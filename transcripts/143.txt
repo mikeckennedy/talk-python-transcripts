@@ -1,0 +1,350 @@
+00:00:00 Michael Kennedy: Do you run a web application or web service? You probably do a couple things to optimize the performance of your site. You make sure that the database responds quickly and more. But did you know a well of performance improvements actually lives inside your web servers themselves? Join Ben Cane and me to discuss how to optimize your Python web application, as well as uWSGI and NGINX. This is Talk Python To Me, Episode 143, recorded December 11th, 2017. Welcome to Talk Python To Me, a weekly podcast on Python: the language, the libraries, the ecosystem, and the personalities. This is your host, Michael Kennedy. Follow me on Twitter, where I'm @mkennedy. Keep up with the show and listen to past episodes at TalkPython.fm, and follow the show on Twitter via @talkpython. This episode has been sponsored by Rollbar and GoCD. Thank them both for supporting the podcast by checking out what they're offering during their segments. Hey, everyone, before we get to the interview, I want to share a quick update about our Python courses with you. Do you work on a software team that needs training and could really use a chance to level up their Python? Maybe your entire company is looking to become more proficient. We have special offers that make our courses here at Talk Python the best option for everyone you work with. Our courses don't require an ongoing subscription like so many corporate training options do. And they're roughly priced about the same as a book. We're here to help you succeed. Send us a note at sales@talkpython.fm to start a conversation. Now let's get to the interview. Ben, welcome to Talk Python.
+ 
+00:01:44 Ben Cane: Hey, thanks, Michael. Thanks for inviting me.
+ 
+00:01:46 Michael Kennedy: Hi, it's great to have you here. I love, I'm just a sucker for a good performance talk. So I'm really excited to talk about all the different layers of Python web apps and performance tuning, mostly outside, though, of the Python code itself, right?
+ 
+00:01:59 Ben Cane: Yeah, well, I would say one of my keys is you have to tune pretty much everything, the entire stack. So Python code, absolutely, but it's not just that. And that's a real important thing to remember, is it's everything, cause everything matters.
+ 
+00:02:15 Michael Kennedy: Yeah, absolutely. So it's going to be great to dig into that. But before we do, let's get to your story. How did you get into programming in Python?
+ 
+00:02:21 Ben Cane: In the '90s, when I was a teenager, I was making Anime fan sites, which is fun. Just for fun, using HTML, CSS. And I wanted to really kick them up a notch. So I learned PHP. And that was kind of the web framework of the time. And I did a little bit of that for fun, mostly. Some for money, but it's funny, in my adult life I didn't actually make a career out of it. I went into retail. And then it wasn't until a friend said, "Dude, what are you doing? You can make these awesome sites. Why don't you make a career out of this?" And I kind of thought about it. I was like, "Oh, he's right." I should make some money out of this.
+ 
+00:03:03 Michael Kennedy: This is way more fun than what I'm doing.
+ 
+00:03:05 Ben Cane: Exactly, exactly. So fast forward, and here I am.
+ 
+00:03:08 Michael Kennedy: Yeah, that's awesome.
+ 
+00:03:10 Ben Cane: Yeah.
+ 
+00:03:11 Michael Kennedy: Cool, and now what are you doing day-to-day, these days?
+ 
+00:03:12 Ben Cane: I'm a staff engineer at American Express. That is, that's essentially the payment network for American Express. So the way I like to summarize it is it's really the yes-no machines. So when you swipe your card, that transaction has to get somewhere. And that somewhere to say yes or no, all of those systems that it goes through in order to get to that yes and no, that's essentially what I work on every day.
+ 
+00:03:36 Michael Kennedy: Wow, so a lot of services, a lot of load latency, demands, right? That person is standing there with their card, like-
+ 
+00:03:43 Ben Cane: Yeah.
+ 
+00:03:44 Michael Kennedy: You know, oddly, uncomfortably looking at the cashier, who's also uncomfortably trying not to look at them, just waiting for your systems, right?
+ 
+00:03:51 Ben Cane: Yeah, exactly, and a whole bunch of them, too, right? Cause it's not just that one person. It's millions of people around the world.
+ 
+00:03:58 Michael Kennedy: Yeah, when you think of the number of people shopping and swiping cards and just using payment at any given moment, it's huge, right?
+ 
+00:04:04 Ben Cane: Yeah, and then when you add things like Black Fridays, Cyber Monday, all those big shopping holidays, it's huge, right? You have to-
+ 
+00:04:12 Michael Kennedy: Does that make a big dent for you guys?
+ 
+00:04:13 Ben Cane: Oh, yeah. The more people are shopping, the more they're swiping their card, the more our systems have to be there to say the yes and the no.
+ 
+00:04:21 Michael Kennedy: A lot more yes-no questions, huh?
+ 
+00:04:23 Ben Cane: Exactly.
+ 
+00:04:24 Michael Kennedy: Yeah, nice. So you talked about the PHP stuff. I kind of distracted you from the Python part of it.
+ 
+00:04:31 Ben Cane: With Python, I was actually working at a web hosting company as a SysAdmin in about 2005. Back then Perl was really the language of choice for SysAdmins. And my buddy Marcel introduced me to this new language called Python. And from then, it was love at first sight. I just loved it. I loved the syntax of it, I loved how easy it was to work with. But then of course I moved to a Perl-only SysAdmin shop. So I was the only one who knew Python. Everyone else knew Perl. So I was kind of like, "All right, well, I guess I'll just write stuff in Perl if I have to." I was really a big fan of Python at the time, so. So I really didn't do much with it then. And then about 2013, 2014 I realized, I was at AmEx at that time, I realized that the traditional SysAdmin role was kind of dying off. And I would say at this point, it's pretty much dead. It's just not everyone knows it yet.
+ 
+00:05:29 Michael Kennedy: Yeah.
+ 
+00:05:30 Ben Cane: I think it's that much of a change, lately.
+ 
+00:05:32 Michael Kennedy: Yeah, so like DevOps and stuff like that is kind of replacing it, Ansible and SaltStack and-
+ 
+00:05:37 Ben Cane: Oh, yeah, exactly. And if you want to stay relevant, I figured you got to learn how to program. And that's when I really buckled down and learned how to program again, above scripts, right? I'd been writing scrips forever. But more than just a script, and it's a big difference between the two. And of course Python was my language of choice to do it.
+ 
+00:05:58 Michael Kennedy: That's really cool. So how did you get interested in performance tuning and that kind of stuff?
+ 
+00:06:05 Ben Cane: It's really part of my job. With things being, the authorizations and that yes and no, like you said, people standing at a terminal, waiting for an answer, we get a lot of requests, and these requests have to be very, very fast. So one of the things that we're very acutely aware of is performance. And we actually hold ourselves to certain performance benchmarks. And we constantly test, do performance testing during the development cycle, just to make sure that we're meeting those benchmarks.
+ 
+00:06:35 Michael Kennedy: Do you have performance requirements or measures in, say, an automated build or anything like that?
+ 
+00:06:42 Ben Cane: Yeah, but that's more for developer satisfaction, right? But for us, it's more about how fast those transactions get processed. When I think performance tuning, that's my immediate thing. Of course, everything else that goes along with it is important. But to me, that's the thing that shines so bright in that. Cool thing is is you can take what you learn from that and apply it to all sorts of different tools.
+ 
+00:07:08 Michael Kennedy: Yeah, absolutely. And as a SysAdmin, DevOps person, you see these as the whole system, right?
+ 
+00:07:15 Ben Cane: Exactly.
+ 
+00:07:16 Michael Kennedy: Like Linux plus the servers and services plus the app, how does that thing work, right? Maybe even across, right? Like how does the front end web servers plus the load balancer plus the backend services, how does that thing perform is really more what you might want to have the final measure be, right?
+ 
+00:07:33 Ben Cane: It all matters, right? So you have to really look at the whole picture in order to see how things interact or how things change the performance of a system.
+ 
+00:07:43 Michael Kennedy: Absolutely. So one thing I kind of wanted to touch on just a little bit at the beginning here is there's a little bit of a difference between scalability and straight performance, right?
+ 
+00:07:54 Ben Cane: If you kind of think about scalability and performance, a lot of times they're really two separate problems. But I do think they're very closely related. With scalability or performance, you might say like one request versus a million requests. And with performance, it's not just necessary one request, right? You might also have a whole bunch of requests, maybe it's not a million, maybe it is, in one instance of an application. And you need to be able to see how many concurrent requests can I handle? Because that impacts performance overall.
+ 
+00:08:29 Michael Kennedy: Yeah, one of the things I think is kind of funny to think about is you could have an app that responds, like it takes 10 seconds to process a request, which sounds like performance sucks. But maybe if you throw a million requests at it and it only goes up to 11 seconds per request, that's a pretty scalable app. It just doesn't perform very well, right?
+ 
+00:08:46 Ben Cane: Yeah, exactly. Exactly, you got to make that thing faster, right? But scalability's also, you can talk about scale up and scale out, too, right? You can scale out the number of instances. So if, let's say your application can only handle a couple of thousand requests at a time, by adding additional instances, you can add that many number of requests at a time. But then there's other trade offs with that, too. You add complexity to the application, which, that's a trade off not only in performance and scalability but also with availability. And that gets a little tricky as well.
+ 
+00:09:22 Michael Kennedy: Yeah, and some people can get away with very small amounts of lack of time and availability. I suspect you guys not so much.
+ 
+00:09:30 Ben Cane: Yeah, not at all, really.
+ 
+00:09:31 Michael Kennedy: It's frowned upon to have the yes-no machine down?
+ 
+00:09:33 Ben Cane: I don't know why, I mean, yeah. No, it's highly frowned upon to have that down. We go through a lot of effort just to make sure that it's up all the time.
+ 
+00:09:42 Michael Kennedy: Yeah, I'm sure. But it totally adds more complexity, which we'll talk about. So I guess one of the things to think about is the difference between performance testing and performance tuning. Could you maybe compare those for us?
+ 
+00:09:56 Ben Cane: Performance testing, at least in my mind, although I think many would agree with me, performance testing is really just the execution of tests that measure performance. Performance tuning is more of a concerted effort to improve performance. So, to give an example, in our development process, we have automated performance tests that run all the time. We know whether that benchmark is being met or not. But really, performance tuning is adjusting that benchmark. Is that benchmark now a higher benchmark? Does it need to necessarily go lower? Although generally, we never go backwards. We always go forwards. You only go backwards if you really have to.
+ 
+00:10:37 Michael Kennedy: Right, maybe you add some major feature and it's worth it. But it doesn't actually, it does make it go slower cause it's doing more or something, yeah.
+ 
+00:10:44 Ben Cane: Yeah, all of these things are about trade offs. You gain in one area, but you trade in another area. So yeah, it's very important to kind of know the difference. Really, the concerted effort with performance tuning, that's important. If your goal is to really squeeze very microsecond out of an application, it's important to have that concerted effort. And it's not just about, what's the measurement tool telling us?
+ 
+00:11:09 Michael Kennedy: And if you have graphs or some other kind of reporting, it's really nice to actually go, wait a minute, we deployed that new version yesterday. What's the response time now than what it was before, or memory usage now, or whatever?
+ 
+00:11:20 Ben Cane: Yeah, measurement from production is huge, right, because you can run all the tests you want in kind of pre-production environments. But production is where things get crazy. And if you start seeing differences in performance there, it really gives you an indication of where you need to start looking, as well. And it's a really good idea to just measure both, measure your pre-production environments, compare that with your production environments, and see where the differences lie and why they are different.
+ 
+00:11:50 Michael Kennedy: Yeah, absolutely. You know, production, that's where reality lives, right?
+ 
+00:11:53 Ben Cane: Exactly, that's what really matters, at the end of the day.
+ 
+00:11:56 Michael Kennedy: Exactly, you're building this stuff to run it for millions of people in production. It doesn't matter what your tests say. That's the final arbiter of how it is.
+ 
+00:12:04 Ben Cane: Yeah.
+ 
+00:12:05 Michael Kennedy: Yeah, so before we get farther into it, let's maybe take a moment and just talk about what a typical web stack in Python looks like.
+ 
+00:12:13 Ben Cane: Really if you kind of start at the top, you have something like NGINX, which is a web server. And I'm actually skipping a whole bunch of layers. But we'll kind of talk from the web server down.
+ 
+00:12:25 Michael Kennedy: In one web server, maybe we're not talking about the scaled out architecture with all the machines working together, right?
+ 
+00:12:30 Ben Cane: Exactly, exactly. So in your typical one-stack kind of approach, you have your web server. You have things like NGINX, Apache, there's several others. NGINX is one being known for being very performant out of the box. And really what those do is they serve those HTTPS requests. They serve kind of the static content. And you can even do some caching with them, as well, which is interesting. And then you go to your application server. You have uWSGI, Gunicorn, things like that. And those are really there for being the worker processes for your running application. So they'll start the application, they'll manage the application, make sure it's running, and really make sure there's enough workers of that application to handle those requests. And then of course you have your app framework as well, your web app framework, so Flask, Web2py, and then Pyramid, Django, there's a whole bunch of those. All of them are kind of a little bit different. Some have different areas of expertise, and some have more features, some have less features. One of the interesting things with performance, if performance is a big factor for you, one of the kind of caveats, or one of the more golden rules I have is the less features, the more performant it's going to be. That's not always true, but it's a good general rule of thumb, at least.
+ 
+00:13:54 Michael Kennedy: Yeah, the less you're doing, the more you can do with it. Yeah, that's for sure.
+ 
+00:13:58 Ben Cane: And then you also have the database, and that's another whole factor to think about and whether it's SQL, NoSQL. Not every web app is going to have that, but a good chunk of them will.
+ 
+00:14:08 Michael Kennedy: Yeah, most of them will have some kind of data store. And usually that choice of database. You actually have some really interesting things to say about that. We'll talk about that. One thing I do want to maybe take a step back and talk about, cause I think it's important to understand for people who don't live in web deployments all the time, is you talked about two web servers. You talked about NGINX, and you talked about uWSGI, or uWSGI. And why do we need two?
+ 
+00:14:36 Ben Cane: That's actually kind of important. And I think I will simplify it with NGINX is really good at what it does. It's really good handling some proxying, let's take an example of HTTPS. In order to do that SSL handling, right, the SSL handshakes, the decryption, all of that, leveraging NGINX for that is very fast. It's good at that, it does that very well, and it does that very fast. And it's tuned specifically for that type of task. It also is really good for serving static content. So if you take an application server like uWSGI that's running your Python web app, well, if you have static content with that, offload that kind of workload to NGINX. Let NGINX do the static content because that's very static. It doesn't need to talk to your Python app. If there's no need, then don't do it. But uWSGI is more for executing the requests across your Python application as well. And that's really kind of your worker process. Now, it all kind of, there's many ways to set up this type of stuff. You can do things in many different ways. Some things work better, some setups work better for certain environments. But your typical deployment's going to have kind of all three, web server, the application server, and then that web app framework as well.
+ 
+00:16:05 Michael Kennedy: Yeah, and one of the things, I don't know how much uWSGI suffers from this, but certainly the Python web servers themselves, the pure Python ones, can suffer from the fact that you only have the global interpreter lock, the GIL. So you can really only do so much serving on any one thread at a time. And if you're busy serving up like a large image file, you're not processing requests, right? So putting something in there to offload everything except for the true application requests, like NGINX, I find is pretty awesome.
+ 
+00:16:43 Ben Cane: That's what NGINX is good at. So let it do its job.
+ 
+00:16:46 Michael Kennedy: Yeah, and it can be a load balancer or a proxy server, it's really quite advanced, what you can do with NGINX.
+ 
+00:16:53 Ben Cane: You mentioned running it all on kind of one server, one kind of instance, but that's exactly right. You can put NGINX up one level and have it do the load balancing across multiple backend applications. And that's really powerful as well.
+ 
+00:17:08 Michael Kennedy: Yeah, that's awesome. Another thing that I do at the NGINX level, at least on my sites, is that's where all the SSL exchange happens, right? Beyond that, the uWSGI stuff, it doesn't even know that it's encrypted. Well, I guess cause it's not. But it's in the data center, right?
+ 
+00:17:25 Ben Cane: Exactly, although, even today, sometimes you're starting to see even that layer get encrypted as well. Things change over time.
+ 
+00:17:34 Michael Kennedy: Yeah, I can see, and the more machines you involve, the more encrypted it is. I guess in my setup is have uWSGI and NGINX on the same machine, so it's like local loopback. So encryption doesn't make as much sense. This portion of Talk Python To Me has been brought to you by Rollbar. One of the frustrating things about being a developer is dealing with errors: relying on users to report errors, digging through log files, trying to debug issues, or getting millions letters just flooding you inbox and ruining your day. With Rollbar's full-stack error monitoring, you get the context, insight, and control you need to find and fix bugs faster. Adding Rollbar to your Python app is as easy as pip install rollbar. You can start tracking production errors and deployments in eight minutes or less. Are you considering self-hosting tools for security or compliance reasons? Then you should really check out Rollbar's compliant SaaS option. Get advanced security features and meet compliance without the hassle of self-hosting, including HIPAA, ISO 27001, PrivacyShield, and more. They'd love to give you a demo. Give Rollbar a try today. Go to TalkPython.fm/Rollbar and check them out.
+ 
+00:18:42 Ben Cane: If you look at like uWSGI, that one in particular, good chunks of it are written in C, right? And that can also help with performance because, you know, it's C. And C is very fast. C's pre-compiled. It's got performance in its nature, right? So being able to leverage that is also very useful. And NGINX is also written in C. And there's kind of that, you used your image example, that's a really good example, right? That's where you can leverage that aspect of NGINX to really get that boost of performance.
+ 
+00:19:18 Michael Kennedy: Right, the threading and parallelism, that's all just, all runs over there in C. And you know, I'm glad I don't have to maintain that.
+ 
+00:19:24 Ben Cane: Yeah, I would agree with you on that one.
+ 
+00:19:27 Michael Kennedy: Let's start by thinking about how you might approach performance tuning. Like I've got an app. It's kind of working pretty well but certainly could be better. Maybe under times of load, it gets too slow, or I'm just thinking, you know, 300 milliseconds response time is fine, but could we do 25 instead? But how do you think about this tuning problem?
+ 
+00:19:46 Ben Cane: I like to think of performance tuning as if it's a science experiment. So first step is put on a lab coat. And then kind of after you've got your lab coat established, really kind of start with an observation. Now, I would say one of the keys here in kind of the next step, which is creating questions, with your observations and your questions, it's really good to have as many perspectives as possible. With, you mentioned kind of the Linux stack, you have web servers, you have application servers, you have the actual Python code itself. Many times, in many areas, some of these things are managed by different people. And bringing those people in to kind of add their input into observations and what kind of questions can be asked, what kind of knobs can be turned, you really start to get multiple perspectives. And that's where things get very interesting. Now, with the same thing with science experiments is you only want to change one thing. And then kind of, that's important as well. So as you're testing and you're validating and you're kind of adjusting as necessary, only making one change at a time is very important because otherwise, if you make too many changes at a time, and this is a real common mistake I see, if you make too many changes at a time, you get a difference, but you don't know which thing caused that difference. And sometimes that leads you down a rabbit hole, right?
+ 
+00:21:13 Michael Kennedy: Oh yeah.
+ 
+00:21:14 Ben Cane: You start changing something that you thought made a big difference, but in reality it was something completely different. And that's really important.
+ 
+00:21:21 Michael Kennedy: Yeah, or one change made it faster, and one change made it slower, but you did them at the same time, so it looked like it had no effect.
+ 
+00:21:26 Ben Cane: And another key piece is really establishing your baseline. And that's one thing I really talk a lot when I'm telling people about performance tuning is the first thing you do, the first thing you do before you make any changes is establish a baseline. And then you also establish a baseline between changes. So usually when you have big performance tuning effort, you're not just change one thing and then everyone goes about their day. You want to change multiple things. You want to have some fun with it. You just want to see all the little knobs you can turn to make this thing go faster, right? So being able to stop and baseline between each kind of iteration is important. And also being able to go back to a previous state. It's important to test things individually and together in kind of separate tests. And it can take longer, and that's complicated and people tend to want to rush through when they're first kind of getting started with performance tuning. And you just got to take your time. And it's key to really measure it very well.
+ 
+00:22:31 Michael Kennedy: Well, and with these deployment stacks or whatever you want to call them, you've got NGINX, and you can tune NGINX. You've got uWSGI or Gunicorn or whatever, you can performance tune that. And you've got your Python code. And so measuring them separately, I think, can be a little bit challenging. While you were talking, it occurred to me that it's pretty easy to measure NGINX directly, maybe against a static file. If you have your app running in uWSGI, you could just start hitting it. You showed, for both of those scenarios, you have AB, Apache Benchmark, right?
+ 
+00:23:04 Ben Cane: And Apache Benchmark is actually, comes with the Apache2-utils package. And it's a very common benchmarking tool. I would say it's got its own problems. There's some things it does really well, some things it doesn't do. But it's a good general-purpose tool. Another one I'm a big fan of is Gobench. It's written in Go. It's a little bit different. It approaches benchmarking web requests a little bit different. In some cases, I've seen it faster. And that's actually an interesting problem too, is these benchmarking tools are applications in themselves. And they're running in environments themselves. So often, you can run into situations when your application is tuned so well that your benchmarking tool is actually where your bottlenecks are. And that gets into a real interesting problem.
+ 
+00:23:56 Michael Kennedy: Yeah, so do you recommend running the benchmarking tools on a separate machine, with like a super low latency connection, like in the same data center or something?
+ 
+00:24:04 Ben Cane: Yeah, sometimes we've just daisy-chained servers to get that low latency connection. But yeah, absolutely. If you can run it on a different machine, that's awesome. That's great, you should do that. Sometimes, though, in order to really cut out network latency, we've had to either run it on the same machine or daisy-chain servers so that they don't go through any switches on the way.
+ 
+00:24:27 Michael Kennedy: Yeah, I can definitely, it's a complicated problem, right?
+ 
+00:24:29 Ben Cane: I think it's fun, because you get to learn all of these cool little, why things work. And the why things work is important. And I find that fun because you learn more about it. And as you learn more about it, you also say, "Well, okay, if this knob turns this way, and that causes this because it does this, what if we turn this other knob?"
+ 
+00:24:51 Michael Kennedy: Well, I feel like learning about all the knobs and experimenting with them actually helps you understand really what happens when a request goes through your infrastructure, because it's easy to go, "Yeah, this is the config file," and I put it up, and then it works. But you know, knowing more about the actual steps before it hits your code is actually pretty interesting.
+ 
+00:25:10 Ben Cane: Yeah, and that's important for 3 a.m. calls as well, when you have a problem, right? So the more you know kind of about your application, some of the benefits to really performance tuning your application is you know that this is why it works and this is how it works. So finding problems is a lot easier. But that also really plays into getting even more performance out of it. The more you know about your application, the more you come up with ideas on what to experiment with and where to make those changes and how they would affect it. Now, I would say, and this is one of my key points, is when you are approaching performance tuning, kind of circling back there, is don't get too hung up on a single solution. As you are measuring things, and you think this is going to make a major impact, sometimes it doesn't. And sometimes it actually makes things slower. I've had that happen quite often. In fact, I'm not sure if I can think of a single major performance tuning effort that we went through that we didn't have an idea of one thing and we're like, "Oh yeah, this one thing is going to make our application just scream." and it had the complete opposite effect.
+ 
+00:26:19 Michael Kennedy: Yeah, yeah, so that's a really good point, thinking about how good our intuition is around performance. And so one thing I sort of wanted to wrap that up with though is you have AB and you have Gobench, and you can test your server-level things. But if you actually want to test your app in isolation, you maybe don't even want to use the development server. You want to just call it directly. And so you could do things like time, say, a unit test or profile a unit test or something where it's literally just your code running and there's nothing in between.
+ 
+00:26:52 Ben Cane: So that gets into kind of code profiling, right? And Python comes with cProfile and Profile. And what those are are those are built-in profilers. And what they really let you do is, it's as simple as running Python -m cpython and then a Python file. And what that'll do is that'll actually let you see what operations are occurring and how long they take to occur. Now, an interesting thing is, when you do profiling, sometimes that also affects changes in performance as well. So you have to take some things with a grain of salt. But it is a really good way to kind of look at the execution of what's happening underneath the covers of all that code. And it helps you to really kind of isolate where within the actual application itself you might make some performance improvements.
+ 
+00:27:48 Michael Kennedy: Right, you do have to be a little bit aware and cognizant of the sort of observer effect, sort of quantum mechanics-style, right? Like it was doing one thing until I observed it, then it did another thing, darn it.
+ 
+00:28:01 Ben Cane: Yeah, and the same is true with monitoring and production, as well. I've seen several times where maybe you make this method of monitoring performance statistics, but in doing so, you actually create a load on the system, and that load then starts potentially affecting performance in itself. So it's all about balance. That's kind of like a key thing. And you have to look at these things. Sometimes it's worth it, and sometimes it's not worth it. And you really kind of have to take a look at your application, what you're running, and what those trade offs are. And there's no real hard-line way to say, this is worth it or this is not worth it. It's all very situational. Depends on the application, it depends on the environment and what's actually happening.
+ 
+00:28:48 Michael Kennedy: For sure. One final thing on this profiling bit that I wanted to throw out there is I'm pretty sure some of the other frameworks have something very, very similar, but in Pyramid, it has this thing called the debug toolbar, which lets you analyze the requests and see what's happening. And it has a performance tab, and you can check a box, and it'll actually collect the cProfile performance data as you click around the site on a page-by-page basis. And that's really nice to just drop in and see, okay, this page is slow because what? You know, just go request it and then flip tabs over to the other thing.
+ 
+00:29:19 Ben Cane: That sounds pretty cool. I'm a big fan of Flask, so I haven't really given Pyramid a try. But that sounds very interesting. I'll have to check that out.
+ 
+00:29:26 Michael Kennedy: Yeah, it is pretty cool. I'm a fan of Flask as well, and I think Flask has some kind of debug toolbar, but I don't know if it has the profiling built in, cause I just haven't done enough with it.
+ 
+00:29:34 Ben Cane: Yeah, I haven't looked at that.
+ 
+00:29:37 Michael Kennedy: Yeah, another thing that I feel like is often, maybe this is my perception from the outside and it's just like I'm looking at this like, "Oh, I know the database for this site sucks. I know it, that's why it's taking five seconds to load this page, I just do." And so I feel like a lot of people skip the real optimization around the database stuff, like indexes, indexes, like if you have a query that doesn't use an index, you need a really good justification for that, for example, in my mind.
+ 
+00:30:01 Ben Cane: Yeah, absolutely. And when you talk about your traditional SQL databases, although some NoSQL databases have indexes as well, but when you talk about your traditional SQL database, indexes are incredibly important. And think about what they do, right? And this just kind of goes down to knowing what is underneath the covers of every little piece. If you think about what an index is, a database is an application in itself, right? It sounds like this ominous thing, but at the end of the day, it's just an application. And really, indexes are a way for the database application to know where on disk am I most likely to find this data? It's a very fast way to find one little piece of data that then leads you to get all of the different data you need. In SQL talk, it's really, where's the index key? Let me find that key, and then boom, here's all my row of data. And it really helps with performance. I would say indexes are very important as well, but sometimes it's also queries. Sometimes queries can be very, very complicated, indexes or no indexes. And simplifying some of your queries, simplifying some of your database structure, can really help out with performance as well.
+ 
+00:31:23 Michael Kennedy: Right, and maybe your queries are terrible because your models are not quite right in your database. I mean, there's all sorts, we can't go too far down here, but definitely, I think optimizing the database is something to consider, right?
+ 
+00:31:35 Ben Cane: Yeah, exactly. And one thing to remember is the database was modeled at the beginning of this application, but the reality is most applications grow over time. And the usage grows over time. So sometimes those queries get the way they get because, well, we wanted to change and have this ability to pull this data over here, but we didn't want to make major changes to the database model. And sometimes it's just necessary.
+ 
+00:31:59 Michael Kennedy: Yeah, for sure. So you wrote a really interesting article called Eliminate the DB. I don't want to go too deeply into it, but you had some really interesting ideas, and I definitely want to point people at it. Maybe give us the flyover on that.
+ 
+00:32:12 Ben Cane: Really, it's eliminate the database for higher availability. And it's a bit of a trolling title, to be honest. A lot of DBAs internally did not like me for that post. But really what my point is is when you're creating a highly-available application and highly-performant application, the goal is to minimize complexity, because complexity leads to problems. The more complex an application is, the harder it is to troubleshoot. And not just an application, but an environment in total, right? The harder it is to troubleshoot, the more opportunities for failure are there. If you just have an application and there's no database, a database going down doesn't affect that application, right? But if both are there, you have two failure points versus one. And that's really kind of what the article's all about is kind of calling out that if you're going to use a database, make it worthwhile. Don't just use a database just to use a database, because it's easier. And that is often kind of really what the design pattern is all about, is only use a database if it's absolutely necessary. And that's really only when you're talking about super high-availability environments. Some environments, it doesn't really matter. If it's easier to use a database, then use it.
+ 
+00:33:36 Michael Kennedy: You've got that web app, you've got the database, they talk to each other, maybe they're even on the same machine, maybe.
+ 
+00:33:42 Ben Cane: Exactly, exactly. And sometimes it's fine. But other times it isn't. And really what that article was all about is knowing when to think about should I or shouldn't I include a database?
+ 
+00:33:56 Michael Kennedy: Yeah, I liked it because it made me think, at first, no, that's not possible. And then I'm like, all right, so how is it possible, if I think the answer is that you can't do it? Do you know what I mean? Yeah, it's pretty cool.
+ 
+00:34:07 Ben Cane: And it all depends on use case. Some applications it's completely not possible, and in other applications it is. And I'll give you a really good, common example, not even card-related, is my personal blog is actually a statically-generated HTML. Now, that doesn't mean I write in HTML. I write my blog in markdown and then I use Python to take that markdown and generate HTML. Some blogs, like if you look at WordPress, for example, that's got a database backend. Now, my static HTML is going to definitely be a lot less complicated to run than a whole web stack just to write a blog.
+ 
+00:34:48 Michael Kennedy: Right, you might not even need a server. You could potentially drop it on like S3 or something.
+ 
+00:34:52 Ben Cane: Yeah, exactly, exactly. You can get real interesting once it's static pages.
+ 
+00:34:56 Michael Kennedy: Right, absolutely. All right, so there's a lot of stuff we can do at the architectural level, caching, queuing, async I/O, changing the runtime to, say, PyPy or Cython or something. But I want to make sure we touch on all the stacks at a pretty good level. So maybe let's move up one level into uWSGI and say this is the thing that runs your Python code. What are the knobs and levers that we can turn here?
+ 
+00:35:20 Ben Cane: There's quite a few. One of the simplest ones is actually enabling more threads. So threads are interesting because you can actually go too far and have too many threads or also go too few, as well. And really what that is is if you look at that configuration, it's processes equals a number. So one of the things that you kind of want to look at is how many CPUs does my actual machine that I'm running this on have? And that's your production machine, not your development machine, because those are two different things. And sometimes you have to also adjust for the environment, as well. And that's something to kind of think about when you're thinking about performance tuning things is what's it run on my laptop is going to be very different than how things run in production. In production, you might have a machine with a whole ton of CPUs available. And on your laptop, you only have maybe four or eight, right, depending on your machine. And then another thing, so kind of the golden rule there is try not to exceed the number of processes for a CPU. But I have found in some cases, in some workloads, you can actually go up to twice of it and still get a performance increase. It's kind of interesting. It's really one of those things where you've got to adjust the number, and slowly adjust it as you go. Start from the lowest and work your way up, or potentially work your way down if you've already got something deployed and it's starting to hit some interesting areas.
+ 
+00:37:01 Michael Kennedy: Yeah, it gets real interesting, too, because basically the parallelism of that is tied to the parallelism of Python, which has its own interesting mixes, right? And so if you're doing something that's computational that takes really long, right, I mean, it doesn't have to be science. It could be generating a really large RSS feed, for example. Some of us have some experience with that. And yeah, the RSS feed for Talk Python is like 700K, and it's quite a bit to generate at this point. At some point I may have to do something about it, but it's hanging in there just fine. But that kind of stuff, that kind of locks that process up, even with the threads, right? But if what you're doing is like you're basically, I come in, I process a request, I call the database, I wait, I call a web service, I wait, and then give it back, that one can keep flying because those network I/O things kind of break it free, right? They release the GIL. And so it gets really, I think it also depends on how your app is working. What kind of app are you running there?
+ 
+00:37:56 Ben Cane: You're exactly right. One thing I actually want to call out, just to circle back a little bit, sorry, is there's kind of two adjustments you can make. By default, uWSGI processes all have the same CPU affinity. So if you do have a two CPU machine, for example, just changing the processes to four will actually lock all four of those to the same CPU. But if you enable threads equals two or enable threads equals true, what that'll actually do is that'll actually split the processes across multiple CPUs. And that's actually a very common problem that people run into when doing multi-threading, is they run into, like "Oh, I'll just add some threads, and we're good to go." But how it actually lays out in the stack is a little bit different. Linux tries to get things running on the same CPU as much as possible to really leverage things like L2 cache. But there are ways to split it out to multiple CPUs, and sometimes they can really be a big benefit. But depending on what the application does, the reverse can be true as well, where running on that same CPU can give you that performance benefit as well. And like your RSS example, I would say, because you're kind of looking all at the same data and generating it, you might even get a benefit running that on one CPU versus two, right?
+ 
+00:39:21 Michael Kennedy: Yeah, for sure. This portion of Talk Python To Me was brought to you by GoCD. GoCD is an on-premise, opensource, continuous delivery tool to help you get better visibility into and control of your team's deployments. With GoCD's comprehensive pipeline modeling, you can model complex workflows for multiple teams with ease. And GoCD's value stream map lets you track changes from commit to deploy at a glance. Say goodbye to deployment panic and hello to consistent, predictable deliveries. We all know that continuous integration is super important to the code quality of your applications. Choose the opensource, local CI server GoCD. Learn more at TalkPython.fm/GoCD. That's TalkPython.fm/GoCD. You have an example in this, there's an article that you wrote about optimizing uWSGI, or uWSGI. And you have one for NGINX that we'll talk about as well. And you start out as your baseline in this one at 347 requests. And just that change knocked it up quite a bit to 1,068, which is quite the improvement.
+ 
+00:40:25 Ben Cane: Yeah, it is. And that's as simple as going from one CPU to two.
+ 
+00:40:29 Michael Kennedy: Yeah, exactly.
+ 
+00:40:31 Ben Cane: It seems like math would say, well, if I have two CPU and I'm getting 347, shouldn't I get around six, eight hundred? So you know, I mean, six to eight hundred range. Sometimes you can even go a little bit higher, right, with, you have less contention. Another thing to kind of think about with Linux is there's a task scheduler, right? And this task scheduler is figuring out what processes should I give priority to CPU time? And when you're all running on a single CPU, you also have other processes that are running against that single CPU. So you're going to have conflicts in CPU time that the task scheduler's job is to figure all that out. So having two kind of allows you to reduce some of those task scheduler conflicts as well.
+ 
+00:41:21 Michael Kennedy: Yeah, it's pretty interesting. So the two other major things, one of them I think is somewhat obvious. One of them is sort of counterintuitive. One is you say is to disable logging, which you may or may not want to do that based on, you might want to have logs for certain reasons. But if you can, disabling logging actually has a pretty significant performance change.
+ 
+00:41:42 Ben Cane: Yeah, because that's disk I/O, essentially. So every log message, and there's many ways to solve this problem. In my article, I kind of took an easy approach by just disabling it, because it was an article, and it was easy. But really what the root of that is is by disabling logging, I'm telling uWSGI to stop writing to disk, essentially, for every request. So for every request, by default, it's just going to write to disk details about that. And whether it's asynchronous or synchronous, and those do matter a lot, you know, some platforms will default to kind of synchronous logging. And what that is is it makes sure that that data is written to disk before kind of going to the next step. And asynchronous is more, well, let's kick off, let's throw this in a buffer, let's kick off a thread to write these to disk and let things kind of continue. Those can be huge. Just going from synchronous to asynchronous can be a big performance increase. But nothing'll give you better performance than just disabling it. But there's some trade offs with that, like you said.
+ 
+00:42:54 Michael Kennedy: It's hard to optimize faster than doing nothing.
+ 
+00:42:57 Ben Cane: Yeah, one little tip I tend to like is actually using syslog with UDP for logging instead of going to disk. So syslog is a very well-established protocol. When you're using UDP, you don't have to worry too much about TCP handshakes. It's kind of fire and forget. So pushing that to a network place versus disk, which disk is traditionally slow, although solid state drives have made it a lot faster. It's still slower than, you know, memory and going to kind of that network stack can make a big difference. And that's kind of an interesting trick. You don't necessarily lose your log data, but you also don't have to go to disk. But another kind of key one there is make sure you're not writing too many log entries. Kind of finding the right balance of how much logging is there is really important. Now, when you're using a framework, the framework's going to do what it's going to do. But even within your application, the less logging the better. But at the same time, you have to have this kind of minimum amount of logging in order to support it.
+ 
+00:44:04 Michael Kennedy: Yeah, absolutely. So the last one, that I said was non-intuitive, is you can tell the worker process to live only a certain amount of time and after that time to just kill off and basically start fresh again, which, there's some startup costs, and there's-
+ 
+00:44:22 Ben Cane: Absolutely.
+ 
+00:44:22 Michael Kennedy: Some cost to having this new process come up, and it had to read your template files, potentially, or whatever. So it seems like that would be slow. But you actually flipped it to something like restart the worker process every 30 seconds, and it was quite fast.
+ 
+00:44:35 Ben Cane: That really depends on the application. If your application's going to hold a lot of data in memory, that could be good or bad, right, depending on how things start up. If you have to kind of load things in memory before you can really start serving requests, then that startup time really, that's a hit, right? But if your worker process is really just executing something very fast, restarting it, as long as it kind of starts up very quick and you have a very low startup time within the actual application itself, you can get a big benefit. The example I had was a very simple, simple application. There wasn't a whole lot of data stored in memory or anything like that that you had to kind of build up. So the start time was really small, and that's where I kind of got that benefit. But again, it all depends on the application.
+ 
+00:45:24 Michael Kennedy: Right, and the benefit can be the lack of memory management or simple allocation cause the memory's not fragmented. One of the things that Instagram, pretty sure it was Instagram, did that was super counterintuitive for performance but at this level is they turned off the Python GC. They left only the reference counting bit. But that doesn't handle cycles and stuff. So there's definitely memory leaks when you do that.
+ 
+00:45:46 Ben Cane: Yeah, but if you restart enough-
+ 
+00:45:47 Michael Kennedy: Exactly, you just go, it's our workload, our data. That means we can run for six hours before we run out of memory. So let's just restart every hour, something like that. And they got like 12% in improvement or something. I mean, it was really significant.
+ 
+00:45:59 Ben Cane: That goes into kind of the overall architecture, right? Sometimes it's okay to kill off an application, as long as you're doing it gracefully and as long as you have others to take its place, right? And that's kind of where that whole microservices approach really lends a hand, because if you break things down really small, then you can run, it's a lot easier to run multiple of them. So you can actually handle the distribution of load to other processes when these ones, you want to start taking them down, right? And that's where-
+ 
+00:46:34 Michael Kennedy: Yeah, for sure.
+ 
+00:46:35 Ben Cane: Having like NGINX up front doing some of that load balancing really plays a big hand in that.
+ 
+00:46:39 Michael Kennedy: For sure. So let's talk about NGINX. We've sort of said what it is, but just like before, you had this baseline analysis. In this case, you had a little under 3,000 requests per second, which this is to a static HTML file or something like that, right?
+ 
+00:46:53 Ben Cane: Exactly.
+ 
+00:46:54 Michael Kennedy: Yeah, so it gets all the other stuff out of the way. It's not to the app, it's just to serve up a thing. And so the first thing that you said you might want to look at is worker threads.
+ 
+00:47:03 Ben Cane: Again, that's just like with uWSGI, right? That's really the number of processes on the system. So a real interesting thing about NGINX is by default, it's actually at auto, which tells NGINX to create one worker thread for every CPU available to the system. Now, what I actually did was I changed it to two. So actually, no, I changed it to four. I had two CPUs on the system, which is basically two worker threads per CPU, and two processes. And I actually got a pretty good boost out of that. And it wasn't too bad. But then if you changed it to eight, when I kind of was tinkering, and this goes into experimentation, right? Measure, measure, measure. When I changed it to eight, performance dropped quite a bit. So.
+ 
+00:47:55 Michael Kennedy: Back it goes.
+ 
+00:47:56 Ben Cane: Yeah, so it's a very close balance. It's walking a very thin line. You can optimize things to work really well in these situations. But once you go a little too far, then you start hitting other contention, right? And that really breaks down to that CPU task scheduler. And that's actually why I did that in that article, was to kind of show sometimes things don't always work out when you just add more numbers.
+ 
+00:48:20 Michael Kennedy: Yeah, so you, by messing with the worker threads, you were able to get it to go from a little under 3,000. You added another 2,250. So not quite doubling, but still quite, quite good. Then the other thing you said is maybe some of these connections are going to last for a long time, or they were sort of backed up. What if we let it accept more connections? This is important for requests, but it's super important for really long, large files, I would imagine, or lots of them, people downloading them, or even like web sockets, these persistent type of things.
+ 
+00:48:52 Ben Cane: Yeah, exactly. And that's exactly it, right? Sometimes, and actually in this case, it was, I believe it was a simple REST API. So there wasn't really a whole lot of static connections. But you're right, that is a big performance increase when you have those long-lived connections. And sometimes that's letting NGINX do some of the work. Let NGINX kind of handle that connectivity. By increasing the number of connections per worker, if they're very fast requests to the downstream application, you can actually kind of leverage NGINX handling connectivity with the end client and through the process very quick. So by making some changes, I think in that case I changed it to like 1024, for example. It went up to like 6,000 requests per second, which was-
+ 
+00:49:40 Michael Kennedy: Yeah, exactly.
+ 
+00:49:41 Ben Cane: A huge improvement, it's really cool. Now, another thing in that kind of worker space is to look at the number of open files, which is a very common Linux limitation that people run into. NGINX, as it's serving static content, for example, or even just the fact that it has logging enabled as well, it's going to have open file handles. And by default in Linux, there's a limitation. I want to say these days it's 4096, but actually I think the NGINX default limitation is much smaller. I forget what it is exactly. I think in that example, all I really did was just upped it to 4096, which allowed it to have even more files open, which gave a little bit of a boost but not too much.
+ 
+00:50:29 Michael Kennedy: Yeah, but still really nice. I think it gave it like 300 more or something about it, yeah, which is cool. But the other thing you can do is most web workloads are hitting a number of files, 10, 50, 100, or 1,000. But after that, how many unique static files do you have in most situations? I know there are some that there's tons, but most sites, they've got their CSS and their images and whatever, and it's mostly shared, right? So you can also tell it to cache that stuff, right?
+ 
+00:50:58 Ben Cane: Yeah, you can. I would say one caveat though is just because you only have a certain amount of files doesn't mean that that process isn't opening other files. Sometimes there's things like shared libraries that it opens. And all of those count, as well. And even like sockets and things like that, they all kind of count towards limitations in the OS. But in regards to caching, that's actually pretty cool. There's some options with NGINX to do like an open file cache, which allows you to increase the default amount of cache for open file handles. So NGINX will open up those CSS files and those HTML files like you were saying, and it will actually load them in memory. So that way when you get a request, even though it's a file on the file system, since NGINX has it open and it's cached in memory, it doesn't have to go to disk for access of that, which makes it a lot faster.
+ 
+00:51:56 Michael Kennedy: Yeah, just serve it straight back out of memory, that's awesome.
+ 
+00:51:59 Ben Cane: Exactly.
+ 
+00:52:00 Michael Kennedy: So in the end, you were able to tune it, NGINX, just on its own bit, from 2,900 up to 6,900. That's a serious bit of change by just tweaking a few config settings. And then you did the same thing, something similar on uWSGI level. And then of course you could tweak your architecture as well. But just making the stuff that contains your app go that much faster? That's pretty awesome.
+ 
+00:52:26 Ben Cane: There's another article that I wrote about kind of benchmarking Postgres. And I had a similar experience there, is all I really did in that article was just adjust a shared buffers configuration. And what that is is that's essentially a query cache for Postgres. And that change alone, for the example I was giving, had a big performance increase. So sometimes, I kind of call these a little bit of low-hanging fruit because they're just little knobs you can change in existing systems. And sometimes those low-hanging fruit can be a really good first step.
+ 
+00:53:02 Michael Kennedy: None of those seem super scary, right? You just change some config files. I mean, if you mess up your config, you will take your website down. But you know, you just put it back. It's not super complicated, right?
+ 
+00:53:12 Ben Cane: The key is test before you put it in production, right?
+ 
+00:53:15 Michael Kennedy: That's right.
+ 
+00:53:16 Ben Cane: So as long as you're testing before production, then if you make a change and it doesn't work, then oh well, who cares, right?
+ 
+00:53:23 Michael Kennedy: Yeah, right.
+ 
+00:53:24 Ben Cane: But really that's kind of getting into the measuring, establishing your baseline and measuring each little change and how they interact. That's real important. So yeah, that way when you go to production, you know exactly what you're changing.
+ 
+00:53:39 Michael Kennedy: Yeah, it sounds good. So we're just about out of time for our conversation here. But I did want to just ask you how do things like Docker and Kubernetes change this? Do they just make it more complicated? Do they simplify it? What do you think containers mean around this conversation?
+ 
+00:53:54 Ben Cane: They simplify some things, like when we're talking scale out type approach. It makes it real easy to spin up a new one. I was kind of thinking, when you asked that question, I think of some of the challenges that I've ran into with those. One thing that I've run into with Docker is if you just pull down a service and use that service out of the box without changing it, you're going to get kind of a default performance. So by using the Docker package, a lot of times you kind of forget about all those little knobs that you have to turn in order to get it fast and performant. And then another area that that kind of goes into is Docker is, they have some services as well that things run through. And Kubernetes is a big example of this. So with Kubernetes, you have a software-defined network, right? So if you have a cluster, and let's just give kind of a scenario, for whatever reason you had half your cluster on one side and half your cluster on another, and there's a network latency between getting to that other half. With Kubernetes and services, you would have your traffic land on any host within that cluster, and then that software-defined networking is responsible for moving that request to the appropriate host that might be running that service. So if there's some latency in there, you can actually start seeing that. And that's actually very obscured away, once you start getting into that area. It's hard to kind of pin that down, because that's so far removed from what you're doing in your application that that can actually be pretty tricky. Plus the fact that you have to go through that software-defined networking means you're taking some penalties there. But again, it's probably worth it.
+ 
+00:55:43 Michael Kennedy: Yeah, probably. Very, very interesting. All right, before I get to the final two questions for you, you said that you, we were talking before we hit record about an opensource project that you're working on as well. You want to give a quick elevator pitch for what that is so people know about it?
+ 
+00:55:57 Ben Cane: Yeah, absolutely. So Automatron is the opensource tool that I've created. It's kind of a second version of something called Runbook. I launched an opensource project called Runbook, and things happened where I was like "I need to redo this and start fresh." And that became Automatron. And really what it is is it's kind of like if Nagios met IFTTT, so where you have these health checks, and they monitor whatever you tell them to monitor. The health checks are really just executables. What it'll do is it will SSH to the remote server, to the monitored system, run that health check, and based on kind of the Nagios return codes, it's either good or bad.
+ 
+00:56:44 Michael Kennedy: Right, like SSH in and ask for the free memory or something like that.
+ 
+00:56:47 Ben Cane: Yeah, exactly, exactly. And if it's bad, beyond a threshold-
+ 
+00:56:52 Michael Kennedy: If it's zero.
+ 
+00:56:53 Ben Cane: Yeah, exactly, then really the exit code would indicate a failure. And that exit code will actually trigger an action to take place, which is, again, SSHing out to a system and then executing either a command or a script or something like that. This is all built in Python. And it actually uses Fabric very heavily, which is a really cool SSH command execution wrapper. It's very cool. I'm a big fan of it. And I used it very heavily there. And it's kind of a cool little side project. And really what it's there for is I hate OnCall, and I really wish it would go away. And this is one of my ways to hopefully help people make it go away.
+ 
+00:57:37 Michael Kennedy: Could a machine just go restart the web server process and just not call me?
+ 
+00:57:41 Ben Cane: Exactly, or in some cases when you've kind of designed your environment well enough, you could just maybe reboot the box, and who cares? At a certain scale, is it worth finding the root cause of a single issue? Or is it more worth finding the root cause of continuous issues? And that's kind of one of the real philosophy changes that that kind of project brings, is in my opinion, at least, it's worth finding more frequent and re-occurring problems, and just one-off problems are not worth it. Just restart the thing.
+ 
+00:58:16 Michael Kennedy: Yep, sounds awesome. All right, cool, so people, check that out. We'll put it in the show notes. All right, last two questions before we go. If you're going to write some Python code, what editor do you use?
+ 
+00:58:25 Ben Cane: Right now it's Vim screen and syntax highlighting. That's it. I'm kind of weird, I believe. So but that's where I feel comfortable. And I think that's all those years in operations has led me to that.
+ 
+00:58:38 Michael Kennedy: Yeah, cool. And then notable PyPI package? You already called out Fabric, right? That's pretty awesome.
+ 
+00:58:43 Ben Cane: Yeah, Fabric is an awesome one. I actually want to call out, since we're talking performance tuning, Frozen-Flask. Now, it's not one that I've used, personally, quite a bit, but the whole concept is it allows you to pre-generate static pages from a Flask application. So it's really cool. And the real awesome thing that you can do is you can kind of combine that with certain NGINX rules to where it'll pre-generate the static HTML, and then based on regular expressions in the past and things like that, you can have NGINX serve that static HTML without having to go down further in the stack. And that's real cool because you can use Frozen-Flask to still kind of keep that all within your Python application. And it's really just, at runtime, it'll generate that static HTML, it'll freeze it, and NGINX configuration from there takes it away.
+ 
+00:59:38 Michael Kennedy: Yeah, that's pretty awesome. So you get the dynamic sort of data-driven bit, but then you could just freeze it. If you were to like turn it to static files and then serve it through that way, that's cool.
+ 
+00:59:47 Ben Cane: Most web applications, you have static pages and dynamic pages. And really using it to establish those static pages and pre-generate them can be a big benefit in kind of production workloads, not just from a performance perspective but cost of what it takes to run it, as well.
+ 
+01:00:06 Michael Kennedy: For sure, that's really interesting. And sometimes the sort of landing pages and main catalog pages, that's where really the busy traffic is anyway.
+ 
+01:00:14 Ben Cane: That's pretty much my use case that I've used things like that. I haven't used that one in particular, but I've done some things like that where I just pre-fetch pages and save the HTML for, yeah, it was hacky, but you know what? It really helped keep things slim, so it works.
+ 
+01:00:31 Michael Kennedy: That's awesome, cool. All right, Ben, final call to action. People are excited, they realize there's a few knobs that make their code much faster. What do you think, they should start by reading your two articles about optimization?
+ 
+01:00:42 Ben Cane: And really just don't be afraid to just jump right into it. Even if you don't know how something works, sometimes just turning that knob and then figuring out why it works is a real benefit. But for kind of self-promotion, for sure check out those blog posts. You can kind of follow me on Twitter. @madflojo is my handle. I have quite a few posts out there and lots of different stuff in lots of different areas. But that's definitely a good start.
+ 
+01:01:08 Michael Kennedy: Yeah, people should check out BenCane.com/archive.html, cause you have a ton of awesome articles there. We just chose a few to speak about.
+ 
+01:01:15 Ben Cane: Awesome, thanks. Yeah, I have tons of stuff, whether it's Docker related, performance tuning, one article I wrote is kind of building self-healing environments using things like Salt and just some Python code, which is-
+ 
+01:01:30 Michael Kennedy: Very cool. Well, thanks so much for sharing your experience. And it was great to chat with you.
+ 
+01:01:33 Ben Cane: Awesome, thank you. Thank you for having me.
+ 
+01:01:35 Michael Kennedy: You bet. This has been another episode of Talk Python To Me. Today's guest has been Ben Cane. And this episode is brought to you by Rollbar and GoCD. Rollbar takes the pain out of errors. They give you the context and insight you need to quickly locate and fix errors that might have gone unnoticed, until your users complain, of course. As Talk Python To Me listeners, track a ridiculous number of errors for free at Rollbar.com/TalkPythonToMe. GoCD is the on-premise, opensource, continuous delivery server. Want to improve your deployment workflow but keep your code and builds in-house? Check out GoCD at TalkPython.fm/GoCD and take control over your process. Are you or a colleague trying to learn Python? Have you tried books and videos that just left you bored by covering topics point by point? Well, check out my online course, Python Jumpstart by Building 10 Apps at TalkPython.fm/course to experience a more engaging way to learn Python. And if you're looking for something a little more advanced, try my Write Pythonic Code course at TalkPython.fm/Pythonic. Be sure to subscribe to the show. Open your favorite pod catcher and search for Python. We should be right at the top. You can also find iTunes feed at /itunes, Google Play feed at /play, and direct RSS feed at /rss on TalkPython.fm. This is your host, Michael Kennedy. Thanks so much for listening. I really appreciate it. Now get out there and write some Python code.
+ 
