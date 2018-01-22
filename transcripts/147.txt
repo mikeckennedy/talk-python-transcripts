@@ -1,0 +1,310 @@
+00:00:00 Michael Kennedy: There have been a bunch of new Python web frameworks coming out in the past few years. Generally, these have been focused solely on Python 3 and have tried to leverage Python's new async and await features. However, these frameworks have come with their own new APIs. They may be amazing, but it's still something new to learn, and a barrier to migrating over to them, and between them. That's why when I learned about Quart from Philip Jones, I was excited. It's an async-enabled web framework that attempts to be 100% compatible with Flask, including the extensions. This is Talk Python To Me, Episode 147, recorded January 18th, 2018. Welcome to Talk Python To Me, a weekly podcast on Python: the language, the libraries, the ecosystem, and the personalities. This is your host, Michael Kennedy. Follow me on Twitter, where I'm @mkennedy. Keep up with the show and listen to past episodes at talkopython.fm, and follow the show on Twitter via @talkpython. This episode is brought to you by Smarkets and Rollbar. Be sure to check out what they're offering during their segments. It really helps support the show. It's that conference time of year, everyone. There's actually a bunch of interesting things happening around Python conferences. So let's do a quick update. First, we'll do this chronologically, first, PyCascades is happening in Vancouver, BC, January 22nd and 23rd. I'm going to be there, so if you are one of the lucky people to have actually gotten a ticket before they sold out, hope to see you there in Vancouver. Next, we have PyColombia in Medellin, Columbia. This is February 9th, 10th, and 11th. So if you're in South America or want to go to South America and would love to go to this conference, please check out the PyColombia Conference. Those guys are doing cool stuff down there. Next up, PyCon Slovakia. This is March 9th to 11th in Bratislava. And I'm actually going to be speaking there and doing a workshop. If you're in Europe, and you can make it to Bratislava in March, that would be awesome. Please come say hello or attend one of my talks or workshops. Finally, the big one: PyCon US in Cleveland, Ohio, May 10th. I personally just finalized all my travel plans, and I hope to see you there. There's still tickets available. They're not yet sold out, as far as I know. So hurry, hurry, because just like Vancouver, they will sell out. We're also going to have a booth with lots of cool giveaway stuff there. So please stop by our booth and say hello if you make it to PyCon US. All of these conferences are amazing, and I hope you can make at least one of them. Now let's get to the interview. Phil, welcome to Talk Python.
+ 
+00:02:40 Philip Jones: Thank you, hello.
+ 
+00:02:41 Michael Kennedy: It's great to have you here. I'm a big fan of asynchronous programming, and I consider myself really a web developer at heart. And so this project that you are creating is really, really interesting to me. Quart, kind of an asynchronous version of Flask. And we're going to get into all the details in that and really dig into it. But before we do, let's start with your story. How'd you get into programming in Python?
+ 
+00:03:03 Philip Jones: So I got into programming really to make games when I was a teenager. The first one was, specifically, was to try and make my own version of Cannon Fodder, which I quite enjoyed playing round my friend's house. So that's how I got into it. It was VB, originally, for me.
+ 
+00:03:18 Michael Kennedy: VB, like VB6 type of thing?
+ 
+00:03:20 Philip Jones: Yeah, I think it must have been, yeah.
+ 
+00:03:23 Michael Kennedy: Like the Microsoft Visual Basic, right?
+ 
+00:03:25 Philip Jones: Yeah.
+ 
+00:03:26 Michael Kennedy: Oh, yeah, very interesting. That's a long ways from the web.
+ 
+00:03:28 Philip Jones: Yeah, definitely.
+ 
+00:03:30 Michael Kennedy: It is cool. So you started out in Visual Basic and creating in that. And that sounds really fun. Where'd you go from there?
+ 
+00:03:37 Philip Jones: Was originally thinking of doing computer science at university, but I did physics instead. But over the time, I got more and more into coding, and by the time I did my PhD, it was quite heavy on the simulation parts. And later on in the postdoc I switched, roughly speaking, from C++ to Python. So reasonably new to Python, but that's the kind of overview of how I progressed in the languages.
+ 
+00:04:01 Michael Kennedy: Oh, yeah, really cool. What was your PhD focus?
+ 
+00:04:03 Philip Jones: It was background rejection in neutrino experiments in Canada, and the simulation of the experiment itself, so a lot of physics simulation.
+ 
+00:04:10 Michael Kennedy: Oh yeah, that's cool. And of course computation is really front and center in that kind of stuff, right?
+ 
+00:04:15 Philip Jones: You can't really explain it anymore without the Monte Carlo simulations. It's too complex.
+ 
+00:04:20 Michael Kennedy: Yeah. Monte Carlo simulations are really amazing. They seem like magic to me. Here's a thing that'll take a month. Oh, but we can do it in five minutes. Very cool. If you're willing to accept a little uncertainty, we can do it really quick. All right, that's cool. So what do you do day to day? Not still physics simulations, right?
+ 
+00:04:35 Philip Jones: No, no, I left physics about three years ago now. I work for a company called Smarkets in London. And they're a betting exchange or event trading exchange. So ideally, we'd become like the prediction market. So you go to figure out who's going to win an election, for example. That's what we want to be.
+ 
+00:04:52 Michael Kennedy: Oh, that's really cool. So probably a lot of website traffic, a lot of, do you have APIs and stuff people can consume?
+ 
+00:04:58 Philip Jones: Exactly, so we built the website and the API to interact with the exchange, to help people to trade. So yeah, it's quite heavy on Python. There's some JavaScript and some Erlang, as well.
+ 
+00:05:08 Michael Kennedy: Erlang, okay, very cool. That sounds like a fun thing to do day to day. And it's not that far removed from this project we're going to talk about. So I kind of want to start the conversation and set the stage by just talking about asyncio in general. So this was introduced in what, Python 3.4, right?
+ 
+00:05:27 Philip Jones: I think so, yeah. I think it was the Tulip project before then, which you could use with Python 3, I think. So yeah, but I think it came in the standard library in 3.4.
+ 
+00:05:36 Michael Kennedy: All right, so what's the main idea behind asyncio?
+ 
+00:05:39 Philip Jones: I think it's about trying to utilize the CPU as much as you can. So instead of just being idle while you're waiting for I/O, you switch to something else. You're getting the concurrency that way. To me, that's what it's about.
+ 
+00:05:51 Michael Kennedy: Yeah, I think one of the real interesting things is web requests are so often waiting on other things. Like at the web server level, at the web framework level, a request comes in, and it says, "Hey, I'm this user, and I care about this data." What's the very next thing you do? You either call a microservice, you maybe find it on disk, or you go talk to a database. Regardless, that whole process is just going, "Eh, I'll just be here for when you need me, waiting for you to get back to me on that data so I can give it the user." Right?
+ 
+00:06:25 Philip Jones: Yeah, exactly.
+ 
+00:06:26 Michael Kennedy: And so if you could somehow say, well let's pause that, until that bit of work has an answer, back from the asyncio, from the I/O conversation, right? To the database or whatever, and let some other part of code that's going to run, run so it can then begin to wait, you know? A lot of hurry up and waits on the web server. So the asyncio basically means if you're waiting on I/O, that same thread can be processing, it can release the GIL and be processing other things, which I think is especially important in the web world.
+ 
+00:06:58 Philip Jones: I think it goes a bit further, as well, like if you compare it to, say, threading, which is another way to achieve the same thing. And it's obviously, co-routines are much more lightweight, so you can handle many more of these requests at any point in time that you can with threads. So that's the other part of it that makes it really useful for web servers.
+ 
+00:07:19 Michael Kennedy: Yeah, the lightweight part is really, really interesting. I mean, anyone who's sort of worked with a generator, it's kind of like that. And threads themselves have all sorts of overhead that come with them, creating the thread, destroying the thread. So maybe put them into a thread pool, but threads themselves, they have context switches at the kernel CPU level, they may mess up the cache, right? The L1/L2 cache. And so then they kind of can wreck performance, as you cycle between the threads. The cost of a thread varies by operating system, but they can have like a meg of stack space allocated to them. There's all sorts of things that limit how many you can have. So you can have 10, no problem, 100, no problem, 1,000, starts to maybe push the actual memory limits of your computer. With these sort of asyncio stuff, you can have many thousands, which is, I think, really awesome. So maybe give us a quick comparison to this concept with like Eventlet or Gevent. How are they similar or different?
+ 
+00:08:20 Philip Jones: So I think Eventlet and Gevent are the ones you typically use for Flask at the moment. And I think Eventlet roughly started-out as a fork of Gevent. So they're similar in principle, those two. And all three including asyncio, are very similar in principle. They're an event loop that runs tasks or greenlets or co-routines and allow yielding when there's I/O. But I think the crucial difference and what asyncio actually does differently to all the choices I've seen so far is that it makes the yielding explicit. You have to write the await keyword. And it fits the Python philosophy a lot better. Obviously explicitly is better than implicit. And I think it makes it a lot clearer to the user, cause you now know when these changes are going to happen. And you get a feeling that you're actually writing these yields into your code rather than there's some magic in the background making it happen.
+ 
+00:09:17 Michael Kennedy: Right, exactly. That's very cool. So basically anytime you're going to call one of these async methods, you say await, and that signals to the runtime to say now we're going to give up this execution and pause until this I/O or this event completes, go on and you sort of really clearly know and call out where things are going to sort of pause, at least for that request but also yield the execution, right?
+ 
+00:09:44 Philip Jones: I think it was probably a little clearer before they introduced the async and await keywords, cause you'd write an explicit yield to actually yield, to yield from, to just switch control to the next co-routine, whereas just with the await keyword, you could await a co-routine or await something that does yield, but it's not quite clear as much. But still, you know that that line could possibly yield, which makes it a lot clearer.
+ 
+00:10:10 Michael Kennedy: Yeah, yeah, yeah, that's really cool. So one thing that you've talked about is this asyncio color problem. What's that?
+ 
+00:10:16 Philip Jones: I can't remember who termed it as such, but yeah, I certainly copied their choice, cause you kind of of, you could imagine coloring certain colors red, and the red functions call other red functions and other functions black, and the same applies. And the red functions would be co-routines, asynchronous functions, and the black ones are just your synchronous ones. So I think that's where the naming comes from. But a basic problem part of it is that the explicit design forces you to only be able to trigger the co-routine's asynchronous code from co-routines. So if you have a synchronous function, your standard Python function, it's quite hard to run a co-routine.
+ 
+00:10:54 Michael Kennedy: Right, and that's one of the hearts of the problem of why so many popular web frameworks don't just enable async, right? Because it comes in through this WSGI interface. It calls the one function that is in that API, and it starts out synchronous, and so there's really no layer, no place where you can sort of inject that easily, right?
+ 
+00:11:19 Philip Jones: Not only is it viral in nature, as soon as you want to await something, you need to be in an asynchronous, in a co-routine to do so, to also call that co-routine, you need to be in a co-routine again, so you go all the way up to the event loop that inevitably runs your co-routines. And WSGI, at least in its current form, doesn't have a concept of event loops. So it's not having that. It's also not going to do the I/O, necessarily, in a way that's going to yield to any event loop for you. So even if you introduce it later on, you're not necessarily getting the full advantage of yielding on the IO.
+ 
+00:11:54 Michael Kennedy: You basically have to block and wait to give the request back, at some point, or you're going to get ahead of yourself. And that pretty much cancels-out all the benefits that you had. So your project says we're going to take this and we're going to start from this asynchronous level, one thing I do want to call out, and I can't quickly lookup where it is, but there's this great article by Christian Medina that says, it's titled something like, Controlling Async Creep, and he talks about this problem, this asyncio coloring problem and different techniques you can have to sort of create boundaries, or whatnot. Very, very interesting article around this idea. But, oh, let's stay focused on this. Maybe before we get into how people work with Flask. I feel like the Flask API is showing-up everywhere. For example, I just recently did a show on Flask Ask, which is like a Flask API for writing, say, Echo Dot type voice interactions. And you just write it as a Flask app. And it just magically plugs into that whole framework from Amazon, which is really cool. Why do you think Flask is so popular?
+ 
+00:13:05 Philip Jones: That does sound really cool. I think it is probably the API, I think. I think it's a very clear and concise API to use. I'll give you a really simple example, the hello world with the decorator saying this is the root and this is the view function. I think you couldn't get an API clearer than that, for a web framework. It's so concise and nice. And I think the design choices Flask has made, as a whole, just really emphasize this usability. So, it might be the request object being a global, for example, just because you're going to use it that way. It makes life so much easier. And so I think this, and the familiarity of that API, is what kicked it off. And then I think that enabled the really strong community around Flask that probably makes it really popular today. So the great blog posts you can find, especially effectively the large blog post I think everyone starts with from, I think, Michael Grinberg. And the extensions, oh, Miguel.
+ 
+00:14:10 Michael Kennedy: Yeah, Miguel Grinberg. And he's actually re-doing that one for Python 3 and modern Flask and all that. So, he's halfway through a redoing that, which is really exciting, as well. I'll be sure to link to that. I agree, I think there's also so many plugins you can get, to extend Flask, right?
+ 
+00:14:27 Philip Jones: Yep, there's extensions for almost anything you could want to do.
+ 
+00:14:30 Michael Kennedy: Let's talk about this for a second. What if I have a Flask app, standard Flask, not Quart or anything fancy like that, and I want to do something asynchronous in it? Like, let's say I want to do web sockets, which are basically permanent connections, right? That can't easily be done synchronously in a sort of, request response style. So, how would that go? Can you do it? 
+ 
+00:14:51 Philip Jones: Yeah, I think typically at the moment, you'd use gevent, at least the two popular ones, which is Flask sockets, the popular extensions, and Flask socket I/O, I believe use gevent under the hood. And you do need the event loop really, to make it possible. And with those, it's actually quite easy. I think you just add that extension and it takes care of the rest for you. And you can just decorate a function that you say is at web socket root, and deal with the web socket directly. It's very easy.
+ 
+00:15:21 Michael Kennedy: I see, so does it basically hand it off to that processing to just run asynchronously on it's own?
+ 
+00:15:27 Philip Jones: Well, if we take the Flask socket example, what that does is it will wrap your Flask app in a gevent WSGI server, and introduce the web socket at that level. So, a web socket request coming in would be handled before it gets to Flask. Although it logs like it's going to Flask, but it would be handled beforehand. And then everything else, would just go straight through to Flask, the WSGI interface. So, yeah, it would work that way.
+ 
+00:15:52 Michael Kennedy: Yeah, yeah, nice! This portion of Talk Python is brought to you by Smarkets. And they're looking to hire someone to write some really awesome Python code! Smarkets operates a world leading exchange for peer-to-peer trading on sports, politics, and current affairs. As a business, Smarkets is widely recognized as one of the fastest-growing tech companies in Europe. It has won a roster of awards for it's success over the past few years. Headquartered in London, with a new tech hub in downtown LA, the company is pioneering a self-managed organizational structure. This breaks down the traditional pyramid of hierarchical silos, into a more fluid and flat network of interlinked teams where engineers are the driving force. There are no formal bosses, staff are allowed to set their own salary, have unlimited holiday and work where they like within the company. Over 60% of the staff are engineers who work on a modern tech stack predominantly based on Python, complemented with Erlang and Javascript. Smarkets uses Python 3.6 throughout, and deploys Dockerize microservices multiple times a day. Apply to work at Smarkets by visiting talkpython.fm/smarkets, or just click the link in the episode notes. Suppose I want to have some Flask view method, and it's going to, say, call a web service it's going to talk to a Postgres database, for example. There are asynchronous ways to do those things, right? If I have aiohttp client, that's a really nice asyncio friendly way to call remote services. And I could use the async Postgres driver there, and call that. But with straight Flask, I can't put async on my methods, right? Or await in it, and really get it to honor that, could I?
+ 
+00:17:36 Philip Jones: I don't think so. If there was an extension called Flask aiohttp, which I think is no longer maintained. But that, I believe, used the WSGI interface that aiohttp provided, which I think is also deprecated now, sadly. But, that would allow you to, fairly easily, I think, make your Flask view functions async. But I think it had some issues whereby the locals, the request G that those request locals would get corrupted, or could get corrupted. So, I think that kind of ruled it out.
+ 
+00:18:10 Michael Kennedy: Yeah, that doesn't sound amazing, right?
+ 
+00:18:12 Philip Jones: No, no, you certainly don't want that. There was also a fork of Flask I found that did make the view functions async. It was designed around asyncio for 3.4. But I don't really, I've been trying I haven't quite tried to figure out how it worked. Or if it worked, but it hasn't been touched for about three years, so I don't think that's maintained either.
+ 
+00:18:33 Michael Kennedy: Right. And so this maybe brings us to your project, Quart. What is Quart?
+ 
+00:18:38 Philip Jones: So, Quart is a web microframework, much like Flask. Based on asyncio and the Flask API. So the aim really is to provide the easiest stepping stone from someone who has a Flask app, or Flask knowledge, to use asyncio in that app, or in a new app, with that knowledge, basically. So, yeah, it's just a web framework, web microframework.
+ 
+00:19:00 Michael Kennedy: Nice, so you decided instead of, because there are other asyncio frameworks that have come around, Sanic, Japronto, others that we can talk about later. But generally they said, we're going to come up with a new way to program the web. And we're going to sort of do it around this asyncio thing, and you said, "Look, Flask is super popular. It has this API that people already know. People can go and take Miguel's tutorial and learn about it already." But you just want to have it work with asyncio, right? And so, we're going to start from there, right? How much did you borrow from Flask, and how much did you have to start from scratch, here?
+ 
+00:19:39 Philip Jones: I've tried to borrow the entire Flask API, and quite a bit of the Werkzeug API, which is the part under Flask that powers much of the http stuff. And I've tried to borrow most of that as well. So, yeah, a great deal, hopefully. What I'd really quite like is if you have a Flask app that doesn't use any extensions, you can just Find/Replace Flask with Quart, and then add the async and await keywords, and it just runs. That's what I'm kind of aiming for.
+ 
+00:20:06 Michael Kennedy: That's great! And how close is it to that goal?
+ 
+00:20:08 Philip Jones: I think it's quite close. I think it's really in the details now. So for example, I need to work on the etag handling, how they're applied to static files, and stuff like that. And subdomain handling in the routing system. I think those are real details that I think most of the use cases, it should be possible to just do that now. To just, as in Find/Replace.
+ 
+00:20:30 Michael Kennedy: Oh, that's awesome! You could go grab Miguel's tutorial, and just I don't know, what's the verb of making it run on Quart? Quartify? Add Quart capabilities to it, right?
+ 
+00:20:40 Philip Jones: That would be cool!
+ 
+00:20:40 Michael Kennedy: Very cool. I guess one of the first questions is, why not just fork Flask, and just tack on the little bits of asyncio handling that you need?
+ 
+00:20:50 Philip Jones: That would be ideal, but at the moment at least, it's beyond what I'm able to do. And I think it goes back to the WSGI interface, which really isn't asynchronous. Again, if you really want the event loop to be able to get the yield on the request I/O and the response I/O, you need to be controlling that part. And so I think you have to go, start from Flask, go up to Werkzeug, and then almost go up to the WSGI servers themselves, and make them asynchronous to really, well asyncio compatible, to really make it possible. And, yeah, I couldn't really make that work. It was quite hard.
+ 
+00:21:30 Michael Kennedy: I know a lot of people have tried, and they've talked about adding a WSGI 2 or a, various acronyms with 'A' involved within there, to basically asyncify that API. But there's really not a lot of flexibility in there. And the actual WSGI API, which is what all the web frameworks use to plugin to the various web servers, right? I want to run a uWSGI, or I want to run on Gunicorn, or whatever, they all speak WSGI, so you can just plug Pyramid Flask, Django, whatever in there, right?
+ 
+00:22:04 Philip Jones: One of them I was looking at is ASCII with traffic Django as plugin. So I think the idea there is you just push out the messages to a queue, and then you have loads of things consuming it in an asynchronous fashion. And then returning the results. I don't think it would quite work for Quart either. But they seem to want to, I think they're trying to suggest that is the next step for WSGI, like it becomes ASCII.
+ 
+00:22:27 Michael Kennedy: Yeah, yeah, that's one of the acronyms I was thinking of. So how do you add on things like web socket support, or HTTP 2 pipelining, where you can make a request, and actually through that single network request, punch like 3 CSS, a Javascript, an image, an html file response as one? Do you think they could make that work there?
+ 
+00:22:48 Philip Jones: I think so, yeah. Because each request could just be a separate message on that queue, and then something can consume and produce the output, and send it back. So, I'm sure it would work for that.
+ 
+00:22:59 Michael Kennedy: Maybe you could somehow bundle-up the multiple responses, or something, at the framework level, and then send it over to the network? I don't know, it's, yeah, it's going to be pretty interesting with all the HTTP 2 stuff coming along, and whatnot.
+ 
+00:23:12 Philip Jones: Ah, definitely. I think HTTP 2 is one of the most, more exciting things I'm interested in, and I'm very pleased that Quart can do it, so it's very good to play with.
+ 
+00:23:22 Michael Kennedy: It can, that's really cool! So, how much of that is the framework, and how much of that is, say, just the server it's running on? Say, if you were on Gunicorn, right? How much is Gunicorn doing versus how much is Quart actually doing to make the HTTP 2 supported?
+ 
+00:23:36 Philip Jones: In a traditional sense, the WSGI server does all the HTTP passing and just passes through the environment. But for Quart, how it works with Gunicorn is we just use the sockets. Gunicorn doesn't actually do any HTTP passing, it all goes through to Quart, so all the HTTP 2, the HTTP 1, it's all taken care of in Quart. And we just pipe it back out through the socket that Gunicorn's provided.
+ 
+00:23:59 Michael Kennedy: Give us a sense around the kind of performance differences that people could expect if they, say, have a standard Flask app, running on Gunicorn now, if they flipped to using Quart also on Gunicorn, what do you think happens?
+ 
+00:24:13 Philip Jones: I actually did a, I think you're going to link an article I did to look at this. And I looked at kind of a production use case where you have a simple CRUD app with a database in the background. And I used Gunicorn, with eventlet, so it was asynchronous. Fairly similar type of work load pattern and the way it approaches the problem and I compared it against Quart. and I think with Quart, I got something like a 3x throughput speed-up, so the latency, or the request time itself, didn't really make too much of a difference, but the amount of requests it could handle at once, really increased.
+ 
+00:24:51 Michael Kennedy: Yeah, that's really cool. And I would guess that you probably were not working with like a super slow database, or a tremendous amount of data in your simple test. But it seems to me the worse the database performs, the more beneficial having this asynchronous thing could be, to sort of free up the waiting, the worse the waiting is, the more beneficial it is to have async methods.
+ 
+00:25:17 Philip Jones: Although that should apply to both sides of the test. Because eventlet would do the same in the Flask sense.
+ 
+00:25:22 Michael Kennedy: Right, okay, yeah. So if you're already switching to eventlet, then it would. Have you thought about this relative to a non-async Flask? Just a standard Flask, if you're not using eventlet?
+ 
+00:25:35 Philip Jones: Yeah, it makes a huge difference then, because your requests, effectively become synchronous. You have to do one at a time, so unless I suppose, you used threading, I haven't tried threading, but assuming you have no asynchronous aspect at all, then it would make a very large difference because you'd have to finish the one request before you could even start the next.
+ 
+00:25:53 Michael Kennedy: That's for sure, how interesting! So you talked about Flask and I said one of the benefits of it is these Flask extensions, right? There's a bunch of stuff you can plug in. Does Quart support Flask extensions?
+ 
+00:26:06 Philip Jones: Supports a good fraction of them. I think it's fair to say. So, this goes back to that color problem we mentioned earlier, because of course, all the extensions are synchronous, they have synchronous functions, and inevitably they're going to try and call some code that's now asynchronous in Quart. And that's, that's where it becomes a problem. So we can go into the details of how it gets around that, but that's why some of them work.
+ 
+00:26:31 Michael Kennedy: Yeah, that'd be kind of interesting, right? Because people are going to pip install these extensions, and generally not change the code. And until your framework is popular enough that people are creating async equivalents of their extensions, you have to make these, you have to blend the colors, right? So how are you doing that?
+ 
+00:26:49 Philip Jones: It's quite fun to look at. It took quite a bit of time. So, if I go back to how you run it currently, you need to run it in the event loop. And if you're outside the event loop, it's quite easy. You just either create or get an event loop, then tell it to run a co-routine, and it's all very good. But if you're in a function that's been called by something within the event loop, you can't do that. The actual asyncio function run until complete, for example will refuse to run, because you're inside the event loop. And it turns out this was known back during the Tulip days, and someone proposed a solution to this, which was to actually run the event loop, again, within the event loop, to run this particular co-routine. And I think it was rejected because it just made things quite complicated, and it wasn't a particularly useful use case. But in this case, where you've got legacy systems, well, you have synchronous code trying to call asynchronous code, it's exactly what you need to do. So what Quart will do, if you want to go down this route, is monkey patch the event loop to add a method to run the event loop, if you like, manually for a co-routine that you specify. So it will suspend the event loop it's already in, run it itself, and then restore everything after its complete. So it probably sounds a bit messy, and it probably is.
+ 
+00:28:08 Michael Kennedy: It sounds like it could create this cascading chain of massive event loops going down, and down, and down.
+ 
+00:28:13 Philip Jones: Yeah, right, so. But it does allow these extensions with their synchronous call to another function to be able to call an asynchronous function without them being able to tell. There's just a layer in between that does this mapping from sync to async.
+ 
+00:28:28 Michael Kennedy: That's really cool, very creative! You said it works for most of them. When it fails, what happens? Why does it not work, do you remember?
+ 
+00:28:36 Philip Jones: So Flask has these request locals, like the request object or the g object and when you try and do anything with them, or access any attribute of them it effectively proxies that action to an instance that's local to the thread or greenlet that you're on. And I hope that makes sense. It's proxying, basically. So, what I can do in Quart is, I can, during that proxy, also take it from a synchronous call to an asynchronous call. So that works really well for these local proxy objects. The problem is when an extension uses the Flask class itself like the app, because I haven't figured-out a way yet to effectively proxy the call and convert it from synchronous to asynchronous. So if the extension just uses these globals, it's good. If it uses the app, I need to be a bit more clever.
+ 
+00:29:25 Michael Kennedy: Hopefully you get that puzzle figured out. Because it would be really cool to have that support in there. Very nice, so what template languages are supported? Do you have Jinja2?
+ 
+00:29:35 Philip Jones: It follows the Flask design in that respect. It just does Jinja2. But I'm sure, I think there's an extension called Flask Mako that's quite popular? I think that may work as well. The question becomes whether that template and engine is asynchronous itself. If it isn't you just get a bit of a performance hit.
+ 
+00:29:53 Michael Kennedy: Right, I see. So the Jinja2 one supports asynchronous behaviors indirectly?
+ 
+00:29:59 Philip Jones: It does. It's actually, if you look at the code, it's kind of amazing how they do it. So if you're running Python 3.6, and you ask it to be asynchronous, it will patch itself to add the asynchronous methods. It's, yeah, it's really quite good to look at!
+ 
+00:30:12 Michael Kennedy: Wow, that's really quite awesome, actually! I didn't realize it did that. So, I'm guessing you don't support Python 2 in this? Is it Python 3 only?
+ 
+00:30:21 Philip Jones: It is. It's even more stricter than that, actually. It's Python 3.6 only, because I use asynchronous generators, one I use is being, if you want to stream a response, you want to yield data back whilst being asynchronous, so because of that you can't use anything other than Python 3.6 where they were introduced.
+ 
+00:30:38 Michael Kennedy: Yeah, that's really interesting. I feel like a few years ago, the story was well, people can't move to Python 3 because there's all this cool stuff that we're using that only supports Python 2. And now I think more and more, we're ending up in a situation where there's all these amazing new things, but they're only accessible to you if you're using the latest versions of Python 3. Which, I think that's a good move.
+ 
+00:31:00 Philip Jones: The other thing which it does as well, which really constrains it to Python 3 I've used is I type into everything, including the variables. Which the syntax, well the nicest syntax, was only introduced in Python 3.6, so yeah, I quite like that as well.
+ 
+00:31:13 Michael Kennedy: I really do as well. I find it makes the editors much smarter about the types of things you're actually working with. You can run tools, and say, no, no, you're passing an int. You're supposed to pass the whole object, not the ID of the object here, things like that. It's great. This portion of Talk Python to Me has been brought to you by Rollbar. One of the frustrating things of being a developer is dealing with errors. Ah, relying on users to report errors, digging through log files to try and debug issues, or getting millions of alerts just flooding your inbox, and ruining your day. With Rollbar's full stack error monitoring, you get the context, insight, and control you need to find and fix bugs faster. Adding Rollbar to your Python app, is as easy as pip install rollbar. You can start tracking production errors, and deployments in eight minutes or less. Are you considering self-hosting tools for security or compliance reasons? Then you should really checkout Rollbar's Compliance SaaS Option. Get advanced security features and meet compliance without the hassle of self-hosting, including HIPPA, ISO 27001, Privacy Shield, and more. They'd love to give you a demo! Give Rollbar a try today. Go to talkpython.fm/rollbar, and check 'em out. Yeah, so actually converting your Flask methods to Quart methods, is quite easy, right? You just have your, let's say, a review function, I think this is an example you have on your website. Say def add review data equals or request socket json. Or you can just say async def add review data equals await request get json. And you just add the async and await keywords, and off it goes, right?
+ 
+00:32:50 Philip Jones: Yeah.
+ 
+00:32:51 Michael Kennedy: So I think it wouldn't be that hard to convert a small to medium sized Flask app to Quart. What do you think, how much effort and testing has to be done?
+ 
+00:33:00 Philip Jones: I think you're right. I think small ones should be quite easy. What will probably make it hard for people is that, they're probably going to call something else, like you were saying earlier. If you're going to do a web request to a, or an HTTP request to a microservice, or something to a database, or something like that, and those libraries are likely to be synchronous, rather than async, and well this comes back to the color problem, you're going to have to switch from say, psycopg to asyncpg or your pyreddis to ioreddis, or request to aiohttp, and that's probably going to be more work because those APIs are subtly different usually.
+ 
+00:33:37 Michael Kennedy: I would think probably the reddis wouldn't be that hard. Probably the aiohttp client, not such a big deal, but I feel like when you get down to database stuff, that's where the complexity lives a lot of times. So maybe upgrading the database driver, or package to be the async one is probably where it's most challenging, I don't know. Have you tried, have you got some experience?
+ 
+00:33:59 Philip Jones: Yeah, I've played a lot with myself, and yeah, because I typically use psycopg directly. I don't use SQL Alchemy on top of it usually. And that's not too bad, it's fairly easy to change. And it has a big bonus, there's an asyncpg, if you look at how Magicstack report the benchmarking for it, it looks much, much quicker, which is excellent! But, yes, if you have a lot of ORM stuff, I think you're almost stuck. I'm not sure I've seen an ORM that's async as yet.
+ 
+00:34:31 Michael Kennedy: I know that SQL Alchemy hasn't done it. I feel like there is one out there, and I'm hesitant to say which one, I'm guessing it is. Because if it's wrong, I'll try to put some notes in the show notes or something. I've seen one that I thought allowed it. But, yeah, certainly SQL Alchemy doesn't, and that's unfortunate, right? So it kind of says, look if you're going to do this async stuff, then you're kind of stuck. I guess there's a few things you could do. You could move your Quart requests out. Say, like, another thread that you wrap-up and await that things respond, or something. But it definitely makes it not easy, right?
+ 
+00:35:15 Philip Jones: Yeah. So, asyncio makes that bit reasonably easy. I think there's a function called run in executor, which will do almost exactly what you just said. So, yeah, that's probably what you'd have to do.
+ 
+00:35:25 Michael Kennedy: Okay, so I found what I was looking for. And it's actually not the ORM itself, it's an add on. The ORM is PeeWee, which is a small ORM type of thing. It's pretty popular, it's got close to 5,000 starts. But there's PeeWee-async which is an asyncio interface for PeeWee. So, that one you can do it. You can basically say await objects.create or things like that where you basically do the queries, and then you can await the response, which is kind of cool.
+ 
+00:35:58 Philip Jones: Ah, that is cool, yeah. I didn't come across that.
+ 
+00:36:01 Michael Kennedy: Yeah, but it's unfortunately that it's not the most popular one like SQL Alchemy, or say the Django one, or something like this, right? But people are looking for it. Maybe you'd have to switch to PeeWee async if for right now, it's written in SQL Alchemy, I don't know, what do you think? I'm thinking about this database problem, can you take a SQL Alchemy Flask app, or a Mongo DB Flask app and somehow shoe-horn it in so you can still do these queries, and you don't have to completely re-write your data access layer. But make it async-friendly, easy, not easy?
+ 
+00:36:33 Philip Jones: I think in all honesty, it requires a bit of effort, yes. You'd have to, you'd probably want to choose a different driver, so you need to spend some time looking into it, and then you'd probably have to re-write a bit to actually make it work. So, yeah, I don't think it's all that easy.
+ 
+00:36:47 Michael Kennedy: It doesn't sound easy to me either. Although, it may be worth it, it's definitely not going to be just a throw an async and a wait keyword here and there, and just go with it, right?
+ 
+00:36:56 Philip Jones: Indeed. I think it is, it does look to be worth it if you, there's some articles by Magicstack and the way they talk about the performance, they can get through the asyncio stuff, it looks really, really good, really very fast.
+ 
+00:37:09 Michael Kennedy: Yeah, I think it's really quite powerful. But it also probably depends, right? Like you guys, I suspect, have a lot of traffic. If you do 10 requests a second on your server, or one, maybe just leave it alone, pay $5 more, and get a bigger server, and just be done with it. There's probably some threshold where below that, it's not worth re-writing it until there's enough demand. What do you think?
+ 
+00:37:34 Philip Jones: Certainly yeah, even for us it's not necessarily worth it to wholesale replace our synapses with Quart. I think we're only really experimenting with it, with asyncio's assistance at the moment.
+ 
+00:37:48 Michael Kennedy: Cool, so let's compare this a little bit with some of the other, what I consider the Python 3 async web frameworks. We've got Sanic, we have Japronto, aiohttp, how do you see your work similar or different to these?
+ 
+00:38:07 Philip Jones: There's kind of two approaches, that have been taken here. And most of the Python 3 async ones I've seen have been more the microframework style than the Django style. The ones that Flask like, which are Sanic and Japronto, I think, and then there's aiohttp, that I think for very legitimate reasons, by design, doesn't want to go down the Flask approach. So, I think that's basically the first choice. And then, I think Quart fits in because it's not Flask-like. Hopefully it is the Flask API. So I think that sets it aside, and is kind of the motivation for it. So, then there's kind of that scale. And then there's the, what is the aim of the project in that scale? Sanic and Japronto I think are all about speed, as far as I understand what they're aiming for. They're really about trying to get performance out of it. And aiohttp is meant to be an all encompassing http library, right? It does the client side as well as the server. So, I think there's these varying aims for the projects.
+ 
+00:39:12 Michael Kennedy: Right, and I think it is a massive advantage to say, we're not going to create something Flask-like, we're going to create Flask, effectively. But async enabled natively. And one of the main benefits there is obviously people can migrate more easily to it, you already talked about the Flask extensions, all those kind of things, right?
+ 
+00:39:30 Philip Jones: To me, it's mostly about not having to learn something new. I did play with Sanic, I quite like Sanic. But I didn't want to have to learn how Sanic did things.
+ 
+00:39:39 Michael Kennedy: Yeah, if you want to go on stack overflow and ask, how do I do this with my web framework x? You'll have way more answers if x equals Flask.
+ 
+00:39:49 Philip Jones: It's true, definitely.
+ 
+00:39:50 Michael Kennedy: Yeah, it's just the more tutorials, more courses, et cetera, et cetera. Although, I suspect there's minor differences, the majority of it is kind of still the Flask API, the Flask story, right?
+ 
+00:39:59 Philip Jones: Certainly there is differences in the details. And obviously async,
+ 
+00:40:04 Michael Kennedy: Yeah, so what are the hangups people might get trying to switch to Quart? Are there things they have to be on the lookout for just due to the async nature? Or how careful have they got to be?
+ 
+00:40:15 Philip Jones: I think one of the most annoying parts is that if you have a co-routine, say you want, the example you said where you await the request .get json, if you forget to write the await word, then the data, let me start again, if you have data equals request dot get json in your Flask, and you change it to Quart, that line of code will still run, it's just the data would now hold a co-routine object, instead of the data you're expecting. And that could probably catch you up quite easily because, until you try and use it, you don't know it's got to be something different.
+ 
+00:40:48 Michael Kennedy: What do you mean status code doesn't exist anymore on this thing, like, why did this start failing? Why are the attributes missing, right? Of course, because you didn't await.
+ 
+00:40:57 Philip Jones: Yeah.
+ 
+00:40:59 Michael Kennedy: Yeah, interesting. So, let's talk about the deployment story. You talk a lot about using Gunicorn, you said you can basically run both Quart and Flask apps on top of that in more or less the same way, but just different config settings, right?
+ 
+00:41:10 Philip Jones: Yeah, you just change the worker, and that should be enough.
+ 
+00:41:15 Michael Kennedy: Right, so you say, eventlet is the one to use for Flask, and Quart-Gig Economy for Quart. Gig Economy is pretty interesting, why don't you tell people about that?
+ 
+00:41:25 Philip Jones: My understanding, which I think is wrong, is that the kind of history goes from Loopevent to Loop-EV, which is what eventlet and gevent I think are based on. To Loop-UV, and they're all improvements on the previous iteration, and uvloop is the kind of Python bindings to change the asyncio loop policy to use uvloop instead of the default one. The reason you'd want to do this is because it looks like, from all the stuff that's been published that uvloop really just makes things run a lot quicker. And, if I understand it correctly, it's the same base event loop that node js uses. So, it's got some proven track record of being very good, so yeah. If you switch it to the uvloop worker, you can really get some performance boosts.
+ 
+00:42:13 Michael Kennedy: I get the same impression reading around that uvloop definitely speeds that up, and its cool that it's the same one that node js runs on. Because node js, for all of it's flaws and challenges, it's definitely good at handling lots of requests based on I/O completion waiting behaviors, right?
+ 
+00:42:30 Philip Jones: Yes, definitely. I find it kind of amusing, if I've understood the history right, it's that uvloop is a re-write of EV, Loop-EV, Loop-UV is a re-write, to work on Windows. At least that was the original motivation. But as I understand it, the uvloop kind of bindings doesn't work on Windows, so I find that a kind of like sad irony.
+ 
+00:42:49 Michael Kennedy: That is very ironic! It's turned it's back on it's origin, how interesting. So, have you talked with Armin Ronacher, the guy who maintains creative Flask, about what you've done, how it maybe could be contributed back to Flask? Or what those guys are up to, things like that?
+ 
+00:43:08 Philip Jones: I haven't, no, I was actually hoping, because I think you spoke to him on this program, I was going to ask I you could introduce me, which would be excellent!
+ 
+00:43:15 Michael Kennedy: Yeah, I'd be happy to, sure! Yeah, I don't really know what's going on in official Flask around all this stuff. So, it seems like you've got a really nice head start, so that's cool.
+ 
+00:43:27 Philip Jones: I don't know what's going on officially for Flask either. But it doesn't look like they're actively pursuing asyncio at the moment, it looks like they're pursuing the release one of Flask, as far as I can tell. Which would be great as well.
+ 
+00:43:38 Michael Kennedy: Yeah, it would be great. I suspect, making major changes to Flask in terms of APIs and stuff is a slow, tedious, careful process. Same thing for Django, and for Pyramid, and these well-established long living web frameworks. Compatibility is probably a top concern.
+ 
+00:43:57 Philip Jones: And I think you probably have to make some difficult changes to introduce asyncio as well, so. My hope would be that Quart proves that this is desired and useful. And then there's more desire to actually make some Flask changes, and to be able to merge the two.
+ 
+00:44:14 Michael Kennedy: Yeah, and then you'll push a major, major pull request over to Flask?
+ 
+00:44:17 Philip Jones: Well, it'd have to be Flask and VERT SIG, I think, if it's ever going to be possible.
+ 
+00:44:22 Michael Kennedy: Yeah, yeah, for sure. yeah, very cool. Where you going in terms of the future for Quart, what's next?
+ 
+00:44:30 Philip Jones: I said earlier, there's details about the API that don't fully match at the moment, which obviously I need to get correct, so. Little details about how etags are used, and how static files are served, that kind of thing. After that, I want to kind of really demonstrate the robustness of the HTTP 2 handling, and the web socket handling, so luckily there's some compliance testing projects out there, which I can use for that. And then, it's also about the development process. Flask and Werkzeug have this really nice debug webpage, that tells you what's going wrong when you try and do something. I think Quart needs something like that as well.
+ 
+00:45:06 Michael Kennedy: Sounds very cool. One of the areas of performance that we spoke about was with async await, and sort of the asynchronous view. We also talked about HTTP 2, how do you see that affecting performance? Do you see the ability to have HTTP 2, also adding another layer of speed-ups?
+ 
+00:45:25 Philip Jones: I do see it makes things quicker when I test it. I haven't published anything yet, because I haven't really figured out what kind of a safe comparison benchmark is. Because the cost of opening connections is quite high. And maybe you should include that, but you could effectively pipeline your, maybe 20 connections, down one, and get a big difference, but wherever that's found, I'm not sure, so I don't know how to talk about it in a fair way.
+ 
+00:45:53 Michael Kennedy: It's really precarious to publish benchmarks.
+ 
+00:45:56 Philip Jones: Yeah, definitely!
+ 
+00:45:58 Michael Kennedy: No matter what you do, there's always someone that's going to show you how you're wrong. And usually what that means is, you're wrong because I use it this way, and you're measuring it that way, and if I used it the way I use it, it wouldn't give me the same results as the way that you use it, and so your results are misleading, or whatever, right? And it's just really hard to get something truly representative of what people are doing when they're doing all these different things, I think.
+ 
+00:46:24 Philip Jones: One thing I'd really like to do, if I can convince my colleagues, is change one of our Edge servers to be HTTP 2, and then you'd be able to see quite a big difference in real use cases. So, that would be excellent!
+ 
+00:46:35 Michael Kennedy: Yeah, well, let's us know when it's out. I'll definitely point people at it. That would be awesome. It would be! Yeah, yeah, very cool, so one thing I noticed is you have your project on GitLab, and a lot of people have their projects on GitHub. And you've talked about this a little bit, so why GitLab over, say, GitHub?
+ 
+00:46:51 Philip Jones: Initially it looks a bit silly because GitHub is way more popular than GitLab, and projects tend to be judged by, at least superficially to begin with, by the stars and forks they have, which is always going to be lower on GitLab. But for me GitLab is open source, which sways a lot of it in my mind. It certainly made a difference to the company I work for when we were starting up, to have such a great open source project we could just use, to begin with. And the other thing I kind of like is it's CI system is really nicely integrated, and that works very well for Quart at the moment, so, it's very easy.
+ 
+00:47:28 Michael Kennedy: Quick then, if you're going to work on Quart, what editor do you open up?
+ 
+00:47:31 Philip Jones: I use Emacs, although, I think I use Emacs really badly. I don't really add any plugins. I tend to use it just as a terminal, very vanilla. I went through a stage of having it reasonably optimized, and then I just reverted all back to plain. Yeah, I don't put too much in my editor, I probably should. But, yeah, I just open Emacs, and go from there.
+ 
+00:47:53 Michael Kennedy: All right, cool! In addition to Quart, which it's pip install quart, right? What other notable PyPI packages are out there that you want to recommend?
+ 
+00:48:04 Philip Jones: I think I'll recommend two that I use in Quart. I recommend Flake8, which has almost certainly caught loads of silly bugs, and style issues, and I think mostly I use it to take away any discussion or uncertainty about the style. And Mypy, for the same reason of catching the bugs, and to make sure the documentation is right.
+ 
+00:48:24 Michael Kennedy: Yeah, Mypy is very cool, and there's a lot of activity around Mypy right now.
+ 
+00:48:27 Philip Jones: Which is really nice!
+ 
+00:48:28 Michael Kennedy: Okay, so final call to action, people are interested in Quart, how do they get started? Are you looking for contributors to the project? Things like that.
+ 
+00:48:37 Philip Jones: Absolutely, yes, it would be great if people could give it a go, and open issues, or pull requests, merge requests of changes. That would be absolutely excellent! And hopefully it's easy, it's just pip install quart. And give it a go, I hope it's as easy as Flask is. Basically a five line quick start.
+ 
+00:48:55 Michael Kennedy: Yeah, that's really cool! And you have a video that's now on YouTube, from one of the PyCons, which I'll link to that's PyCon UK, right, 2017?
+ 
+00:49:03 Philip Jones: Yep, that's the one, yeah.
+ 
+00:49:05 Michael Kennedy: All right, so if people want to watch your video presentation as well, I'll be sure to link to that. Looks like a really cool project, thanks for creating it, and coming on the show, to share it with everyone!
+ 
+00:49:15 Philip Jones: Thank you for the invite!
+ 
+00:49:15 Michael Kennedy: Of course, talk to you later!
+ 
+00:49:16 Philip Jones: Okay, bye!
+ 
+00:49:18 Michael Kennedy: This has been another episode of Talk Python To Me. Today's guest was Philip Jones, and this episode has been brought to you by Smarkets, and Rollbar. Smarkets is looking for talented Python developers to build amazing Python 3 based microservices. Apply at talkpython.fm/smarkets, and level-up your career! Rollbar takes the pain out of errors. They give you the context and insight you need to quickly locate and fix errors that might have gone unnoticed, until your users complain of course! As Talk Python To Me listeners track a ridiculous number of errors for free at rollbar.com/talkpythontome. Are you or a colleague trying to learn Python? Have you tried books and videos that just left you bored by covering topics point by point? Well, check-out my online course Python Jump Start by Building 10 Apps at talkpython.fm/course, to experience a more engaging way to learn Python. And, if you're looking for something a little more advanced, try my Write Pythonic Code Course at talkpython.fm/pythonic. Be sure to subscribe to the show! Open your favorite pod catcher and search for Python we should be right at the top. You can also find the iTunes feed at /itunes, Google Play feed at /play, and direct RSS Feed at /rss on talkpython.fm This is your host, Michael Kennedy. Thanks so much for listening. I really appreciate it. Now, get out there and write some Python code!
+ 
