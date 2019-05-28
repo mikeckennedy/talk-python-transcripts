@@ -1,0 +1,430 @@
+00:00:00 Michael Kennedy: On the last episode, we explored Pyodide, a project whose goal is to bring the CPython scientific stack to the browser via WebAssembly. This time, I meet up with Brett Cannon, one of the more well known and prolific core developers to explore what role WebAssembly has for CPython, in general and what opportunities might exist for Python and WebAssembly, at the moment. This is Talk Python To Me, Episode 213, recorded on site at PyCon on May 3rd, 2019. Welcome to Talk Python To Me, a weekly podcast on Python, the language, the libraries, the ecosystem, and the personalities. This is your host Michael Kennedy. Follow me on Twitter where I'm @mkennedy. Keep up with the show and listen to past episodes at talkpython.fm and follow the show on Twitter @talkpython. This episode is brought to you by Microsoft. Be sure to check out what they're offering during their segments. It really helps support the show. Hey, folks, thanks for listening in today. Just a quick heads-up on the audio on this one, we recorded it live on the expo floor hall at PyCon in Cleveland, this year. I think the audio is actually amazing. It came out great. But, you will hear our voices straining a bit to talk over the crowd and my voice in particular has a little road wear from all that conferencing. So, sorry for my fading voice, but, you'll enjoy the conversation with Brett, for sure. Brett, welcome back to TalkPython.
+ 
+00:01:30 Brett Cannon: Thank you, Michael, glad to be here.
+ 
+00:01:31 Michael Kennedy: It's great to have you here. It's been too long. I mean what has it been, like, three episodes?
+ 
+00:01:36 Brett Cannon: Has it even been that many? I don't know if it's even gone that far.
+ 
+00:01:38 Michael Kennedy: I know, I don't think that it has. But, we're back together because we had a great show talking about the steering council, the future of Python governance and all that kind of stuff and then we hung up, well, we stopped the recording and I just threw this off-hand comment about, oh and what do you think about WebAssembly?
+ 
+00:01:55 Brett Cannon: Yeah, I mean this happens every time I come on your show. We end up chatting after the hang-up and then it cometh, oh we should have brought that up while we actually had the microphones recording.
+ 
+00:02:04 Michael Kennedy: Yeah, and so, we were going to be here, at PyCon, we're recording live from the PyCon expo hall center, here. And that's with the background noises, everyone hears. So, we're going to talk a little bit about WebAssembly and I guess, you know, maybe we should start with what is WebAssembly, why is it interesting? You know, to me it seems like WebAssembly is starting to gain some traction.
+ 
+00:02:25 Brett Cannon: Yeah, so I'm going to preface all of this as I'm a fan and keep up on this out of interest. I actually almost made something similar to this my PhD thesis. Except my PhD supervisor, Eric Wohlstadter was smart enough to say, "No, that's a bit ambitious for one PhD because that's going to take three or four other PhD students." and he didn't want to dedicate that much time of his life to the topic.
+ 
+00:02:48 Michael Kennedy: I'll be your advisor, but come on, not for life.
+ 
+00:02:51 Brett Cannon: Exactly. So, I'm just going to fully admit I could quite possibly say something wrong about this. But, basically, to explain what WebAssembly is, is the browser renderers all got together realizing that while Javascript is nice, it's not the end of the world and the best answer, necessarily for everyone, and they wanted a more lower level, kind of target for languages in browser and so, they basically designed an assembly language specifically for the web. And the key thing here is, you can think of it as basically, like x86 or ARM or RISC or any of those other chips that have the low level assembly commands that the CPU actually executes. But, the key thing here is it was designed to be performant but also verifiable to be safe because as we know on the web, you can't trust everything that gets sent to your browser. So, they very much made sure it was fast and verifiable. Which is, and cross-platform, which is also very cool.
+ 
+00:03:41 Michael Kennedy: Yeah, I think that's the first danger, when you think, alright, we have this binary thing and we're going to download it and execute it in your browser, they're like, oh my god, is this ActiveX, is this COM, is this the you know, the thing that's going to hack all the machines?
+ 
+00:03:56 Brett Cannon: We all know you do not download a random binary off the internet and run it and expect not to get some nasty malware installed on your machine. The same goes for WebAssembly, you don't want a buffer overflow in your browser. Right, that's hard enough just for the browser renderers to deal with the render. The last thing you want is the JavaScript or anything else you download to just make a button flash to actually cause a buffer overflow and suddenly take over your machine.
+ 
+00:04:22 Michael Kennedy: Right, so WebAssembly is, kind of this assembly language, it's faster, it's binary, but it's run within the same sandbox as JavaScript.
+ 
+00:04:31 Brett Cannon: Yes, from my understanding.
+ 
+00:04:32 Michael Kennedy: More or less, but, there's some really interesting things, a lot things that compile to C can be made to compile to WebAssembly.
+ 
+00:04:39 Brett Cannon: Yeah, and that was actually the original way they tested this idea was, there was a project called asm.js and they created a tool for LLVM called Enscripten, and what they did was, they just came up with a subset of JavaScript that you could actually compile C down to, and it was basically typed arrays to simulate a stack in memory, and a bunch of other stuff, and they basically made it work, and they were able to show that if you added certain markers to tell the JavaScript's execution engines that hey, you know what, this is actually asm.js, not normal JavaScript, they could actually get really good performance out of it, and that was enough of a motivation for them to go like, okay let's make this a real thing, let's not do kind of a weird little subset of JavaScript, let's do a proper assembly language which will still get us the exact same compile target, and safety with even better performance.
+ 
+00:05:27 Michael Kennedy: Let's not try to treat JavaScript truly as a similar thing, but make something that executes binary bits, right?
+ 
+00:05:33 Brett Cannon: Exactly, everyone's already compiled to JavaScript and knows it's possible, but let's actually take it to the next level and actually compile to a reasonable target.
+ 
+00:05:41 Michael Kennedy: It's awesome, did you happen to catch the Birth and Death of JavaScript, by Gary Bernhardt?
+ 
+00:05:45 Brett Cannon: No, I didn't.
+ 
+00:05:46 Michael Kennedy: Oh my gosh, so this is such an insightful thing, so people out there are listening that are interested, they should definitely Google that up, maybe I'll put it in the show notes. It's a talk he did at PyCon, I think 2015, and it imagines a future where JavaScript takes over the world, talks about the future, like 2030. Going down this asm.js world, and things being compiled deeper and deeper and deeper and the world just being all JavaScript, and it's super insightful because it talks about these things and predicts them. He's got examples of like, having Quake, which is written in C, run in Chrome, but then recompiled Chrome to run in Firefox, so Firefox is running Chrome, Chrome is running Quake, all like nested together, and this turtles all the way down with JavaScript.
+ 
+00:06:30 Brett Cannon: Well actually, I don't know if you caught Dan Callahan's Keynote at PyCon US in 2018, but he did something similar, where he showed a VR of a computer in a basement running simulated Windows 3.1, running a browser in it, so you can go very deep with this stuff.
+ 
+00:06:46 Michael Kennedy: Right, and so many of those were these sort of, these proof of concepts into some JavaScript world, but WebAssembly is like, well that's cool, let's make that official.
+ 
+00:06:54 Brett Cannon: Yes
+ 
+00:06:54 Michael Kennedy: That's the stage for what the heck is WebAssembly? Now the big question is CPython, right in its name, we know it's written in C, what are the possibilities for it being interacting with doing interesting things with WebAssembly?
+ 
+00:07:11 Brett Cannon: There's basically two current projects that I'm aware of. So one is Pyodide, which I believe you'll have an episode out on this, if not already.
+ 
+00:07:18 Michael Kennedy: Due to time shifting, it's not out yet but it's out before this, so people will have heard of that.
+ 
+00:07:23 Brett Cannon: So go back and listen to that episode, but basically someone at Mozilla is taking CPython and the scientific Python stacks, so SciPy, NumPy, Pandas, all those.
+ 
+00:07:32 Michael Kennedy: Which are heavily C underneath, right?
+ 
+00:07:34 Brett Cannon: Oh and more, right, 'cause this also includes Fortran stuff, like this is deep level stuff right? SciPy is crazy to compile, but what they did was they actually compiled that whole stack down to WebAssembly, and they got it running, and if I remember correctly from the blog post, they said it was three or four to twelve times slower, which is not great, I mean compared to some things, but it was still actually fairly performant to the point that they actually, I mean it still has a demo, I believe of Jupyter Notebook style workflow for data science exploration that actually works reasonably well.
+ 
+00:08:10 Michael Kennedy: Yeah, and what's cool about that project is they've actually compiled the libraries that you need, so you can import NumPy, you can import Pandas in the browser, it will go get the WebAssembly equivalent, suck that down, on demand by the way, which is cool, it doesn't even suck it all down in front, it like, waits till you hit the import statement, and it sucks it down, and it runs. So that's pretty cool, but to me what that feels like, and not to take anything away from it, it's super cool, is that feels like let's take the compilers we have and point them at the version we have and make them run in this place best we can. You know, but it's not saying "What if we imagined what a CPython developed for WebAssembly could be."
+ 
+00:08:51 Brett Cannon: Yes, it's very much a let's take what we have already, and see if we can make it work, not a let's make this a target of something, and what does that look like?
+ 
+00:09:01 Michael Kennedy: That's a good question.
+ 
+00:09:02 Brett Cannon: It is a good question!
+ 
+00:09:03 Michael Kennedy: So I think it's, I mean it's super noble, it's awesome that they've done it, and like having Quake run in the browser, it proves it could be done.
+ 
+00:09:07 Brett Cannon: Yes.
+ 
+00:09:09 Michael Kennedy: But size, size matters sometimes on the web.
+ 
+00:09:12 Brett Cannon: Right and they fully admit in the Pyodide project, I believe the download for the interpreter is 40 Megs, roughly. So it's not small, we might all be living with one multi-Meg pages now, unfortunately, but they're not 40 Megs, no-one's that crazy, so there's definitely issues. Now I'm also going to say that not all use cases for WebAssembly necessarily require a smaller download size, so for instance if we were doing Electron app.
+ 
+00:09:39 Michael Kennedy: Like Visual Studio Code?
+ 
+00:09:40 Brett Cannon: Visual Studio Code, or Slack or any other Electron app I can see out on the show floor from someone sponsoring PyCon, they don't have that download size restriction, they could totally just embed a 40 Meg version and be done with it.
+ 
+00:09:53 Michael Kennedy: Right, the Electron JS apps, for people who don't know, already embed the binaries of Chrome, plus the binaries of Node, so throw on a few more megabytes of WebAssembly, who cares, right?
+ 
+00:10:03 Brett Cannon: Eh, whatever. But obviously if we wanted this to be on the web, or in more size-restricted situations, like we're talking more embedded space, or you're embedding it in a smaller, more native desktop app like think Blender or something. That's where you start to care about the size, so directly compiling CPython while great, is a great solution for today, it might not be if we want to potentially expand the possibilities in the future.
+ 
+00:10:30 Michael Kennedy: Right, and Python is doing awesome, I mean it's, we've seen the Stack Overflow, the incredible growth of Python article.
+ 
+00:10:36 Brett Cannon: Yep.
+ 
+00:10:36 Michael Kennedy: I mean we've just, look around PyCon this year, like, to me, when I walked in here I felt like wow, Python's growing up a little bit, like these booths are a little more corporate, little more pro, they're like taller, I don't know what that means but they're like twice as tall as last year.
+ 
+00:10:49 Brett Cannon: Yeah I mean, I was kind of shocked when I came in here and I saw stuff hanging from the ceiling, I saw people with walls put up, and these aren't just like, custom for the booth walls, I mean this is really slick stuff coming in here so yeah, Python's definitely come a long way since I started using it.
+ 
+00:11:05 Michael Kennedy: Yeah, and so my point is, that's amazing, but how far would it go if it could be in mobile, if it could be on the front-end of web, if it could be the foundation of these Electron JS apps, I mean there's like lots of growth, there's headroom here, for more.
+ 
+00:11:21 Brett Cannon: Yeah, and it, if you get a chance, watch Russell Keith-Magee's Keynote from PyCon US 2019, it was on Friday. He did a really good job of outlining why this is a potentially great growth opportunity for Python. We were in a lot of spaces, right, as I said, we're embedded, we do scripting, we do some desktop apps, we do web, we do data science, but for instance we haven't really tapped into the mobile space, or the web space front-end, obviously we got back-end covered. So there's definitely opportunity for us to grow the community and help bring more people in, 'cause I've been told we have one of the best communities in the world, so I'd like to honestly do this just so we can get more people actually in who are participating, and off of communities that they might not be happy with.
+ 
+00:12:07 Michael Kennedy: Yeah, and to me it feels like WebAssembly, kind of holds the key to unlocking some of those possibilities.
+ 
+00:12:13 Brett Cannon: Yeah I think it's a definite possibility, I don't think we can necessarily claim it's definitely a panacea, or that it's an obvious Black Swan event, another reference to Russell's keynote, but I think there's definitely enough there to make it a very interesting possibility, worth looking into.
+ 
+00:12:27 Michael Kennedy: Okay, so, I guess, let's think about you are on the core dev team, you are also on the steering council, you obviously don't make all of the decisions, but you're in a place to have some internal insight, what would need to happen, or is there any possibility of CPython having an official WebAssembly story?
+ 
+00:12:47 Brett Cannon: I don't know. So in any official capacity, I have to say I don't know. Personally, I would love to see it. One thing I can say is we've had some very initial discussions on the steering council, about kind of coming up with a vision document, of what would it take to make Python two times faster?
+ 
+00:13:05 Michael Kennedy: Right
+ 
+00:13:05 Brett Cannon: and kind of like outlining like what do we view as necessary, what do we view as acceptable, what do we view as total fertile ground and we don't care what you do, and we've just started talking about this so there's nothing specific there, but I mean, you could theoretically think of some company going like oh okay I've read this document, I see kind of where you're going, we're going to take a stab at it, and we're going to try to make a WebAssembly Python. Now, who knows what that means, that could either mean let's see what happens if we didn't do CPython to WebAssembly, but we still had an interpreter that was more restricted to make the size smaller, or someone could even do a straight Python to WebAssembly compilation target. Now, I don't know what we'd have to give up for that, for instance from my reading of the spec, WebAssembly doesn't provide a way to directly execute on-the-fly compiled WebAssembly, like actual Assembly does right, that's how JITs work, they actually write to a memory point, and you basically treat it like a function pointer in C, and that just magically gets executed. There is no equivalent from what I can tell in WebAssembly. So that would potentially make eval and exec a problem, if we were trying to compile Python straight to WebAssembly but I think there's opportunity there to explore all this stuff and see where it goes, because there's general excitement from what I've been seeing and hearing from people about this idea, not just for Python but the overall tech community, as a really clear, cool opportunity. I mean Cloudflare is doing JavaScript on the edge computing, but it's JavaScript, but you can compile to WebAssembly, and then recently Fastly came out and just said "We're doing straight WebAssembly, that's all we're doing." for their edge computing. There just seems to be a real kind of conglomeration of people, at least in the webspace around this as a thing, and obviously we all know that the web's got a lot of money and a lot of push, so I think it's worth at least considering and taking a look.
+ 
+00:14:50 Michael Kennedy: Yeah that's a super interesting point, there's definitely a huge, huge number of users there, I mean Flask, we consider Flask to be, like, one of the more popular things right? It's got 41,000 Github stars. Just Vue.js has 140,000, I mean like the scale is massive right? So. And the days are early, I think, so if we could tap into the whole WebAssembly space at the early days, you know, how much could we make Python a first class citizen there?
+ 
+00:15:17 Brett Cannon: Yeah, I mean, and that's really what I would love someone who has the time and resources to actually look into right, like, really doing the research, finding out how possible it is, what would we gain, could we make it as fast as CPython? If it is slower or faster, by how much? It's something I would just love someone to just go out and try.
+ 
+00:15:39 Michael Kennedy: Yeah, it's super interesting, I mean, we talked about Pyodide and that's really great, but that's super focused on getting the scientific stack on the client side in the browser.
+ 
+00:15:47 Brett Cannon: Yeah and I believe Mozilla even admits that it's fully a proof of concept, it's to show that this is possible, I don't know how far they plan to take it, so I don't know where they could even push it, but I mean it would be great to see.
+ 
+00:15:58 Michael Kennedy: Yeah, another one that's really interesting that's not anything to do with Python but comes from your home base in the Microsoft world, is Blazor, are you familiar with Blazor?
+ 
+00:16:06 Brett Cannon: A little bit.
+ 
+00:16:07 Michael Kennedy: Yeah so Blazor is take the .NET CLR, which is also JIT-based, and take C# and turn that into a front-end, single-page app framework, through WebAssembly. So if they were able to get the CLR and all the UI bits down, like it seems like the CLR and CPython are sort of comparable in size and complexity, ignoring the libraries.
+ 
+00:16:29 Brett Cannon: I think it definitely shows that with the resourcing, it's definitely possible to use WebAssembly as a target, even as it is, which the WebAssembly team and the website and everything are very clear that this is very much minimal viable product, and they are still very much working towards it, like they just sent out something called WASI, W-A-S-I, which adds a system interface, that's what the SI stands for, to WebAssembly, 'cause they realize that with a portable target, you can now actually start using this for more desktop application and execution, right? So basically if you start to treat WebAssembly as kind of the world's common interpreter layer, and you start targeting that, it starts to really open up, and in order to make that work, you really have to have that layer of, basically of POSIX on UNIX would cover, and so they're very much working towards that, it's still early days, but once again, there's definite possibility there.
+ 
+00:17:17 Michael Kennedy: Absolutely, so let's bring it back to your original statement. What if you could make CPython, well, Python, two times faster, what are some of the ideas you have there?
+ 
+00:17:26 Brett Cannon: For Python in general or specifically for WebAssembly?
+ 
+00:17:29 Michael Kennedy: Let's start with in general.
+ 
+00:17:30 Brett Cannon: I think the key thing there is going to be really outline exactly what is, like, things we just cannot give up, right, like compatibility, at what level, where would we go like, okay if we gave this up, that the community would just never even contemplate it, it just would break way too much code whatever, it just wouldn't work.
+ 
+00:17:50 Michael Kennedy: Right, if C extensions went away, that's probably a bridge too far.
+ 
+00:17:52 Brett Cannon: Exactly, right? Like, what, would we be okay with transitioning right, like we'd done 2 to 3 and we know how difficult that was but we also know why that was difficult, if we had ways to automate bridging and such that that pain wasn't there, that's a possibility.
+ 
+00:18:08 Michael Kennedy: I think it's PEP 554 that has multiple sub-interpreters?
+ 
+00:18:11 Brett Cannon: Yeah, Eric Snow's stuff.
+ 
+00:18:13 Michael Kennedy: Would it be possible to maybe use that as a compatibility layer these days? Right, like you take the stuff that runs over here, and you got to do an eval so we're going to do the eval in another.
+ 
+00:18:21 Brett Cannon: That's an interesting idea, I honestly have not thought about it.
+ 
+00:18:24 Michael Kennedy: That's all I know, I haven't really thought much about it either, but it seems like you might be able to have like a compatible, older CPython that handles the cases that's not as fast, and then like a proper, maybe like a JITing.
+ 
+00:18:36 Brett Cannon: That comes tricky 'cause all that's running in the same process. Suddenly you're going to get a multi-processing scenario and that always has it own can of worms, that if you're not really aware of how it's working and what the edge cases are, can really,
+ 
+00:18:48 Michael Kennedy: Sure
+ 
+00:18:48 Brett Cannon: become a problem. So I don't know.
+ 
+00:18:50 Michael Kennedy: Maybe it's not worth pursuing?
+ 
+00:18:51 Brett Cannon: Yeah probably not, I know a lot of people want that idea of when we're doing the 2 to 3 bridging, and no-one ever really got to work properly, so I'm going to assume in any other scenario it just ain't going to work.
+ 
+00:19:01 Michael Kennedy: Just wasn't worth the trouble. Okay, interesting.
+ 
+00:19:03 Brett Cannon: I honestly don't know, like I know there's Rust Python, and people are working on that, I've always been curious to see what Rust could give us in terms of safety and performance. I also know, though, some people don't want to go that route because, at least in CPython's case, Rust is not available on every platform where there's a C compiler, and so there and the embedding story is there, but it's not necessarily quite as straightforward if you don't put in the work to do that, I mean you can give FFIs through C, through REST, but that's an extra layer of work.
+ 
+00:19:30 Michael Kennedy: Right, maybe slower too with another layer.
+ 
+00:19:31 Brett Cannon: So I think the key thing here is also, don't focus too much on CPython itself, I mean if WebAssembly, we're talking basically, a whole new thing, so I totally up in just, even first proof of concept for whatever, I would want people to try anything, and don't tie yourself to CPython as necessarily the starting point, tie yourself to CPython as, kind of, the way to test your compatibility, although I would still say don't tie yourself to every edge case and every little potential bug, 'cause Guido has even said before he retired, that really small edge-casey parts of the language that no-one really uses would be up for consideration from being deprecated and removed from the language, if it made a massive performance difference. So people have also never done that exploration, so we even have that potential, regardless of WebAssembly, of ways to potentially speed up Python.
+ 
+00:20:20 Michael Kennedy: This portion of Talk Python To Me is brought to you by Microsoft. For ultimate developer productivity in a cloud, use Azure Extensions for Visual Studio Code. You can deploy and debug your serverless Python apps directly from your editor. On Azure, you can run your Python apps as serverless code on Linux web apps in functions, or on top of manage Kubernetes, and easily connect data from database services, including Postgres and MySQL. You can also use Azure DevOps to create cross-platform builds of your Python packages with hosted macOS, Linux, and Windows build machines, and publish them to Azure Artifacts for your own hosted PyPI feed, Azure DevOps is free for open source projects and many are using it already. Get started for free at talkpython.fm/microsoft. We've had a lot of progress, right?
+ 
+00:21:07 Brett Cannon: Yes.
+ 
+00:21:08 Michael Kennedy: From 3.5, maybe 3.4 to 3.7.
+ 
+00:21:07 Brett Cannon: Yes.
+ 
+00:21:12 Michael Kennedy: The stuff that Victor Stinner was doing, and other people, like you would hear "Oh, dictionary's got this much faster, function call's got 20% faster and bound methods." or whatever, right, like, year for year, that stuff's compounding as well, right?
+ 
+00:21:24 Brett Cannon: And I don't think we've even necessarily hit all the low hanging fruit, but I do believe that we're reaching a point where I think on the team we're realizing that our goal from years back of keeping the interpreters simple, specifically making it easier to contribute to by making it easier to comprehend how it works, basically Python's so big we can't really do that anymore. I think we've hit the point now where we don't worry about whether a single individual can fully comprehend how the entire interpreter works, because we realized that so many people rely on it, we need to keep it maintainable, obviously, but we don't need to keep it simple, and that's a very key distinction, and so I think there's opportunity there once again, if someone had the time and resources to really dig into that and see what would be possible to actually speed up CPython itself, and obviously whatever crazy thing someone might do.
+ 
+00:22:13 Michael Kennedy: What's the possibility, likelihood of some kind of JIT making its way in, I know you work on Pyjion.
+ 
+00:22:19 Brett Cannon: Yep.
+ 
+00:22:19 Michael Kennedy: Which maybe, I lived in a different country when we last spoke about Pyjion, maybe tell people quickly about what that is.
+ 
+00:22:25 Brett Cannon: Pyjion, for those who don't know, and it's spelled P-Y-J-I-O-N, was a project Dino Viehland who was at work at the time now at my Facebook, and myself, worked on back in 2016 I believe
+ 
+00:22:37 Michael Kennedy: Yeah I think it's 2016, yeah.
+ 
+00:22:39 Brett Cannon: Where we looked at what it would take to JIT CPython, executable Byte code using .NET, and we got the project to the point where we developed a PEP for adding a hook into CPython to allow you to override the eval-loop, the actual function that you pass commands through.
+ 
+00:22:58 Michael Kennedy: Which is like, 3000 lines Switch it's an impressive thing
+ 
+00:23:01 Brett Cannon: it's a very large thing
+ 
+00:23:02 Michael Kennedy: eval.c
+ 
+00:23:03 Brett Cannon: Yeah eval.c is quite the impressive function. But basically we figured a way to hook into it, such that if we took some Python bytecode and compiled it down into .NET CLR which is stack based as well, which made the translation, I'm not going to say straight-forward, but at least possible. We did it and we managed to hit on the Python Benchmark Suite pretty much even. Unfortunately once, after you did our PyCon talk, work got in the way and we just weren't able to pursue it any further.
+ 
+00:23:31 Michael Kennedy: Yeah I remember you said it got even and that's pretty good, how much more do you think it could have gotten better, a lot or is it kind of like...
+ 
+00:23:37 Brett Cannon: That's one of those things where, with JITs you just never know, like if you talk to the PyPy folks, they'll fully admit, I'm sure, that PyPy is excellent, and can go really fast if it works for you, but for some people they need very deterministic performance because JITs always work on hot code and such, and it can be very variant based on the current work load.
+ 
+00:23:53 Michael Kennedy: Right, with the reference counting, in CPython, it's pretty predictable.
+ 
+00:23:56 Brett Cannon: Yeah exactly, so I don't know what Pyjion could've been had we put more time into it, because JITs by definition, are very load dependent, and so there's just no way to even speculate.
+ 
+00:24:09 Michael Kennedy: How much does a GC in Generational Garbage Collectors have, or are required around JITs, I mean, most of that unpredictability has more to do with the Garbage Collection side of things, than they do with the JIT, 'cause you could pre-JIT stuff, and things like that if you had to.
+ 
+00:24:24 Brett Cannon: I don't think it necessarily really ties into it specifically, so for those of you who don't know, CPython uses reference counting to do its memory management which basically means we keep check of the number of places an object is referred to in your Python code, so every time you do an assignment, the count goes up by one and every time a variable goes away, it goes down by one, and basically when an object hits zero, we Garbage Collect it. It's very straightforward, and the nice thing about it is it's very deterministic, right, so if you define your dunder del on an object, you can actually see that execute fairly quickly after you actually delete the object. With Garbage Collector, you don't get that, so really the bigger problem with that has always been the C API, because it's very directly exposed for C extensions to be able to properly manage the memory they need for any objects they create, and that has always been a stumbling block for things like the GIL, because in order to control that kind of stuff there's overhead, and the real key thing is the Global Interpreter Lock exists specifically for reference counting, because that's how we make sure you don't accidentally stomp on each other, when like two threads try to both increment and decrement, and you don't want to lose either of those, 'cause if you get the count wrong, that's a memory leak, and that's not a good time.
+ 
+00:25:32 Michael Kennedy: It's either a crash, or a memory leak depending on which way the race condition runs.
+ 
+00:25:35 Brett Cannon: Whichever badness you want, choose one. You just don't get to choose though 'cause one of the threads will choose for you, which is the problem. So I honestly don't know from a JIT perspective if it really specifically matters, depending on how you decide to handle it, but...
+ 
+00:25:48 Michael Kennedy: Enough of our C
+ 
+00:25:48 Brett Cannon: Opens things up because it gets rid of that single point of contention with the GIL.
+ 
+00:25:54 Michael Kennedy: Right, okay, that's interesting, I think the GIL gets more negativity than it deserves, honestly.
+ 
+00:26:00 Brett Cannon: It's one of those things where if you're I/O bound, it doesn't matter, and if you're CPU bound it can, but only if your load is that high that this is really a critical thing
+ 
+00:26:07 Michael Kennedy: Right, so there maybe some C library that's already doing parallelism for you.
+ 
+00:26:12 Brett Cannon: Yeah and if you look at Eric Snow's work with sub-interpreters, there's the potential there that if Eric can get it all working, to have per-interpreter kills, which would then give you per-thread interpreters, which would then let you have GIL release, because basically each interpreter in its own thread running on our GIL, which should still have its contention but its the equivalent of basically running completely free threads, which would help a lot, and it doesn't require us to completely rewrite every extension and we don't have to try to detangle all of this worlding, we get to keep the very straightforward and determinant reference counting.
+ 
+00:26:50 Michael Kennedy: That's all really interesting, and I guess sort of a roundabout, the reason I was asking about a lot of these things is, if your goal is to make Python run twice as fast, there's all these options but there's all of these limitations, because of the history of the implementation of C for Python, and the C, you know, val.c and all of that, what if it was written in something like Rust, or something else, like would that, I guess let me also preface that with, like, Rust is all about compiling to WebAssembly, so could you get your one benefit and then unlock this other WebAssembly world at the same time?
+ 
+00:27:22 Brett Cannon: I think it's definitely possible, from my understanding. I don't know what kind of restrictions your Rust code has to be placed under in order to compile down to WebAssembly but I think it's definitely there. For some people, CPython is just a Python interpreter, and it's not a critical aspect that it has this extensive C API that allows you to do the C extensions, and for others it is, and that also varies based on people who embed C Python, and a C or a C++ application, and those who don't.
+ 
+00:27:49 Michael Kennedy: Like design apps that have an automation, or whatever.
+ 
+00:27:52 Brett Cannon: Yeah, like Blender is a perfect example, or Maya, a lot of the 3D, the special effects tooling in movies often embed CPython specifically, because they want Python embedded as a scripting tool. So for those people, that would matter if the, like, hypothetical Rust implementation didn't provide those kind of hooks, but for others it wouldn't, this is one of those things where for me personally, I've always viewed it as Python the language as implemented by CPython the interpreter, and so I view the key component as the language, and we just happen to have the CPython implementation which, by the way is really great for embedding as a thing, but I don't think that necessarily means that CPython, in my personal view as like, special, or in some way untouchable or unreplaceable, in terms of at least having other options, I mean PyPy exists, and it does have users, right? There's a reason it's there, it doesn't work for everybody and that's fine. The key question is, does the community and do other people have the time and resources to put in the work to look at making Python faster, whether it's through WebAssembly or through Rust, or if you're hoping to make CPython go faster, do they have the stomach and the gumption to take some of these paths and try to make it happen? That I don't know, and honestly I can't answer that until the community as a whole, kind of comes forward and says "We're going to give this a shot and we see what happens."
+ 
+00:29:13 Michael Kennedy: Yeah, I mean that's a really big question, we just kind of put to bed this whole Python 2, Python 3 saga, and I know it's a totally different story, but it's kind of just churn and fatigue for some folks and so, you know, how much do you want to rattle that cage, maybe just let things settle for a while, I don't know.
+ 
+00:29:32 Brett Cannon: I know for a long time, a lot of people have hoped that once Python 2 was laid to rest, that the mental, honestly the cumulative mental capacity of the community we were hoping would be freed up, because suddenly all this Python 2 stuff would kind of just go away.
+ 
+00:29:48 Michael Kennedy: The weight is off us.
+ 
+00:29:48 Brett Cannon: Yeah the part of our collective brain that had to still deal with Python 2 would now be free to just try to make Python 3, which would then, honestly is just going to be Python, just make Python faster and better, and I would like to think and hope that that's going to happen but I honestly don't know, once again that's going to come down to the community coming forward and saying: "You know what, we want to help make this happen and we're going to work with everyone as necessary to make that a thing."
+ 
+00:30:14 Michael Kennedy: Yeah, well maybe we're entering a period of where lots of flowers will bloom, some of them will wither, some of them will grow into trees or whatever, but, you know, for example taking CPython itself, and just compiling it to WebAssembly, and getting it to run, say, in an Electron JS app, like that would be a huge win for deployment, I think, 'cause all you deploy is this little WebAssembly binary, and it just loads up into Chrome and maybe that unlocks one area of growth, maybe Pyodide does something for the data science, and there's a bunch of different areas, and eventually we find what's working, find ways to adapt them, I don't know, what do you think?
+ 
+00:30:48 Brett Cannon: Honestly, one thing I'm curious about with WebAssembly is whether the phone OS's are going to start potentially adopting it as a target as well. Right, like, I could imagine a world where Android and iOS suddenly start allowing WebAssembly as a compile target versus specifically Swift and the raw C stuff on iOS or the equivalent on Android, or its ART JIT. And I don't know if WebAssembly will catch that much, but if it does that really opens it to an even greater extent in terms of the usefulness and potential importance of WebAssembly, because if you did that suddenly you have the web, and you have mobile.
+ 
+00:31:22 Michael Kennedy: and you have mobile, yeah.
+ 
+00:31:23 Brett Cannon: And with WASI you get desktop, that's a crazy amount of the userbase in terms of just flat-out computer users, it's just crazy.
+ 
+00:31:32 Michael Kennedy: Yeah I mean there are three places I see missing the huge growth opportunities are desktop, mobile, and front-end, and web browsers.
+ 
+00:31:38 Brett Cannon: Yup
+ 
+00:31:38 Michael Kennedy: That kind of hits them all, yeah?
+ 
+00:31:40 Brett Cannon: Yeah, and once again, I'm just going to keep harping on at this, is it's really good to come down to the community coming forward, and I do want to say, I personally really hope that whatever the community does do, we're able to work together as a community, like I don't want to see fragmentation of "Oh I've done this thing, this version of Python that's slightly different, and oh this person over here's done a version of Python that's slightly different and we haven't talked as a community about what we care about." and try to also pull everyone together to kind of work towards a common goal, versus "Oh I think we should do it this way, no I think we should do it that way okay well I'll re-implement Python with the Garbage Collector over here, and I'll do it a different way over here." and there's no way for them to work together. I understand experimenting with different ways, but I would still want them to hopefully end up in the same spot together, such that we're just not wasting time and energy because as you commented earlier, we already did that with the Python 2 to 3 transition, and it was somewhat painful, but we got through it and there was reasons for it, and I don't regret it, but I also don't want to ever purposely do that again, if we can avoid it, and so my big hope is we can get the community to come together as a group to try to decide how we want to make this happen.
+ 
+00:32:45 Michael Kennedy: Yeah, I definitely second that.
+ 
+00:32:47 Brett Cannon: I don't want to dictate much, is my key point, and I can't speak for my other steering council members, but I don't think they want to either, I think our key goal in anything, if anything does come out is trying to see, how can we help shepherd the community towards a single point, and try to give guidance to help make sure that everyone is able to work together as community.
+ 
+00:33:06 Michael Kennedy: I think that sounds great, like, one of the things that might be cool, you know you talked about maybe eval not working, for example, and is that a problem, I don't even know how much of a problem that would be.
+ 
+00:33:16 Brett Cannon: I don't know, I mean for instance, for a long time Namedtuples required it.
+ 
+00:33:19 Michael Kennedy: Yes I remember yeah.
+ 
+00:33:20 Brett Cannon: And a lot of people didn't know that and that just got changed, I believe in 3.6 perhaps, maybe 3.7.
+ 
+00:33:28 Michael Kennedy: Yeah it's pretty recent.
+ 
+00:33:29 Brett Cannon: But yes, for the longest time, component that a lot of people used in the starting library would not have worked. So it really, it's one of those things as I said, I don't know, edge case stuff, I think the team would be open to ditching things that really can be shown as yeah, not a lot of people use this and boy is it a pain to implement, let's really consider getting rid of it 'cause it's just not important enough to keep around for that performance boost.
+ 
+00:33:52 Michael Kennedy: One of the thoughts I was having is, what if there's, something like a subset standard Python language like, okay maybe we can't have metaclasses, or we can't have eval, or something that's kind of edge, or maybe, I don't know, but if you target this subset, it's guaranteed to run in some WebAssembly world, in CPython, maybe in PyPy, maybe like, we're...
+ 
+00:34:15 Brett Cannon: Well, so have you heard about MypyC?
+ 
+00:34:16 Michael Kennedy: I've heard of it, yeah.
+ 
+00:34:17 Brett Cannon: Yeah, so for those of you who don't know, the Mypy team has implemented a tool called MypyC, where basically they can take a subset of Python, that's fully typed, run it through Mypy and they use Mypy as actually a compiler front end to drive it to a Python C extension back-end, and actually emit a Python extension for your Python code, and it was originally written for Mypy, I assume because Dropbox wanted Mypy to run faster, but they've actually gotten Mypy to run four times faster from what Guido's told me,
+ 
+00:34:48 Michael Kennedy: Wow
+ 
+00:34:48 Brett Cannon: at Dropbox, by doing this. Now, they fully admitted it was fully written for Mypy and it's got a very specific subset and it's very targeted, but that does tie into your whole "What happens if we make it so that if you care, just type Python end to end for your code?" And they pass it through something like MypyC, and hit that target. I mean, some people have done that with Cython, but Cython is very much...
+ 
+00:35:09 Michael Kennedy: It's kind of got its own little bit of syntax.
+ 
+00:35:11 Brett Cannon: It's got its own syntax.
+ 
+00:35:12 Michael Kennedy: You got to do it style, you know.
+ 
+00:35:14 Brett Cannon: Well they've actually added type hint support for it
+ 
+00:35:17 Michael Kennedy: Which is awesome, yeah.
+ 
+00:35:17 Brett Cannon: Which is great, but Cython is also typically targeted much lower constructs, like C-level ints, right? And void stars and structs, and that kind of thing. Well, MypyC is targeting a higher level, not such a C-level bridge like Cython, but very much like this is just normal Python, we just want Python faster. And so, it's a slightly different opportunity from what Cython has been targeting all these years, and done a great job, I mean Cython definitely deserves credit for what they've done.
+ 
+00:35:43 Michael Kennedy: Absolutely, so there's a lot of possibilities, I don't know if WebAssembly has to be here or not, but it seems like it could be.
+ 
+00:35:48 Brett Cannon: I think it's definitely worth the consideration. I think as you, hopefully, people can tell through the excitement in our voices, I think both Michael and I obviously think it's a great thing, and I think it's very cool piece of tech and I like the motivation behind it, and I think they're seen to be driving it for the right reasons, and I think it's definitely worth looking at. I think it's just a question of what benefits will Python get as a community, and will that be enough to cover, tick five boxes, or tick two boxes?
+ 
+00:36:15 Michael Kennedy: Right, right, right
+ 
+00:36:15 Brett Cannon: Or 10 boxes even, 'cause we just don't know. It's enticing enough that I really do hope someone gives it a solid go.
+ 
+00:36:21 Michael Kennedy: Yeah, I concur and like, one of my bits of excitement is around how it seems to let languages inter-operate, like if you can get something to get down to WebAssembly, you can get it to play with other things that it might not, right, if I can compile CPython to WebAssembly, I can now get it to do JavaScripty things with JavaScript and work with other stuff, and Rust, if I can get it there, I can get it in in the space as well, like you know, there seems like it could be a cool integration layer.
+ 
+00:36:47 Brett Cannon: Oh, most definitely, if you look at the WebAssembly spec, what it actually specs out in the MVP is basically unsigned and signed ints, both 32 and 64, floats, and functions, plus imports at the module level. But the key point is, because they're specifying at the function level, if you wrote something in JavaScript and had it compiled down to a WebAssembly function,
+ 
+00:37:09 Michael Kennedy: If you could export that function...
+ 
+00:37:11 Brett Cannon: Exactly, so now at the WebAssembly level it's available, so as long as Python knows how to work with WebAssembly code, it can do that, and actually there is a WebAssembly implementation called Wasmer, which I believe you talked about on Python Bytes.
+ 
+00:37:25 Michael Kennedy: Yes, we did talk about it on Python Bytes, and Wasmer is super exciting, tell people about that. It's like the reverse of what we're talking about in a sense.
+ 
+00:37:31 Brett Cannon: Yeah exactly, so it's a WebAssembly implementation but one of the interesting things they've done is they've defined their own basic, kind of C API, and so what they're letting other languages that can do C API work, is they allow you to actually use it like an extension, so what Wasmer has, is they actually have a C extension for Python that will actually let you load WebAssembly code into Wasmer, and they make calls through Python into Wasmer itself to do execution on your behalf, and then come back, kind of like what your idea was earlier Michael, about "Could we somehow use a sub-interpreter to do backwards compatibility?" This is actually using, kind of like almost a multi-processing, kind of like out through an extension call to have some WebAssembly get executed on your behalf, and then come back into Python.
+ 
+00:38:11 Michael Kennedy: Yeah, it's really cool. To me when I saw it, it felt like it's a little bit like what Node.js did. So JavaScript was stuck in the browser and it lived in the browser as a web thing, but then Node.js came along, and said "We can take this stuff and bring it to run on the desktop, or on a server." Let's just take anything that would run in WebAssembly, and now bring it into your Python application on the server side, and run it, and that's a pretty exciting different take on this angle here.
+ 
+00:38:37 Brett Cannon: Yeah, I mean, I think it's a very clever way to try to start that bridging of showing people the benefits of WebAssembly, but also just making it useful today, right, 'cause, like there's plenty of great stuff being written in JavaScript or any other language that can target WebAssembly, Rust, and there's no reason why you can't reach for it through that mechanism, so I think once again it acts, even at just at some levels a proof of concept to show what the possibilities are if as a technical community all up, what would happen if all languages and tools, tooling and all that start to tackle the WebAssembly as a target and try to actually work towards that as a common goal.
+ 
+00:39:16 Michael Kennedy: It's early days, but it's exciting to imagine what might happen.
+ 
+00:39:19 Brett Cannon: It feels very utopian, amazing if we could have it and it's kind of cool and exciting 'cause it seems not totally bonkers to actually aim for it, so.
+ 
+00:39:27 Michael Kennedy: Yeah, people have always said that JavaScript is the assembly language of the web, but maybe WebAssembly actually is going to be what we get to, yeah?
+ 
+00:39:33 Brett Cannon: Yup.
+ 
+00:39:36 Michael Kennedy: This portion of Talk Python is sponsored by Microsoft and Visual Studio Code. Visual Studio Code is a free open source and lightweight code editor that runs on Mac, Linux and Windows, with rich Python support. Download Visual Studio Code and install the Python Extension to get coding with support for tools you love, like Jupyter, Black formatting, Pylint, PyTest and more, and just announced this month, you can now work with remote Python code bases, using the new Visual Studio Code remote extensions. Use the full power of Visual Studio Code when coding in containers, in Windows Subsystem for Linux, and over SSH connections. Yep, that's right, auto-completions, debugging, the terminal, source control, your favorite extensions. Everything works just right in the remote environment. Get started with Visual Studio Code now at talkpython.fm/microsoft. I think that pretty much covers it for WebAssembly, I do like these two projects that are out there, and I want to see more, I guess maybe we should throw a little love to Rust Python.
+ 
+00:40:32 Brett Cannon: Yes.
+ 
+00:40:34 Michael Kennedy: Which is a cool project and you mentioned it earlier, but its goal is to "Let's see if we can rewrite CPython in Rust, and there's a lot of options, like what if we re-imagined what CPython was supposed to do with some compatibility in mind?" But for WebAssembly, right? There's some options.
+ 
+00:40:51 Brett Cannon: Yeah, and the only clarification I would make is that I don't think it's a target from CPython to Rust, I think they're doing a full...
+ 
+00:40:58 Michael Kennedy: Re-implementation
+ 
+00:40:58 Brett Cannon: Python itself, re-implementation, right?
+ 
+00:40:59 Michael Kennedy: Yes.
+ 
+00:41:00 Brett Cannon: So it's not like they're taking CPython and slowly implementing bits of Rust, kind of like what Mozilla's doing with Firefox, and it's kind of like an inside-out kind of growth of Rust, they're doing it fully Rust from scratch. I mean, with the amount of tooling and work that Rust is putting into the WebAssembly world as something they very specifically care about, it does potentially open that implementation if they manage to reach the level of compatibility that people are happy with to get us Python in WebAssembly, potentially.
+ 
+00:41:29 Michael Kennedy: Yep, it's very exciting, awesome. All right, well let's talk about a couple of other things while I got you stuck here on the expo floor, huh?
+ 
+00:41:36 Brett Cannon: Sure.
+ 
+00:41:36 Michael Kennedy: We talked about the 2 to 3 thing
+ 
+00:41:37 Brett Cannon: Yup.
+ 
+00:41:38 Michael Kennedy: Let's just talk a little bit about sunsetting the whole Python 2 thing next.
+ 
+00:41:40 Brett Cannon: Yes.
+ 
+00:41:42 Michael Kennedy: I mean, where are we right now, it is May, seven months from now we're going to be officially at the sunset, like what's the plan, is that just going to happen, is there something happening, to like shepherd that?
+ 
+00:41:55 Brett Cannon: The steering council is just starting to get ourselves out from the pile of open PEPs that we started off dealing with when we first got elected, and so we're just starting to have conversations among ourselves of "Okay, what do we think we can do if we can somehow hope to direct some energy in the world and such?" And so we've just started, just, like very much I mean just, started having conversations with the PSF about seeing if we could potentially get some funding for, like a PM to help us with the sunsetting of Python 2.7. If you go to the python.org website, it says Python 2, Python 3 everywhere, but you know what, come January 1st 2020, it just should say Python, all the little "Oh, 2 here, 3 there." all that should just go away, 'cause now it's just Python 3, which'll just be Python.
+ 
+00:42:41 Michael Kennedy: Well the biggest one is, if I go search for a function that's in the standard library and then I click on the result in Google, there's a high probability that says 2.7, or pull down the dropdown to get to the 3.7 or whatever.
+ 
+00:42:53 Brett Cannon: Yeah, and how do we handle that, right? Do we do it with redirects, do we just totally get rid of it, what are our options? I don't know, but it's definitely something we should look into, and I think we're hoping we can get some, basically professional help to get that done, 'cause obviously that's going to be potentially a slight slog, and asking a bunch of volunteer core developers to go through the website and all our documentation, and just remove every mention of 2.7, I don't think that's going to go well.
+ 
+00:43:17 Michael Kennedy: Command F. Put 2.7 and type 3.7.
+ 
+00:43:20 Brett Cannon: Let's really test VS Code's global search and replace. The other thing though, is there's going to be some decisions that have to be made, and someone's going to have to stay on top of this, right, this is very much going to be a detail-oriented thing to keep a massive to-do list of things to get done, and once again, asking a single volunteer to try to act as the contact point co-ordinator for that is probably going to be way too much, so I'm hoping this initial conversation will go somewhere, and we're going to hopefully be able to get a PM or something to help us, kind of, make this happen.
+ 
+00:43:47 Michael Kennedy: Yeah, it sounds like a great plan.
+ 
+00:43:49 Brett Cannon: And also, honestly, asking is kind of a nice first step to see what its like for there to potentially be hired help, to help Python dev, and who knows where that can lead?
+ 
+00:43:56 Michael Kennedy: That could lead to a lot of good places. I mean, we saw the whole pypi.org relaunch because there was a little funding brought in there, and that had been, kind of, been chipped at for a long long time, and then six months later...
+ 
+00:44:08 Brett Cannon: I've personally said that I think there's possibility, but we've not had those conversations yet, among even the steering council, let alone Python dev all up, what that potential could look like or mean, but I think there's some potential opportunity there.
+ 
+00:44:20 Michael Kennedy: Yep
+ 
+00:44:20 Brett Cannon: If this works out, everyone's amendable and honestly, once again, we can get the funding.
+ 
+00:44:25 Michael Kennedy: Yeah, minor thing, funding.
+ 
+00:44:26 Brett Cannon: Yeah, money, it's just a thing.
+ 
+00:44:28 Michael Kennedy: It's just paper, come on. All right, and then you're on the VS Code team, specifically the Python side, you guys probably made some announcements, or have something going on here, anything you want to share?
+ 
+00:44:37 Brett Cannon: Actually it was kind of cool, we've been working with the VS Code team for a while now, to land some support for remote editing. Actually, it was mainly driven by the VS Code team, they basically talked to us about some of our needs, to make sure they got addressed, we helped test it for them, 'cause the Python Extension's the number one extension of VS Code, that doesn't come with it out of the box.
+ 
+00:44:55 Michael Kennedy: Yeah, one of the things that drives me crazy, people say "I'm going to use some really sub-par editor, because I need something that's always available to me no matter what, even if as I say to you another terminal like, so I'm going to choose like a least common denominator option, rather than among other tooling."
+ 
+00:45:11 Brett Cannon: So what's really great is VS Code has developed a system I believe's in the Setters build right now, while they work out any kinks from the public announcement, but basically they've launched three extensions that let you use Windows 10's WSL support, Docker, both remote and local, and SSH, and so basically what it does is it runs more or less a headless VS Code on the remote location of where your code is, to get proper IntelliSense, PAS, all that stuff that's normally really airy to do on the translation side, if your desktop's, if your development platform's different from your development position of your code. They just basically run VS Code on that point, and then you basically get a GUI front end on your actual desktop, which, it's a really slick solution, and I'm honestly really appreciative of the VS Code team for letting us actually announce that here at PyCon, it was not a thing that they announced anywhere else, we actually got told to announce it here, because VS Code team itself has been very supportive of us in the work we've done on the Extension, so, thanks to them for that.
+ 
+00:46:09 Michael Kennedy: Yeah, well that sounds pretty awesome, I mean, this part of the Electron JS suite aspect, right? It's kind of already like two tier, it's just, now the tier's far, far away.
+ 
+00:46:18 Brett Cannon: Yeah, exactly, I mean, the analogy I use and I think it's kind of, it feels a little like a cheap end zit, a little too much for the amount of work the VS Code team spent, it's almost like running on X11, right, we've had the headless version running on the remote machine, and you just get it on the other end.
+ 
+00:46:33 Michael Kennedy: Yeah, pretty cool, so, yeah, that's awesome.
+ 
+00:46:35 Brett Cannon: I'm extremely happy, if for any other reason that it closes out our top two feature requests on our issue tracker, that have been there since Don joined the team and the extension moved over under Microsoft.
+ 
+00:46:45 Michael Kennedy: Yeah, and now you can stop talking about it.
+ 
+00:46:47 Brett Cannon: Yeah, now we just got to start with the next new number one and number two feature request.
+ 
+00:46:51 Michael Kennedy: Can you make it write my code for me?
+ 
+00:46:52 Brett Cannon: Yeah, no.
+ 
+00:46:53 Michael Kennedy: I don't know if we want that.
+ 
+00:46:54 Brett Cannon: No, probably not
+ 
+00:46:55 Michael Kennedy: Probably not, but people keep saying it's going to happen, I don't know, we'll see.
+ 
+00:46:58 Brett Cannon: Yeah I actually had a Prof in my Master's program at Cal Poly San Luis Obispo who said "Oh yeah, like in 10 years, code would be writing itself." and I hate to break it to you Doctor Fisher, it's 10 years now and it didn't quite happen, and yeah, we're quickly approaching 20 and it still doesn't look like it's going to happen.
+ 
+00:47:15 Michael Kennedy: Yeah, there's a lot happening here at PyCon and a lot of people typing, a lot of keyboards doing cool stuff. All right Brett, well thanks for coming back and following up this discussion, 'cause it was a lot of fun, and I think WebAssembly and Rust have some pretty amazing possibilities, we'll see where it goes.
+ 
+00:47:28 Brett Cannon: I think the future is bright if the community decides to make it so, and so I'm optimistic and hopeful that it will, and I'm really excited to see where things potentially end up.
+ 
+00:47:37 Michael Kennedy: All right, cool, well thanks for being on the show, and enjoy the conference.
+ 
+00:47:40 Brett Cannon: Thanks Michael, you too.
+ 
+00:47:41 Michael Kennedy: Bye!
+ 
+00:47:41 Brett Cannon: Bye.
+ 
+00:47:42 Michael Kennedy: This has been another episode of Talk Python To me, our guest on this episode was Brett Cannon, and has been brought to you by Microsoft. If you're a Python developer, Microsoft has you covered. From VS Code and their modern editor plugins, to Azure Pipelines for continuous integration, and serverless Python functions on Azure. Check them out at talkpython.fm/microsoft. Want to level up your Python? If you're just getting started, try my Python Jumpstart by Building 10 Apps course. If you're looking for something more advanced, check out our new Async course that digs into all the different types of Async programming you can do in Python, and of course if you're interested in more than one of these, be sure to check out our Everything bundle. It's like a subscription that never expires. Be sure to subscribe to the show, open your favorite podcatcher and search for python, we should be right at the top. You can also find the iTunes feed at /itunes, the Google Play feed at /play, and the direct RSS feed at /rss on talkpython.fm. This is your host, Michael Kennedy. Thanks so much for listening, I really appreciate it. Now get out there and write some Python code!
+ 
