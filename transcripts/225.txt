@@ -1,0 +1,518 @@
+00:00:00 Michael Kennedy: Have you heard that Python is not good for writing concurrent asynchronous code? This is generally a misconception, but there is one class of parallel computing that Python is not good at, CPU-bound work running in the Python layer. What's the main problem? It's Python's GIL or Global Interpreter Lock, of course. Yet the fix for this restriction might have been hiding inside Python for 20 years, sub-interpreters. Join me to talk about PEP 554 with co-developer, Eric Snow. This is Talk Python To Me, Episode 225 recorded August 2nd, 2019. Welcome to Talk Python To Me, a weekly podcast on Python. The language, the libraries, the ecosystem, and the personalities. This is your host, Michael Kennedy. Follow me on Twitter where I'm @mkennedy. Keep up with the show and listen to past episodes at TalkPython.fm. and follow the show on Twitter via @TalkPython. This episode is supported by the Linode and Toptal. Please check out with their offering during their segments. It really helps support the show. Eric, welcome to Talk Python To Me.
+ 
+00:01:11 Eric Snow: Hi, how it's going?
+ 
+00:01:11 Michael Kennedy: It's going really well. It's an honor to have you on the show. We met up at PyCascades and talked a little bit, but this latest work you're doing to address concurrency and parallelism in Python is super-interesting. So I'm looking for to talking to you about that.
+ 
+00:01:25 Eric Snow: Well, it's super-interesting to me too.
+ 
+00:01:27 Michael Kennedy: Yeah, I can imagine.
+ 
+00:01:29 Eric Snow: I'm glad you're interested.
+ 
+00:01:30 Michael Kennedy: This kind of stuff is, I don't know, there's just something that draws me in, and I really enjoy exploring it, but before we do, let's start with your story. How did you get into programming in Python?
+ 
+00:01:38 Eric Snow: Oh boy, I had all sorts of ideas on what I want to do growing up, and computers was not really one of them, but then I ended up at school and somehow ended up, signed up for computer stuff, ended up getting a CS degree. And then it's funny because I actually, while I was in school, I was working for a web hosting company doing technical support. Once I graduated I moved over to a development team and the I guy replace, you may know him, his name is Van Lindberg.
+ 
+00:02:11 Michael Kennedy: Okay, yeah.
+ 
+00:02:12 Eric Snow: So it's kind of funny, so I ended up working on this project that Van had been running, and ultimately ended up kind of being the tech lead on the project, is all written in Python. And so I thank Van for my introduction to Python.
+ 
+00:02:29 Michael Kennedy: That's really cool. So you went from talking to the customers and helping them with the problems that developers created to creating the problems for the person who developed. Just kidding.
+ 
+00:02:39 Eric Snow: Kind of.
+ 
+00:02:41 Michael Kennedy: That's a really great progression, right, like you sort of get your foot in the tech space and then you make your way over to kind of running the team. That's great.
+ 
+00:02:48 Eric Snow: It was a good experience. One neat thing is that, it was pretty flexible as far as the job goes. There were only a handful of us on the team and we were doing a pretty big job, but we had taken the approach of highly automating stuff. So it was mostly just a matter of making the effort to address automation stuff, which meant that otherwise we have a little more time to kind of delve into issues and solve problems in a better way. And as part of that, whenever I'd run into Python stuff, like I couldn't figure out what was going on or I won't understand how something worked, I had the time to go and explore it, and within a year or something I discovered the mailing lists, and then before long I was actually active in email threads and I started getting involved with the import system. And by 2012, so this is over the course of a few years, I got a commit rights and was pretty heavily active in core development.
+ 
+00:03:50 Michael Kennedy: That's so cool. I think there's something special for working for a small company, you get to touch a lot of different things, you get this freedom that you're talking about that kind of solve the problems the way you see they should be solved, and then go and kind of explore, right. I worked for a small company and I think, I really attribute being in that company in early days to a lot of the success in my career because it gave me a chance to round out the corners that I didn't really know. I was in this pigeonholed into some super-narrow role, right. You work on what this button does, that's your job.
+ 
+00:04:21 Eric Snow: Right. Right, right, exactly. That reminds me what you just said, that's been my experience with CPython, that as I've gotten involved in the mailing list, in the bug tracker and everything, I feel like it's really rounded me out a lot because I'm exposed to so many things. The breadth of programming and just 90% of it, I probably never really would've been introduced to because probably isn't that interesting to me, but because their email threads and whatever, I learned about it. And it's really made a huge difference for me I think.
+ 
+00:04:57 Michael Kennedy: Yeah, I can imagine, it's an amazing group of people working on there, and then get down into the technical details.
+ 
+00:05:03 Eric Snow: Oh, yeah.
+ 
+00:05:04 Michael Kennedy: So you started out in this web hosting company, and now work for a really big web hosting company, right. With Azure.
+ 
+00:05:09 Eric Snow: Oh yeah.
+ 
+00:05:11 Michael Kennedy: No, not exactly, but definitely, definitely got some web hosting going on. What do you do day-to-day over at Microsoft?
+ 
+00:05:17 Eric Snow: So I work with Brett Cannon on the Python extension for VS Code. I joined the team, well, a little over a year and a half ago.
+ 
+00:05:23 Michael Kennedy: Nice, that's got be a fun team to work on. The excitement around VS Code is massive, right.
+ 
+00:05:29 Eric Snow: Oh yeah.
+ 
+00:05:29 Michael Kennedy: I always ask this question, what's your favorite editor, what editor you use, things like that in the show. And, yeah, VS Code is definitely tracking as a major thing, and it used to sometimes be Sublime or Atom or something, and it seems like certainly for that type of interface, what would you call? So what would you call? I mean, it's not an IDE really. It's not like a terminal app, what category of editor are Sublime, Atom, VS Code? What's the name? What are we calling these things?
+ 
+00:06:00 Eric Snow: Like a full-featured editor.
+ 
+00:06:03 Michael Kennedy: Yeah, exactly.
+ 
+00:06:04 Eric Snow: You can't code an IDE because that's for button.
+ 
+00:06:07 Michael Kennedy: Yeah, and there's not enough buttons. It needs more buttons in Windows, right.
+ 
+00:06:11 Eric Snow: It needs more menus and more stuff, so you can get lost in there, right.
+ 
+00:06:15 Michael Kennedy: Yes, exactly.
+ 
+00:06:16 Eric Snow: Right now it's too easy not to get lost.
+ 
+00:06:17 Michael Kennedy: Yeah, there's not enough floating Windows does. Congratulations, I'm sure that's a super-exciting thing to be working on, and it's really growing quickly.
+ 
+00:06:25 Eric Snow: It's funny, this is a team that I first talked with them about getting on the team in 2014, and it almost happened, and then there were some complications because I was only going to work remote. At the time is working for Canonical, who makes Ubuntu, so I ended up just kind of waiting and took two or three years or something like that, but it worked out in the end. That's kind of a story of my life, I just kind of find a good thing and then wait for it to work out. I'm never really in a big hurry, which I suppose we'll talk about relative to the stuff I've been working on.
+ 
+00:07:02 Michael Kennedy: Yeah, absolutely, so, well, that's really good. And that's a great project to be working on day-to-day. And you say that Microsoft actually gives you a decent amount of time to focus on CPython as well. As they do with Brett and some other folks, and that's really quite cool.
+ 
+00:07:17 Eric Snow: Yeah, yeah, I get to work, basically my Fridays I work on exclusively on Python. So that's been a big boost to what I've been able to get done.
+ 
+00:07:28 Michael Kennedy: It's awesome. So you're saying the fact that we scheduled this on Friday is actually cutting in your time to make Python better for everyone?
+ 
+00:07:34 Eric Snow: It's actually part of why I...
+ 
+00:07:35 Michael Kennedy: I just. Yeah, I know, it's cool.
+ 
+00:07:37 Eric Snow: That's the cost.
+ 
+00:07:38 Michael Kennedy: Yeah, but I think awareness of what you're doing is really good because I think you can make a big difference. So let's just talk about parallelism and concurrency and asynchronous programming stuff kind of in general and in the Python space. I feel like there's a lot of people who look at what Python does with async. They see things like the GIL and they say, well, this just doesn't work for parallelism. I'm switching to Go or something like that. And I feel like it's, there may be situations where you got to switch to C or switch to Go but they're like, 1% of the situations where people actually do that, right. Most of the time I think that's just not taking advantage of what's out there. So maybe let's just set the stage with talking about concurrency in general.
+ 
+00:08:23 Eric Snow: Yeah, you bet. If you look at it, the history of computing other than really large systems, most computers have been single processor, single core until relatively recently.
+ 
+00:08:34 Michael Kennedy: Yeah, like 2005 or so, it just used to be, the clock speed went up and up and up, and that was how computer got faster.
+ 
+00:08:42 Eric Snow: So it's kind of funny because threading, sure, you can kind of logically program for different threads, but ultimately it was just a single thread getting switched by the OS, and it's kind of the, what you had to deal with, but it's a different story now.
+ 
+00:08:59 Michael Kennedy: Yeah, and back in the early days, you didn't even have preemptive multithreading.
+ 
+00:09:03 Eric Snow: Oh yeah.
+ 
+00:09:03 Michael Kennedy: Cooperative multithreading, you had to give it up, right. It was in Windows 3.1 in the early days. There was some weird stuff where you had to be a good citizen on the operating system to even allow that.
+ 
+00:09:15 Eric Snow: We're kind of full-circle here with async.
+ 
+00:09:17 Michael Kennedy: Yeah, async and await is exactly the same thing.
+ 
+00:09:19 Eric Snow: So it's kind of conceptually the same. So it's really interesting, but now not only do we have concurrency where you have to deal with matters of who is running at a given time, but now we also have parallelism, which gives us performance boosts, but of course with Python it's some issue with the GIL, which everyone likes to complain about.
+ 
+00:09:41 Michael Kennedy: Right, exactly, so within a single process you get really, unless you are doing certain operations that release the GIL, you can't really run more than one interpreter instruction at the same time, right.
+ 
+00:09:53 Eric Snow: Right, right, it's really a CPU-bound code that suffers.
+ 
+00:09:56 Michael Kennedy: Right, yeah, exactly. So if you're talking to databases or you're waiting on web services, all the stuff is fine, right, like CPython interpreter, once it opens a network socket down at the C level, while I was waiting will release the GIL. And you can do those kinds of things in parallel with threads already, right. And not computationally, yeah.
+ 
+00:10:14 Eric Snow: Yeah, it's kind of funny because if you look at it, and I think Guido's mantra has always been, well, you aren't really hurt by the GIL as much as you think you are because a lot of code that we write really isn't CPU-bound, very often it's not. And especially for some of the CPU-bound stuff, a lot of the critical stuff, people moced into the C extensions anyway. There's still a set of problems that are affected by the GIL and people had to work around that number solutions. Asyncio is kind of one thing, but you also have multiprocessing and you have all sorts of distributed frameworks.
+ 
+00:10:52 Michael Kennedy: Right like Dask and other types of things, yeah.
+ 
+00:10:54 Eric Snow: So all that stuff is in part, well, for distributed it's a little different, but part of the motivation there has just been to leverage parallelism better. So that's one of the biggest complaints that people have with Python has been for awhile, just parallelism, multi-core. And it's a bigger problem now that multiple cores are essentially ubiquitous.
+ 
+00:11:19 Michael Kennedy: Right, even here in my MacBook, if I go and ask it, how many processors it has, how many cores rather, it says it has six, and each of those are hyper-threaded. So as far as the OS is concerned, I effectively have like 12. And yet it's super-difficult to take advantage of those. In Python.
+ 
+00:11:36 Eric Snow: Yeah, yeah, it's really interesting. So it's funny the way things have gone, and it's going to more this way. I mean, I expect that the way people program will be different as we think about multiple cores more, but maybe not, I mean, because how often are we writing CPU-bound code.
+ 
+00:11:55 Michael Kennedy: I feel like there's just a couple of situations where it really matters. And they are already to some degree some SDK patches, right. So the most obvious place where in Python it really matters for computational parallelism is in data science.
+ 
+00:12:09 Eric Snow: Yep.
+ 
+00:12:10 Michael Kennedy: Right, like I've got a billion of these things. I want to run some crazy algorithm on it, and like machine learning training or whatever, but a lot of the libraries that the machine learning folks already have, have some capability for, or for data science folks have have some capability for parallelism at their lower C levels anyway, right.
+ 
+00:12:30 Eric Snow: Yep, that's exactly right. I mean, a lot of these libraries have C extensions where they need them.
+ 
+00:12:36 Michael Kennedy: Exactly. The other place where I feel like you really could get a lot better support is on the web. Right, we have some of the neural frameworks. We have Moten and Japronto and Starlette and all these things, Responder, that let us write async def some web method and truly leverage the asyncio components there, but the main ones, Flask, Django, others, Pyramid, whatever, they don't, right, they're always WSGI, and you just can run into issues, right. I mean, I know the web servers themselves have some capability just to parallelize it out, but still it would be much easier if you did. So I don't think it's that big of a problem, like there's these two areas, the data science space, and I think the sort of high-end web serving space that could be handled a little bit better. We are already seeing some self with asyncio on the web, which is I think where it's appropriate.
+ 
+00:13:30 Eric Snow: I think there's one important caveat too, and it's something that we don't really bring up a whole lot in the community, which is that there are a lot of enterprise users of Python that we never hear about how they're using it. In part because of competitive advantage and that sort of thing, but we don't really hear about it.
+ 
+00:13:49 Michael Kennedy: Yeah, or they just don't go to the conferences, and they don't spend all the time on Twitter, they just see it as a job, they do their work, they go home, like they don't, it's not also their hobby necessarily.
+ 
+00:13:58 Eric Snow: Yeah, yeah, so in a lot of those cases performance matters and not just performance, of course, efficiency and that sort of thing. I mean, it really adds up. So I'm sure there are a lot of folks that we don't even think about who would benefit from better multi-core support in CPython, but we don't hear about those folks.
+ 
+00:14:22 Michael Kennedy: Well, maybe that's not even them directly, right. Maybe they'd pip install a thing and that thing now works better, and they don't even know that's using multi-core support. Right, but somebody who is really clever found a way to make something they were doing much, much better using that, right. This portion of Talk Python To Me is brought to you by Linode. Are you looking for hosting that's fast, simple and incredibly affordable? Well, look past that bookstore and check out Linode at talkpython.fm/linode. That L-I-N-O-D-E. Plans start at just $5 a month for a dedicated server with a gig of RAM. They have 10 data centers across the globe, so no matter where you are or where your users are, there's a data center for you. Whether you want to run a Python web app, host a private Git server or just a file server, you get native SSDs on all the machines on newly upgraded 200 Gigabit network, 24/7 friendly support, even on holidays and a seven-day moneyback guarantee. Need a little help with your infrastructure, they even offer professional services to help you with architecture, migrations and more. Do you want a dedicated server for free for the next four months? Just visit talkpython.fm/linode. This work that you're approaching basically tries to deal with this limitation of the Python's GIL, the Global Interpreter Lock, which basically has the effect of what I said before that only a single interpreter instruction can run at a time, maybe some low level C stuff can also happen, but the stuff that you write runs only one bytecode instruction at a time basically. So maybe just tell people really quick, that sounds bad, people often say this is a bad thing, but it's here for a reason, right. It solves a lot of problems for us, right.
+ 
+00:16:04 Eric Snow: Oh, yeah, it hides a multitudes of sins. It's really something where there are a lot of problems that you face when dealing with threads that you don't have to worry about in Python, but only that it's also when you're writing C extensions, in C you have to do a lot of stuff yourself. And when you're dealing with threads, you have to deal with all that. So when you're using Python and you're holding the GIL, you don't have to worry about other python threads, you don't have to manage your own locks for those threads which is... I think makes a threading at the C level in the C API easier, but also there is a lot of implementation details in CPython that depend on the fact that the GIL protects them. We deal with reentrancy a lot, but other than that we don't really have to worry about race conditions on any of the C types, the built-in types or any of those because they are protected by the GIL.
+ 
+00:17:05 Michael Kennedy: Yeah, which is great, and the GIL is largely a memory management thing. It's not a initial job. I mean, it is for threading, but it's mostly to protect the memory management in making that thread-safe, right.
+ 
+00:17:16 Eric Snow: In large part, it's to protect the runtime state, so especially memory management, yeah.
+ 
+00:17:21 Michael Kennedy: Yeah, yeah, so, it serves this important role. I mean we still do have RLock and things like that because we might write algorithms that like a whole bunch of different steps can't be interrupted because temporarily in valid state or whatever. So we might have to think, but it's very rare actually that you end up doing locks and stuff in other languages like C++ or C# or something like, it's common. It's do locking all over the place.
+ 
+00:17:45 Eric Snow: Oh yeah.
+ 
+00:17:45 Michael Kennedy: Right, for all kinds of funky things, so it's nice that it's not there, and there has been several attempts to take it out to switch to other types of memory management, other things that let us avoid it, but it's always had these problems of making the C extensions not working well or breaking them, of actually making the single threaded case slower, right. Like it's one thing to say like, okay, we could switch to some other system that's not using the GIL, but now your code is 1.5 times slower. Unless you send like six cores on it, then now it's faster sort of sometimes. Right, like that's not a great solution either, is it?
+ 
+00:18:24 Eric Snow: One of the key things that we protect with the GIL is ref counts because we use ref counting for, especially for memory management, then we have to keep those ref counts safe from race conditions. So we'd have to do locking around all ref count operations, and now it'd get real expensive, real fast.
+ 
+00:18:45 Michael Kennedy: Right, exactly.
+ 
+00:18:46 Eric Snow: There had been other projects, but in the past several people have tried to get rid of the GIL, including most recently Larry Hastings with the Gilectomy. And each time it comes down to having to add a lot of locks or similar mechanisms to protect those global resources. And those things kind of fall apart and cause performance issues that ultimately kind of kill the goals of the project.
+ 
+00:19:14 Michael Kennedy: Right or break the C APIs. If you're looking for performance like, well, we made the Python bit 1.5 times faster, but the C part doesn't work, all of a sudden it's much lower, right. That's a problem.
+ 
+00:19:27 Eric Snow: If we were able to just break the C API or even get rid of it and use something else, then we'd be able to solve this problem I think without a lot of trouble, but because people in C extensions rely on a lot of these details, we just can't get rid of them that easily. There has been recognition of this kind of in the core team in last few years, and a recognition that we really got to figure out how to solve this. So I'm hopeful that we're going to figure this out, there have been a lot of smart people thinking about this, and a lot of good ideas over the last year or two. There are some things that will have to break, but I think we'll be able to sort it out.
+ 
+00:20:08 Michael Kennedy: That's good. Let's talk about the proposal that you've been working on, PEP 554, which has his concept of a sub-interpreter. And when I heard about this, I thought, wow, okay, this is some creation that's going to be this new thing that allows for isolation, so you can effectively mimic what you're doing with sub-processing or multiprocessing, but without actually the overhead of processes and the inter-process communication. Okay, this is great, but then as I looked into it, this is not a new idea at the very core of it, right.
+ 
+00:20:45 Eric Snow: No.
+ 
+00:20:45 Michael Kennedy: But it's just not something to anybody's leverage, tell us about it.
+ 
+00:20:47 Eric Snow: It's interesting, it really is. Nick Coghlan kind of expressed it as the isolation of processes with the efficiency of threads. And it's not a pure explanation, but it's pretty close. Sub-interpreters have been around as part of Python, Originally CPython was just implemented as kind of a blob of state. There is an effort to kind of bring a little sanity to that. And isolate all of the state related to Python threads in one C struct and interpreters, which can have multiple threads in another C struct, and then there is runtime state still all over the place. That's just global. So at that point, that was, I don't know, 20, 21, 22 years ago, some like that. And at that time, C API was added for creating and destroying sub-interpreters. And the threading API is built around sub-interpreters to an extent, but it's funny because like you said, it's not a new thing and yet a lot of core developers didn't even know about sub-interpreters, very few users knew about it. I knew of only one project that was actually using sub-interpreters meaningfully up until four or five years ago. And that was mod_wsgi, Graham Dumpleton. And it's funny because sub-interpreters now, there's more awareness and people are starting to use them more, and some big projects including. And at the same time a lot of old users, so Graham, and I've since heard from few people that use sub-interpreters internally for long time, now that we're fixing all the problems with them, they're actually moving off the sub-interpreters because they gave up. It's like, no, just wait another year, you probably have a lot of stuff.
+ 
+00:22:42 Michael Kennedy: It's almost there.
+ 
+00:22:43 Eric Snow: Yeah, and you can benefit from performance improvements that we're doing. So, yeah, so it's really funny. A lot of people just didn't know about it, and the people who did didn't really think about all that much. So it's funny, as CPython progressed, things get added in, and they would affect sub-interpreters, but nobody would realize that there wasn't going to test this sub-interpreters, there weren't many users and nobody report problems, poor Graham he'd report things and nobody would really pick up the bugs and work on them because...
+ 
+00:23:12 Michael Kennedy: Well, this guy is crazy, what's he talking about this weird some interpreter... Is that even a thing?
+ 
+00:23:16 Eric Snow: Exactly. There are a number of problems. So in my opinion it never really was quite finished because they're not as isolated as they probably should be. And there are a number of other rough corners, bugs and stuff. So what's interesting is the stuff I'm doing, one consequence is that those things have to get fixed.
+ 
+00:23:37 Michael Kennedy: Yeah. So the idea is to lift this concept of a sub-interpreter up out of the C layer, create a standard library module.
+ 
+00:23:46 Eric Snow: Yep.
+ 
+00:23:46 Michael Kennedy: Called interpreters. That allows you to program against this concept of the sub-interpreter.
+ 
+00:23:51 Eric Snow: Correct, so it's definitely, I'm doing this with isolation in mind. At first the proposal was just wrap the C API in Python in a C extension.
+ 
+00:24:05 Michael Kennedy: Because it's there, right.
+ 
+00:24:06 Eric Snow: And somebody really early on pointed out, well, if you can't share stuff between sub-interpreters, all you can do is just start one up, it's not really nearly as useful. In C you just do the C thing, pass stuff around however you want, and shoot yourself in the foot if you want.
+ 
+00:24:24 Michael Kennedy: Here's a bunch of pointers. You can talk to them all you want.
+ 
+00:24:26 Eric Snow: Exact.
+ 
+00:24:27 Michael Kennedy: Make sure you talk to them at the same time.
+ 
+00:24:30 Eric Snow: Don't hurt yourself.
+ 
+00:24:31 Michael Kennedy: Yeah, exactly.
+ 
+00:24:32 Eric Snow: But in Python, we don't have the opportunity, which is I think a good thing here. So they are like, yeah, well, it's not nearly as useful as it would be if you had just at least some basic way of sharing data between them. So it's like, oh yeah, that's a good point. And so really got me thinking about sub-interpreters more than just as a tool to achieve other goals, which I expect we'll talk about, but also as actually a vehicle to a concurrency model that I think fits the human brain better, at least in my opinion. I'm not a big fan of async, I'm sure it's great. Some people really get it, for me it just, I don't like it. But that's fine. I think there are other ways of thinking about concurrency that work a lot better. I think there have been studies since the 60s.
+ 
+00:25:20 Michael Kennedy: Right, message passing and some of these types of concepts where you're more explicitly like, I'm going to send this over to the thread and the thread is going to pick it up and work on it. Things like this, right.
+ 
+00:25:30 Eric Snow: Yeah, yeah. Before I moved to Microsoft, I was at Canonical for three years working on various projects written in Go. And Go has a concurrency model that's, I'd say loosely based on CSP, which is a kind of a concurrency model that was research and developed since the 60s, especially by a guy named Tony Hoare from over in the UK, really powerful stuff. And it has a lot of similar roots with the Actor model.
+ 
+00:25:59 Michael Kennedy: Yeah, exactly. Go is one of these languages that very explicitly controls how concurrency works, and it's part of the language that this data sharing and whatnot happens, right.
+ 
+00:26:11 Eric Snow: I don't think it's great what they did because they took CSP and then they broke some of the fundamental ideas behind it, like isolation in these processes, right. I mean, CSP is communicating sequential processes, so the idea is that you have a process that is just, it's like a single-threaded program, right, just you could break it down into just a linear flow of code, no matter what, deterministically. And then you have a mechanism by which these processes can communicate, basically just send messages back and forth, and they block at those points. I'm going to send a message and wait for the other process to pick it up, and then at that point both processes will move on. So I spent awhile trying to figure out really what would be the best way to setup rudimentary communication between sub-interpreters, and my experience with Go came to that. Well, so, I don't know if I just said this, but Goroutines, which were kind of the idea of these processes, in Go they're not isolated, so you can share data between them. So basically it invalidates a lot of that, the ideas behind CSP, I mean.
+ 
+00:27:25 Michael Kennedy: Interesting.
+ 
+00:27:26 Eric Snow: So I want to take advantage of the isolation between sub-interpreters, and so essentially you end up with kind of opt-in data sharing or opt-in concurrency. You don't have to worry about races and stuff like that.
+ 
+00:27:40 Michael Kennedy: It's very much kind of like what the multiprocessing communication flow is... I'm giving this data over to this other process, and then they can just have it and they own it and don't have to worry about it or they get a copy of it or some like that.
+ 
+00:27:54 Eric Snow: So I look for a lot of prior art taht kind of follows this model and the stuff in multiprocessing was one, the Queue module has a lot of stuff that's kind of the similar idea, and there are a few other things out there, and, of course, in other languages. I really stuck with this idea of following the model of CSP as much as I could, and really while the proposal isn't like some CSP implementation. The whole thing is kind of with CSP in mind. Okay, could I build a nice CSP library on top of this?
+ 
+00:28:28 Michael Kennedy: Right, because like you said without the communication, like you said it's like, it's kind of interesting, but it's just like a task spawning... Type of thing, right. It's not really any sort of cooperation. This portion of Talk Python To Me is brought to you by Toptal. Are you looking to hire a developer to work on your latest project? Do you need some help rounding out that app you just can't seem to get finished? Maybe or even looking to do a little consulting work yourself, you should give Toptal a try. Maybe you've heard we launched some mobile apps for our courses over on iOS and Android. I used Toptal to hire a solid developer at a fair rate to help create those mobile apps. It was a great experience and I can totally recommend working with them. I met with a specialist who helped to figure out my goals and technical skills required, then they did all the work to find the right person. I had a short interview with two folks and hired the second one, then we released the apps just two months later. If you like to do something similar, please visit talkpython.fm/toptal and sign-up for an account. That's talkpython.fm/toptal, T-O-P-T-A-L.
+ 
+00:29:31 Eric Snow: I think what we ended up with, which is channels, really basic, but I want to keep the PEP as minimal as possible. And I think it really, I came up with a good solution for this. So one of the tricks though is that because of the isolation you can't just share objects between sub-interpreters. I mean, currently you can at the C layer, but in the Python I didn't wanted to give anybody ever the opportunity to share objects, at least not at first. Maybe we can come up with some clever solutions for that, but currently you can't. So I mean there's really a limit to what can be shared between sub-interpreters as proposed. Want to keep it as minimal as possible, so we can build from there.
+ 
+00:30:10 Michael Kennedy: Yeah, absolutely. Well, one of the really exciting parts that is, one thing that is not shared between sub-interpreters is the Global Interpreter Lock, right.
+ 
+00:30:19 Eric Snow: Well, currently it is.
+ 
+00:30:20 Michael Kennedy: Is it?
+ 
+00:30:21 Eric Snow: That's the problem. So right now...
+ 
+00:30:23 Michael Kennedy: I see.
+ 
+00:30:24 Eric Snow: Sub-interpreters do share the GIL. So one of the things I'm working on is kind of the bigger problem, really I'm trying to tackle this problem of supporting multi-core parallelism in CPython, using sub-interpreters. And so kind of PEP 554 is just a vehicle to make sub-interpreters accessible to the Python users, but really the actual goal is to fix sub-interpreters, including to stop sharing the GIL between sub-interpreters, which is kind of crazy.
+ 
+00:30:54 Michael Kennedy: That is crazy, but at that point then you can say start five threads. Each thread starts a sub-interpreter as it starts a process, and then all of a sudden the GIL is no longer a problem.
+ 
+00:31:05 Eric Snow: Precisely.
+ 
+00:31:05 Michael Kennedy: Essentially. And because you're not sharing the objects, right, you don't have to worry about that.
+ 
+00:31:09 Eric Snow: And now you have these channels where you can pass data back and forth in a thread-safe way.
+ 
+00:31:14 Michael Kennedy: That's super-cool. It sounds like sub-interpreters as they exist don't do that, but that's kind of the ultimate goal. Create this exposure of the API to actually create some interpreters, move the GIL down so it's one per sub-interpreter, and then a way to communicate between them.
+ 
+00:31:30 Eric Snow: So that's, the hairy problem, right, is the GIL. What we have is, like I said earlier, we have a whole bunch of runtime state all over the place. So one thing I did a couple of years ago for this project, there are a bunch of things that we've done. Big things that probably nobody even notices because they're all internal, but one of the things I did was I took all the global state I could find and I pulled it all into one single C struct. So what's neat about this project, the ultimate goal of not sharing the GIL between sub-interpreters is that it requires just a ton of other things. I think I listed out 80 different tasks that are probably not even superfine-grained, that have to get done in order to make this work. And probably 70, 75 of those are things that are good idea, regardless of the outcome of my ultimate goal, right.
+ 
+00:32:23 Michael Kennedy: Right, you CPython is going to be cleaner.
+ 
+00:32:25 Eric Snow: If we get to the 75 things, and then we are like, oh, it's not going to work. Well, that's okay because then we got some good stuff done anyway, stuff that we wouldn't have done because we weren't really that motivated. I mean, this is open source, so I have a motivation and other people share some of the motivations. It's really neat, there is a lot of collaboration going on now because not just for the whole sub-interpreter thing. Some of the stuff that I need is stuff that other people need for different reasons and it's working out pretty well, but the whole thing is, I took all this state and smashed into a single struct. And as kind of a side effect, I just want to make sure I didn't hurt performance by doing that, so I ran Python's performance suite, and it turned out that I was getting a 5% improvement in performance.
+ 
+00:33:16 Michael Kennedy: Interesting, do you know why?
+ 
+00:33:17 Eric Snow: It's crazy, well, I expect it's because the cache locality of that struct.
+ 
+00:33:21 Michael Kennedy: That was my first guess as well, right. As you load one element of that struct, everything drags along onto L2 cache or the local cache and it's just like a little quicker. Right, use accidentally do fewer like deep memory lookups.
+ 
+00:33:35 Eric Snow: Somebody pointed out to me that it probably doesn't have quite the same effect on performance for a PGO build where the compiler can optimize the layout of memory and various other things relative to what's hottest in the code, right. So it kind of runs the things through a workload and determines what's the hottest chunks of memory and pushes those together, so you get those same cache locality benefits. So ultimately under a PGO build, probably not the same performance benefits, but I only bring that up because...
+ 
+00:34:09 Michael Kennedy: PGO, Performance Guided Optimization.
+ 
+00:34:11 Eric Snow: Yes, thank you.
+ 
+00:34:12 Michael Kennedy: For everyone out there, yeah.
+ 
+00:34:13 Eric Snow: Acronyms.
+ 
+00:34:13 Michael Kennedy: Yeah, yeah. So maybe it's not as big necessarily. Is that theoretical or is that something that is actually done on CPython builds?
+ 
+00:34:21 Eric Snow: Yeah, yeah, yeah, people do it.
+ 
+00:34:22 Michael Kennedy: It's the one that I like brew install, is that one PGO?
+ 
+00:34:25 Eric Snow: I don't know.
+ 
+00:34:26 Michael Kennedy: Optimize, okay.
+ 
+00:34:28 Eric Snow: Yeah, you get some real benefits from a PGO build. There are lots of these little things. One of the things I needed to happen was there was some work that Nick Coghlan started like four or five years ago to cleanup runtime startup. And I needed that because otherwise there were certain things that I just couldn't do, so I was blocked on that. So finally I got around to taking the branch that he had which was on Subversion and moving it over to Git, and then at the same revision, and then I had to be rebase it against master and fix all the conflicts and finally got that merged. Like two years ago. And that was a big thing. And then because of that, we're able to do a lot of really good things with startup that we weren't able to before. So that's a side effect. And there are all these things that are just good.
+ 
+00:35:20 Michael Kennedy: That was one of the larger goals of Python 3 as well is try to fix just the cold startup times, right.
+ 
+00:35:27 Eric Snow: No.
+ 
+00:35:27 Michael Kennedy: No.
+ 
+00:35:28 Eric Snow: One of the goals that we have is to fix startup time, so they are at least on par with Python 2, which they weren't, weren't nearly at first.
+ 
+00:35:35 Michael Kennedy: Yeah, yeah, that's what I was thinking, yeah.
+ 
+00:35:37 Eric Snow: So we're mostly on par now. The biggest problem with all the codecs and Unicode stuff, that really hits startup performance. So if you think about sub-interpreters, if you startup a new sub-interpreter, it has to build all the state, it has to load all these modules. There's a ton of stuff that has to happen, right. So you're going to incur that cost for each sub-interpreter. As a consequence of what I'm working on, I want to make sure that startup time is as small as possible. So it's definitely one of the things, maybe not one of the immediate concerns but kind of one of the relatively low-hanging fruit for this project once I finish this first phase is to go in and do things like make interpreter startup more efficient, whether it's sharing or whatever. And those are things that are good idea regardless of use the sub-interpreter. I mean, just for the main interpreter, getting startup faster is a good idea. And that's something that I want for sub-interpreters and I'm motivated to do it, and I think other people. Once sub-interpreters get in widespread use, people are going to be like, oh yeah, this is great, and people are going to be motivated to fix some of these deficiencies in sub-interpreters.
+ 
+00:36:42 Michael Kennedy: Yeah, absolutely, and it'll definitely as, it's a little bit of a catch-22, right. You said it wasn't even hardly like quite finished because here is this idea, but at the same time if no one is really using it, why do you care about fixing this thing? And if no one is fixing it, I'm not going to use it because it doesn't quite work. And then and it's like this lock, right.
+ 
+00:37:01 Eric Snow: So it reaches a point where, well, for me it was in 2014, I was having a conversation with somebody at work and they were saying, yeah, Python is going to die because it doesn't do multi-core because of the GIL. And it was just, I don't know one of those moments when something hits you so deep, they dig a little too hard, and you're like, okay, fine, forget you. I'm going to fix this and I'm never going to hear anybody complain about the GIL again.
+ 
+00:37:29 Michael Kennedy: Yeah, yeah, absolutely.
+ 
+00:37:31 Eric Snow: That's what this project is. That's what I've been working on for several years now. It's basically just to get people to stop complaining about the GIL.
+ 
+00:37:40 Michael Kennedy: I definitely think rightly or wrongly, it's one of the perceived deep limitations of Python. I think wrongly, but I do think that it is perceived to be that Python is not nearly, is barely appropriate for parallel computing.
+ 
+00:37:55 Eric Snow: Yeah, yeah, yeah.
+ 
+00:37:55 Michael Kennedy: I don't think that's right, but I think that's the perception. Outside of a lot of Python, or maybe within.
+ 
+00:38:00 Eric Snow: I think it's a fair perception for a class of users, and as a community we like to be inclusive, we don't want to leave anybody out. We want to make sure that things work out for folks. It's just being open source, it's nothing is going to happen until somebody cares enough to do something about it, and that happened for me.
+ 
+00:38:19 Michael Kennedy: That's awesome, yeah.
+ 
+00:38:20 Eric Snow: And so here we are.
+ 
+00:38:21 Michael Kennedy: Yeah, so it sounds like around September 2017, you introduced PEP 554 to address this. Probably you've been working prior to that. 2018, you talked about at PyCon US at the Language Summit and whatnot, and then also again in 2019. Also it sounds like those experiences were a little bit different. You want to maybe recount those for us and tell us how this has been perceived overtime.
+ 
+00:38:46 Eric Snow: You bet, I mean, I've done support from the core team. I think my first post about all of this to the Python dev mailing list was probably 2016, early 2016 I think. And there was a lot of discussion about it, and there are really only a handful of people that had any sort of opposition to it, any major concerns, which I took as kind of a valid litmus test on, if it was worth pursuing.
+ 
+00:39:18 Michael Kennedy: Yeah, and when you initially presented it, what was the scope? Was the scope like the final end goal where there is, like you're trying to use it for concurrency and all that. That was like from the start.
+ 
+00:39:28 Eric Snow: Talking about using sub-interpreters and not sharing the GIL to achieve these goals of multi-core parallelism. So at some level to the details pursuing kind of a CSP model, a standard library module. And the response was pretty good, there was several long threads, and I incorporated all the feedback into the PEP ultimately, but yeah, the feedback from the PEP was great, and then come PyCon 2018, I basically asked everybody I talked to, I explained sub-interpreters and what I was working on, and asked them what they thought of it, how they would use it? And it seemed like everybody had a different response. Everybody was excited about it almost universally, and everybody had a different response on how they would use it. Most people, I didn't even have to ask them, they'd go like, wow, it's a perfect use case for that. This, this, this, this. And I even at one point asked, oh, his name skips me, the maintainer of Dask.
+ 
+00:40:30 Michael Kennedy: Matthew Rocklin.
+ 
+00:40:30 Eric Snow: Thank you, Matthew Rocklin.
+ 
+00:40:32 Michael Kennedy: You are welcome.
+ 
+00:40:32 Eric Snow: I asked him about this. He's like, wow, sub-interpreter, so neat, but I doubt I'd incorporate, I'd make use of them for Dask, except Dask internally has all of these control threads and all this machinery built-out for managing all the distributed programming.
+ 
+00:40:54 Michael Kennedy: Just so people know Dask is a way to run your Python code potentially on a bunch of different systems. It's kind of like a Pandas DataFrame style programming, but you say run this computation, but like all over. That's the problem that Dask solves, and then.
+ 
+00:41:10 Eric Snow: So next he said, but yeah, I'd totally use that for my internal stuff. I mean, for these control threads. I mean I'd totally make use of that because it's perfect. Or I talking to web folks, and there are a bunch of different use cases for how this will apply to web frameworks, or basically everybody had ideas.
+ 
+00:41:31 Michael Kennedy: Yeah, there's a ton of great ways, yeah.
+ 
+00:41:32 Eric Snow: It was really neat, so I got excited, and then come Sprints that year. Oh, and one of the people that was really supportive was Davin Potts, who is one of the maintainers of multiprocessing, which is, I thought that was a pretty good sign that I was in the right direction.
+ 
+00:41:49 Michael Kennedy: It is absolutely a good sign. I mean this is like the nextgen multiprocessing in my mind kind of.
+ 
+00:41:54 Eric Snow: I still wonder if once we have sub-interpreters, do we even need multiprocessing?
+ 
+00:41:58 Michael Kennedy: Sub-processes makes sense. But does multiprocessing make sense, I'm not sure. I mean, it's kind of like the big hammer to solve the GIL problem and this isolation problem by just going find out, or the system will do it, but if CPython itself does it then, I don't know, maybe there's a memory, but it's interesting to think about, yeah.
+ 
+00:42:16 Eric Snow: What's funny is, now after, I'm charged up, I'm excited, I've got all sorts of notes, like, wow, there's all this stuff, several people have said that they'd like to help out. And then I get to the Sprints and you can imagine like Guido is a busy guy at PyCon. Everybody wants to talk to Guido, taking pictures.
+ 
+00:42:36 Michael Kennedy: He can't get even a moment of peace, I know. Yeah, it's definitely got people chasing around.
+ 
+00:42:41 Eric Snow: It wears him out. And there's always stuff going on, there are people that he used to talk to about different proposals and whatever. And this is 2018, he's still BDFL, and there is a lot going on. And what happens, he actually comes and finds me, sits me down and for 45 minutes he basically tells me that he thinks it's a bad idea. And I can tell you I wanted to, so I understood where he's coming from and I think in part he'd misunderstood what I was trying to do.
+ 
+00:43:14 Michael Kennedy: Yeah, it's like that telephone game where one person tell the person, who tell the person something and it's not the same on the other side.
+ 
+00:43:20 Eric Snow: And in the conversation I tried to clarify a few points, but really wasn't a great opportunity to try and explain really why this was a good idea. I mean the PEP to an extent does, but I think there was kind of a gap in the justification that really Guido was just, I hadn't communicated well to him, so 45 minutes. And basically, I conceded some of the points that he made and tried to explain the others and ultimately it's not like he said, stop. He basically said, he thought it was a waste of my time that I should work on something that's going to benefit people more. Also he was coming from, thinking about the problem in a different way than I was, and a different understanding of exactly what I was trying to solve and what I was trying, what the proposal was, what the solution was.
+ 
+00:44:16 Michael Kennedy: Well, he probably also has a lot of GIL fatigue, hearing how GIL is ruining Python and all that, right.
+ 
+00:44:19 Eric Snow: Yeah, and I think apart, he was just worried that I was going to get people excited about something that wasn't going to actually end up happening. So it was kind of a bummer. I was bummed out probably the rest of the day.
+ 
+00:44:31 Michael Kennedy: Did you walk away less inspired or are you still excited after all the other input you got?
+ 
+00:44:36 Eric Snow: I was still determined. Probably my excitement level was lower, only because it had been suppressed a little, but that wears off, and talking to more people about it, same level of excitement, the same excitement about how they'd use it. And so I didn't worry about it, but I was worried that if I couldn't convince Guido, then A, of course, I didn't think it'd happen; and B, maybe it really wasn't a good idea because Guido is smart and he's been in this a long time, and I have absolute trust in that uncanny ability he has to understand whether something is good for Python or not. I mean, he's amazing. So it did make me wonder, well, what if he's right, maybe I'm not understanding. That's probably more likely. So, but I kept at it, I was determined. Like I said I waited three years for the job I have now. So I was like, I'll just keep going, and if nothing else comes of it, I was convinced that 80 or 90% of stuff that I was doing was a good idea regardless. So I was like I'll just keep going, and if it ends up that it's not going to work out, I won't feel too bad about it, I'll have made a difference I think. So I kept going, but then 2019 rolls around and Guido pulls me aside again and says, oh yeah, that's a good idea.
+ 
+00:45:56 Michael Kennedy: He's been thinking about it.
+ 
+00:45:57 Eric Snow: Because he got it. Well, the point that we were fixing, over the course of the year he saw that I was working on all these things that I needed for that goal, but they were good idea regardless. And he's like, oh yeah, you are working on all this stuff. And also he probably heard my explanation a few more times and it clicked on how I was trying to solve this problem. And he said, yeah, that could work, and so I was floating around for awhile. It was exciting.
+ 
+00:46:24 Michael Kennedy: That's super-cool. One of the challenges a lot of PEPs and projects I've have had recently, let's say since July 2018 maybe. Is we, more like you guys have not really had a way to decide to make decisions after Guido said I'm stepping down, I'm just stepping back to a standard core developer or Steering Council now, but stepping back saying, you guys have to figure out a new way to make decisions and sort of govern yourself, right. So that your PEP spanned that gap, so I'm sure that didn't.
+ 
+00:46:58 Eric Snow: Oh, man, it was brutal.
+ 
+00:46:58 Michael Kennedy: Was it?
+ 
+00:47:00 Eric Snow: It literally killed a lot of the momentum I had coming out of PyCon 2018 because that happened just a couple of months after. And basically I kept working on stuff, but there was all these discussions about governance and governance and governance and it just dominated a lot of what we were working on. So there wasn't a lot of collaboration going on with this project, and there was a lot just cognitive effort to stay on top of the stuff because it's important. So really until all this was solved, PEP 554 was ready, basically right after PyCon , I'd worked up kind of a separate list of arguments to make to Guido on why this was a good idea and try and kind of fill that gap that I'd perceived. And then on top of that I had updated the PEP to kind of iron out some of the smallest things I felt like it was ready. And literally right before I was going to ask for pronouncement on the PEP, then Ernoi, I think I was going to wait till the core sprint is in September. So that I could talk to Guido on person and try and make the case, and then ask for pronouncement. So this was, it was brutal because then no PEPs got decided, and the core sprint was mostly spent talking about governance stuff, which that's fine, it was productive, but I wasn't able to get a lot of progress. So it just kind of slowed things down so much, and then when we finally got governance ironed out, others transition and so, this whole time I was honestly aiming to get PEP 554 landed for 3.8, and then even stop sharing the GIL stuff done for 3.8. Neither one happened in large part because of the whole governance issue.
+ 
+00:48:48 Michael Kennedy: It's probably good in the long-term that this transition happened, but in the short-term it definitely threw a bunch of molasses in.
+ 
+00:48:55 Eric Snow: It's a little disappointing, every release you miss on something, it's a little part of you hurts, but.
+ 
+00:49:01 Michael Kennedy: I can imagine, well, and the releases are long, like the gaps are wide between them, right. 18 months is a long time in technology. It's not like, well, maybe next month it will come out.
+ 
+00:49:10 Eric Snow: We are actually talking about reducing the release cycle to a lot smaller, six or 12 months depending.
+ 
+00:49:17 Michael Kennedy: I think that's interesting. What's the trade-off there?
+ 
+00:49:21 Eric Snow: So our current Release Manager, Lucas.
+ 
+00:49:24 Michael Kennedy: Yep.
+ 
+00:49:24 Eric Snow: He said for 3.9, I want it to be shorter. So he basically said there are variety of reasons. The main opposition to having shorter release cycles was that it's more of a burden on the Release team, but that's less of an issue now, there's a lot more automation. And so this is coming from the Release Manager, so he was in position to determine what made sense. So that's kind of how that's played out. He's like let's do this. And so there was some discussion for stretch-on, what would be the best time, and if it made sense at all, of course, but if we went with it, what kind of release interval we'd have and how that'd work logistically, and how that'll play into other factors of core development. So I don't remember where that's got into, I think there was some consensus that it would make sense to look at it further, but I think like most long discussions do, it kind of tailed off without a good conclusion quite yet. I don't know, I don't remember. I don't remember what the PEP numbers. It's the release pep for 3.9 is where he started this discussion. So there is a number of threads related to that PEP.
+ 
+00:50:35 Michael Kennedy: Yeah, to me it sounds generally positive, right. Like smaller releases that you can understand a little bit. More completely rather than just like, here's a huge dump of 18 months of work, but I definitely do understand it. I mean, you've got all the places, all the Linux distributions, all the other place that are shipping it, they have to now think probably that more frequently.
+ 
+00:51:00 Eric Snow: Yeah, that was definitely one of the concerns, but now that the Linux distributions are moving away from exposing their system Python, that it's less of a concern.
+ 
+00:51:11 Michael Kennedy: Right.
+ 
+00:51:12 Eric Snow: So one interesting thing in this discussion was just the idea of moving to CalVer for Versioning Python. I think that was something that Brett had talked about. So there are a number of different ideas.
+ 
+00:51:25 Michael Kennedy: Like actually having the version number be like 2019.6 for June or something like that, yeah.
+ 
+00:51:32 Eric Snow: So then you'd end up with 2019.6.0.1 for bug fixes
+ 
+00:51:38 Michael Kennedy: Definitely I like the calendar versioning for packages and stuff, but for the actual core, that's pretty interesting.
+ 
+00:51:45 Eric Snow: I don't know. It may not make sense, right. There are a lot of things that people talked about. We talked about possibility of LTS releases or some variation on that. And so that we be maintaining multiple, but I think a lot of people are kind of burnt out on having maintaining 2.7 and Python 3. At this point.
+ 
+00:52:06 Michael Kennedy: Can we just about gotten out of this?
+ 
+00:52:07 Eric Snow: Yeah, yeah, yeah, most people don't bother with 2.7 at this point, right, core developers. So it's really interesting, I don't know. There are lots of ideas, I think ultimately we'll settle on the right thing, something that work well for us. Even if it's a status quo if we figure out that's the best way forward, but we've already since 3.6 I think it was, we started doing a shorter release cycle, more like 14 months because we used to do release cycle from release to release, or from final to final. Now we do, if you think about, it's more like final to beta 1.
+ 
+00:52:44 Michael Kennedy: Right, which we're already, like way past 3.8 beta 1.
+ 
+00:52:47 Eric Snow: The final release date for the next version is basically 18 months from beta 1 now instead of final. That's the way we've been doing last few releases. So it breaks it, shortens it to 14 months. So 12 months really wouldn't be that different.
+ 
+00:53:02 Michael Kennedy: Yeah, that's true.
+ 
+00:53:03 Eric Snow: We'll see what happens there, but interesting topic.
+ 
+00:53:06 Michael Kennedy: For sure, so the final takeaway is, you are targeting Python 3.9, which would be basically where the work is going into now. Right, like you're already in beta of 3.8, it's kind of frozen and whatnot. So it's going to be probably the next version of Python, maybe that will be shorter, maybe not.
+ 
+00:53:22 Eric Snow: A little undetermined at this point. Might be 12 months from now or who knows. I expect regardless of what it is, that we're close enough that we'll be able to get all of the sub-interpreter stuff done for that, assuming PEP 554 work gets accepted, which I expect, I hope it does, I expect it will. I don't see a reason why it wouldn't.
+ 
+00:53:41 Michael Kennedy: Yeah, it seems like the excitement is there for it. To me it clearly solves the problem assuming like the startup time of the sub-interpreters is not just equal to multiprocessing and things like that. It seems like it's going to be really great.
+ 
+00:53:56 Eric Snow: Yeah, and what's nice is, I've done this in a way that we'll start really minimal, like you only be able to pass bytes or strings or other basic immutable types between sub-interpreters, but with this foundation then there's like a whole list of really neat projects that people can work on to improve things for sub-interpreters. Like I talked about earlier, improving startup time, but also things like, one neat idea is the idea of, for memory allocators in CPython, right now we use one memory allocator throughout the whole lifetime of the runtime. Memory allocators in charge of, of course, allocating and de-allocating memory. So what if you could use a different memory allocator per interpreter? Well, what if you could at any arbitrary time swap out an allocator, so that objects are allocated using different allocators? Then you could manage relative to the allocators for those objects, and you get some neat things, like what if you had an allocator that was page size, right. And so then you actually in Python have a class that kind of wraps that allocator, so that you can create objects relative to that class or create an object that represents the allocator, and then any attribute that you create on the object is in that allocator or whatever. So now you have this self-contained memory page that then you could mark, let's say read-only. Suddenly all that memory is read-only and you have truly read-only objects in Python. What if you take that read-only and now you can pass that whole memory page over to another interpreter, and you don't have to worry about any race conditions relative to that memory page.
+ 
+00:55:46 Michael Kennedy: One of the best ways to get parallels in this is to have immutability. I think there are lots of, and so there is a, I have a project open for this and a number of other resources where I've basically written all the stuff down, like here's a whole list of awesome things that we can do once we have this foundation set. Would you get things like maybe less memory fragmentation for long-running processes, if you could startup the sub-interpreters, like give them a block of memory, let them throw that away and things like this, like other benefits, possible memory leaks for badly written code, but like it was all within a sub-interpreter that got recycled.
+ 
+00:56:21 Eric Snow: There are a number of things there. One is that, I have a list of, like I said there's all this global state all over. This is kind of the main blocker for me right now is we have all these static levels in the C code all over the place, thousands of them. And most of them can't be global, so I can't even pull them into the runtime state struct, I have to pull them down into the interpreter state, which means I have to collect them out of static globals and kind of migrate them into this PyInterpreter state struct, and it's just a lot of work. And then I have to make sure that nobody adds any static globals that they shouldn't in the future. Or else same problem all over again. So I mean, this is probably the main problem right now. Aside from all those globals, there are some parts of the PyRuntime state, which is this struct where I pulled in a lot of globals earlier couple of years ago. There are key items of that struct that I've identified that need to move over into the interpreter state. The GIL will be the last one of those, but right before that...
+ 
+00:57:30 Michael Kennedy: Exactly, yeah.
+ 
+00:57:32 Eric Snow: Is memory allocators. So I'm pretty sure that we'll be able to do this just fine, but I need to see how it affects performance, but moving the memory allocators to per interpreter. So I think one of the side effects, I mean, it really could be reducing memory fragmentation down, isolating it to per interpreter, which if you're using multiple interpreters, that's a good thing.
+ 
+00:57:57 Michael Kennedy: Yeah, that's really interesting, and certainly the pressure that hardware is putting on top of programming languages and runtimes is not getting less. Right, like, we're going to have more cores, not fewer going forward. So it's only going to be a problem that stands out more starkly, if Python only reasonably runs on one core at a time when you have 16, 32, 64 cores, whatever it is in five years, right. So it's definitely a good project.
+ 
+00:58:24 Eric Snow: I'm really excited about it still after first motivated to work on this and five years ago. I'm still motivated, almost gave up at one point, but plugging away and now a lot of people are excited. Looks like it's really going to happen for 3.9.
+ 
+00:58:39 Michael Kennedy: Are some of the other core developers helping you?
+ 
+00:58:40 Eric Snow: Somewhat, everybody has got different goals in mind. Victor Stinner, he's been really helpful for some of the stuff, especially relative to the C API. There is, I've had offers of help from others. That was before Emily Morehouse became a committer, I was helping to mentor her, and one of the things that we did, we met basically weekly. And for the most part we paired up on working on sub-interpreters, and that was a big help.
+ 
+00:59:10 Michael Kennedy: Yeah, that's cool.
+ 
+00:59:12 Eric Snow: Now she is so important now. No, Emily is great, but she's so busy.
+ 
+00:59:17 Michael Kennedy: Yeah, she is great.
+ 
+00:59:18 Eric Snow: She's running a successful company, really busy. And on top of that she is the Chair for PyCon 2020 and 2021. Well, I'm guessing 2021, anyway at least next year, and then she has got a lot of the stuff going on. And she did the assignment expression implementation.
+ 
+00:59:36 Michael Kennedy: That's right.
+ 
+00:59:37 Eric Snow: And all sort of stuff, but during that time when she was helping out with this stuff, it was a really big help, so lots of help.
+ 
+00:59:44 Michael Kennedy: Cool.
+ 
+00:59:44 Eric Snow: I had help from a number of folks in out in the enterprise, talked to folks at Facebook and Instagram and some other companies. I've had offers to help from other individuals, help from small companies, people coming up and saying, hey, I want to get my whole team working on this. It hasn't really gone anywhere. I don't get my hopes up too high.
+ 
+01:00:07 Michael Kennedy: Yeah, it's such a big problem, right. It's like so wide standing, it sounds like with all the like the globals and whatnot, you got to really, it's not very focused, so it's hard to work on a suspect.
+ 
+01:00:16 Eric Snow: One thing I made sure to do was break this problem down into zillion tasks, as granular as I could. So I think I gave you the link there to the multicore python project that I have. If you look me up on GitHub, you'll find that repo, and that repo is basically just a wiki and GitHub projects breaking down all this work into discrete chunks.
+ 
+01:00:40 Michael Kennedy: I'll certainly link all those things in the shared notes, so we'll be able to just click on it, but yeah, it's great. Link to you gave a talk PyCon 2019, I don't think we mentioned that yet.
+ 
+01:00:49 Eric Snow: Yeah, so it was a talk, I actually proposed two talks. One of them was specifically about sub-interpreters and both PEP 554 and the whole effort to move GIL to per interpreter. That got rejected. That was the one I wanted to give, I gave another one that's broader. It was kind of a superset, it included the stuff from the other talk, but I also talked about all about the GIL in general. The history of the GIL, what really, the technical ideas behind the GIL, really race conditions, and parallelizm, and concurrency and all that stuff. And then also talked about what we need to do to kind of solve that problem, including talked about some of the past efforts and also current efforts to make fixes in the C API, changes in C API to, so that we can move past the GIL. And then I focused a lot of the talk on the stuff with sub-interpreters.
+ 
+01:01:51 Michael Kennedy: Cool, yeah, that sounds really interesting, we'll definitely link to that. All right, Eric, I think we're just about out of time. We've definitely covered this, and I'm really excited for this project. So if you need any more positive vibes and feedback, I think this definitely has a chance to really unlock this multi-core stuff in a general way. I think there is interesting APIs you can put on top of it, so you can make it like almost transparent to folks. I'm a big fan of the Unsync library, which has a cool unifying view on top of threading, multiprocessing and async. And this would dovetail right into that.
+ 
+01:02:28 Eric Snow: Oh yeah.
+ 
+01:02:29 Michael Kennedy: Value and boom its sub-interpreter execution and all sorts of stuff, that would be great.
+ 
+01:02:33 Eric Snow: Yeah, it's really awesome.
+ 
+01:02:34 Michael Kennedy: Excellent work, I'm looking forward to using it in 3.9 beta 1. Now before you get out of here though, I do have two final questions for you, I think we may spoiled the first response. If you kind of write some Python code, what editor are you going to use? I think people may be able to guess what you're going to say here.
+ 
+01:02:50 Eric Snow: It's funny. First I'll say that the Python extension for VS Code is written not in Python, but in TypeScript because...
+ 
+01:02:59 Michael Kennedy: Because it's in Electron JS app, yeah.
+ 
+01:03:01 Eric Snow: That's a whole another topic, and interesting one. So for the most part I've been using Vim forever. As long as I've used an editor, that wasn't on Windows, I've been using Vim. And so, and actually after years you kind of build up muscle memory and you build up a whole set of configurations and all that stuff, so changing editors is hard, but given that I work on an extension for VS Code, it's pretty meaningful to actually use VS Code, right.
+ 
+01:03:34 Michael Kennedy: Right, I just do experience the thing, right. It just makes it a lot better.
+ 
+01:03:38 Eric Snow: I really appreciate VS Code, I'm not really a big use-my-mouse while I'm working sort of guy. So VS Code is definitely out-of-the-box oriented towards use-your-mouse in Windows. So, kind of there is that mentality, and that's fine. It's definitely, that's a target. So it's not really how I operate all that much, there are ways however, there is a Vim extension, which basically makes VS Code work like Vim. So I tried it and it was nice. There were only a couple of problems and they're kind of blockers for me. I use VS Code for Python stuff sometimes, but most of the time not.
+ 
+01:04:18 Michael Kennedy: Once you know and love an editor, it's tough.
+ 
+01:04:21 Eric Snow: I think that they're solvable problems and I've kind of pushed the feedback upstream. So who knows? I mean maybe I'll move away from Vim at some point, makes it hard when I'm in a terminal and I need to edit stuff, I can't relate popup VS Code.
+ 
+01:04:34 Michael Kennedy: Yeah, yeah, but you do have that cool like remote editing stuff that's coming in VS Code, which is pretty cooler.
+ 
+01:04:39 Eric Snow: That was one of the blockers. And now that there's that, it's less of an issue for me. So there are only really a couple of things left that are kind of blocking me from using VS Code, otherwise I like it, there are a lot of things that I just don't haven't bothered with them, but you just get out-of-the-box with VS Code and it's nice.
+ 
+01:04:58 Michael Kennedy: Cool, all right, and then notable PyPI package, maybe not the most popular, but something like, wow, people should really know about this, and maybe they haven't heard of it.
+ 
+01:05:06 Eric Snow: That's a great question. There is a few out there. I'm a big fan of projects that, so really I've been able to stay on top of the growth. That's a really hard problem when you're working on a project and it gets popular, trying to keep up. Most times it's just volunteers' spare time, things often grow pretty organically. I think for the most part, most programmers are pretty pragmatic, so they aim for immediate fixes. So it's really hard over time to keep a project under control especially when it gets big. So I'm a big fan of projects that kind of keep that under control. There are some projects I think that have aimed for simplicity, and really focused on that. See, I'm setting myself up for failure here though because I want to give a good example of this, and not having looked at any projects too closely in awhile, I maybe kind of invalidating my whole point. There is some neat ones out there that people find use, of course, attrs, but attrs is kind of, we're Data classes now, attrs is, it still has a place I suppose, but not quite as much as it did.
+ 
+01:06:11 Michael Kennedy: Yeah, it definitely seem to have. Did it directly inspired Data classes? It's kind of achieved its goal like.
+ 
+01:06:16 Eric Snow: Oh yeah.
+ 
+01:06:17 Michael Kennedy: In a manner of way, anyway, yeah.
+ 
+01:06:18 Eric Snow: I have one on there importlib2, which is backport of Python 3's importlib Python 2, but I haven't really kept up with it. So it probably doesn't work anymore.
+ 
+01:06:29 Michael Kennedy: Those are good, the attrs is definitely a good one.
+ 
+01:06:32 Eric Snow: Backports ones are kind of useful sometimes, but there is also, there's some that make it easier to use some of the trickier functionality of Python. So things that deal with descriptors, for instance. There is some decorator packages out there, I think Graham Dumpleton has Wrapped, that's an interesting one. One that I think people don't think about whole lot is psutil, which actually is really neat because it has some good abstractions cross-platform for a lot of the things that you do system side, like monitoring processes, getting system information, killing processes and whatever, but it also stays pretty focused. I think that's a good one.
+ 
+01:07:13 Michael Kennedy: Yeah, psutil, that's definitely a good one, yeah.
+ 
+01:07:15 Eric Snow: PyCparser is one I've looked at recently that does some neat things in a lot of parse C code, pure Python though.
+ 
+01:07:21 Michael Kennedy: Oh, interesting, okay.
+ 
+01:07:23 Eric Snow: There's some limitations to it, but otherwise I think it's actually pretty cool.
+ 
+01:07:27 Michael Kennedy: Awesome, very cool. Those are definitely some good ones. All right, final call action, people are excited about this, maybe they want to help out, maybe they want to try or see some of the changes. Is there something they can do? Is there like this list you talk about, can they find this list to see if they can take one of them for you?
+ 
+01:07:43 Eric Snow: First of all if anybody is interested, they can just get in touch with me immediately. I'll get right back to you. We'll talk about all about the project how they can help, what their interests are, how that lines up. That project I talked about, the link that you'll have has a lot of the tasks broken down as issues, organized on the project board, so you take a look at those. Also the wiki is basically where I've dumped pretty much all of my notes on this stuff. Read through there, there's lot of stuff, you can see how it applies, give feedback on the PEP, and there maybe other ways that it could work that you've thought of that nobody else did, that are worth talking about, but again just get in touch with me. It wouldn't take a lot of effort and I can get you working on something right away, something that will interest you, and we'll make a real difference here. I think this is a feature that people until they think about it don't realize how important it is. I really do think that it's going to make a big difference for people.
+ 
+01:08:47 Michael Kennedy: That's awesome, great, much, much people get involved, I totally agree with you. I've certainly put this in my top five most important projects for Python. So very good work, I love this deep dive, thanks for taking the time, Eric.
+ 
+01:08:58 Eric Snow: Yeah, thank you, thanks for having me, Michael.
+ 
+01:09:00 Michael Kennedy: Yeah, you bet, bye. This has been another episode of Talk Python To Me. Our guest in this episode was Eric Snow and it's brought to you by Linode and Toptal. Linode is your go-to hosting for whatever you're building with Python. Get four months free at talkpython.fm/linode. That's L-I-N-O-D-E. With Toptal, you get quality time without the whole hiring process. Start 80% closer to success by working with Toptal. Just visit talkpython.fm/toptal to get started. That's T-O-P-T-A-L. Want to level-up your Python? If you're just getting started try my Python Jumpstart by Building 10 Apps course, or if you're looking for something more advanced, check out our Async course that digs into all the different types of async programming you can do in Python. And, of course, if you're interested in more than one of these, be sure to check out our Everything Bundle. It's like a subscription that never expires. Be sure to subscribe to the show. Open your favorite podcatcher and search for Python, we should be right at the top. You can also find the iTunes feed at /itunes, the Google Play feed at /play and he direct RSS feed at /rss on talkpython.fm. This is your host, Michael Kennedy. Thanks so much for listening, I really appreciate it. Now get out there and write some Python code.
+ 
