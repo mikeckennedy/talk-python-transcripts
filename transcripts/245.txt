@@ -1,0 +1,722 @@
+00:00:00 Michael Kennedy: Python is growing incredibly fast, and it's found its place in many facets of the developer and computational space. One area that is still shaky and uncertain is packaging and shipping software to users. I'm not talking about building reusable libraries and hosting them on PyPI. I'm talking about shipping executable software to non-developers. Take a moment and stop and think about the ways you would send an end-user a program built with Python that they can simply run. It's a bit of a mixed bag, isn't it? On this episode, we welcome back Cris Medina to run through the state of Python packaging. This is Talk Python to Me, Episode 245. Recorded November 21st, 2019. Welcome to Talk Python to Me, a weekly Podcast on Python, the language, the libraries, the ecosystem, and the personalities. This is your host, Michael Kennedy. Follow me on Twitter where I'm @mkennedy. Keep up with the show and listen to past episodes at talkpython.fm and follow the show on Twitter via @talkpython. This episode is brought to you by Tidelift and Linode. Please check out what they're offering during their segments. It really helps support the show. Cris welcome back to Talk Python to Me.
+ 
+00:01:17 Cris Medina: Hey thanks. How's it going? It's been awhile.
+ 
+00:01:19 Michael Kennedy: It has been awhile. It's been since the summer of 2018, so not quite two years but it's definitely been awhile since you were on. Previously, you were on to talk about continuous integration, continuous delivery.
+ 
+00:01:32 Cris Medina: That's right.
+ 
+00:01:33 Michael Kennedy: With Python, and you know, that was a really popular episode actually. I thought the topic would be popular but you came across with all these little tools and techniques that people just loved and so, yeah, it was really great. And we'll probably learn some more about cool tools and techniques this time around too.
+ 
+00:01:48 Cris Medina: Yeah, sure. It was a good episode to kind of get everything plugged together and in a nice little summary for all that. So, yeah. Anybody that's interested, it's a good one.
+ 
+00:01:57 Michael Kennedy: So, let's maybe fill people in on what you've been up too lately, day-to-day.
+ 
+00:02:03 Cris Medina: Sure.
+ 
+00:02:04 Michael Kennedy: You were on the software development side but it sounds a little bit like you're also on the testing and like, process, making sure stuff works for the folks around you, like that they don't build bad software as well.
+ 
+00:02:13 Cris Medina: Yeah, so when we recorded that last episode, yeah, I was mostly doing development side but I was in a small team so I was tied into everything, QA, builds and everything. But since then, I've transitioned to a different organization. And I'm mostly doing QA now. And so, QA tooling, which still involves build stuff but not really developing a product. More developing tools to help test and release code.
+ 
+00:02:39 Michael Kennedy: That's cool. So you're basically in the developer tool space but internally for your company, not like JetBrains or Microsoft or something like that.
+ 
+00:02:47 Cris Medina: Right, right. And I've done that in my career a lot. I actually like it 'cause I can walk over and talk to my customers. And tell them, "Did you like this?". And they'd be like, "No, it sucked.". Okay, so I'll go fix it.
+ 
+00:02:58 Michael Kennedy: That is a super cool feeling. I've worked in small offices where basically the users of the software, they were a few offices or little lab space down and it was like, alright what we need for next week is this, you know. Come back three or four days later, this is what I built. I know you asked for this, but I think this part can be automated too. What do you think about, like, and they're like that's amazing or no, what were you doing? Like, of course you can't do that. And, so on and so, yeah, it's that quick feedback loop is pretty cool.
+ 
+00:03:27 Cris Medina: Yeah, it just helps you produce something productive for people that will help their productivity. Yep.
+ 
+00:03:32 Michael Kennedy: Yeah. Yeah, yeah, yeah, cool. So, well that sounds really fun and also related, a little bit, to what we're going to be talking about now.
+ 
+00:03:40 Cris Medina: Yeah, slightly.
+ 
+00:03:41 Michael Kennedy: Slightly. Yeah, so I want to start really high level with our conversation. So, the idea is we're going to dig in to some of the options for packaging Python applications. And I think before we even dig into the details of how we do that, some of the cool tools that are out there, honestly I think we have define what the heck that means. And it's not because we just need to be precise, but I think to different people they have vastly different expectations and needs and some tools completely solve that and if your desire is different, it's completely broken. Like imagine I want to get my web app onto a server to run consistently. Maybe Docker and Kubernetes is the perfect answer. If I have a accounting application I want to give to accountants, running a Kubernetes cluster is not the right answer, right? Like these are really, really different. So maybe what are some of the definitions of what packaging might mean for different people. What's the spectrum out there?
+ 
+00:04:43 Cris Medina: Right, so even in the org I'm in right now, we actually have this problem 'cause we have a wide range of tools, right? So if you're building a bunch of services with REST APIs to help you deliver something to, that's remote or lets call it cloud-like to people, right? That's something you might want to package as a Docker container, as a service running on a server which is a different deliverable than say a double-click this icon here, desktop application that you'd want to deliver if you're wanting to say, create a log viewer for somebody to help them process that information, right?
+ 
+00:05:23 Michael Kennedy: Right.
+ 
+00:05:24 Cris Medina: When then is completely different from some utility where you just want to provide a quick library for other people to write more code using your library, right? And all that, you'd want a deliverable for all of that would be different and something that makes more sense to the user in the environment that they're in, 'cause they're all different environments.
+ 
+00:05:45 Michael Kennedy: Yeah, absolutely, like I suspect you're kind of on the border at work, right? Because you are working with developers so, it's probably reasonable to say well there's a REST endpoint or there is a command line tool, you type this in the command line and magic happens.
+ 
+00:06:01 Cris Medina: Right, so the REST endpoint, easy, right? So there's this GUI, uses some REST API and you can track your execution of your tests, for example, right? And then you can see how things are going. But when you're talking about the actual tests you wrote then that needs a library for you to access the infrastructure and a bunch of services in that infrastructure that might relate to just stuff you need and that requesting resources for testing or using other, you know, integrating with other tooling that will help you with that, right? Which is then completely different from some utility that will tell me, give me the list of all my compute that I have available to run tests on, right? And then that utility needs to run on every developer's machine and then how you distribute that starts getting complicated.
+ 
+00:06:48 Michael Kennedy: Yeah, and do you help these developers that you're working with? Do you help them distribute their tools maybe to more end-user type folks?
+ 
+00:06:55 Cris Medina: Not so much. Some of the libraries that the organization runs are or might be soon be open-source so we might wind up using PyPI and Github to distribute some of the stuff. Internally, we have like internal, private PyPI repos and Docker registries and things like that, today.
+ 
+00:07:11 Michael Kennedy: Okay, yeah, yeah, very cool. Now I'm going to throw out, as part of this high-level discussion an idea, I don't know if it's popular or not, it's not super positive but I do want to kind of start there 'cause I think this is a pretty serious issue. And I'm going to say that Python's in this broad sense that we've set it up, not necessarily like virtual environments and like pip install, but in the broad sense, Python's packaging for applications in particular is fairly broken. How's that sit with you?
+ 
+00:07:41 Cris Medina: There's definitely a number of areas that need improvement, mostly because of the, part of the problem is that we just have so many different ways of distributing, say virtual environments or just the packages themselves, or just putting the code together and giving it out to somebody. And part of it is good 'cause just Python is flexible enough for you, for allowing you to build whatever makes sense for your org, right? And then everybody puts it out there and then some people use it and some people don't. But if we had the one official supported thing that goes beyond just pip install, 'cause pip install involves a pre-existing Python executable which is where things start getting complicated.
+ 
+00:08:24 Michael Kennedy: Exactly, you've got to have a well-known, somewhat decent environment that have a certain version of Python, or a range of version, it's got to be over 3.5, or say over 3.6 if you're using F-strings or whatever version it has to be, that has to all be in place and set up. Even when that works, it's usually difficult to give somebody an icon to double-click to make their app go, right?
+ 
+00:08:50 Cris Medina: Right.
+ 
+00:08:51 Michael Kennedy: Why is my thing not like Firefox? Well you see,
+ 
+00:08:54 Cris Medina: Exactly
+ 
+00:08:55 Michael Kennedy: There's all these rules, let me tell you about it dependencies, like, nobody wants to hear that, right? They want to go, "I want the icon that I click."
+ 
+00:09:02 Cris Medina: Yeah, it gets even more complicated once you're distributing compiled code along with it, like some of the machine learning stuff or whatnot which is why you see all these alternative systems like say Anaconda exist to just help with that, right?
+ 
+00:09:16 Michael Kennedy: Right, yeah, yeah, that's a good point. That is sort of why Anaconda exists. I mean it also focused a little more on the developer's side but, right, it kind of tries to solve some of these challenges, of how do I get some of the foundational bits in place for the developer users, right?
+ 
+00:09:32 Cris Medina: Yep.
+ 
+00:09:32 Michael Kennedy: So there was a, here's a quote from the PyOxidizer page so, Greg I believe is onboard with this idea. And this is from Russell Keith-Magee's Pycon 2019 keynote talk, so he's on idea with, he's onboard with this idea but he gave a talk, basically, about these black swan events for Python. Are you familiar with this idea? Did you see his talk?
+ 
+00:09:58 Cris Medina: Yep, and it was discussed in a couple episodes. I think you guys talked about it probably in a Python Bytes episode before, as well.
+ 
+00:10:04 Michael Kennedy: Yeah, I do think we might have done that, yeah. Yeah so the idea of the black swan event roughly is like this thing that is very rare, that people don't see coming in an ecosystem, in society, in cycles, whatever, that are potentially, existentially, critically bad, right? So the original example was something like a turkey thinks the farmer loves them. Everyday the farmer comes in and greets 'em. Treats him really well.
+ 
+00:10:33 Cris Medina: Feeds him.
+ 
+00:10:34 Michael Kennedy: Yeah, feeds him and nobody saw Thanksgiving coming, right?
+ 
+00:10:37 Cris Medina: Right.
+ 
+00:10:38 Michael Kennedy: Something like that or things along those lines. I guess maybe another one might be traditional photography and Kodak and digital cameras, right? Like nobody saw that coming in the sense, like well enough, I guess.
+ 
+00:10:53 Cris Medina: I'll give you one more. With server development and the commoditization of that and what happened with the larger manufacturers when all the cloud companies started to develop their own servers.
+ 
+00:11:06 Michael Kennedy: Yeah probably at first they're like you know what? It's no big deal that there's all of these cloud-hosting places because they're just going to buy our servers and put 'em in their data centers and we'll be fine until they said, you know what? We could do better on efficiency and our biggest cost is electricity so thanks, but no thanks.
+ 
+00:11:21 Cris Medina: Yeah, exactly.
+ 
+00:11:21 Michael Kennedy: Right. Yeah, yeah, so Russell Keith-Magee said, there are a couple things that he believes are these black swan type of threats for different parts of Python, right? He loves Python but like what might undo this great success that Python has had over the last couple years? And one of them is definitely about packaging. Said look, I believe some of the others, there was mobile, there was packaging. There was a few others but those are the two that really stood out to me. I was like, people who are coming into programming, why would they come into Python if they can't take the cool little app they built and share it with their friends? Right? They're going to do it in JavaScript or they're going to do it in something else where they can package it up and share their game or whatever, right?
+ 
+00:12:04 Cris Medina: Exactly.
+ 
+00:12:05 Michael Kennedy: Yeah, so that's why I think this is a big challenge, right? I think it's important, it's also tricky but I think it's, I do think it's really important. Also, you probably heard me go on and on about like, building GUIs in Python, right? Like this is another one?
+ 
+00:12:17 Cris Medina: And I've done my GUI thing too, so yeah.
+ 
+00:12:19 Michael Kennedy: Yes you have, that's right. You gave a talk at PyCaribbean about it. That's cool and I think one of the reasons people don't build more desktop applications and GUI applications in Python is because, one, yeah there's a little bit of a gap in the tooling there but things like Qt and whatnot, they're actually quite decent Cocoa Touch, not Cocoa Touch, but some of the Py of OBJC or whatever.
+ 
+00:12:44 Cris Medina: Yeah, yeah, yeah.
+ 
+00:12:45 Michael Kennedy: The wrappers around the Cocoa APIs. Those are probably pretty much okay but even once you build those, then you come back to this packaging problem that we're talking about here, right?
+ 
+00:12:55 Cris Medina: Right.
+ 
+00:12:56 Michael Kennedy: And I think it's so much of a problem that people don't put any energy to build out the GUI apps, the GUI capabilities because, heck, once you build them, you still can't really give 'em to anybody in like a super decent way. So, why bother building, like you're just going to build a web app or whatever.
+ 
+00:13:12 Cris Medina: Right
+ 
+00:13:13 Michael Kennedy: I think there's a bit of a chicken and egg problem where like people don't work on trying to distribute their application because it's so hard to build the type of applications that get distributed so it's just kind of like, it's a little anemic in that space, is what I'm trying to say.
+ 
+00:13:26 Cris Medina: No, no, I'm with you. And even so, when I said like, I did my GUI thing, so I have my attempt at a GUI framework where I went through the analysis of what you're just talking about and I just pretty much just gave up and said well the web one, we can just make our GUIs in the web, let's figure how to do that a little bit easier and just go down the Chromium distribution kind of Electron JS equivalent to do everything 'cause then everybody just gets a web browser. Which is cool that that works but then when you start thinking about the, what else you're distributing with your application just to do a simple GUI or whatever, like an entire web browser or whatnot, then it just seems kind of wasteful as well, yeah.
+ 
+00:14:05 Michael Kennedy: Yeah, yeah. I do think actually that might be something that happens for Python, something like Electron, right? That's actually really, totally possible and the web assembly stuff could make that really interesting as well, if you could package up the runtime as a web assembly and just drop that with your Electron distribution.
+ 
+00:14:22 Cris Medina: I managed to do it. It works. I'm not using Electron itself, I'm just using the stuff that Electron uses in the back-end. So it's all totally possible.
+ 
+00:14:31 Michael Kennedy: This portion of Talk Python to Me is brought to you by TideLift. TideLift is the first managed open-source subscription, giving you commercial support and maintenance for the open-source dependencies you use to build your applications. And with TideLift, you not only get more dependable software, but you pay the maintainers of the exact packages you're using. Which means your software will keep getting better. The TideLift subscription covers millions of open-source projects across Python, JavaScript, Java, PHP, Ruby, .NET, and more. And the subscription includes security updates, licensing verification, indemnification, maintenance and code improvements, package selection and version guidance, roadmap input and tooling and cloud integration. The bottom line is, you get the capabilities you'd expect and require from commercial software. But now, for all the key open-source software you depend upon. Just visit talkpython.fm/tidelift to get started today. All of this conversation sort of started from this, it's almost like a retrospective on a journey that you went on. This blog post that you wrote. Four attempts at packaging Python as an executable.
+ 
+00:15:40 Cris Medina: Right.
+ 
+00:15:41 Michael Kennedy: I'll put the link for that. That original article over there so maybe just tell us a little bit about what that was all about and the journey and then we can dive into some of the details that we pulled out of there.
+ 
+00:15:50 Cris Medina: Sure, so in the, even in the previous episode when I was working on mostly CI/CD stuff as part of that CI/CD system, there's a, you need to execute some code inside it to like keep your process going, right? And one of the limitations I had at the time was that the containers that I was using required Python to be installed in it. And I wanted to remove that dependency. I knew it was possible to compile my code down to an executable. I wanted to figure out what method worked for me. And I tried, I didn't have a lot of time, so I tried four systems, which at the time was Cython, PyInstaller, Nuitka, and PyOxidizer, right? And each one had, you know, I fumbled through most of them, and you know I'd use Python.
+ 
+00:16:36 Michael Kennedy: For simple cases you could get it to work, right? Like Cython, you sort of got it to work but only for a simple app.
+ 
+00:16:42 Cris Medina: Yeah, exactly. I got what I wanted. It works pretty well. It's been in production for my side of the world for a while so I'm happy with it. But, yeah, so out of that came this analysis of where we're at with, like, how to turn your Python script into a double-click executable kind of thing.
+ 
+00:16:58 Michael Kennedy: Yeah and I definitely thinks it depends on what level you need to be at, right? If you're building a tool for fellow developers, that's one thing. If you're building a tool, like I said, for accountants, or lawyers.
+ 
+00:17:10 Cris Medina: Exactly.
+ 
+00:17:11 Michael Kennedy: They expect something to put next to their Word icon and their MacOS doc or whatever. Like, that's a different type of thing, right, so.
+ 
+00:17:19 Cris Medina: Yep.
+ 
+00:17:20 Michael Kennedy: Let's go through it. I guess we've got it broken up into some nice taxonomy here. Let's talk about delivering an application first.
+ 
+00:17:29 Cris Medina: Yeah, sure. So, just to give the overall taxonomy a little bit, right? We have three things based on what deliverable, what your end goal is from having this Python package, this distribution to your end user, right? And we have the idea of putting it together as an application that you run or putting it together where you just distribute a virtual environment with it. Or you just give out a specific executable. And then there's some other things along with it that we talk about later. But if you want to deliver an application, or a service type of application, one of the best things to use, these days, is Docker. We used it successfully to run pretty much everything Python related. An official Docker image that you can run, that's based on Debian, I believe, and I use that in my automated testing all the time.
+ 
+00:18:19 Michael Kennedy: And that's supported by the PSF, I've learned, right? That's pretty interesting.
+ 
+00:18:23 Cris Medina: Somewhere in the Python build, they're a little bit after that comes an official Python Docker image that you can just pull from and use.
+ 
+00:18:29 Michael Kennedy: Yeah, that's cool. Docker is cool but it makes me a little bit nervous, you're taking like layers of customized operating system that maybe different people have, you know, changed or built on stuff and then, you know. how sure are you that those are not, you know, that somebody hasn't slipped something in there? I think the Docker files are maybe a safer bet, of course, right, to just like build it yourself, rather than to download the full container.
+ 
+00:18:54 Cris Medina: But you still need to start from an image, right? So if you start from say, some official distribution of something like the Python one but just the same, there's like all kinds of other images from Postgres, Ubuntu, MySQL, whatever that you can use, you can, you know, slowly build up with your Docker file whatever dependencies is it that you need. Now the advantage of this is that you're distributing all the dependencies for your operating system along with the Python executable that you need along with your actual application, right? That makes the, it worked on my machine problem go away, essentially.
+ 
+00:19:29 Michael Kennedy: I do think Docker's a pretty cool solution if having Docker running on your operating system is not a big deal to you, right? You've already got the desktop Docker or whatever or it's installed on your server.
+ 
+00:19:44 Cris Medina: Right.
+ 
+00:19:44 Michael Kennedy: Then this is a pretty solid way, certainly to deliver like services and stuff. If it's just a matter of pulling it down and say Docker run this container or whatever then it's okay.
+ 
+00:19:55 Cris Medina: Yeah, I've also come across a couple of applications I would call them, that where you run a CLI and your interface is the CLI but in the back-end of CLI, Docker runs something for you. So it all runs in its own little contained environment and then just exits.
+ 
+00:20:12 Michael Kennedy: Yeah, one of the slicker instances of this was from Gigantum. Are you familiar with them? They're pretty new.
+ 
+00:20:18 Cris Medina: No.
+ 
+00:20:19 Michael Kennedy: So I just had them on the show three or four episodes ago, not very long ago and basically what they are is they are like a collaboration environment for data science. So, they distribute their application to you as a Docker container and then each environment you create starts from one of these containers, as well. So, either it's like an Anaconda pre-configured container or it's a, you know, just a bare one with Python or whatnot. But yeah, it's really cool that the PSF has an official Docker container 'cause I didn't realize that. That's great.
+ 
+00:20:52 Cris Medina: Yeah, yeah, it really does help it along.
+ 
+00:20:54 Michael Kennedy: Yeah, the other thing that can be tricky with Docker is your trading level. Now set up this version of Python in this way for, now make sure you expose these ports in the right way. And you map that volume over there. There's just like, there's still some friction to distributing stuff as a Docker container, right?
+ 
+00:21:12 Cris Medina: Yes, that's correct. So if once your application, if you've got something that's really somewhat complicated and you need to have persistent data and things like that, then you got to worry about making the proper volumes or mapping the correct directories into it so that you can persist the data outside the container or even access it without having to get into the container. And then when you have to do things like, when you depend on networking in some way, like if, say you're running HTTP server then you need to make sure you pass in the right commands to open the correct ports for it to work for ya. So that's some of the complications you get there.
+ 
+00:21:46 Michael Kennedy: Yeah, but it could get wrapped up, right?
+ 
+00:21:48 Cris Medina: Yep.
+ 
+00:21:48 Michael Kennedy: The example you pointed out where you don't really know that you're doing Docker when you're working with your CLI. It just happens to Docker behind the scenes to make things reliable, that's a pretty good use case.
+ 
+00:21:59 Cris Medina: Yeah, I think so, yep.
+ 
+00:22:00 Michael Kennedy: Cool, alright. So another one that you have out there which is maybe pre-Docker is, I'm just going to give you a virtual machine and you can just run that.
+ 
+00:22:10 Cris Medina: Yep, and along with that, and so the original thing was here's your virtual machine application, essentially, and it starts an entire operating system that you can run in VirtualBox but along, as well as other virtual machine environments, but along with that came Vagrant which was kind of like a Docker file for virtual machines, except before Docker files. And so you can sit there and say it's a VM, it's going to have this configuration for your network, for memory, CPU, whatever, file systems and whatnot. And spins up, essentially, a pre-configured OS, fully packaged OS for you. And now, of course, when you distribute a VM, you're distributing a whole OS so it's going to be a large image that you're giving out. Which is the difference with something like Docker because it's a layered file system. Then you only need to, you only just distribute the pieces that you're adding on top of...
+ 
+00:23:05 Michael Kennedy: Right, right.
+ 
+00:23:05 Cris Medina: Some basic image.
+ 
+00:23:06 Michael Kennedy: Any changes you make to that virtual machine maybe requires a new five gig download. Whereas a change to a Docker file might just, well you just rebuild like the last layer of that Docker image.
+ 
+00:23:17 Cris Medina: That's correct, yeah, yep. And then you can find like, for the Docker site, you can find, you know, tiny OS images in the tens of megs, versus a full VM, right? That will be like probably a couple gigs. You can get small VMs too.
+ 
+00:23:30 Michael Kennedy: Yeah, couple gigs to start.
+ 
+00:23:32 Cris Medina: Yeah, yeah, true.
+ 
+00:23:34 Michael Kennedy: The other thing that seems like a challenge with the VM option is it's now your puppy. You've got to caretake it, right? So if it has a security vulnerability...
+ 
+00:23:43 Cris Medina: Yeah, of course, right.
+ 
+00:23:45 Michael Kennedy: Or something like that then you've got to go in there and patch it and whatnot.
+ 
+00:23:48 Cris Medina: Right. Which you technically still have to do with Docker but if you spin off your image on top of an existing one, for example, let's go back to the Python thing. If I have my application built on Python 3.6 and 3.7 comes out, I just need to change my base image to 3.7 and stuff just starts working on top of that.
+ 
+00:24:09 Michael Kennedy: Right, or you could just live a little bit out on the edge and do something like a Ubuntu Python colon latest.
+ 
+00:24:14 Cris Medina: Yeah, right, exactly.
+ 
+00:24:15 Michael Kennedy: Or something like, right, whatever's the latest, if there happens to be a new latest when I rebuild it, get the new latest and then give me that. That one's probably patched at the OS level and got the newer version of whatever in it.
+ 
+00:24:26 Cris Medina: Right.
+ 
+00:24:27 Michael Kennedy: There's a risk that it's not 100% repeatable potentially, but things like Linux and Python, they're pretty backwards compatible.
+ 
+00:24:35 Cris Medina: Yep.
+ 
+00:24:36 Michael Kennedy: As opposed to, I now have to login to my Docker images and patch them, like, that's another level of effort.
+ 
+00:24:42 Cris Medina: Yeah, exactly. That's a lot more complicated. Usually, it's just considerably easier to go to the, to just update the base image and...
+ 
+00:24:50 Michael Kennedy: Right, right, right.
+ 
+00:24:51 Cris Medina: It's also a great little test thing, right? If you want to go to, you want to check whether your code works in 3.7 versus 3.5, for example, just start an image with 3.7 and then you're done.
+ 
+00:25:02 Michael Kennedy: Yeah and run it through your CI and see what happens.
+ 
+00:25:05 Cris Medina: Yep.
+ 
+00:25:06 Michael Kennedy: Another thing that might be a benefit of the Vagrant VM style though, could be background work, background jobs and whatnot. Like Docker typically it has the Docker container but then there's like the one thing it runs as it's life, right? Like there's not a systemd in Docker that I'm aware of and things like that, right?
+ 
+00:25:25 Cris Medina: Right, depending on what you want to do, right? 'Cause you can configure it to do whatever, pretty much. And there's like privileged containers too, right. So you got some limitations on your normal stuff but you can also add other kernel privileges to it to help it communicate or create new devices and whatnot. And yes the process, the process manager and service managers inside the container aren't there by default so if you want to do that you get to configure it yourself.
+ 
+00:25:52 Michael Kennedy: Right, right, right.
+ 
+00:25:53 Cris Medina: Which is complicated, can be complicated but is also good 'cause you get like a really base thing. So if you don't need it, you don't have it.
+ 
+00:26:01 Michael Kennedy: Yeah, one of the things that's cool about that though is you have all the control, right?
+ 
+00:26:05 Cris Medina: That's correct.
+ 
+00:26:06 Michael Kennedy: And once you set it up, it might be painful to set it up, create that Docker file that's just right, but once you got it, like, you put it in version control and you just forget about it, right? You just build on top of it.
+ 
+00:26:15 Cris Medina: Yeah, exactly. You can have like a build container, for example, in version control just exists to build your code, for example, or package your code and then just gets destroyed afterwards.
+ 
+00:26:28 Michael Kennedy: Yeah, so we've got these different container technologies like really big shipping container style and then like the small, I don't know, Tupperware style with Docker and VMs.
+ 
+00:26:38 Cris Medina: Right.
+ 
+00:26:39 Michael Kennedy: But we also have things like PyInstaller, right?
+ 
+00:26:41 Cris Medina: Yep, so with PyInstaller has been around for awhile. That's what I used to distribute the GUI stuff we were just talking about earlier. So PyInstaller can take your Python application, like you point it to your directory and it can output fully installable application in both Linux, Windows, and Mac. So in Mac, you'll get a dot app. You know, in Windows you'll get an executable. And for Linux, you'll get another executable file. I used it recently to do something simpler, which is what I discussed in my recent article. But I used it in the past to not only write a Python app that ran say a WebSocket server in it, right? It also included an entire Chromium browser along with it and got delivered almost like an Electron application.
+ 
+00:27:31 Michael Kennedy: Yeah, that's super cool.
+ 
+00:27:31 Cris Medina: Yep.
+ 
+00:27:32 Michael Kennedy: I do think PyInstaller is quite nice. It's been around for awhile but it seems to be like one of the go-tos that people are keeping around.
+ 
+00:27:39 Cris Medina: Yep. So actually after I wrote my post I got a number of folks the pinged me and went like, eh, talking about how great PyInstaller is and they've been using it for awhile.
+ 
+00:27:46 Michael Kennedy: Yeah, yeah. Super cool. This is pretty close to here's your executable you can have and run.
+ 
+00:27:52 Cris Medina: Yep, just double-click and go.
+ 
+00:27:54 Michael Kennedy: Yeah I've had pretty good success for it. I used Gooey, you know Gooey, G-O-O-E-Y.
+ 
+00:27:58 Cris Medina: Yep.
+ 
+00:27:59 Michael Kennedy: I used Gooey to build a little app which was a super simple thing and then I packaged it up with PyInstaller. And, It was good except for, it ran fine on Windows, like it was, it had a dot exe, it had an icon. You double-clicked it, it did the thing. On MacOS, I had a dot app file. And you double-clicked it, it's did it's thing except for it also opened the terminal, kind of off to the side which I...
+ 
+00:28:26 Cris Medina: Oh, really?
+ 
+00:28:27 Michael Kennedy: For the life of me, I couldn't get it to go away. Like the commands to make the terminal not show were obviously working on Windows but not on Mac and it's like, ah, it's so close to working.
+ 
+00:28:35 Cris Medina: Wow that's interesting.
+ 
+00:28:36 Michael Kennedy: Yeah, yeah, yeah, yeah. So I still think there's some rough edges but it definitely seems, like the other stuff I tried didn't get that far, right? So that was cool.
+ 
+00:28:44 Cris Medina: Yeah so I haven't had that experience but I have had complications because when you package your application now you have to worry about things that depend on some of the dunder methods to come in with Python, like the dunder file stuff which is supposed to tell you the directory in which the file that you're working on is located.
+ 
+00:29:03 Michael Kennedy: Right.
+ 
+00:29:04 Cris Medina: Well that's kind of different because the way PyInstaller works is it bundles your application, all the files and whatever extra data you want with it and it bundles the Python Interpreter in it. So, when it runs it just extracts all this stuff into some internal directory that you're not aware of. So dunder file just doesn't work, it gives you, if it gives you anything, I can't remember, it's wrong, right? So, but PyInstaller provides its own little API to get the actual directory where the files actually exist. So you just got to be aware. You do a check in your Python code to say, oh we're inside PyInstaller so we need to check here, go here instead.
+ 
+00:29:40 Michael Kennedy: Okay, that's interesting.
+ 
+00:29:42 Cris Medina: Yep.
+ 
+00:29:42 Michael Kennedy: Can you use the dunder file to still get, like, I need to go up one folder and get that other file next to it? Or is it even relative stuff, it's not really working?
+ 
+00:29:53 Cris Medina: Even relative stuff is not quite set up right.
+ 
+00:29:56 Michael Kennedy: Okay, but if you build for it, it's not a big deal?
+ 
+00:29:58 Cris Medina: Yep.
+ 
+00:29:59 Michael Kennedy: And then another option is, I mentioned Russell Keith-Magee and his big project is the whole Beeware project and one of those is about packaging, right?
+ 
+00:30:08 Cris Medina: Yep, Briefcase. And so, you know, BeeWare is a whole slew of individual repositories that provide different functions specifically a way to, together they provide a way to build cross-platform Python applications, which involve GUIs and mobile devices as well as your desktop app or the web. And as part of that, they need a way to package the application and so they built a briefcase which is the repo that lets 'em do that. And so you can take, essentially write a base app and using Briefcase produce an Android application and an IoS application and everything else. I haven't particularly used it to do anything major so, I don't know a lot about the internal details but I know it's there and people are working with it.
+ 
+00:30:58 Michael Kennedy: Yeah, certainly it's pretty interesting that it has IoS and Android.
+ 
+00:31:01 Cris Medina: Yeah and I have seen the apps work in the, Russell's done several talks on how that all does all it's stuff. It's actually pretty neat all the things that they're doing. Some of the Android stuff, last I checked, was transpiling some of the Python code. Some of the IoS stuff was directly calling into Objective C, a few things. So it's pretty neat.
+ 
+00:31:20 Michael Kennedy: Yep. So that is some subset of the options for delivering
+ 
+00:31:25 Cris Medina: Right.
+ 
+00:31:25 Michael Kennedy: An application, right? Like I want to have the whole environment come along and what every that takes, if that's a VM or bundling stuff up, like Chrome or whatever you need, do that. But maybe another level is delivering a virtual environment. Right, this sounds like it's most useful, it's kind of for developer and automation and server type stuff.
+ 
+00:31:47 Cris Medina: Right, so say you have an organization or customers that you know are on a set Python Interpreter, So you don't need to bundle your Python Interpreter with you, then you can use some of these tools to bundle your application along with all of its dependencies into one file. So the ones I'm talking about here are Pex for example, which was built by the folks at Twitter, and CHIV which was built by the folks at LinkedIn based on the PEX stuff. And the idea is they take all your code and they bundle it into one file and you can feed that file into Python and it follows a, I forget, I should have made note of that. There's a PEP that explains how to build these zip apps.
+ 
+00:32:31 Michael Kennedy: PEP 441,
+ 
+00:32:31 Cris Medina: There you go.
+ 
+00:32:33 Michael Kennedy: Python zip applications for it, yeah.
+ 
+00:32:35 Cris Medina: Right, and so then with one command, you can just feed that into your Python Interpreter and it knows how to unpack it and run all the stuff in it.
+ 
+00:32:41 Michael Kennedy: Nice, and does PEX and CHIV, do these package up the dependencies? Like if I depend upon...
+ 
+00:32:47 Cris Medina: Yes.
+ 
+00:32:47 Michael Kennedy: httpx or request or SQLAlchemy it will take it with it?
+ 
+00:32:50 Cris Medina: It'll do it.
+ 
+00:32:51 Michael Kennedy: Yeah, that's pretty cool but typically, the virtual environments, at least on the Unix, Linux, MacOS systems are like symlinks back to the real Python, right? They're not full copies of Python?
+ 
+00:33:04 Cris Medina: Right.
+ 
+00:33:05 Michael Kennedy: Yeah, so is that kind of how it works? It's like here's a little virtual environment shell and just link back to the main Python and then run?
+ 
+00:33:13 Cris Medina: Right, so you'll be using whatever the Python it is and I haven't done this, but I imagine you could make a virtual env with your Python Interpreter that you what to use and then in that virtual env, run your PEX or your CHIV.
+ 
+00:33:23 Michael Kennedy: Yeah, yeah I would think so as well.
+ 
+00:33:25 Cris Medina: Package code.
+ 
+00:33:25 Michael Kennedy: Yeah. So you still, basically the idea is you still've got to have Python bare bones as a thing, the version that you need as a thing there to bootstrap. But once you have that, at least you don't have to say first step is, create the virtual environment. Second step is pip install -r the requirements. Like you can skip all of that. Long as Python is present you can basically run it potentially.
+ 
+00:33:49 Cris Medina: That's correct, yep.
+ 
+00:33:50 Michael Kennedy: Okay, yeah that looks really cool. When I first saw that I was like, oh please let this package up the Python Runtime with it, and no, you're right. It just builds on top of that PEP 441 to say basically you can create these, these zip versions that are directly executable by Python.
+ 
+00:34:09 Cris Medina: That's it, yep. So if you have a like, in a large organization sometimes you have a standard virtual developer, virtual machine or developer laptop or desktop and stuff that you distribute to everybody. And if you have the stuff in place, which not everybody does, to automatically keep that up to date with, say, whatever Python Interpreter it is that you're running then you can make a safe assumption that your users all going to have this Python environment and just go from there.
+ 
+00:34:36 Michael Kennedy: Yeah, it definitely seems like an interesting way to ship stuff to a server.
+ 
+00:34:38 Cris Medina: Right.
+ 
+00:34:39 Michael Kennedy: Instead of creating the environments and setting them up there and installing the packages, it's just like, I'm going to take this zipped up virtual environment, send it over there and say run, it's not quite Docker works on my machine level but it's closer.
+ 
+00:34:55 Cris Medina: Right, so other things you'd have to think about asides from the interpreter would be any other external dependencies of your package. Those will probably not get zipped up with it. I think there's some options to help that along on both of them but I don't know all the details with that specifically.
+ 
+00:35:10 Michael Kennedy: But maybe you need Redis on the machine. And like,
+ 
+00:35:12 Cris Medina: Right.
+ 
+00:35:13 Michael Kennedy: That's not a Python thing.
+ 
+00:35:15 Cris Medina: Or you need libmysql.
+ 
+00:35:16 Michael Kennedy: I see, yeah.
+ 
+00:35:17 Cris Medina: Or something like that.
+ 
+00:35:18 Michael Kennedy: I'll throw one more into this part of the taxonomy, delivering as a virtual environment. Pipx, are you familiar with pipx?
+ 
+00:35:24 Cris Medina: I am. I used it a little bit,
+ 
+00:35:25 Michael Kennedy: Oh, yeah.
+ 
+00:35:27 Cris Medina: Haven't done much else after initial config.
+ 
+00:35:30 Michael Kennedy: Yeah, yeah, yeah. So pipx is interesting because pipx, if you have Python on your machine and you pip install pipx, from then on you can, so basically the way things like Homebrew or Chocolatey work for installing utilities into your OS, if those utilities are based on Python, pipx serves the same role as say Homebrew.
+ 
+00:35:53 Cris Medina: Right.
+ 
+00:35:53 Michael Kennedy: Right. So I can go and if I pip install --user pipx, from then on I now have a pipx command and I can say like pipx install glances. And Glances is like a cool terminal sort of process explorer type thing with, you know, ASCII bar graphs and whatnot.
+ 
+00:36:12 Cris Medina: Yeah, right, right.
+ 
+00:36:12 Michael Kennedy: Right. But so if I wanted that I could say pipx install glances and it will create a dedicated virtual environment just to run and install Glances and then if I want HTTPie, which is a cool alternative to cURL, that's Python basically say pipx install HTTPie and it will actually go and create a dedicated, isolated environment for that command line tool. So if you've got a command line option that you want to, a command line tool that is Python-based, you want to be able to have it upgrade itself 'cause you can say pipx upgrade all and stuff like that. And it's isolated. It's not being installed on one of your projects. Its just something you want on your machine.
+ 
+00:36:48 Cris Medina: Right.
+ 
+00:36:49 Michael Kennedy: Pipx is actually a pretty cool option.
+ 
+00:36:50 Cris Medina: Yeah, like I would even use it for something like a linter, or a...
+ 
+00:36:55 Michael Kennedy: Yeah, yeah, exactly. Something like that.
+ 
+00:36:56 Cris Medina: Can install Flake8.
+ 
+00:36:57 Michael Kennedy: For sure.
+ 
+00:36:58 Cris Medina: And then you can use, when you type Flake8 anywhere it will just run your pipx frozen, essentially environment for that, yep.
+ 
+00:37:04 Michael Kennedy: Yeah that Is pretty cool. And then, along with that, if you want to create a package that fits into that world. I want to create a package that I'm going to create as a tool for somebody, then you can create an entry point in your package, right? Which is a thing you can do in your, I think in the setup.py, where you put it?
+ 
+00:37:22 Cris Medina: Yep.
+ 
+00:37:23 Michael Kennedy: Yeah? And you say here's the command and here's the entry point and like here's actually what that means in term of my package, right? Like black or whatever, right?
+ 
+00:37:32 Cris Medina: Yep.
+ 
+00:37:33 Michael Kennedy: So you can set up those up, and then if you install them with pipx, now you're managing that almost as a separate command line set of APIs that could automatically be updated. Obviously, you can install them with pip elsewhere. But pipx is cool 'cause it's isolated and it automatically, well upon request, will automatically upgrade stuff for you.
+ 
+00:37:51 Cris Medina: Yeah, no, that's another cool utility.
+ 
+00:37:55 Michael Kennedy: This portion of Talk Python to Me is brought to by Linode. Whether you're working on a personal project or managing your enterprise's infrastructure, Linode has the pricing, support and scale that you need to take your project to the next level. With 11 data centers worldwide, including their newest data center in Sydney, Australia, enterprise great hardware, S3-compatible storage, and the next generation network, Linode delivers the performance that you expect at a price that you don't. Get started on Linode today with a $20 dollar credit and you get access to native SSD storage, a 40 gigabit network, industry-leading processors, their revamped cloud manager cloud.linode.com, root access to your server along with their newest API and a Python CLI. Just visit talkpython.fm/linode when creating a new Linode account and you'll automatically get $20 dollars credit for your next project. Oh, and one last thing. They're hiring. Go to linode.com/careers to find out more. Let 'em know that we sent you. Alright, and then the third part of our trifecta. The three or four, something like that is...
+ 
+00:39:01 Cris Medina: Yeah, three.
+ 
+00:39:02 Michael Kennedy: Basically what I started with. I want an icon next to Firefox in Word in my doc, I click it and I want to see it run and do its thing. Right? Like that type of thing. Take us through what our options are here.
+ 
+00:39:17 Cris Medina: Right, so we are already kind of discusses PyInstaller, and that's the best one for the icon double-click and go.
+ 
+00:39:23 Michael Kennedy: Yeah it works for all the operating systems, right? It works for MacOS...
+ 
+00:39:26 Cris Medina: That's correct.
+ 
+00:39:26 Michael Kennedy: And Windows and Linux but don't you need those systems in place to build the deliverables?
+ 
+00:39:33 Cris Medina: That's correct.
+ 
+00:39:34 Michael Kennedy: Right, like if I just have Windows, I'm in trouble 'cause I don't have a Mac to like build my Mac version.
+ 
+00:39:39 Cris Medina: Right, in fact to the point where I even considered it would be interesting to set up some online stuff that creates PyInstaller packages for you that just somebody that's essentially renting out the Windows or the Macs for doing it, right?
+ 
+00:39:52 Michael Kennedy: Yeah, that would actually be a really cool service is like, here's my Python application. Here's its icon. Here's what I want it to just make that for all the operating systems and give it back to me as like an MSI installer in Windows, a dot app on Mac, and a Linux binary or something like that, right? That would be a super cool project.
+ 
+00:40:10 Cris Medina: Yeah. And yeah, so PyInstaller gives you that and, you know, we mentioned it earlier that you can also get just a package application without all the extra pretty stuff along with it. But the one that makes it the most pretty, so far, for me, has been PyInstaller. Now the next contender, so well actually, before I go with that, let's just talk about Nuitka a little bit. So that package has been around for awhile and so PyInstaller produces and packages all of your stuff together for you. It doesn't compile it for you, right?
+ 
+00:40:43 Michael Kennedy: Okay, yeah. So it just takes Python on along with it and it then like drops your files out and then like runs those.
+ 
+00:40:50 Cris Medina: That's correct.
+ 
+00:40:51 Michael Kennedy: It doesn't fundamentally change what's happening.
+ 
+00:40:50 Cris Medina: That's correct.
+ 
+00:40:54 Michael Kennedy: It just delivers the two pieces and it clicks 'em together and says go. Like CPython already, yeah?
+ 
+00:40:59 Cris Medina: Right. If you want to actually compile it and get some extra speed boosts out of having actual, an actual compiled C code instead of an interpreted language, then you can use something like Nuitka, which actually produces the one file you can just ./run or double-click and get it to run your stuff, right? Now there's, of course, since you're compiling it, things get a little bit more complicated and you have to start thinking about having compilers, having the correct libraries in order to do all of that and the dependencies of those libraries. And so it's slightly harder to do it. But, you'll get, in the end, code that doesn't, you know when you run your application in PyInstaller, you're extracting the application and then running it but if you run it on something like Nuitka, you don't need to extract that, it's just the one file that just runs.
+ 
+00:41:51 Michael Kennedy: Right, it's converted to machine instructions that just do its thing.
+ 
+00:41:54 Cris Medina: That's correct, yeah.
+ 
+00:41:55 Michael Kennedy: So that sounds actually like an incredibly good option, right? It's got to run pretty fast. It sounds like its nice and independent, that's great. But what if I depend on other complex things, right? Like I'm using NumPy or I'm using SQLAlchemy which has it's own compiled bits or something like that.
+ 
+00:42:18 Cris Medina: So if you're using something like NumPy then you're not going to get a lot of speed boosts out of it, right? 'Cause you're already running at C.
+ 
+00:42:26 Michael Kennedy: Is it going to take NumPy along with it? Like can it handle dependencies of this type? Do you know?
+ 
+00:42:33 Cris Medina: I'm pretty sure it can. I haven't had to do it myself.
+ 
+00:42:35 Michael Kennedy: Yeah, I've not tried either, yeah. I mean, if it could, that would be pretty cool, actually.
+ 
+00:42:39 Cris Medina: Yep.
+ 
+00:42:41 Michael Kennedy: Alright, want to talk about the new kid on the block?
+ 
+00:42:43 Cris Medina: The new kid on the block is PyOxidizer which has come up a few times this year already.
+ 
+00:42:49 Michael Kennedy: Clever name.
+ 
+00:42:50 Cris Medina: Yep, it's built on the packaging tools that the Rust programming language brought with it. And so it can produce executables for you. It still bundles things as well. The difference is that instead of extracting them into the file system, like PyInstaller does, it extracts it into memory so you'll get a faster startup time when, and all your library loads are going to happen straight off of memory 'cause it's all mapped in there.
+ 
+00:43:20 Michael Kennedy: That sounds really good. I know that you tried this on your example in the article that you wrote and you didn't go with this.
+ 
+00:43:27 Cris Medina: That's correct.
+ 
+00:43:28 Michael Kennedy: So if I had to just guess, close my eyes and say, alright, I don't really know too much but I'm going to guess, I would actually guess PyOxidizer might be the place to start, 'cause it's a little fresher but what was the challenge there?
+ 
+00:43:39 Cris Medina: So there's just a couple different things. Similar to the PyInstaller stuff, dunder file doesn't work, so you got to configure a few things. And in this case it's a slightly more complicated 'cause it's not like it's a different directory, because there's no directories in memory.
+ 
+00:43:53 Michael Kennedy: In memory, yeah, yeah, yeah.
+ 
+00:43:54 Cris Medina: Right. But they have like very extensive documentation on how to get past it and so that was like my biggest holdup, which at the time to me, just kind of felt like, ah, no I need to think about it a little more, so I just put it on the side as a come back to this later. But the thing I really liked about it was, it's like the config options you have for what you can, the output you can get out of it are really neat. And so, you can get an executable that runs a function inside a module, or just runs file, works as if you were running your file from the CLI, your Python file from the CLI. Or you can get, which is what I like 'cause I can play with, you run it and it just starts your Python Interpreter, your REPL with your entire virtual environment along there available. So you just say create my REST API client application and I can just run client, not .py 'cause it's complied, right, and well it's an executable and I'll get a Python Repl with requests already available for me to import and I don't have to pip install anything.
+ 
+00:45:03 Michael Kennedy: That's cool.
+ 
+00:45:04 Cris Medina: So in that sense it's, and I think you can do that with PEX and CHIV as well, there's a way of doing that, but this was really neat. You have a lot of control over it. And you can watch it pull in all the dependencies. You can have it, it will pip install everything for you into this kind of directory structure when it's trying to put itself together and so it grabs all the dependencies fresh out of PyPI or whatever indexes you feed it and then creates your final environment from that.
+ 
+00:45:29 Michael Kennedy: It sounds pretty promising. It seems like it's got a nice, modern take. I like the making your code run faster, it's already in memory. That in itself, pretty cool. This one does all the OS's as well, right?
+ 
+00:45:39 Cris Medina: Yes.
+ 
+00:45:39 Michael Kennedy: Cool. As I'm sitting here listening to you talk about all this stuff, it seems to me like one of the big challenges is, how do I get Python to come over correctly? How do I get the dependencies to come over correctly? Sometimes it's a little bit tricky to get the program to actually start, it seems like there's some challenges on around some of the platform stuff. What I don't see with any of these is, what do you think the viability of saying, like, you can take CPython and embed it into any application, right? Like you can host CPython. What if you created an app that is just a C-based app that obviously runs, no problem. It already has Python compiled into it and it's job is to unravel the virtual environment and run your code alongside. So you're just shipping this, your exe that already comes with Python and like, it already knows how to run totally reliably, just a matter of executing your Python code as part of it's like internal automation or whatever.
+ 
+00:46:41 Cris Medina: Yeah, so I haven't done too much work into all of that but I think it's things like PyOxidizer will help with that. Or even something, the ones that do the compilation for you if you're trying to deliver an executable like Nuitka or even Cython and it can help you along those lines.
+ 
+00:47:00 Michael Kennedy: Okay, interesting. Alright, so, yeah, you mentioning Cython. That one, in your article, sounded like, I'm a fan of Cython, I've used it for a coupla things. It's really cool that it supports the Python type hints, now it doesn't have its own type language, necessarily. It still has it but, it used to be you'd have to describe your types in the Cython way. Now if you just describe them in the CPython way, Cython goes along with that which is really cool. That means you can write kind of just annotated Python, in the traditional sense, or the normal sense and you get compiled machine instruction type stuff. That's pretty awesome. But it's not really built for packaging, is it?
+ 
+00:47:41 Cris Medina: The end goal of Cython was really to integrate C and Python essentially. So that you can go into C code and use Python libraries from it, or you can go into, which is the more common part, go into Python code and use a C library inside Python code, like say NumPy or something like that. Something beyond just C types and some of the base stuff that Python already has. But it will compile your Python code for you. And it has an option to produce a single file executable, it just isn't going to do a lot of, for example, if you do it with Nuitka, it will traverse all of your dependencies and compile them, put them together, but Cython will only do a little bit of that. It won't traverse dependencies to...
+ 
+00:48:25 Michael Kennedy: Right, right. It probably expects like, you're going to compile these three files and put them together or something and...
+ 
+00:48:33 Cris Medina: Right.
+ 
+00:48:34 Michael Kennedy: You just want to give it a Python application and say put these pieces together for me and it, it's just not really for that, is it?
+ 
+00:48:38 Cris Medina: Yeah, it's not really built for that. But it's one of the things I tried, yeah.
+ 
+00:48:41 Michael Kennedy: Yeah, sure, and it does get you C code which then you can compile,, and.
+ 
+00:48:47 Cris Medina: Yep.
+ 
+00:48:48 Michael Kennedy: It's a possibility but it's, it just seems like its abusing Cython. 'Cause you could probably make it work but it's not like it's goal, right? Like PyOxidizer doesn't have another purpose other than to package up...
+ 
+00:49:00 Cris Medina: That's correct.
+ 
+00:49:01 Michael Kennedy: Your thing and so it's kind of what it's for.
+ 
+00:49:03 Cris Medina: Yep.
+ 
+00:49:04 Michael Kennedy: And two of the things that didn't fit in the taxonomy were Flatpak and Snapcraft, both of which are ways to package up...
+ 
+00:49:12 Cris Medina: An application.
+ 
+00:49:12 Michael Kennedy: Applications for
+ 
+00:49:15 Cris Medina: An OS.
+ 
+00:49:15 Michael Kennedy: Linux, is it a...
+ 
+00:49:17 Cris Medina: And specifically Linux.
+ 
+00:49:19 Michael Kennedy: Yeah, Linux but what's cool is they both have like their own little app store, it's kind of like the MacOS app store or the Windows 10 app store.
+ 
+00:49:27 Cris Medina: Right.
+ 
+00:49:28 Michael Kennedy: But it's the Snapcraft or Flatpak app store.
+ 
+00:49:31 Cris Medina: Yes, it's more like apt or yum, like it's own little package manager type thing and it packages everything together with you. Flatpak, I don't have a lot of, it's been awhile since I've gone into all the details of how Flatpak did its thing and I think it even included some OS stuff when it did all its packaging. So you run it in a completely isolated environment, your application. And Snapcraft does something similar and on top of it, it's an app store type experience so, if you push an update, if you enable it, it'll automatically update your application for you.
+ 
+00:50:10 Michael Kennedy: Yeah, I think that's actually pretty cool.
+ 
+00:50:10 Cris Medina: Yeah, I think that's neat. There's actually a lot of use cases for that even in large organizations beyond just typical customer stuff like if you're talking about developers, if you have a bunch of developer tools and you just produce some new Python package with these tools in it, then you got to go ask all the developers to go pip install --upgrade, right? But if you have something like this and everybody's on Linux, which may or may not be true, then you can just push the update out to the developers. And, since I'm on that, that just reminded me, there's another system which isn't a packaging system but it's a distribution system called Pulp that works a little bit like Artifactory, if you're aware of that, which is essentially a package distribution system, it will do...
+ 
+00:51:01 Michael Kennedy: Like PyPI private, PyPI server.
+ 
+00:51:02 Cris Medina: Yep.
+ 
+00:51:03 Michael Kennedy: Yeah, it covers like all the different types...
+ 
+00:51:05 Cris Medina: Right.
+ 
+00:51:06 Michael Kennedy: And languages, yeah.
+ 
+00:51:07 Cris Medina: Docker registries and all that. But Pulp has agents that you can install on your systems and push updates to them.
+ 
+00:51:12 Michael Kennedy: Oh, I see, and then like, hey run this script and make sure everybody's got like the newest NginX or the newest whatever, right?
+ 
+00:51:19 Cris Medina: Yep.
+ 
+00:51:20 Michael Kennedy: Okay, that's pretty cool. I definitely like the auto-update. Now you should be able to, very strong should, not necessarily could, but should if you could get PyOxidixer or PyInstaller to truly work correctly, you should be able to take that output and put it in the MacOS app store or in the Windows 10 app store.
+ 
+00:51:40 Cris Medina: I think so, yes.
+ 
+00:51:41 Michael Kennedy: Right? And then you get the benefits of doing that, those app stores always have weird restrictions and...
+ 
+00:51:48 Cris Medina: I know one of the worst, I know you had...
+ 
+00:51:49 Michael Kennedy: parts of my experiences God, man. I'm still, I don't want to go into it. But I'm still having, let's call them disagreements at very strong levels with some of the app stores, right? Just some of them were completely weird and out of place. Other of 'em are just, I don't know, they're just no you have to change your app to be like this for no particular reason.
+ 
+00:52:12 Cris Medina: Right.
+ 
+00:52:13 Michael Kennedy: But they're very frustrating. But if it works, it's actually a great experience for the user, right?
+ 
+00:52:17 Cris Medina: Right.
+ 
+00:52:18 Michael Kennedy: When I install an app on my Mac, if it has a version in the app store, or I could buy it separately, I get in the app store because then I know, it's just going to be on all my machines. I don't have to worry about what happens if I lost the license code of I've activated it twice but that one machine actually died so, I'm not actually using it but I can't deactivate it because it's actually dead, like how often have you been through this experience of like, you've used up your five activations, it's like well but the machines were virtual machines and I threw them away. I can't unactivate them, I don't know what
+ 
+00:52:49 Cris Medina: Right.
+ 
+00:52:49 Michael Kennedy: You want from me, you know? So the app stores are good in that regard.
+ 
+00:52:53 Cris Medina: They are. And you can also have the experience of well I have all of these devices that are registered on my app store, and I want to install this application. Please install it on all of them for me, right? Because the system's already built with the permissions to do that, then you're set.
+ 
+00:53:11 Michael Kennedy: Yep, absolutely. Well I think these are all really good options and I think it's most important to break it into that taxonomy, like, first what are you even trying to do because the fix for one of this is definitely not the fix for another one of them, necessarily.
+ 
+00:53:27 Cris Medina: Right.
+ 
+00:53:27 Michael Kennedy: Right, so, yeah. But this gives the people a lot to think about and a lot to go play around with.
+ 
+00:53:33 Cris Medina: Yep.
+ 
+00:53:34 Michael Kennedy: Yeah, it's cool.
+ 
+00:53:35 Cris Medina: Yeah, for sure.
+ 
+00:53:36 Michael Kennedy: Now I do have one plea, one request for the folks maintaining all of these things. Maybe, not all of 'em. Like Cython, Python's off the hook. But for many of these things, right? For PyInstaller, for Briefcase, for a lot of these, have one or two showcase applications that when you go there, and guess what? We found this awesome open-source GUI application and we built a Mac, Linux, and Windows version of it. Here's a screenshot. Click to download and run it and see what the experience is as a user. Like briefcase is really cool but I go there, there's not like a single example of anything built with it or what, right? There's no evidence to me before I commit to trying it out. Like look at this amazing stuff that's built with briefcase or PyInstaller, right? Like, here's three applications that are well-known apps that you probably didn't even know were built on Python, right, so anyway. I'm going on and on.
+ 
+00:54:36 Cris Medina: I'm with you.
+ 
+00:54:37 Michael Kennedy: If people are out there, like please put this, this will do much to help the adoption if people can go and see like that. And it doesn't have to be the owner of that application, find an open-source application that's awesome, that you could package up and then package it up.
+ 
+00:54:52 Cris Medina: Right.
+ 
+00:54:53 Michael Kennedy: It doesn't even have to.
+ 
+00:54:53 Cris Medina: Right, sure.
+ 
+00:54:53 Michael Kennedy: You could do it as your own proof of concept and then do a PR back, who knows?
+ 
+00:54:57 Cris Medina: Yep.
+ 
+00:54:58 Michael Kennedy: Well, let's maybe wrap it up there for the, oh, go ahead, Cris.
+ 
+00:55:01 Cris Medina: I was going to say maybe we need one of those awesome lists, awesome lists of PyInstaller applications, awesome lists of...
+ 
+00:55:09 Michael Kennedy: That's right, Mahmoud Hashemi just recently did a...
+ 
+00:55:11 Cris Medina: Right.
+ 
+00:55:12 Michael Kennedy: An awesome Python applications. I'm sure, I know that there are a bunch of GUI applications there. You could go and package one or two of those up and put it on your site as an example.
+ 
+00:55:21 Cris Medina: Exactly.
+ 
+00:55:22 Michael Kennedy: No doubt.
+ 
+00:55:22 Cris Medina: Yep.
+ 
+00:55:23 Michael Kennedy: Cool, alright. Well let's leave it there for the packaging exploration landscape and just talk about a few things really quick before I let you get out of here.
+ 
+00:55:30 Cris Medina: Sure.
+ 
+00:55:31 Michael Kennedy: Is there a rumor that you might be doing less typing and more talking in communicating with the world?
+ 
+00:55:36 Cris Medina: Maybe. I've been exploring the idea of starting up my own Podcast, something short-form type thing, kind of 10 minute, 15 minute episodes with the idea...
+ 
+00:55:50 Michael Kennedy: Would it be like Developer Tea?
+ 
+00:55:53 Cris Medina: A little bit like Developer Tea where we just pick a technical topic based on some online article. People can send suggestions and we read through it, not in complete detail, but just kind of I give you my take on it and just kind of analyze what it's talking about and how it effects, just development topics in general and technologies. You know...
+ 
+00:56:17 Michael Kennedy: Well, if you get that on, I'm definitely looking for it. Are you going to call it The Try Except Pass Podcast?
+ 
+00:56:22 Cris Medina: That's the plan for now, The Try Except Pass Podcast. I might change my mind on that but I think that's good for now.
+ 
+00:56:29 Michael Kennedy: That's cool, It could be Try Except Podcast.
+ 
+00:56:31 Cris Medina: The Try Except Pass Podcast, yeah. Yeah, if it doesn't work, make a Podcast about it. Why not?
+ 
+00:56:37 Michael Kennedy: Yeah, exactly. Right, that's the finally clause, it's the podcast. Either way, you're going to podcast.
+ 
+00:56:41 Cris Medina: Exactly. Yeah, yeah so I was looking for a way to kind of diversify the content I'm putting out with the website, tryexceptpass.org, which lately has been doing, well just finishing up a series on CI/CD and all the different aspects of it.
+ 
+00:56:57 Michael Kennedy: Yeah, and you have a newsletter too, right? That people can go sign up and hear about it?
+ 
+00:57:00 Cris Medina: That's correct. If you're interested in the site and keeping an eye out for the podcast and everything that's coming up, just feel free to drop by the website and sign up for the newsletter. We're also open for any suggestions of anything you want to hear more about. Like my biggest request so far has been Async stuff, so I'm going to be doing a few more things on that. Or if you want to contribute an article, it's a good way of getting yourself out there.
+ 
+00:57:23 Michael Kennedy: Yeah, absolutely, cool. Well I know the articles you have out there so far are pretty good so, people should check it out, for sure.
+ 
+00:57:30 Cris Medina: Yeah, the articles are long-form too. So expect 2000 word articles, more or less. Every couple weeks.
+ 
+00:57:37 Michael Kennedy: A little bit like a magazine.
+ 
+00:57:39 Cris Medina: A little bit.
+ 
+00:57:39 Michael Kennedy: Type of article Or something, yeah, yeah, cool.
+ 
+00:57:41 Cris Medina: Yes.
+ 
+00:57:42 Michael Kennedy: Alright, well excellent, yeah so keep up the good work over there at tryacceptpass.org.
+ 
+00:57:45 Cris Medina: I will keep on chugging.
+ 
+00:57:46 Michael Kennedy: Yeah, the content creation, it never ends.
+ 
+00:57:49 Cris Medina: No, it doesn't. It's fun though, I have lots of fun doing it.
+ 
+00:57:52 Michael Kennedy: Yeah, it's awesome. Alright, now time for the final two questions before you get out of here.
+ 
+00:57:56 Cris Medina: Uh-huh.
+ 
+00:57:57 Michael Kennedy: If you're going to write some Python code, what editor do you use?
+ 
+00:57:58 Cris Medina: These days, I am using VS Code.
+ 
+00:58:01 Michael Kennedy: Alright, right on.
+ 
+00:58:02 Cris Medina: The remote extension is awesome.
+ 
+00:58:04 Michael Kennedy: Yeah, yeah, very cool. I just read that Facebook has made VS Code their official editor.
+ 
+00:58:11 Cris Medina: Oh, really. Interesting.
+ 
+00:58:13 Michael Kennedy: Which is a pretty interesting move there. So it's cool and then notable PiPY package? There's probably some on our list here, but I wanted... What comes to mind is, you're like, you should totally know about this thing.
+ 
+00:58:23 Cris Medina: I'm going to throw out Sanic. I've been using sanic a lot lately for, as a REST, a framework but it also has web sockets integrated with it and so you can provide both endpoints that answer HTTP requests and endpoints that answer web sockets and it asynchronous so I've been playing with Async APIs, REST APIs using Sanic lately.
+ 
+00:58:45 Michael Kennedy: Oh, that's super cool. Yeah, Sanic is one of the contenders for the hot, new Async ASGI Python web frameworks, so, yeah.
+ 
+00:58:53 Cris Medina: It's great.
+ 
+00:58:54 Michael Kennedy: Yeah, it definitely seems like it's a good one.
+ 
+00:58:54 Cris Medina: Yep, I've had great experience so far.
+ 
+00:58:56 Michael Kennedy: Oh that's good to hear. Alright, final call to action, people they got a, some kind of Python app, they got to package it up, what do they do?
+ 
+00:59:03 Cris Medina: Yep, just have a listen to the podcast and see where you land, make a decision on who your users are going to be and what your best deliverable is and make your choice based on that. If you can help out anybody to, like we were just talking about, produce some examples of their, how their packaging systems work, that would be great.
+ 
+00:59:27 Michael Kennedy: Yeah, and if you're out there and you've built a cool application and you've bundled it up with one of these things, shoot a note...
+ 
+00:59:33 Cris Medina: Let us know.
+ 
+00:59:33 Michael Kennedy: Back to the, yeah, shoot a note back to the maintainer. Say if you used PyOxidizer, shoot 'em a message back to them say, hey here's a cool thing I did. Could you, you know, feature this? Here's a picture you can feature on the site, like, I don't know. I just think we need more of that.
+ 
+00:59:47 Cris Medina: Yeah, I'm with you. And some of it, I know there's lots of apps already and some of 'em might not even be using any of these systems. I think that just having examples of Python producing these types of system applications is just good for the language.
+ 
+01:00:01 Michael Kennedy: I agree. It would start to break the chicken and egg cycle.
+ 
+01:00:05 Cris Medina: And I'm tired of hearing that Python is only a scripting language.
+ 
+01:00:09 Michael Kennedy: Yeah, so am I. Awesome. Well, thanks so much for being here, Cris. It was a lot of fun to go through all this stuff with you.
+ 
+01:00:15 Cris Medina: Yep, loads of fun. Thanks for having me.
+ 
+01:00:17 Michael Kennedy: Yep, bye. This has been another episode of Talk Python to Me. Our guest in this episode was Cris Medina. It's been brought to you by TideLift and Linode. If you run an open-source project, TideLift wants to help you get paid for keeping it going strong. Just visit talkpython.fm/tidelift, search for your package and get started today. Start your next Python project on Linode's state-of-the-art cloud service. Just visit talkpython.fm/linode, L-I-N-O-D-E. You'll automatically get a $20 dollar credit when you create a new account. Want to level up your Python? If you're just getting started, try my Python Jumpstart by Building 10 Apps course. Or if you're looking for something more advanced, check out our new Async course that digs into all the different types of Async programming you can do in Python and, of course, if you're interested in more than one of these, be sure to check out our Everything Bundle. It's like a subscription that never expires. Be sure to subscribe to the show. Open your favorite Podcatcher and search for Python. We should be right at the top. You can also find the iTunes feed at /itunes. The Google Play feed at /play. In the direct RSS feed at /rss on talkpython.fm. This is your host, Michael Kennedy. Thanks so much for listening. I really appreciate it. Now get out there and write some Python code.
+ 
