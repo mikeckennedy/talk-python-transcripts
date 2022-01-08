@@ -1,0 +1,709 @@
+00:00:00 The team at Instagram dropped the performance bomb on the Python world when they open sourced Cinder, their performanceoriented fork of CPython. It contains a number of performance optimizations, including bytecode, inline caching, eager evaluation of corutines, a method at a time JIT, and an experimental bytecode compiler that uses type annotations to emit type specialized bytecode that performs better in the jet. Well, it's not a general purpose runtime we can all pick up and use. It contains many powerful features and optimizations that make their way back to mainline Python. We welcome Dino Velon to the show to dive into Cinder. This is Talk Python to Me episode 347, recorded November 29, 2021 welcome to Talk Python to Me, a weekly podcast on Python. This is your host, Michael Kennedy. Follow me on Twitter, where I'm at McNuty and keep up with the show and listen to past episodes at Talkpython FM and follow the show on Twitter via at Talk Python. We've started streaming most of our episodes live on YouTube, subscribe to our YouTube channel over at Talkpython FM. Youtube to get notified about upcoming shows and be part of that episode.
+
+00:01:23 This episode is brought to you by Sentry and Top Tile. Please check out what they're offering during their segments. It really helps support the show.
+
+00:01:31 Do you know? Welcome to Talk by the to me.
+
+00:01:33 Hi, Michael. Thanks for having me.
+
+00:01:34 I'm really excited to talk to you. You've been involved in a lot of projects that I've wanted to talk to you about over the years and haven't yet. So we'll get a touch on a couple of those, but we've got some really big news around Cinder and some performance stuff that you all over at Instagram are doing to try to make Python faster. You did a really cool Python keynote or not keynote the talk on that. So we're going to dive deep into this alternate reality runtime of C Python called Cinder that you have created. That's going to be a lot of fun.
+
+00:02:05 Yeah, there's always slightly alternate reality.
+
+00:02:07 It's not that much of an alternate reality, just a little bit. Yeah, before we do that, let's just hear your story. How did you get into a programming in Python?
+
+00:02:15 I started programming when I was a teenager. I got into computers initially. Really? Through BBS's.
+
+00:02:22 Oh, yes. Maybe pre Internet.
+
+00:02:26 This is like dial up only you would dial into the BBS. Oh, my gosh.
+
+00:02:31 Yeah, like you. I had a modem. Someone else had a modem sitting in their home waiting for people to call in. You'd log in, send emails, post messages, take your turns on games long out, and someone else could log in and respond to your emails.
+
+00:02:47 It was so amazing. And send email meant wait for another BBS to dial in to connect to that one, to sync its local batch of emails. It was like peer to peer email. It's so weird.
+
+00:02:58 Yeah, there's a lot of local emails right?
+
+00:03:02 You're waiting for the other person to have a chance to log in, but, yeah, there's also that network, like a couple of different big networks. It was such a different time.
+
+00:03:12 It was such a different time. I was not super into this as much. My brother was really into it. We had two phone lines so that we could do more of this. Did you ever play Trade Wars or any of the games that were on there? Yeah.
+
+00:03:24 Trade wars is awesome.
+
+00:03:26 So good. I think I would still enjoy Trade Wars.
+
+00:03:28 It was so good. I was still clean trade wars in College, we formed teams, and we're trying to take over some Trade Wars that was available over the Internet, actually, that you could Telnet into and play.
+
+00:03:42 A lot of this BvS stuff. Had sort of found a home over Telnet for a while, hadn't it?
+
+00:03:47 Yeah. I think the main PBS software that I use there was used in St. Louis, where I grew up, which was World War II with I think it's still around and available for you if you really want to host it on some Internet server, but who's going to do that?
+
+00:04:08 Incredible. Okay, so How's the BBS story fit into the programming side of things?
+
+00:04:13 The BBS software that kind of was really popular. You could get a license to it for $50, and you got a source code for it along with it. And there's a big active modding community. And so I started off taking people's mods and applying them and then trying to make my own mods and just ended up teaching myself C and initially very poorly taught myself C, but then finally got good at this sometime.
+
+00:04:43 How fun.
+
+00:04:44 Yeah.
+
+00:04:44 Do other people use your mods? Or were you running your own BBS or anything like that? Where's the surface?
+
+00:04:50 I did a really bad job at running my own BBS. I petitioned my parents for a second phone line, but I also wanted to use it for phone calls. So to call my BBS, you had to dial in, and then I had this device where you could punch four extra codes and it would connect you to the modem. So that was kind of annoying and didn't make it the world's most popular BBS. And it was rather short lived.
+
+00:05:13 I heard some of the automation.
+
+00:05:14 Yeah, yeah, but I published my mods. My friends ran BBSs. They pick up some of the mods. I don't know that I was the most popular moderate out there. I should go and see if I could find them. That might be terrifying, though.
+
+00:05:27 Yeah, that might be terrifying, but it could also be amazing. Let's wrap up the BBS side of things with putting some bookings on the time frame here. What was the beginning bod rate and end bod rate of your BBS time?
+
+00:05:39 4400 to 57.6 kw.
+
+00:05:44 Yeah. So you took it all the way to the end there, but 2400 probably meant it didn't require putting the phone on to a device like the War Games.
+
+00:05:55 Never that bad.
+
+00:05:56 Fantastic. All right. How about Python? How did you get to that?
+
+00:06:00 I got into Python in a very weird way because I started working on a Python implementation, having really never touched or used Python before.
+
+00:06:09 Obviously, I've heard about it, and I kind of like significant white space. That sounds weird, but ended up really loving working on it on Iron Python. Really loving the language and the way it was designed.
+
+00:06:24 It gave me a very weird outlook on Python. I think just because I knew all sorts of weird corner cases about Python and the language and all the details there, but then didn't really know much about libraries and things like that. And to some extent that continues today. But I get to write a lot more Python code today, too. Sure. But always having been on the implementation side is a little strange.
+
+00:06:54 It is strange, and I guess it would be a weird way to get to know the language. So I feel like one of the real big powers of Python is that you can be really effective with it with a super partial understanding. Like you could have literally no idea how to create a function, and you could still do useful things with Python.
+
+00:07:12 Whereas if you're going to jump in and create Iron Python, which we'll talk about in a second, you have to start, what are these meta classes and how do I best implement dynamic objects and all this stuff that's, like the opposite of starting with a partial understanding?
+
+00:07:29 Well, how do imports work?
+
+00:07:33 That was I remember when I learned about them. Wait, this is like running code.
+
+00:07:39 It's not like an include file or statically linked file or adding a reference in dot. Net or something like that. No, it just runs whatever's in the script, and it happens to be most of the time it defines behaviors, but it doesn't have to.
+
+00:07:53 Yeah. And like, how do you pick what's going to get imported and the semantics? There are so complicated.
+
+00:08:04 Yeah, there are some oddities of Python, but in general, it seems to be working well for people, but I can see as I implemented it, it's could definitely be pulling some hair out.
+
+00:08:14 So many things implement it, they're super safe. They make a lot of sense. There's just some weird cornered faces that you run into that are like, what's going on here? When I worked on hiring Python, we couldn't look at the source code that see Python, which made things really interesting.
+
+00:08:32 Okay.
+
+00:08:34 Because this predates net being open source and all that kind of stuff, right? Yeah. You don't want to be poisoned by the ideas.
+
+00:08:43 Okay.
+
+00:08:44 I found was open source, but this was when Microsoft was still very much figuring out how they wanted to approach open source, and we're still very cagey about it. It was very interesting.
+
+00:08:57 Yeah. They've come a long way and many companies have, I would say it's still there's some Idiosynchronous seas, I guess there. But certainly it's a different time now than it was then. This was like, what 20, 08 20 09 time frame ish or 2005 maybe.
+
+00:09:14 Yeah. 2005 2006. I think it was around Iron Python one out. 2006. Sounds about right.
+
+00:09:21 Yeah. So that's a while ago.
+
+00:09:22 Yes.
+
+00:09:23 It doesn't sound that long ago to me, but honestly, it's a while ago.
+
+00:09:26 Yeah. It's like I remember the 90s is not ten years ago.
+
+00:09:31 It's true. Definitely true.
+
+00:09:33 All right. How about day to day? What are you doing now? Your Instagram, right.
+
+00:09:37 Basically, I work on our fork of seatbelts on which we call Sender, and my job is to help make my entire team's job is to make Instagram run more efficiently.
+
+00:09:48 Obviously, Instagram is a very large website that has a lot of traffic, and it's a very large Django app. So we just spend our time trying to improve C Python and very specifically trying to improve C Python for Instagram's workload. We're very driven by kind of that is our sole direction. And so it lets us make some interesting decisions and drive some interesting decisions. But it's just really spending the day looking at what we can do to improve performance and going off and implementing that and making a little bit faster.
+
+00:10:29 So when we talk about Python and Django run Instagram, I put up a little post here of something I did yesterday just to have some Instagram stuff to show. Is that talking about the website is that the API is behind the scenes. Like when you say Django runs Instagram, what are we talking about here?
+
+00:10:47 So it's the website. It's the API. There's obviously some parts that aren't Django, but kind of everything that people's devices are interacting with is going through the Django front end. And there's also a bunch of like, if we have asynchronous processes that need to kick off and run in the background, that's kind of all handled by a Django tier as well. So it's a good chunk of what's going on.
+
+00:11:13 Yeah. Nice. This is probably one of the, if not the largest Django deployment there is. Right. This is a lot of servers we're talking about, right.
+
+00:11:20 I would assume so I don't know. There might be something else pretty big out there.
+
+00:11:25 Yeah. I feel like the talk at the 2017 Python. Remember that when we used to go to places where there are other people and we would go and like being in the same room and stuff that was so nice.
+
+00:11:36 And there was a cool Instagram talk about. I believe that one was about disabling the GC or something like that. And I feel like they said in that talk, at least at that time, that was one of the largest, not the largest Django deployment.
+
+00:11:49 Yeah.
+
+00:11:50 We no longer disable the GC. We fix the memory leak. So that's good.
+
+00:11:55 Okay.
+
+00:11:57 We're going to talk a lot about memory. And honestly, this whole conversation is going to be a bit of a test, an assessment of my C Python internals. But I think that's okay because a lot of people out there don't know super indepth details about C Python, and I can play the person who asked the questions for them.
+
+00:12:17 I can try to answer questions.
+
+00:12:20 Sure.
+
+00:12:21 Well, we'll keep it focused on the part that you've been doing. But during your talk, you mentioned a couple of things. First, you said, okay, well, when we're running over on Django, we're running on you say you whiskey. I feel like it's a micro.
+
+00:12:36 It used to be like a microwiskey. Yeah.
+
+00:12:39 Microscope. I don't know. You whiskey or microscope. Whatever it is.
+
+00:12:42 Yes.
+
+00:12:42 I feel like all these projects that have interesting names should have a Press here to hear how it should be pronounced.
+
+00:12:50 Anyway, this microscope you guys are running on and understanding how it creates child processes and Forks out. The work is really important for understanding some of the improvements that you've made and some of the areas you've focused on. So maybe we could start a little bit by talking about just the infrastructure and how actually the execution of Python code happens over Instagram.
+
+00:13:16 Yeah. So in addition to your whiskey, it's running on Linux, which is probably not surprising to anymore.
+
+00:13:24 Zero people are surprised now.
+
+00:13:26 Yeah.
+
+00:13:27 I thought it was a Windows Server come on, or Solaris? Yes. Or a Raspberry Pi cluster. Come on.
+
+00:13:35 That'd be awesome.
+
+00:13:37 So one of the common things that people take advantage of Linux is fork and aesthetic, where you start off by a master process and then you fork off some trial processes and they can share all the memory of that master process. So it's a relatively cheap operation to go off and spawn those trial processes. And you get a lot of sharing between those two processes, which reduces kind of the memory that you need to use and all that good stuff. And so the way is working is that we are spawning our master process going off, importing kind of all of the website. We try to make sure that everything gets loaded initially and then spawn off a whole bunch of worker processes which are going to actually be serving the traffic. And if something happens to one of those worker processes, then the master will come in and spawn a new worker to replace it. That kind of goes on and on and on.
+
+00:14:42 And it's also not just about durability. It's also about scalability, right. If one of the worker processes is busy working on a request, well, there might be nine others, and the supervisor process can look and say, okay, well, I got some requests got to be processed here. This one's not busy and sort of scale it out. And that also helps a lot with Pythons Gill and stuff. You can just throw more of these worker processes at it to get more scalability, and at some point that kind of hits the database limits anyway. So it doesn't really matter that much, right?
+
+00:15:16 Yeah. And I think, like, you whiskey can auto tune. I don't know exactly all the details of our settings.
+
+00:15:22 Yeah. There's a lot of advanced settings in there.
+
+00:15:24 Yeah. Like it can tune for memory for Stoke workers.
+
+00:15:31 It's pretty smart.
+
+00:15:35 There's actually a really interesting. I don't know. Maybe you've seen this. There's a really interesting post called Configuring USD for Production deployment over on Bloomberg Tech talking about all these knobs that they turn to make it work better and do these different things. And it's super interesting if these tuning knobs are unfamiliar to Python people. Yeah, but the important takeaway here is when we're talking about running your code on a single server, we're talking about 510, 20 copies of the same process running the same code with the same interpreter. Yeah, exactly.
+
+00:16:10 You guys pay for bigger clouds and you have your own data centers, right. So you probably get bigger VMs this portion of Talk Python, I mean, is brought to you by Century. How would you like to remove a little stress from your life? Do you worry that users may be encountering errors, slowdowns or crashes with your app right now? Would you even know it until they sent you that support email? How much better would it be to have the error or performance details immediately sent to you, including the call stack and values of local variables and the active user recorded in the report with Century. This is not only possible, it's simple. In fact, we use Sentry on all the Talk Python Web properties. We've actually fixed a bug triggered by a user and had the upgrade ready to roll out as we got the support email. That was a great email to write back. Hey, we already saw your error and have already rolled out the fix. Imagine their surprise, surprise and delight your users. Create your Century account at Talkpython FM Sentry. And if you sign up with the code Talkpython all one word, it's good for two, three months of Century's business plan, which will give you up to 20 times as many monthly events as well as other features. Create better software, delight your users and support the podcast. Visit Talk Python FM Century and use the coupon code Talk Python.
+
+00:17:34 So that impacts a lot of the decisions that we make.
+
+00:17:38 We can talk about those more later. I think another interesting thing about our USB and our deployments in general is that we're also redeploying every ten minutes when developers are.
+
+00:17:52 Yes, I saw that. And that blows my mind. So tell me about this rapid redeployment.
+
+00:17:57 It blows my mind too. And when I started it at Facebook, I guess not meta. But it was Facebook back then you go through a process called boot camp, where you spend your first several weeks just learning about Facebook. And one of the first things you learn is like Facebook dot com redeploys every three to 4 hours. I'm like that's insanely fast and then land on Instagram. We deploy every ten minutes. It's like what?
+
+00:18:22 Yes, that's incredible. Can you talk about why that is is there just that many improvements and code changes going on, or is there some other balancing reason that this happens like a DevOpsy thing?
+
+00:18:35 I don't know what all the original reasoning is. It has a very nice. So one of the nice things about deploying a lot is when something goes wrong, it's not hard to figure out what caused things to go wrong you're not looking at right?
+
+00:18:50 There's a bunch of small changes in each one gets deployed. So you're not going back to the last six months or whatever, right?
+
+00:18:57 Yeah. Exactly.
+
+00:19:00 Each of those deployments has a good number of changes in it. And even if it was like 4 hours, there would be a huge number of changes that you have to track things down through. And also, it's really satisfying from a developer standpoint in that you land your change and it's rolling out in half an hour. So I don't think anyone I don't know all the original reasoning, but I don't think anyone would really want to change it just because it actually has some significant benefits. It makes things interesting to challenge some ways, too. But otherwise, I think it's really nice.
+
+00:19:36 Yes.
+
+00:19:38 It just never ceases to frustrate me or blow my mind how these companies just have extended downtime? I'm not talking. We pushed out a new version in order to switch things in and out of the load balancer. There's 5 seconds of downtime or better on a database migration, and it creates a new index, and that's going to take one or two minutes. I'm talking.
+
+00:20:01 We're going to be down for 6 hours on Sunday, so please schedule your work around. I'm just like, what is wrong with these companies? Like, how is it possible that it takes so long to deploy these things? And if they had put in some mechanism to ship small amounts of code with automation, then they would just not be in this situation, right? Yeah. They would get pushed somewhere and then something would happen and then they would have a new version of the site, right?
+
+00:20:34 It always baffles me when I end up at a website and it's like we're currently down for service. It's like, what the website you're not supposed to do?
+
+00:20:45 That the most insane thing. I'll get off this thing, but it drives me. Okay. The most insane thing is I've seen websites that were closed on Sunday. What do you mean, it's closed on Sunday?
+
+00:20:55 Yeah.
+
+00:20:57 Just go and turn it off when you go home.
+
+00:20:59 It's open Monday to Friday, sort of thing. It was like a government website and I don't know why it has to be closed, but apparently it had to be closed.
+
+00:21:08 Yeah, we have engineers standing by Monday through Friday to prompt us your request by hand.
+
+00:21:13 Exactly. We got to push the button. No one's there to push the button. Okay. So I guess one more setting the stage stories here or thing to know is that you run these servers quite close to their limits in terms of CPU usage and stuff like that. And then also, you said one of the areas that you focus on is request per second as your important metric. Do you want to talk about those for a moment?
+
+00:21:41 Sure. So I don't know what the overall numbers under normal load are. I don't think the CPU load is necessarily super high, but what we want to know at the end of the day is like, how many requests can we serve under peak load? And so what we can actually do is take traffic and route it to a set of servers and drive that traffic up to where the server is under peak load. And we see how many requests per second a server is able to serve at that point, which gives us a pretty good idea of kind of what the overall level of efficiency is. So when we make a change, we can basically run an AB test where we take one set of servers that don't have the change, drive them up to peak load, and compare it against another set of servers that have the change and drive those set of servers up to peak load, and then compare between the two and see how many requests per second we end up getting and what the changes, right. And we can do that to a decent amount of accuracy. I think kind of like when we kick off a manual test, we try to strive for one point 25%. When we're doing releases of sender. I think we try to push it a little bit further by doing more runs. So we get down to zero 1% or something like that. So we have a pretty good idea of what the performance impact of what those changes are going to end up looking like.
+
+00:23:15 I think that makes a ton of sense. You could do profiling, and obviously we do that, too. Yeah, but at the end of the day, there's a bunch of different things, right. If I profile against some process and say, well, this went this much faster in terms of CPU, maybe it took more memory and at production scale, it turns into swap, which means it's dramatically.
+
+00:23:40 There's a bunch of pushes and pulls in there. And this pragmatic, let's just see what it can take now is interesting. You all are in this advantage situation where you have more traffic than any given server can handle, I would imagine.
+
+00:23:56 Yes, we actually run on one server.
+
+00:24:03 It hasn't been rebooted in seven years.
+
+00:24:06 You have the ability to say, well, let's just tune some of our traffic over to this one particular server to sort of see this limit, whereas a lot of companies and products don't. Right. Like, I use this thing called Locust IO, which is just a fantastic Python framework for doing load testing. Do you actually know the upper bound of what my servers can handle? Because we get a lot of traffic, but we don't get 30,000 requests a second. Lots of traffic. Right. And so I think this is really neat that you can actually test in production sort of beyond integration test not test that it works. Right. But send real traffic and actually see how it responds, because really, that's the most important thing, right. Does it do more or does it do less than before you brought up Profiling.
+
+00:24:55 And we still have to use Profiling sometimes to 00:20. 5% 1%. That's still a lot of noise.
+
+00:25:04 So if there's some little micro optimization, we can still be like, okay, well, what's this function using after the change kind of across some percentage of the entire fleet, which is kind of amazing because the profiling is just running on production traffic sampled. So for smaller things, that ends up becoming super important.
+
+00:25:27 Right. And you're making a ton of changes as we're about to dive into, but they're additive or multiplicative or something like that. Right. So if you make this thing 1% faster, that 5% faster. This 3% faster, all of a sudden you could end up at 20% to 30% faster in production, right?
+
+00:25:42 Yeah.
+
+00:25:44 We just had a few percent.
+
+00:25:45 Yeah.
+
+00:25:46 Exactly.
+
+00:25:48 Where is Cinder? Here we go. All right. So when I saw this come out, when did you all make this public?
+
+00:25:54 Shortly before Python?
+
+00:25:57 Yeah. That's right.
+
+00:25:57 Yeah.
+
+00:25:58 Would you put it, like, February, March, something like that, something like that. That sounds exactly right with this eight months ago.
+
+00:26:05 So this is under the Facebook Incubator.
+
+00:26:12 Incubator.
+
+00:26:13 Permalinks. Come on.
+
+00:26:16 It doesn't matter all that much. It's Instagram, I guess. But let me just read the first opening bit here. I think there's a lot to take away just from the first sentence. Cinder is Instagram's internal performance oriented production version of CPython 38. So performance oriented. We've been talking about performance when you get into a lot of the cool things you've done production version. So you guys are running on this on Cinder. Fantastic.
+
+00:26:42 And we redeploy, like.
+
+00:26:44 Once a week, you redeploy the Python runtime, right?
+
+00:26:49 Yeah.
+
+00:26:50 So the source that's up here is yeah. If you go back and look at maybe a week ago is what we're probably running in production any given time.
+
+00:26:59 Right. Okay. Fantastic. And then see Python 38 because you've made a lot of changes to this that can't really move forward. So you picked the one. I'm guessing that was the most current when you first started most current and stable and just started working on that. Right.
+
+00:27:16 So we do upgrade. We previously built on CPython Three seven. Oh, cool. There's hundreds or I don't know if we're yet up into thousands of changes yet, but there's a lot of dips that we've applied.
+
+00:27:34 We've been working on it for.
+
+00:27:36 I've been working on it for three years now, and it predates me. So we've upgraded Three seven. We're going to upgrade to 310 next, which we're actually starting early next year. So it's just a big and bold process.
+
+00:27:52 And you've also contributed some stuff from Cinder to Three tabs. That'll be interesting as well. That probably actually makes it harder to merge rather than easier.
+
+00:28:02 We hope that makes it easier. That is one of the things.
+
+00:28:06 Yes. I guess you could drop that whole section. Right. You could just say, you know what? We don't even need this whole enhancement because that's just part of Python now, right. Okay.
+
+00:28:13 Yeah. That is the incentive for us one of the incentives for us to contribute.
+
+00:28:18 Yeah.
+
+00:28:19 Itemar out in the live stream, and the audience says 2000 commits. Oh, my gosh.
+
+00:28:25 Yeah.
+
+00:28:26 That's awesome.
+
+00:28:26 Edmar's going to be he's now our kind of full time, dedicated resource to help us upstream things.
+
+00:28:34 Oh, fantastic. To upstream itemars job is to take the work you're doing here and then work on getting that into C Python properly.
+
+00:28:43 Yeah.
+
+00:28:43 Okay.
+
+00:28:43 We could have been doing such a better job. I think we've upstream some little things, some slightly more significant things, but it's something that we really need to be working on more. And so we've got someone who's dedicated to it. And obviously he's not just doing it in a vacuum. We're going to help him. But having someone drive that and make sure it actually happens is super important. Yeah.
+
+00:29:07 That's really cool. I suspect that he and Lucas Lingo will become friends.
+
+00:29:13 Lucas will be on the receiving end of that a lot. I've given the developer in residence over at Sea. Python cool. All right. So I guess let's talk about this. Is it supported. So right now, the story is you guys have put this out here as sort of a proof of concept, and by the way, we're using it, but not. We expect other teams and companies to take this and then just run on it as well. Right. This is probably more to work on the upstreaming side. Is that the story?
+
+00:29:44 Yes. And let people know what we're doing if someone wants to pick it up and try it. That's great. It's just mainly we're focused on our workload and making it faster and can't commit to helping people out and making it work for them.
+
+00:30:01 Right. But as you just said, you are working on bringing these changes up to Python, and you already have to some degree. So that's pretty good. I guess it also lets you all take a more specialized, focused view and say, you know what? We want to make microwisky when it Forks off child processes. We want to make it that happen better and use less memory.
+
+00:30:25 And we're going to focus on that. If it makes sense to move that domain. Python good. If not, then we're just going to keep those changes there, right?
+
+00:30:33 Yeah. And that's happened. I think we've done some work around Immortalization of the GC heap, which is kind of a big improvement over not collecting we were talking about earlier. Exactly. And that didn't make sense for us to see Python.
+
+00:30:50 That's something that we just have to maintain.
+
+00:30:51 Cool. I was so excited when I saw this come out. I'm like, wow, this is the biggest performance story I've seen around see Python for quite a while. And now there have been some other things as well. We'll touch on at the end on how they come together, but maybe walk us through cinder. What does this work? And we can dive into some of the areas. Maybe.
+
+00:31:11 Sure. You have Immortal instances highlighted so we could start talking about that, I think.
+
+00:31:16 Yeah. If you change, it makes sense.
+
+00:31:18 Yeah.
+
+00:31:19 Let's talk there.
+
+00:31:19 So the chitches and what I work on day to day. We have several other team members who work beyond that full time, but it's obviously a huge part of the performance story. So the jet right now is it's a method at a time jet, so it compiles each individual method. It's again very tuned for our workload. Kind of. You can see here some of the descriptions of how to use this thing, and it's mentioned in this list file. So when we're using this in production, what happens is we compile all the functions ahead of time inside of the master process before we fork off all those worker processes because we want all that memory to be served share between the different processes. So that's kind of an unusual mode for to work in, right.
+
+00:32:10 They don't normally think about children processes and forking. They just do their own thing, right?
+
+00:32:15 Yeah. It's just like, okay. I have this method. It's gone hot. It's time to jive it. So it's use in this weird way. At some point we need to, I think, add support for kind of normal jitting methods when they get hot.
+
+00:32:30 We're at the point where we're talking about using Cinderella a little bit beyond Instagram within Meta. And at that point, people are going to need something that isn't so heavily tuned to us.
+
+00:32:42 The jig does it's entirely. We kind of filling the full stack. So it uses, I think. Is it ASM shit?
+
+00:32:52 Yes.
+
+00:32:52 It uses the library to do the X 64 code generation. Other than that, we go from a high level representation.
+
+00:33:01 How close is the high level representation to just Python's bytecode?
+
+00:33:06 There is a pretty good set of overlap. There are also a lot of opcodes which kind of turn into multiple, smaller things. So like, on top of my head, I think like making a function involves setting several different attributes on it at the end. So there's something that says, make me this function, which is just a single opcode and see Python, and there's several different opcodes which are setting those fields on it. So it's pretty close, but maybe slightly lower level. There's also a lot of op codes in there for just kind of super low level operations. So one of the things the thing that I spend most of my time were beyond a static Python. And so we added a bunch of things that support primitive math and simple loads and stores of fields and lower level things like that. So it's a mix.
+
+00:34:02 Yeah, the static Python that we're going to talk about is super cool.
+
+00:34:06 Is that possible? Because the JIT like you can do whatever you want, and then the JIT will see that and then adapt correctly.
+
+00:34:12 The JIT is really important to it because it takes things that are usually tons of instructions and turns them into a single instruction or a couple of instructions. It's not 100% required, like we support it in the interpreter loop, and kind of our goal is to do no harm and generally, like, at least get the normal performance. But being able to resolve things statically and turn them into simple ways is super important. So from Hir, we turn that into an SSA form and run a bunch of optimizations over it. I think one really interesting optimization is rough count removal, so we can see kind of these objects are either borrowed or just like that. We'd have extra recounts happening on them that we don't need to actually insert, and we can just align all those, which is super awesome.
+
+00:35:09 This portion of Talk Python to me is brought to you by Top Tal. Are you looking to hire a developer to work on your latest project? Do you need some help with rounding out that app? You just can't seem to get finished. Maybe you're even looking to do a little consulting work of your own. You should give Top Tile a try. You may know that we have mobile apps for our courses over at Top Python on iOS and Android actually used Top Tile to hire a solid developer at a fair rate to help create those mobile apps. It was a great experience, and I can totally recommend working with them. I met with a specialist who helped figure out my goals and technical skills that were required for the project. Then they did all the work to find just the right person. I had short interviews with two folks. I hired the second one and we released our apps just two months later. If you'd like to do something similar, please visit Toppython Fmtoptowel and click that Hire Top Talent button. It really helps support the show.
+
+00:36:09 There's a lot of interesting stuff happening around memory that you all are doing, but one of them is just recount and you make assumptions that are reasonable. When I'm in a method call of a class, I don't need to increment and then decrement the self object, because guess what? The thing must be alive because it's doing stuff. Right. And then it sounds like also, maybe with Constance, like, the number one doesn't need a ref cab changed and stuff like that, you notice that and go, you know what? We're just going to skip that. Yeah.
+
+00:36:39 One of the things we've done is the immortalization of objects. And so we can also like, the number one is going to be an immortal instance.
+
+00:36:48 And so in that case, we can be like, okay, yeah. We don't need to deal with rest counts on this. Unless, of course, that number one ends up going off to somewhere that maybe doesn't understand the recounting semantics of legit. In which case, maybe we do have to end up inserting them.
+
+00:37:06 Right.
+
+00:37:06 Or if it's going through, like, ELFs or something, where one of the branches, we have to end up rough county. So it's smart.
+
+00:37:15 And it's important because within mortal instances, our risk counts are a little bit more expensive than normal roof counts, because we have to check to see if the object is immortal too.
+
+00:37:24 Right. So they're just doing an increment on a number.
+
+00:37:26 Yeah.
+
+00:37:27 Okay. So this immortal instances, this comes back to that memory thing that comes back to the turning off the GC, which you stopped turning it off. It sounds like immortal instances are a more nuanced way to solve that same problem.
+
+00:37:39 This is really about that fork and exact model.
+
+00:37:42 Yeah.
+
+00:37:42 So when we fork off this worker processes, they're initially sharing all the memory with the master process, unless they happen to go off and write to it. And reccounts are a really big source of writing to that shared memory. And so what this does is take all the objects that are present inside of the master process and runs through marks and all's mortal. And then from then on out, the child process will be like, oh, this thing's immortal. I'm not going to change the roof account.
+
+00:38:17 Okay. So this happens. You basically just scan the whole heap right before you do the fork and you're like everything. We're just going to clone this and it becomes unchangeable. And then we'll just at least with regard to its rest count, and we'll go from there. Yeah.
+
+00:38:31 Yeah. And then as long as ideally we also don't, we shouldn't have a lot of global mutable state. People should be like, if you think about what's in the master process process, it's like classes and functions, and people shouldn't be really going off and mutating those things inside of the worker processing. Something strange happening. If that's going on.
+
+00:38:56 Maybe let me ask you really quick or let you talk about really quickly.
+
+00:39:00 The real benefit here is on Linux. When you fork off these processes. If the memory itself hasn't been changed, that can be shared across the 40 or 60 processes. But as soon as that memory change, like a local copy has to be dedicated to that one worker process. So silly stuff. Simple stuff. Like, I want to pass this string around that happens to be global, and then it says, well, it's passed. So you've got to add refer to it, which means now you get 60 copies of it all of a sudden, those really simple things you are able to get lots better memory sharing, which then leads to cash hits versus cash MITS and misses. And there's, like, all these knock on effects, right?
+
+00:39:45 Yeah. And it's not just the string itself, right. It's the entire page that the string lives on. So you might have a 15 Byte stray with 16 Byte object header.
+
+00:39:59 And you end up copying four KF memory because you changed a six reference number to a seven or to a five.
+
+00:40:06 Yeah.
+
+00:40:08 Fascinating. Okay. Do you think that Python see, Python itself could adopt this? Would it make sense?
+
+00:40:13 We tried to upstream it and there was resistance to it. It is touching something that's very core. It's going to be a bit of a maintenance burden. There are other reasons I think that people are now talking about wanting to have immortal instances. So Eric Snow has been working on subinterpreters for a long time, and I think he has been interested in them recently for sharing objects between interpreters. And I think Sam Gross's work on no, Gil might have some form of immortal instances as well. So maybe the core and mortal instances support could land upstream at some point, but maybe the code that actually is walking the heat and is free breathing every day. Maybe that's very Instagram specific and doesn't have much value.
+
+00:41:08 It seems to me that there's probably a set of things that would be good immortal instances for almost any Python process that starts up, right. Like before your code runs everything, there probably would be a good candidate for that.
+
+00:41:23 And there's potential.
+
+00:41:26 It's kind of scary because roof counts are so frequent, and so adding extra code in the restaurant process seems risky. But if you can freeze enough stuff that was kind of there before the program started up that's super core and happening a lot, then maybe it does actually end up making sense for other workloads, too.
+
+00:41:49 Yes. Perhaps. Okay. So these immortal instances are one of the things you all have done. That's pretty fascinating.
+
+00:41:55 And also a huge win. Something like 5%.
+
+00:41:59 Yeah, that's right. It says right here big boom in production 5%. And does that mean 5% request per second? Is that when you say 5%? Is that the metric you're talking about here?
+
+00:42:09 Yes.
+
+00:42:10 Have you thought about or tested? I'm sure you've thought about if this lets you run more worker processes off of increment that spawn worker process number.
+
+00:42:21 I think the developer who worked on this was doing did look at that number and was looking at tweaking the number of worker processes. If I were calling it got a little bit of pushback from people who were nervous about increasing it.
+
+00:42:37 Don't mess with this number. We never mess with this number.
+
+00:42:39 What are you doing?
+
+00:42:40 Yeah, yeah. But I hear you. I'm just thinking, if it really does create more shared memory, maybe it creates more space on the same hardware for you to actually create more. And then that would just possibly allow even a bigger gain in request per second. Because there's no parallelism.
+
+00:42:57 Given that it was such a big win, it could have just been that we were already under significant memory pressure and it got us out of significant memory pressure. Maybe we had the right number. Maybe we had too many hosts. I don't know.
+
+00:43:10 Yes, perhaps. But still 5% as one of the changes is still a pretty big deal.
+
+00:43:17 All right.
+
+00:43:17 The next one on deck is strict modules. Let's talk about strict modules.
+
+00:43:23 We talked about a little bit of things that are kind of related to this. I was saying, like, if you have things that are going off and mutating your things in the master process, it's like, what? That's kind of crazy.
+
+00:43:35 So search modules work about performance. Actually, there's a little bit of performance thought behind it. But now they're really not considering them as performance feature at all. They're more about reliability feature. And so you brought up early on how, like Python modules just going off executing some code. Who knows what that code is going to do?
+
+00:43:57 Right.
+
+00:43:57 So strict modules is an attempt to take that process.
+
+00:44:03 And what we do is we run status analysis over the code. I mean, we are basically interpreting the code in a safe interpreter. And if the module has any external side effects or it depends upon any external side effects, we don't allow it to be imported. And so we know that all the modules are side effect free that are strict.
+
+00:44:27 When you say they're side effect free, does that mean the importing of them is side effect free? Or all of the functions are also side effect free.
+
+00:44:35 The importing of them. Their functions can do whatever they want.
+
+00:44:38 Got it.
+
+00:44:38 They can call functions from other modules. They can call functions from themselves if they call those modules at the top level while doing the import, many of those functions need to be side effect free.
+
+00:44:50 So where does this lead you? What do you get out of this?
+
+00:44:52 We get additional reliability.
+
+00:44:55 Got it.
+
+00:44:56 Instagram as I think. Maybe we mentioned this being a big Bono monolithic application. Maybe we didn't get to that.
+
+00:45:05 Yeah, I don't think we talked about that, but this is not a 100 micro services type of thing, is it?
+
+00:45:10 No, it's one giant application. The thing that gets redeployed every ten minutes is that giant application that makes the redeployment even more impressive.
+
+00:45:18 By the way, right?
+
+00:45:21 Yeah. I mean, maybe it's nice and that's one giant application because you just have to redeploy one thing.
+
+00:45:27 Yeah. Exactly. It's not 100 different things. You got to keep in sync all at the same time, right?
+
+00:45:34 Yeah. Our PES make that happen. And it just happens behind the scenes as far as I'm concerned.
+
+00:45:41 So if you have, like, if you import one module and it depends on side effects from another module, and then something changes the import order, whether that's, like, state that things are depending upon suddenly things blow up in production and your site doesn't work, and everyone's really sad. So we want to get to a world where our modules are completely safe.
+
+00:46:07 We've experimented doing other things with this, like adding a hot reload capability. We know the modules are completely side effect free. Why not just patch the module in place and let developers move on without restarting the website? It has the potential to kind of really change the way we store modules so that we haven't gone down this route yet. Where instead of storing modules, is a bunch of Python code that needs to run off and execute to restore modules as like, here's a class definition, here's a function, and can we lazily load portions of the modules out of there? But we also have really other different take on lazy Loading that's insetor now, too.
+
+00:46:51 Okay.
+
+00:46:52 Yeah.
+
+00:46:52 That's pretty interesting, because normally you can't reimport something, because maybe you've set up some kind of static value on a class, you've set some module level variable, and that'll get wiped away, right?
+
+00:47:09 I mean, you can call reload on a module, whether or not that's a safe thing to do. Who knows?
+
+00:47:16 Exactly.
+
+00:47:18 All right. Cool. So I think one of the more interesting areas, probably the two that really stood out to me are the jet and static Python, with the mortal objects being right behind it. But static Python, this is your area, right. What is this?
+
+00:47:31 Yeah. So this is an attempt to leverage the types that we already have throughout our entire code base. So Instagram is 100% tight, although there are still some any types flowing around, but you can't add code that isn't tight, so we know the types of things.
+
+00:47:52 Right? You're talking traditional. Just colon in optional stir that type of type of typing. Yeah.
+
+00:48:00 Yeah. So why not add a compilation step when we're compiling things the PYCs instead of just ignoring the types, why don't we pay attention to the types?
+
+00:48:11 Yeah.
+
+00:48:12 So we have a compiler that's written in Python. There's actually this old compiler package that started in Python two. There's this external. There's this developer on GitHub PF Falcon, who upgraded it to Python three at some point, and we upgraded it to Python three eight and made it match C Python identical for bytecode generation. So we have this great Python code base to work in to write a compiler in, and we analyze the type annotations, and then we have run time support and a set of new opcodes that can much more efficiently dispatch to things. There's a great my co worker, Carl Meyer, had this awesome slide of calling a function during a Python talk, and it was just like pages. Well, it was one page in a very tiny thought of the assembly of what it takes to see Python to invoke a function. And then we're able to just directly call a function using the X 64 calling invention. So shuffle T registers around and admit call instruction.
+
+00:49:23 That's awesome. It surprised me when I first got into Python how expensive calling a function was. Not regardless of what it does, just the act of calling it coming from C Sharp and C Plus Plus, where you think you'll get in line by either the compiler, the Jet compiler, and all sorts of interesting things you're like. Wait, this is expensive. I should consider whether or not I'm calling a function in a tight loop.
+
+00:49:46 There's so many things it has to deal with, like it has to deal with adding the default values then, and you don't know whether you're going to have to do that until you get to the function. It's got to deal with taking keyword arguments and mapping those on to the correct keywords. And that's one thing instead of Python. We do that at compile time.
+
+00:50:08 If you're calling the keyword arguments, they turn into positional arguments because we know what we're going to, and we can just shuffle those around at compile time and just save a whole bunch of overhead.
+
+00:50:19 Yeah, it's fantastic. So the way people should think of this is maybe like my PISCES or Python, where it looks like regular Python. But then out the other side comes better stuff. Except for the difference here is you guys do it at Jet, not some sort of ahead of time pre deployment type of thing.
+
+00:50:36 Yeah. And so the first thing we did with it was actually we had 40s modules that were inside of the Instagram code base, and that was a big developer pain point, and that those things had to be rebuilt. The tooling for editing them wasn't as good because you don't get syntax color highlighting. And so we were able to just get rid of all those. And those were heavily tuned, like using a bunch of sights on features. And so that really kind of proved things out that like if we need to use low level features, we support things like permit events if you want to use them instead of having boxed variable size. And so that was a good proving that it worked. And now I think it's more close to my Pi C at runtime as we've been going through and converting other modules to static Python within the Instagram code base. Yeah.
+
+00:51:32 Fantastic. You guys say the static Python plus sender JIT achieves seven times performance improvements over C Python on the type version of Richard's Benchmark. I mean, obviously you got to be specific, right? But still, that's a huge difference.
+
+00:51:47 Yes.
+
+00:51:48 And some of that like the ability to use primitive integers. Some of that is the ability to use B tables for invoking functions instead of having to do the dynamic look up, which is something that both my pricey and Siphon support. So lots of little things end up adding up a lot. And so that's just the chit.
+
+00:52:07 Yeah, that's fantastic.
+
+00:52:10 Talk Python to me, is partially supported by our training courses. We have a new course over at Talk Python HTMX plus Flask modern Python web apps hold the JavaScript HTMX is one of the hottest properties in web development today, and for good reason, you might even remember all the stuff we talked about with Carson Gross back on Episode 321 HTMX, along with the libraries and techniques we introduced in our new course, will have you writing the best Python web apps you've ever written, clean, fast, and interactive, all without that front end overhead. If you're a Python web developer that has wanted to build more dynamic interactive apps, but don't want to or can't write a significant portion of your app enrich front end JavaScript frameworks, you'll absolutely love HTML.
+
+00:52:54 Check it out over at Talk Python slash HTMX, or just click the link in your podcast player show notes.
+
+00:53:03 You've talked about using primitive integers, and I've always thought that Python should support this idea somehow. If you're doing some operation like computing the square root or something, you take two numbers, two integers and do some math, maybe multiply square them and then subtract them or something like that. And all of that stuff goes through a really high overhead version of what a number is, right.
+
+00:53:31 Instead of being a four or eight bite being on a register, it's 50 bytes or something like that as a Pi object long thing that gets recounted. And then somewhere in there is the number bit. And that's awesome because it supports having huge numbers like you don't ever see negative 2.1 billion when you're adding you increment a number by one in Python, which is great. But it also means that certain times you're doing math is just so much slower because you can't use registers. You've got to use complex math, right. And it sounds like you're doing this like let's treat this number as a small number rather than my object pointer drive thing.
+
+00:54:14 Jits can handle this to some degree, right. And they can recognize that things are small numbers and generate more efficient code. I think when you had Anthony on, he was talking about pitching doing this. There's still some overhead there for dealing with the cases where you have to bail out. And it's not that case. It's nice just having a straight line code that's there. You can also do type pointers, which again, kind of handle that type pointers are kind of difficult on C Python because things expect Pi object stars. And if that Pi object star ever escapes to something that's not your C Python code, it's going to be very unhappy.
+
+00:54:56 The nice thing is, it's a relatively straightforward way to allow it. It was actually a little bit controversial in that. Is this really what Python developers are going to expect? Are we going to have the right semantics there? And I think we have a to do item to actually make things raise overflow errors if they do overflow instead of flowing over to negative 2 billion.
+
+00:55:19 That would be fantastic.
+
+00:55:22 I would personally rather see an overflow error than have it wrap around to the negative side or go back to zero if it's unsigned or whatever terrible outcome you're going to get.
+
+00:55:32 Yes, it's a much more reasonable behavior.
+
+00:55:35 I guess we haven't been very motivated to actually go and fix that.
+
+00:55:38 Well, you're probably not doing the type of processing that would lead to that. Right. You're probably not doing, like, scientific stuff where all of a sudden you took a factorial too big or you did some insane thing like that. There's probably not a single factorial in the entire code base, I would guess.
+
+00:55:55 Yes. There's not a lot of math. It was like some like, the only place where you've used primitive integers really was in the conversion of the existing site on code where people had resorted to them.
+
+00:56:07 Right. Because it probably started as an N 32nd 64. Right.
+
+00:56:12 Yeah.
+
+00:56:13 They had that option available to them. They used it. It's not like something that we're going through and sprinkling in and our random Python code because we don't do much math. It's very object oriented, lots of function calls, lots of classes.
+
+00:56:28 Yeah. Absolutely.
+
+00:56:29 All right. There's a lot of other good things that we talked about that are not necessarily listed right here.
+
+00:56:36 Kind of stuff with async and await. It sounds like you guys use asynchronous way a lot. Is that right? Yes.
+
+00:56:41 The entire code base is basically async. There was a big conversion and a big push to convert it, right. As I was starting. And now everything basically is async unless obviously it's not waiting.
+
+00:56:55 I heard that async in a way to slow. Why would you ever use that?
+
+00:56:58 Because it allows additional parallelization.
+
+00:57:01 Yeah.
+
+00:57:01 Because multiple requests can be served by the same worker.
+
+00:57:04 Sure. Well, whenever I hear those, I see examples of like, we're just calling something as fast as you can and it doesn't really provide there's not an actual waiting. Right. Like the AC going to wait is really good to scale the time when you're waiting, do something else. And a lot of the examples say, well, this is slower. There's, like no waiting period. But you know what? It is a really good slow thing, an external API in a database. And it sounds like you guys probably talked to those things.
+
+00:57:30 Yes. And the no waiting case is actually what this eager covered in evaluation is all about.
+
+00:57:38 Sometimes we're talking to a database, but sometimes you have a function that's, like, have I fetched this from the database? Okay. Here it is. I don't have to wait for it. Otherwise I'll go off and fetch it from the database.
+
+00:57:50 Right. If there's an early return before the first wait.
+
+00:57:53 Exactly.
+
+00:57:54 There's not a huge value to calling this, right?
+
+00:57:56 Yeah.
+
+00:57:57 So tell us about this eager co routine evaluation, which deals with that, right? Yeah.
+
+00:58:01 So this lets us run the function up to the first wait and only go off and kind of like, normally, what happens is you produce your coroutine object schedule that on your event loop, and then eventually it will get called. And now when you call the function, it's going to run immediately, run up to the first away.
+
+00:58:24 And if it doesn't hit that first away, it's just going to have the value that's produced. And you're not going to have to go through this big churn of going through the event with this whole co routine object.
+
+00:58:36 Yeah. That's fantastic.
+
+00:58:37 Yeah. It is slightly different semantics, because now you could have some CPU heavy thing, which is just like not showing the CPU with other workers, which is great. And I think it can end up kind of I think there can be some slight differences on what the scheduling happens, like where you could have observable differences, but we haven't had any issues with that. So I think it might be a little bit controversial, but it's such a big win that it makes a lot of sense for us.
+
+00:59:11 It certainly could change the order if you were doing here's a whole bunch of co routines and a bunch of awaits and stuff, and then you ran them in one mode, the sort of standard mode versus this, you would get a different order. But, you know, I mean, it sounds like you're going to ultimately put the same amount of CPU load on. I mean, async and wait runs on one thread anyway. Generally.
+
+00:59:33 Yes.
+
+00:59:33 Unless you do something funky to wrap some kind of thread or something, but in general, it still runs there.
+
+00:59:39 I would hope that most people aren't super dependent upon the order.
+
+00:59:44 If you're dependent upon the order and you're doing threading or something like that, you're doing it wrong.
+
+00:59:49 Yeah. The fairness issue might be a bigger issue.
+
+00:59:53 Yeah.
+
+00:59:54 For us, it makes a lot of sense. Yeah.
+
+00:59:56 That's really cool. All right. Another one was shadow code or Shadow bytecode.
+
+01:00:01 Yeah. So this is our inline Caching implementation. We've had this for a few years. Python 311 is getting something very similar. So we kind of expect that our version will be going away to see if there's any cases that aren't covered or if there's any performance differences. But basically it's nearly identical. We have an extra copy of the bike code, which is why it's called shadow bytecode, which we can mutate in the background and replace the normal opcodes with specialized ones. So if we're doing a load Adder and that loader is an instance of a specific type, we can just say, okay, well, we know that this load Adder doesn't have a type descriptor associated with it. Descriptor associated with it like a get set data scripture. We know that the instance has a split dictionary, which is the way C Python shares dictionaries dictionary layout between instances of classes. We know this attribute is at offset two within split dictionary, so we just do a simple type check and make sure the type is still compatible and go off and look in the instance dictionary and pull the value out instead of going through and looking up all those other things that I've just described, which is kind of what you have to do every single time on a normal load Adder.
+
+01:01:31 Yeah. That's really cool. Is this something that could come back to see Python?
+
+01:01:35 Yeah. I think the fact that they've gone off and built their own version 311 means that's not going to happen.
+
+01:01:41 But the idea lives there lives on.
+
+01:01:44 Yeah. Okay.
+
+01:01:45 Awesome.
+
+01:01:46 So we're getting short on time here, but maybe you could just highlight really quickly stepping back. One feature point on the Async IO stuff is the send receive without stop iteration stuff that you did that getting upstreamed as well already.
+
+01:02:05 Yeah.
+
+01:02:07 So I did work on this. Developer of Vladimir Mate worked on this, and that was adding in.
+
+01:02:16 I think he added in a new set of slots for actually achieving this at the end of the day in Sender, we have a type flag that says this type has these additional slots, and so we can call the send function and the receive function and get back and eat out. That's kind of did this thing return a result? Did this thing throw an exception? And here's the result so that instead of producing the stop it duration on every single result, we just return the result. And that is obviously big with coroutines because coroutines are generators at the end of the day. Yeah.
+
+01:02:56 That's fantastic. Everything can get more efficient by not allocating on sort of hidden behind the scene exceptions, right.
+
+01:03:03 Yeah.
+
+01:03:03 All right. Well, there's a bunch of cool stuff here, and I'm really happy to hear that you and your team and Adam are out there are working on bringing this stuff over because I was so excited when I saw it, and then I thought, is it supported? Like, not really. You should really shouldn't use this. I'm like, oh, but it looks so good. I want so much of this stuff to be moved over, so that's cool.
+
+01:03:21 And I think some of it will be difficult to move over. Like in moving the entire jet over the jets written in C Plus plus. Obviously the seat Python core developers were open to C four plus for a Jet at one point in time with unlaid and Swallow. Whether or not that feeling has changed, who knows? But it's a big piece of code to drop in. So one thing that we really want to do going forward is actually get to the point where the big pieces of sender are actually just Pip installable. So we'll work on getting the hooks that we need upstream. One thing that relies on a lot. This dictionary watchers that we can do really super fast global loads, and we have a bunch of folks into, like, type modification and function modification that aren't super owners by any means. So if we can get those upstream, then we can make the jet just be here Pip install us. And so hopefully we can get those upset 311 and have Hip install Cinder start working.
+
+01:04:24 Yeah. That'd be awesome. Yeah. Really good work on these. I guess. Let's wrap up our conversation here because we're definitely short on time. But there's the other projects which I'm going to start calling the Shannon plan that Mark and Guido are working on. They've been working on for a year, and then there's Pigeon, which, by the way, Anthony Shaw has taken over. But you created Pigeon, right? Yes. That's awesome.
+
+01:04:50 Well done on a whim at a Python.
+
+01:04:54 Exactly. And Sam Gross's work on the nogill stuff. All of this seems to be independent, but in the same area as those things, where do you see the synergies? Do you see any chance for those to come together? Is that through some kind of Pip putting the right hooks in there and other people plugging in what they want or what do you see? There be great if these could come together a little bit.
+
+01:05:16 Yeah. In a lot of places we're working on independent things. Obviously, Pigeon is a jet.
+
+01:05:22 And we're legit with different goals to some degree, right?
+
+01:05:26 Yeah. But I mean also very similar and overlapping goals. I think they'll probably have to be discussion of what the future of just look like in C Python. Is that something that's part of the core, or is that something that should live on as being external or they're going to be a grand competition and at 1.1 Legit will win. Who knows? It's a good discussion that should probably take place. The folks for JITs are there. And between what Brett and I added for Pigeon and Mark Shannon's vector call work that happened to you. Several releases ago. Banks have a pretty good foundation for flipping and replacing code execution. They probably need other books to get into other things, like the dictionary watchers that I mentioned, but we can keep working on books. Other things have less overlap, so hopefully we can all kind of work in our own street and work to improve things and make those available to Python developers in the best way that's available and not be stomping on each other's shoes or duplicating work too much.
+
+01:06:36 Yeah, absolutely.
+
+01:06:38 Well, it's an exciting time. I feel like a lot of stuff is sort of coming back to the forefront and feels like so much performance work. Yeah, for sure. It feels like the core developers are open to hearing about it and taking on some of the disruption and complexity that might come from it, but still could be valuable.
+
+01:06:56 Right.
+
+01:06:57 It's absolutely going to be valuable. Yeah.
+
+01:07:00 I feel like there's enough pressure from other languages like Go and Rust and stuff. Oh, you should come over to our world and forget that Python stuff and hold on, hold on.
+
+01:07:09 We can do that too.
+
+01:07:10 But we can get faster.
+
+01:07:12 Yeah. Well, this is awesome work. Thanks for coming on and sharing.
+
+01:07:15 Thank you for having me.
+
+01:07:16 Yeah, you and your team are doing now before you get out of here. Got the final two questions.
+
+01:07:22 Let's do notable pipe package first. So is there some library or notable package out there that you come across like, oh, this thing's awesome. People should know about whatever.
+
+01:07:31 So does it have to be Pip?
+
+01:07:33 No. Any project.
+
+01:07:34 So, as I said, I have a very weird relationship with Python as using mainly mainly from the implementation side. So I think my favorite package is the standard library.
+
+01:07:46 Okay, right on.
+
+01:07:47 And if I had to pick something out of the standard library, I think one of the coolest parts is mock. It's been an interesting integration with static Python, but seeing the way people use it and drive their tests, it's really kind of amazing.
+
+01:08:03 Yeah, I agree. It's definitely a very cool. And people should certainly be using. And now if you're going to write some Python code, you might also have special requirements that shift you in one way or the other. But what editor are you using?
+
+01:08:13 Oh, I use Vs code pretty much. Well, I use Vs code, and I use Nano when I need to make a quick edit from the command prompt.
+
+01:08:21 I'm a fan of Nano as well. Just keep it simple. Give me an edit. This thing over the shelf.
+
+01:08:26 Yeah.
+
+01:08:27 In tax cover highlighting now.
+
+01:08:30 So advanced. It's awesome.
+
+01:08:31 Cool.
+
+01:08:32 Now I use it as well. All right. Well, Dino, thank you so much for being here. Final call to action. People are excited about these ideas. Maybe they want to contribute back to try them out. What do you say?
+
+01:08:40 I mean, try out sender. Yeah, it's unsupported, but if you have thoughts on it, that's cool.
+
+01:08:46 You do have instructions on how to build it right here so you could check it out.
+
+01:08:51 Yeah. Okay.
+
+01:08:51 Yeah. So it's pretty easy to give it a shot.
+
+01:08:56 It might be harder to get it up and running in a per sensitive environment. If you want to try out static Python, that would be cool or strict modules and give us any feedback you have on those fantastic all right.
+
+01:09:09 Well, thanks for being on the show. Great to chat with you.
+
+01:09:11 Thank you, Michael.
+
+01:09:12 Yeah, you bet. Bye.
+
+01:09:13 See you.
+
+01:09:14 See you.
+
+01:09:15 This has been another episode of Talk Python to me. Thank you to our sponsors. Be sure to check out what they're offering. It really helps support the show. Take some stress out of your life. Get notified immediately about errors and performance issues in your web or mobile applications with Century. Just visit Talk Python FM Century and get started for free and be sure to use the promo code Talk Python all one word with Top dial. You get quality talent without the whole hiring process. Start closer to success by working with Top Tile. Just visit Talkpython Fmtop to get started.
+
+01:09:53 When we level up your Python, we have one of the largest catalogs of Python video courses over at Talk Python. Our content ranges from true beginners to deeply advanced topics like memory and async and best of all, there's not a subscription in site. Check it out for yourself at Training Python FM be sure to subscribe to the show. Open your favorite podcast app and search for Python. We should be right at the top. You can also find the itunes feed at itunes, the Google Play feed at Play and the Directrssfeed atrssontalkon FM.
+
+01:10:25 We're live streaming most of our recordings these days. If you want to be part of the show and have your comments featured on the air, be sure to subscribe subscribe to our YouTube channel at talkpython. Com. Youtube. This is your host, Michael Kennedy. Thanks so much for listening. I really appreciate it. Now get out there and write some Python code.
