@@ -1,0 +1,517 @@
+00:00:00 Does your app have a database? Does that database play an important role in how the app operates and how users perceive its quality?
+
+00:00:07 Most of you probably said yes to that first question and definitely to the second. But what if your database isn't doing it as well as it should? How do you know? And once you know, what do you do about it? On this episode, we're joined by Michael Christopheide, co creator of PG Mustard, to discuss and explore the Explain command for Postgres and other databases, as well as all the recommendations you might dig into as a result of understanding exactly what's happening with your queries. This is Talk Python to Me, episode 366, recorded May 11, 2022.
+
+00:00:53 Welcome to Talk Python to Me, a weekly podcast on Python. This is your host, Michael Kennedy. Follow me on Twitter, where I'm at mkennedy and keep up with the show and listen to past episodes at talk. Python. Fm and follow the show on Twitter via at talk. Python. We've started streaming most of our episodes live on YouTube, subscribe to our YouTube channel over at talk. Python. Fm. Youtube to get notified about upcoming shows and be part of that episode.
+
+00:01:19 Transcripts for this and all of our episodes are brought to you by assembly AI. Do you need a great automatic speech to text API? Get human level accuracy in just a few lines of code? Visit Talk AssemblyAI.
+
+00:01:32 Hey there.
+
+00:01:33 Before we jump into the conversation with Michael, let me just tell you about a new course we just released, up and running with Get.
+
+00:01:41 Look, you're probably thinking, Michael, there are a ton of Get courses out there. Why create a course on Get? Well, this course takes an unconventional and pragmatic approach to Get and source control that will get you up to speed super quickly.
+
+00:01:55 Many of those Get courses that are out there, they take a least common denominator approach. They decide that you need to learn cure. Yet that is, you open up the terminal or command prompt and you do get there, and that's it. And yet, is that how most of us work? No. We have really great Git and source control features built right into the tools that we're using. So with up and Running with Git, that course teaches you how to use Git by leveraging the best UI tools from common Editors such as PyCharm and Visual Studio Code, as well as using highly polished Git apps such as Atlassians, Source Tree. And we even throw in a little terminal magic at the end. If you want a practical and friendly introduction to Get and get stronger with source control, check out up and running with Git over at talkbython. Fmgtgit.
+
+00:02:46 All right, you're ready to Talk Postgres?
+
+00:02:48 Michael, welcome to Talk Python to Me.
+
+00:02:50 Thank you. Thank you for having me. It's a pleasure.
+
+00:02:53 Yeah, it's a pleasure to have you. I'm honestly pretty psyched to talk about database stuff. I feel like databases are these magical centerpieces of so many applications, and yet they are so unoptimized in many situations that if you could just sprinkle a few of these ideas that we're going to talk about on them, they'll make the entire app and the entire experience for everyone involved better, easier for the developers to have code that goes fast. If their queries are fast, the customers will be happy that it's not like, wait, did I click the button? Oh, yeah, it's still spinning. That's right. All of these experiences, just like every time I have them, I'm just like remain calm. Somebody didn't put an index somewhere. There should have been one. And this thing will probably work eventually. I don't know if you have those feelings as you go around the web.
+
+00:03:39 Yes, 100%. I might have taken it a bit far in trying to fix them, but yeah, absolutely.
+
+00:03:44 I'm going to send a support request, and here's the explain document that I've come up with for you.
+
+00:03:50 Fantastic. All right. Well, we're going to dive into specifically Postgres, but we were chatting a bit before we hit record, and much of this guidance expands beyond Postgres. Right. Even beyond relational, potentially, yeah, absolutely.
+
+00:04:04 And going back to something you said just briefly, then, the beauty of databases is they've worried so much about performance and you can get up and running, you can get a lot of performance out of them without doing even the basics. Right. Sometimes, but at a certain scale that starts to fall down. So, yeah, once you're past the first few stages, quite often the performance problems you're hitting tend to be database related. So, yeah, that's what I'm excited about. But it's not yes, most of my recent experiences with Postgres, but the performance is mostly about trying to work out how to do less work or how to not do the work in the first place. And that's the same whether whichever database you're working with or data in general. Basically.
+
+00:04:47 Yeah. Databases seem magical.
+
+00:04:50 They take all this data and they come up with answers incredibly quickly. But they're not magical. They just have four or five algorithms for sorting and different mechanisms for filtering, and then they know how to sort of estimate and plan those together and take guesses. And our conversation today will be how to understand those different things that databases can do, how we can interrogate them to tell us what they're trying to do and then what changes we can make to make them faster and some tools along the way. But before we do that, how do you get into databases and being associated with PG, Muster and all the stuff you're doing?
+
+00:05:25 Yes. So it goes well, back in the University, I studied mathematics, so that involved a tiny bit of programming, but really not much. Just a little bit of statistics that I quickly dropped.
+
+00:05:37 Yeah.
+
+00:05:37 Tiny bit of mechanics that I dropped as well. Very pure.
+
+00:05:41 There must be something about math in the air. The last three episodes I've done have all been like people with PhDs in math and doing all sorts of interesting stuff. And I have a math background as well.
+
+00:05:51 Amazing.
+
+00:05:52 Yeah, it is. So it started math. Yeah.
+
+00:05:55 Absolutely. No PhD here. But I then went to I thought I wanted to be a management consultant for my sins back in the day. And then the financial crisis happened. So luckily that got scuppered and I ended up finding a job at a company called Redgate, which I understand are actually familiar with. So they did database tools predominantly for SQL Server, but also developer tools for net, as you've seen, and then expanded out from there. So I started at a time where the most popular product was called SQL Compare for comparing databases. And just a few months into when I was there, they launched a product called Sequel Source Control. So got into kind of the change management side of things and luckily got so many opportunities there to do various roles and landed mostly in product management. Luckily got a chance to take on their Oracle tools team. So it's a tiny team compared to the rest of the company, and it was the first foray into their tools for Oracle. We also span off a couple of tools for MySQL as well. And in working in that small team we started to see, I wouldn't say the rise of Postgres because it's been going for so long, but the resurgence and the slow and steady improvements from that. So that was my kind of first five years of getting to know databases.
+
+00:07:15 What a cool place to do it, right? I mean, there are some very hot database companies, the Maggotb folks, obviously, Oracle, Microsoft SQL Server, where they make them, but then there's only a few places where they really say and what was missing, let's just fix all of that.
+
+00:07:30 Right.
+
+00:07:30 Let's make the developer experience really right on databases. And I feel like Reggae was very much like that, like Sequel Compare and the source control stuff. That was all very neat.
+
+00:07:40 Absolutely.
+
+00:07:40 Still is. I haven't touched it for a while, but I don't mean to speak of it totally in the past. That's my experiences. That was in the past.
+
+00:07:46 Yeah. And they're doing some cool things now. They're doing some of their products across database. Now they're doing some Postgres things. They acquired Flyaway DB, which a lot of people use. But yes, the thing that first attracted to me to them was their slogan, believe it or not, it was ingeniously simple software, which is something about I guess it's the math background as well, about getting to a simple solution. And we talked about databases sometimes feeling magic. Even if you realize they're not magic, they're still complicated or there's certain complexity to dealing with them. And if you can make that easier for folks or at least help them with better defaults. People designing databases are exceptionally smart, and they pick the defaults for a reason. But in the real world, sometimes you can afford to be slightly less conservative or have choose a certain perspective on something and make a tool that's only for a certain subset of the users. So you can be a bit more opinionated as tools Bender versus a platform provider. And I like that kind of space where you can differentiate a little bit more on usability and performance, maybe a little bit less on the absolute fundamentals.
+
+00:08:53 Sure. Well, there's so many different situations in which databases are used. Right. Are you Google, are you talk Python or are you a single little app that one person is using? These are all very unrecognizable to each other in significant ways.
+
+00:09:08 Yeah, absolutely. And the mad thing is they can all run off the same type of database. So you could run any.
+
+00:09:15 Yeah, that is mad. Yeah.
+
+00:09:18 That's a really good point that you can run off. Basically everyone installs the same database, does some sort of schema creation thing and goes from there.
+
+00:09:26 Yeah, absolutely. Or even Mongo run. Well, I think that's the key thing. Run well, probably most. I mean, Facebook still runs off, albeit a missiley highly modified. Very impressive. Mysql set up. And I think just today we saw a couple maybe in the last two days we've seen a couple of really impressive companies launching SQL Lights on the edge. So there's really pretty much any database that's made it to this point can probably support you at any scale if you know enough about it or if you run it well.
+
+00:10:01 Yeah, for sure. Interesting. All right. Now before we get into optimizing these, first let's get the order right, understanding the performance, and then optimizing right. Not take a shot at optimizing. Then we'll figure out if we got the right spot, just like profiling and performance optimization of code. Let's just talk for a minute about some of the we were debating what the nomenclature was, GUI tools for managing databases, because I saw that you were using in some presentations you're doing you're using the Beaver, which is pretty interesting. And I feel like a lot of people don't end up using these tools. So maybe you could highlight a couple that I think sort of stand out for just interesting database stuff.
+
+00:10:45 I do apologize. I got a tiny bit of lag there, but yes. So if you can hear me clearly, then I do like DBA for doing demos. It's very easy to run multiple queries in a row that you don't have to type out or copy paste around. It's also exceptional for post GIS, which is for geographic data. I know a few people are really keen on its visualizations for that. I tend to not use it day to day anymore, but only because there are so many tools out there that you can use. I think you've listed a few, but a lot of people are very keen on the default one that ships with Postgres called psql, which is command line interface, very powerful, can do a lot of things that other tools can't, but has quite a steep learning curve in my opinion. There's some people doing really good tutorials on I think Leticia is doing some really good conference talks at the moment on this and has done them in the past and has a website around psql tips. So, yeah, there's loads of good guise out there at the moment. I'm using a really modern one called Archetype. They've only recently launched, but I tend to try out tools probably earlier than most would.
+
+00:11:53 But wait, this looks nice, right?
+
+00:11:56 Looks really nice. Archetype Arctype.com, you got it. Yeah, right on. This is cool. Okay. And this works on the different databases that you might so they stripped back down to a couple.
+
+00:12:09 Maybe a year or two ago. So it was Postgres and my sequel, I believe, but I think they're adding some back in. Not 100% sure, though. Sorry, I'm Postgres through and through.
+
+00:12:20 Yeah. It solves the problem. What else do we need to worry about?
+
+00:12:24 Right, absolutely. And if we're talking specifics, actually, because I'm on Postgres on a map, I think probably the best long lived option and one that's been around for years, I would say is PostCo, which is a Mac only app, but yes, it's lightning fast, which I so pasteco with an O at the end. Pasteco.
+
+00:12:43 Okay. Interesting. Oh, Mac only. Okay. Yeah, that's pretty nice. But this other one, this Archetype, looks really nice but looks on everything.
+
+00:12:52 Right?
+
+00:12:52 No, of course, you're absolutely right. They're not. But they need to work well. So the two others that I was going to throw out there that are kind of nice, this one clearly is not for Postgres because it's DB browser for sequel light. But at the same time, I feel like a lot of people are interested in databases generally, not just Postgres. Right. You can come across Sequel like all over the place. So I think this one is nice and this one is free. And then have you done anything with Beekeeper?
+
+00:13:17 No, I have seen it around.
+
+00:13:19 Yeah, Beekeeper is pretty nice. It gives you like autocomplete for your queries and ways to explore your schemas. But what it seems to not have really is any sort of exploration of the schema visually. There's not like a, UML, looking diagram type thing.
+
+00:13:33 Yeah. One last one. Before we I think a company that doing great things in IDE space in general are JetBrains, and their data group product is very good as well, and very cross platform in terms of different support for different databases.
+
+00:13:48 Yes, absolutely. I think data grip is really great. Right. If you use PyCharm, for example, when you're doing the database features of PyCharm, it really is just data grip. Right. If you just want the standalone edition. So super cool. Yeah. These are all really nice. And I discovered a few myself as well from this. Awesome. I just think it's kind of important for people to have these tools, and maybe you end up just on CLI tools like P SQL. But when you're starting, I think that can be the difference of I can do this or I can't do this, you know what I mean? Rather than efficiency, people might just look at it go, that's too much for me. I'm out.
+
+00:14:25 Yeah. Well, it's also about discovery. I think sometimes you don't know what's there and what's possible. And in a command line tool, it's really on you to figure that out. Whereas in a Gui, they can leave you hints, they can show you the tree of things, you can start to realize what is and isn't possible. And they've got a lot more freedom to educate you as a new user, whereas in a combination, there's very little they can do on that front. So, yeah, not all of the guise take advantage of that.
+
+00:14:55 But the good ones, the possibilities there. Yeah, the good ones do. All right. I was talking about schema, and I'd like to hear your thoughts on this. I'm sure you're more well versed in it than I am. When I think about Schemas, I think about the tables, maybe the columns, the types of columns that are there. So this one is a bar chart 16. This one is a float or whatever. Would you consider indexes part of the schema?
+
+00:15:20 I would, yes. Yeah, I guess it depends on definitions are hard. Two mathematicians discussing definitions.
+
+00:15:26 How long have you got?
+
+00:15:28 But I guess when I'm thinking about schema changes and deployment scripts and things like that, I think it's just as important for the functioning of your app. An index, existing or not, can be the difference between you effectively being up or being down. And if it's that important, then I'd probably say it does for sure.
+
+00:15:51 Quick audience question from William, what's the most powerful utility you personally got out of psycho?
+
+00:15:56 Oh, good question.
+
+00:15:58 What's the most powerful thing that you find yourself doing with PC Call maybe is a good way to phrase it?
+
+00:16:03 I'm probably not the best person to ask. I tend to use it for really quick things, so it's more of like it's by far the easiest and quickest to throw a quick query into and get a really quick result back out of there's. Zero load time or anything like that.
+
+00:16:18 Right.
+
+00:16:19 And you get text output straight back.
+
+00:16:22 You don't have to worry about any formatting or anything.
+
+00:16:25 Right. Open your terminal psycho some query, you see the answers right there.
+
+00:16:30 Yeah, but that's not like there's probably people ripping their hair out and screaming at the screen saying, Why don't you mention this amazing feature of P SQL? But the truth is, I'm not a heavy database user. In the grand scheme of things, people doing DBA work. I make and help design and run a tools company, not a we don't have a massive database. I don't do tons of analytical queries day today.
+
+00:16:53 Sure.
+
+00:16:53 So it's the DBAs of this world, and the people that have got a lot of hands on database experience probably do a lot more of that. But in terms of recommendations, I think Leticia avroad has a website called psql Tips, and I think if you go to it, it just loads a random tip of about 100 and something that she keeps adding to. And I think, wow, that's a fun way to get some discovery or learn some features in a tool.
+
+00:17:24 This portion of Talk Python, I mean, is brought to you by Century. How would you like to remove a little stress from your life? Do you worry that users may be encountering errors, slowdowns or crashes with your app right now? Would you even know it until they sent you that support email? How much better would it be to have the error or performance details immediately sent to you, including the call stack and values of local variables and the active user recorded in the report with Sentry? This is not only possible, it's simple. In fact, we use Sentry on all the Talk Python web properties. We've actually fixed a bug triggered by a user and had the upgrade ready to roll out as we got the support email. And that was a great email to write back. Hey, we already saw your error and have already rolled out the fix. Imagine their surprise, surprise and delight your users. Create your Century account at talk. Python. Fm Century and if you sign up with the code Talkpython all one word. It's good for two, three months of Century's business plan, which will give you up to 20 times as many monthly events as well as other features. Create better software, delight your users and support the podcast, visit talkpython. Fmcentric and use the coupon code talk. Python you spoke about being in a tools place. You want to just give a quick shout out to PG Mustard and we'll come back and talk about it more later.
+
+00:18:45 Yeah, sure.
+
+00:18:46 That's sort of the second question I was going to ask you or not making speedy progress, which is great. So you were at Redgate and now you've gone on to start your own company, co found your own company around database holes.
+
+00:18:58 Yeah, absolutely. So I worked at a couple of companies in between, one of which was a big fan of Postgres. So there was a company called GoCardless and the team there were exceptional loved my time there and they ran quite a big payments company by the time I left on a single Postgres database and the team were big fans and completely converted me. I was already keen on Postgres or the idea of it from Redgate time and hearing what customers were saying about it. So I was pretty sold on the idea. I loved the platform, I loved how extensible it was. I loved that you could see the source code, you could even contribute back to it. So big fan of the platform. But my first ideas for a business were pretty lukewarm, let's say. So there's a reggae product I love called psql. So you mentioned Autocomplete in, I think was Beekeeper. They had an Autocomplete tool in SSL, which is SQL Server Management Studio, which people loved. And it's an everyday use tool and you could easily see yourself making it better and better for years. So that was my kind of ideal tool. But building it would have entailed either integrating into the 25 ideas that we've looked at so far or picking one and really maybe not being that useful. So ended up trying to build something a little bit more standalone. There's a few really good open source query plan visualization tools. They do a lot of work to help you see where the time is going in a query and give you some basic kind of guidance. Maybe not basic, maybe super DBA friendly guidance. So it's often built by DBAs for DBAs type tools, right?
+
+00:20:35 Advanced, but maybe basic in this presentation, something like that. It's just like here's a wall of text, it speaks your language. Go figure it out.
+
+00:20:42 Yeah, exactly. And I quite often saw in different places, people would post links to them and say, I put it into this tool, but what can I do to speed it up? So there's clearly still a missing step of what can we do about it? Okay, here's where the time is going, but what can I actually do about that? So tried to build something that would help solve that problem. And this is what we came up with.
+
+00:21:06 Yeah, it's really cool. And the way it works is you give it postcard, explain your query plan to it to you, and then you give that query plan to PG Mustard and it puts it into a graphical form and into a more digestible form. And that's interesting. But what's really interesting is it gives you advice, says, you know what, this sort is happening without an index and that's where you're spending most of your time. Here's your big opportunity for a win. We'll come back to this, like I said after we talk about finding these problems, but I just want to point out we covered this on top Python. One of our guests mentioned it. I think it was Henrik. And then we also talked about it on Python Bites. My other show is just one of the topics and I don't remember which place we talked about. Somebody made the joke of, oh, this is my new consulting job. What I'm going to do is I'm going to buy a license to PG Mustard and I'm going to go around and optimize people's databases by dropping the query planes in here and just taking it advice, which I thought was hilarious but also plausible.
+
+00:22:10 We have some consultants that use us.
+
+00:22:12 I can imagine. It's really good visualizations and interesting, often useful advice that it gives.
+
+00:22:20 That is all super cool. But let's go back more broadly to Postgres. But then maybe even like I said, more generally, I feel like a lot of this applies to my Microsoft SQL Server and even Mongo. So let's just start out about maybe you are the unfortunate person who is running one of these websites that makes me think about the optimizations that were missed as I wait for the spinning thing to load. And it's your job to figure out what is wrong.
+
+00:22:47 So maybe we could talk about some of the techniques for finding problems with your database. Let's just start there. My database is slow.
+
+00:22:55 Yeah, perfect. So a lot of databases will have some version of a slow query log or built in monitoring view.
+
+00:23:06 Or you'll have a monitoring tool set up yourself to log and aggregate this kind of thing. And normally the starting point. So I guess there's a few starting points. Either customer reports, customer team member, or somebody reports something slow or your database is on fire. It's maxed out on something.
+
+00:23:27 CPU, memory, disk, some combination thereof.
+
+00:23:30 Yeah, exactly. Or in the cloud, maybe you've run out of your vision. Anyway, let's take that. I've got one slow query. So in that case, you probably know or can get from the query log the actual query that was being run.
+
+00:23:45 Yeah. Let me just make a little side comment here. If you're using an Erm, it can be a little bit harder to see what that is. Right. You might have to attach some kind of real time login information tool to the database or get it to log it to a file and go track it down. But also a lot of the O RMS have features that you can make it spit out the queries, like in super verbose mode. So for example, SQL. Alchemy, when you create the engine, you can say Echo equals true. But it's not just sequel, alchemy, you can do it with many of them and it'll start printing the queries. Maybe that's a place to start, right?
+
+00:24:19 Yeah, absolutely. And some of them have there are some tools now increasingly that let you even do the explain. So, yeah, the first step is to get the query. But in some of these frameworks and RMS, you can even ask for the explain plan directly as well. Increasingly, even with and this is where we start to get a little bit more technical and a bit more database specific. But I think it's the same across many databases. But you want explain, we'll give you the plan of what the database has chosen to be probably the optimal route to do that query, to get you that data or to insert that data. But if you want to get the performance information and get really start to dig into exactly why it's slow, you need to run something called Explain Analyze, which will also run the query. So be careful around that. If you're running kind of big delete or something and probably not run it on production, please, please wait.
+
+00:25:15 Why is this delete slow? Oh, wait. Why is there no data? It's fast now. That's great. Wait, why is it fast?
+
+00:25:21 Or you go to run it a second time and don't understand why it's not?
+
+00:25:25 Yeah, it's different somehow.
+
+00:25:27 Yes. So Explain Analyze will run the crew behind the scenes. But instead of getting the date or instead of, let's say, getting the data back or getting a normal return, you get a query plan back with performance data in it with a few quite a lot of statistics. So, yes, you just append that to the beginning of your query, run it as normal, and then it gives you the query plan. So that's step one is get that information from your database.
+
+00:25:55 Right. And the way that that works is instead of writing, Select Star from table where you write Explain, Select Star from that, or Explain Analyze, depending on whether you want that timing information. Right?
+
+00:26:07 Exactly.
+
+00:26:10 Hopefully not many of you in this situation ever. But if you have a query that never returns, let's say it's going to take 6 hours, maybe you probably want to get the Explain plan just to get a query plan. Because Explain Analyze is going to take as long as your query because it is excluding behind the scenes it runs it and figures out how much I owe it's doing and stuff like that.
+
+00:26:29 Right?
+
+00:26:29 Yeah, exactly.
+
+00:26:30 Good question. So to add IO information, at least in Postgres, you need to include an additional parameter so it would be explained, analyzed, buffers. And this is part of my advice to people, especially when. Well, probably everybody, but especially when you're new. And you might need to ask for help from somebody else if you add as many parameters you can to that explain if you're in an IDE to select them all once you're getting timing, there's not that much additional overhead to getting the other information as well. But in Postgres, we recommend buffers for both settings. And there's even a new that gives you headlog information as well. So if you ask for all of it, then you only have to get it once. And even if you have to go to us, maybe you're passing it into a tool, but maybe you're asking a colleague for help, they might spot something in that extra information that helps them help you.
+
+00:27:19 Right.
+
+00:27:20 Okay. Michael in the audience asks a question which makes me think of my next one here. It says Google Cloud SQL just added some sweet query monitoring and planning visualization. So that's pretty nice.
+
+00:27:32 Yeah. Google Cloud SQL doing some really cool things. They also just recently announced that you can do major version upgrades much more easily now, which they didn't have before. So, yeah, the cloud providers are doing some really interesting things. The query plan visualization stuff is obviously very interesting to us. But there is a natural trade off with performance as always. There's this trade off in general between monitoring constantly for these things versus getting them when you need them. There's a small overhead. Well, I say small but normally small overhead to constantly profiling, constantly monitoring for these things and getting timings does have some overhead. So there is some advice out there to not do this in general for most applications. But we have customers that get the query plan. They don't log it for every query, but they get it for every query so that if it's slow, put it into the logs and it can be investigated.
+
+00:28:27 Okay. Interesting. Yeah. So my question is let's suppose I'm going to get some cloud database type thing, right? Managed Postgres, let's say. And I also happen to have Postgres running locally, or maybe I'm fully insane and I have sequel light local, but then Postgres and that's going to make you worry. Sure. But I run one of these explain analyzed plans against them. Are they comparable? Let's say I need to make sure that I pointed at my production system when I'm asking these questions.
+
+00:28:57 Yeah. Let's take what do you think? Let's start with the Postgres Postgres example. That's going to be easier. And yeah, the main thing that's tricky there is, but there's a few things to get right. Naturally, the schema being as similar as possible is pretty important, the config of the database as well as similar as possible. So there's a bunch of config changes that you might have made on production that is pretty important to have locally as well. So that the plan is making similar decisions. And then the big one that we see people do, sadly, far too often is having a really tiny data set locally. So generating 100 rows or even worse, inserting three rows or not having any data in a table. And databases, as we've discussed, magical or let's say clever, they know that the amount of data is really important to them in terms of their choices. So you mentioned different. I think the joint algorithms. Postgres, for example, has multiple joint algorithms that can use and if there's very little data, it will choose one that has a very low startup cost, even if it gets would get expensive at lots of data because it knows there's always it thinks there's not much, whereas in the world locally you've got not much data. But then on production you've got a lot of data. It might choose a different joint algorithm. So the choices it's making are very different depending on the amount of data. That tends to be the one that trips people up most. But it's not just algorithms. It's also whether it would pick an index or not. That's the one that really confuses people.
+
+00:30:31 I know there's an index in here. Why isn't it using it?
+
+00:30:34 Exactly. It's a super common question. And it turns out you've only got ten rows there. They all fit on a single block. And it's much faster for Postgres just to return that single block to you than it is to look up each entry in an index. Yeah, exactly.
+
+00:30:49 Yeah.
+
+00:30:49 Okay.
+
+00:30:50 So I did want to give a shout out to a couple of tools for having fake data. Maybe you've got some recommendations as well. But there's really cool tools like this one@macaroo.com. Are you familiar with Macaroo?
+
+00:31:02 I'm not, no.
+
+00:31:03 So what's cool about this? You can go and generate fake data, right. So of all sorts of things. But one of the problems is like, well, the fake data is too fake. It doesn't look like the right structure or it doesn't validate, or it's also good just for developing things. But like, for example, you can have all sorts of stuff in here. And the thing that's cool is there's a library of types of things that I can get. So I could get like all sorts of stuff to do with cars that has real car makes and models in years or Vin numbers or credit cards or genders or those types of things. And then you can go and you can export the schema as CSV or JSON or create table sequel, insert script, which is pretty cool. So if you need more real data, places like this for generating or Faker, which is the package for Python and these other ones that you can just make enough real fake data, right?
+
+00:31:58 Yeah, exactly. And this is super powerful in terms of getting as similar data as possible to your production system without having to worry about personal sensitive information.
+
+00:32:10 Yeah, that's a big concern, right. It's like if you take production data, let's suppose it's not that massive and you put it on, you give it to all the developers, somebody's going to lose it. Somebody's going to lose their laptop without the drive being encrypted. They're going to put it on a USB stick to transfer that's just like Fat 32 with no security or something terrible, right?
+
+00:32:27 Yeah, absolutely. And then you might not even want people to even have select access to some of that stuff in certain environments.
+
+00:32:35 But probably the more important thing in my world is the first summing book is the sheer amount of data.
+
+00:32:43 Just number of rows, right?
+
+00:32:45 Yeah. So even if some of these fields aren't perfect, maybe you've got numbers in those names and things like that. It's probably not going to make a huge difference to performance unless you're really far out in terms of the size of that data. So if you're inserting kind of multi kilobyte blobs instead of gender, then you're going to maybe see some differences, not as much as if there were a million rows versus if there were two. So step one is make sure you've got enough. And then step two, maybe if you need to make it a lot more realistic.
+
+00:33:17 Size and data type, but not necessarily super precise.
+
+00:33:21 Yeah, great point on data type as well. Yes. Especially when it comes to indexing.
+
+00:33:25 Right, exactly. Because indexing a string case insensitive is different than a number.
+
+00:33:30 Yes, yes. Great point on case insensitivity. The other thing I wanted to call out on the Postgres side of this is it's got a really powerful generate series function that can be used to Mark data quite quickly and easily. Not as powerful as some of these, but simpler and built into Postgres already. That's quite cool.
+
+00:33:50 Ryan Booze from time scales been doing some quite fancy demos of that, of using that to do quite interesting time series, huge amounts of data being populated via it. So it is surprisingly powerful as well.
+
+00:34:04 Speaking of time series, Michael asks any tips for storing machine learning embeddings and Postgres? Best thing he's seen is storing them as binary Blobs. I have no advice here. Sorry, I don't have any experience.
+
+00:34:17 I don't think I fully understood what would be different about it in terms of binary Blobs, though.
+
+00:34:23 I think generally what happens with the machine learning stuff is people train up these models and they just save them as just binary blobs. So it's more of a tips for storing binary data. Perhaps in general it could be as well.
+
+00:34:39 This is secondhand, this is not something I have direct experience of, but I've read a lot about performance, believe it or not, over the years. It seems to me that the advice is in the early days, keep it simple. Maybe you want to store Blobs in the database, but there's very cheap blob storage out there and you can store ideas to those in the database. But if you want to, if you want to only have one tool to start with, you can store them. The database allows you to. There are specific types in Postgres for that. Jason Beef support in Postgres is amazing, and I think probably led to. Well, it's partly responsible for why it's popular today. I think especially.
+
+00:35:18 I think so, too. I think people see it as a significant a really good choice. That's like some middle ground between a purely relational database and document databases like Mongo, but we can kind of have both, right? Yeah.
+
+00:35:30 I don't even know if you need to say the word kind of because I think maybe I don't know many, but maybe there's some use cases where Mango is going to really outperform Postgres using JSON B. I've not seen them and I don't know what they are. It's super powerful. And I guess the key difference between that and pure Blob storage is you can index it.
+
+00:35:51 So you can you can index the inquiry that you can index into go to this object in JSON and then here and then here. And if they have that value, I want it back as an index. That's the magic, right?
+
+00:36:03 It's not as performant as splitting those out into columns in a schema and indexing those, but it's a trade off. Again, back to trade off.
+
+00:36:13 Do you have a billion of those things or 100 of them? Because if you got 100, you're probably fine. I mean, probably way more than 100, but billions, you might be pushing your luck. Okay, pretty interesting. There other real quick shoutouts to like another thing that these guys disclosure they were sponsors of talked about. But I found them before they were sponsors. I thought they were cool and start talking to them. This place called Tonic that you connect it to your real life data and it will generate PPI cleaned up. That looks like your real data, but it's not actually a real data. So you sort of base it off of your production date. Anyway. If people are looking for fake data, I guess my whole reason to go down that is there's not a lot of choices and not a lot of reasons to not have enough data. There's a lot of options for getting enough data at various versions of realism.
+
+00:36:59 Yeah, good point.
+
+00:37:00 All right, so we were talking about can I run this explain analyze against my local machine and compare the results to how it's going to be in production. So one of your big pieces of advice is make sure you have enough data and data types that are representative and probably relations. Right. If you're doing joins like you want to have similar amount of related data and whatnot.
+
+00:37:23 Yeah, ideally. But again, in step one, and that website you talked about that has a spinning loader, they're going to be fine.
+
+00:37:31 They're going to spot their problems without very accurate.
+
+00:37:36 So if a foreign key isn't indexed and they're doing a lookup on that, they'll notice it even if the distribution is slightly off.
+
+00:37:46 So, yeah, the nice thing about performance is often you're talking about ten X difference, 100 X difference, 1000. Sometimes all the blog posts talk about how we may Postgres 20,000 times faster.
+
+00:37:58 Holly took was added in index. Look at it go.
+
+00:38:01 Yeah. And there's other things, right. There are performance isn't just indexing, but when you're talking about the absolute basics, it's normally you're probably going to get pretty close as soon as you've got even as soon as you've not just got ten rows in your database.
+
+00:38:17 Sure.
+
+00:38:17 Okay. Because there were interesting things that you'll find. Maybe you'll only find this if you do the buffers.
+
+00:38:24 Also, in addition to just analyze, if you're doing a sort and you have a ton of data, it might say there's too much data to sort in memory. So it might do what was it called? Emerged sort on disk. That's crazy. It writes data to the disk and sorts it as the database. You're like, wait a minute. What is it doing? It taken out of memory. Are you insane? What is this?
+
+00:38:43 Well, yeah. It's mean, I Super clever, as you said, but the alternative is risking and out of memory exception, the whole thing.
+
+00:38:52 You want it fast and wrong or right, slow and correct and working right. Like which take your pick, right. At some point, it can't do it otherwise, but that goes back to the real data. If you don't have enough data, you'll never see the problem. Is it's going to disk? Because why would three records go to disk? That would be crazy.
+
+00:39:08 Yeah, exactly. So. Well, this is a really good example because Postgres determines what it would do in memory versus on disk by a couple of parameters now. But the main one being or working memory, and that's set very low for most production workloads. So that's four megabytes by default. And I've seen a really good one of the top Postgres consultants giving a talk at a conference even a few years ago. So this might even be out of date saying they just automatically change that to 16 megabytes wherever, just always starting point and sometimes bumpy for analytical workloads. It could be a lot higher than that. But there's loads of formulas you can see out there. But that's an example of the default that probably is a little bit low in postcards in general.
+
+00:39:55 Right. But if it's running on the cheapest server, you can get it somewhere like Lenode, and it's got 200 Meg total. Well, then you want it to still be right and slow, not wrong and crashing or fast and crashing.
+
+00:40:07 Yeah, exactly.
+
+00:40:09 Yeah. You do need to know these defaults. I think part of being successful is like, okay, this is my context. So these are the defaults that make sense, and these are the ones that I should should be tweaking. So in another presentation I've seen you give talked about the process that you go through for finding these sort of determining there's a problem, figuring out what it is and then solving it. You want to talk to your process there?
+
+00:40:34 Yeah, absolutely. And this is a process I recommend and I'm guilty of not always following, but this helped me as well.
+
+00:40:42 Learn the rules first and then you can break them later. There you go.
+
+00:40:45 Right, exactly. But I tend to regret breaking these, actually. So, yeah, the first couple I think we've already covered briefly were run on a realistic data set, and then second one being make use of the parameters that explain has in your database. So for Postgres, it uses as many as your version supports. Tends to be my recommendation. So get a lot of information. Is the short version of that with Postgres query plans? I think, especially if people are used to reading text format ones, they'd be very easily forgiven for starting English speaking world, start at the top, read left to right. Makes loads of sense, but the plans are indented. So there are a list of operations that Postgres is doing, and the first one you see is the last one it does to give you the data back.
+
+00:41:33 Right. So think of it like an onion, right. It's the outer shell of the thing that you're being given.
+
+00:41:39 Yeah, exactly. It'd be difficult to start in the inside of an onion, wouldn't it? So yes, my advice, first, you need to know that the plan is executed from the most indented inwards just to be able to understand what's going on. But secondly, it reports some really important statistics right at the bottom. So the total execution time being an obvious example, but also the amount of time it spends on planning, on triggers and on just in time compilation. So these are don't worry if you don't know what all of those mean. I didn't. But those can all in rare cases be the dominant issue. So if planning time is 300 milliseconds and your execution time is one millisecond, but you've got 20 operations that the query has done in that one millisecond, you could spend easily an hour trying to understand that entire query plan, maybe more, maybe you've been interrupted a few times and then you get to the bottom and you see that planning time was the problem the whole time.
+
+00:42:43 I have 5 seconds, five milliseconds I could possibly save.
+
+00:42:47 Yeah, exactly.
+
+00:42:48 Do things like cache the query plans or stuff like that.
+
+00:42:51 Yes. So that's a whole topic in itself. But a lot of our Ms do that kind of thing for you. Yeah, but the big advice, there is not so much on the planning timeframe, it's more check out that bottom if you're on Postgres, especially check out that bottom section first and look for dominant issues before you spend ages reviewing the rest of the query plan. Okay, so that's the third of the five and the fourth is then the bit that I sometimes mess up and forget to do, which is work out, which. So if you then have to look through that tree of operations, don't look at any of the statistics until you've worked out where the time is going or where the majority of the work is happening. So progress especially is difficult in this area because it will report I think my sequel does the same. I'm not sure about Mongo and others. It will report all of the operations, including the statistics of their children. So you have to do a bunch of subtraction and some slightly more complicated stuff than that, sadly to work out where this time is going. And it's very easy to get distracted by something. A pattern that you've seen before, like the obvious, the one that gets me and lots of other people is spot a sequential scan on a relatively big table and you start to meet you just jump to that and think that's probably where the problem is.
+
+00:44:10 Miss index, we're going to go fix that.
+
+00:44:11 Yeah, exactly. But in a big enough query, a scan of even a few hundred thousand rows might be, especially if it's returning most of them might be optimal. It definitely might not be the bottleneck. There might be bigger problems. Sure. So, yeah, my advice is work out where the time is going. All the work is being done first. And then the last step is once you've found like is there a big bottleneck Where's the time going? Then narrow down into looking at just that operation or that cluster or that subtree.
+
+00:44:42 Right. And it could be a programming pattern. It could be. Well, this query is returning 200,000 rows when it gets back to the app. The app is iterating over the first ten and deciding it's had enough. Right. But Meanwhile.
+
+00:44:57 Yes, exactly.
+
+00:45:00 It could be that. Yeah.
+
+00:45:01 And the fix would be a simple limit ten and skip a certain amount. Just put Paging in the app as part of the query and you're good to go.
+
+00:45:08 Yeah, exactly. Pagination is huge, especially once you've got good indexing can be so, so powerful. But yeah, I mean, to be fair, this process is mostly for a query that you've worked out is slow and you want to make faster. And that would be a great example. But then there are also other application side things. So it might not be that any of these queries are slow necessarily. But you're firing off the typical M plus one example. You're firing off a lot when you don't need to. You could instead of doing a lot of round trips.
+
+00:45:38 Yeah. Instead of doing an eager join eager load on relationship.
+
+00:45:45 I got a 50 these back and then I'm doing the relationship 50 times. Yeah, exactly. Yeah. And that echoing out the database calls of your arm. You'll just see stuff ripping by like why is there so much database stuff here? This seems insane. And they're like, well, in plus one.
+
+00:45:59 Yeah.
+
+00:45:59 That's the problem really quick. I want to just follow up on that. There was a question out in the audience. What would you like to use? Would you want to use maybe Postgres and sequel alchemy psychopg two, maybe the Async version these days would be really nice to use. I said, well, you might also consider a SQL model, but with either of those SQL model built on top of sq alchemy or just sequel me, the question was can it handle getting millions of rows back in a short amount of time? Yes and no. I like to hear what your experience is with this, Michael, if you have any. What I've seen is a lot of times the database will really quickly give those results back and actually even ship them over the network to the app. But the deserialization of like here is a record and I'm going to make a class out of it, and here's a record. And you're making a million classes and setting probably ten properties on each one of them. 10 million assignments.
+
+00:46:49 It doesn't matter how fast your database is going to be. Just don't return 10 million rows into an RM. Almost ever.
+
+00:46:56 Very rarely, let's say.
+
+00:46:58 Yeah, exactly. The general advice, I think, is if you're going to be doing aggregation work, try to do a database side. They're designed to do that stuff. They have incredibly smart algorithms built into them. I'm sure there are exceptions, but it seems to be the wise way of doing things. I mean, of course, analytical stuff. Maybe you are presenting a report that needs to be hundreds of thousands of lines long, but there aren't many apps that there is a good argument for that, I don't think.
+
+00:47:23 Yeah. And so many of these RMS have a way to limit the returned fields. Right. So I only need the title and the ID, or I need the title, the price and the ID, because I'm going to do some local data science stuff with price or whatever. But you don't need the full description and all the user reviews or whatever. Right. So that can save a lot.
+
+00:47:43 That's such a good point. And yes, I think I might even see that one more often. So requesting it's effectively the select staff from equivalent.
+
+00:47:51 Yeah, it is.
+
+00:47:52 You'd be surprised how many different things that can affect the number of operations down that tree that can be affected by the number of columns you've requested is huge and interesting. It affects things like, oh, by the way, the same goes for how many columns you ask for it to be sorted or ordered by. So it can make the difference between being able to do, for example, an index only scan versus an index scan. That can be a huge performance difference.
+
+00:48:21 Just that one alone. In terms of aggregation, it can make a big difference. There's so many things you'd be kind of the knock on effects of passing that many data. We talked about sorts.
+
+00:48:33 If you're having to keep that many rows in memory and each one's bigger, they're going to use that work memory more quickly.
+
+00:48:40 Right. It might fall back to one of those write to disk and sort it rather than sort it in memory.
+
+00:48:44 Exactly.
+
+00:48:44 Interesting. Okay. I hadn't thought about the knock on effects as much. Let's talk a little bit about fixing this. We've set up the problem, things you shouldn't do, but how do you know whether you're doing them right. So you've got a couple of free tools that people can use that you might give a shout out to. And then let's talk about PG, Mustard and maybe talk to some examples there as well. Sure.
+
+00:49:09 There's so many queries and visualization tools. A lot of the ideas we discussed also have them in built as well. Amazingly, a lot of them seem to choose to visualize it quite differently. So it's quite interesting looking through some of them. But the one you've got up on screen at the moment is a free tool written by a French team at Postgres consultancy called I don't know how to Pronounce. It either Dallibo or Delibo. And this tool is inspired. I think it's even a fork of a product that was written many years ago by a great guy called Alex Tatians. So a lot of people will recognize the Tatian name from the URL that was a tool called PEV.
+
+00:49:50 So back in the day when I started, the two tools were Depairs and Tatianz. So Depes being the one you just flipped too briefly there.
+
+00:49:57 Yeah.
+
+00:49:58 This is like the original. This is the first one I'm aware of.
+
+00:50:02 Let's start with the OG first, then.
+
+00:50:03 Yeah. Okay. This guy is a bit of a legend in the Postgres community. He's so helpful on so many of the chat forums. And he's Postgres DBA and has been for many years. And he built this tool because the text format of Explain, I think he described it as unreadable. So he's written a whole great blog series on maybe six parts. Now on reading Explain plans. And this tool he's using to highlight in red here kind of big problems or where a lot of the time is going. So that's that step four that we talked about, work out where the time is going fast.
+
+00:50:38 So if you've seen the Explain text, it's kind of indented and talks about the problem and it has things about timing. But here's an HTML table that has columns that shows you the timing and then the number of rows is very important, and then it has again still the actual text. And it sounds to me like you think this is pretty important to still have the text that people expect.
+
+00:50:59 I think that text is super important for experts and people that have been doing Postgres performance work for years. So they can fall back to that text if the left hand side is not helping them. Or in this case we're looking at right now, there's a lot of red. It might be tricky to know where to start. You might fall back to looking at the right hand side for something Interestingly. That rows column is a row count, estimate, multiplication. So it's how many rows did Postgres expect to get versus how many actually came back. And that's super important for the cases we discussed briefly around which join algorithms are going to choose or multiple other joint orders really important as well. It will try and filter out as many as possible in the first few joins so that there's less data to worry about in the future ones. So if it's really far out in an estimate somewhere, that's really important. So, yeah, this tool is doing some of those things and doing it really neatly but that text format, I think is super expert friendly people that are very used to the Postgres text format. This is probably the tool they're going to like best.
+
+00:52:03 Yeah, it's really nice. Okay. And then there's the Dalibo other one that's similar, right?
+
+00:52:10 Yes. So this one's the one that's based on PEV. So they call it PEV two, I think. And it's open source GitHub repository two. And this is their hosted tool, again, free to use open source. And like the other one that supports both text format explains and JSON format explains. So I think that's what they're saying at the top there. This is much more visual as a tool. So this displays the crew planet.
+
+00:52:35 Sadly, they don't have an example. I can just pull up. I'd have to put it all together and drop it in there. Or do they? I didn't see one.
+
+00:52:42 No. At the bottom there. I have sample plans. There you go.
+
+00:52:46 The Gray button on the right.
+
+00:52:49 Oh, yeah, you're right. Okay, let's just go with that one. Cool. And then I'll submit it Gray. That's why I missed it. Okay, this looks fantastic.
+
+00:52:56 Yes. So this is a visualization very similar color scheme to the last one. So you'll see things in red they're saying are really bad, Orange if they're medium bad, and then yellow if they're maybe a problem.
+
+00:53:11 Sorry about it for now. Get back to it later.
+
+00:53:13 Yeah. So this is good for visual stuff if you're that way inclined. The other thing, some people that are still extremely competent at this love the left hand side, especially so it looks unassuming. But those little bars are kind of like a flame chart on its side.
+
+00:53:33 And they'll show you in this case, we're looking at the amount of time spent by each operation, but you might be able to say buffers. There is a really popular way of looking at it.
+
+00:53:43 That's a feature. Sure. That's not in a lot of the other tools. So that's a common reason that people really like this tool.
+
+00:53:51 Fantastic. Okay, so these are both totally free, web hosted. Sounds like some of them are open source. You can probably download them as well. They look nice. Let's talk PG mustard a little bit. So like I said when I came across this, I thought, wow, this is really a lot nicer than the other tools that I've seen for doing this, maybe the best way to understand it would be to sort of talk about two things real quick. You can tell me how you want to talk about it, but I think maybe talk about the performance advice. What do you think about that? We could maybe go through that real quick. Some of the things that will find for you.
+
+00:54:24 Well, yes, I know there's a lot of listed there, but the short version is that we've got some strong opinions on the visual side of things. The red gate trying to keep things as simple as possible has not left. So my co founder of this guy called Dave and we worked together for a couple of years, almost full time building this. So we've also spent a lot more time than some of the others on building this. The big differences are on the visualization front, we try and keep things that bit simpler. We're also a lot more opinionated. We assume you are trying to speed up your query. That might sound stupid, but it's not the only reason you would look at a query plan. So there are reasons why we might not be a good fit for people. Let's say you're working on the Postgres source code and you're trying to implement a new feature and you just want to look at some explain plans. You probably want the text format and you probably really want the costs. So they're the things that the plan is using to choose between plans. You probably want those highlighted and we don't highlight those. We hide those really far away from you. Because most of the time when you're trying to speed up a query, that's not what you're going to be wanting to see. Right. So it's super opinion.
+
+00:55:33 Yeah. So which ones are these really do you feel like are both highly valuable, highly recommended, or maybe some that are like, wow, I can't believe it would find that. I would have never found that.
+
+00:55:42 Good question. Sadly, the most valuable are the index related ones. So as you mentioned that we quit high index potential when there's a lot of rows being filtered versus the amount being scanned. So that's the big thing to look out for in the text format is when there's higher numbers of rows being filtered, not just on sequential scans, but also if you've got an index scan that's still having to filter out a lot of rows. We call that an inefficient index, but it's only inefficient for that query.
+
+00:56:11 There's nothing wrong with the index. It's more that your query doesn't suit that. It's just Postgres. That's the best one Postgres could use, right. So yeah, the indexing was super valuable operations on disk. We've already discussed a few times. That comes up a lot and poor estimates. These are the most common. All of the others are either rarer or less valuable when you hit them, but sometimes when they're rare, they can be extremely helpful.
+
+00:56:36 Sure. Once you pass the advice of look for table scans and then add an index and don't select star if you got a big result set so it doesn't go to disk. Those are pretty not super easy, but those are somewhat easy, right? Yeah, except if it's not fast enough, you're like, well, now what? I added indexes. It's not fast enough. Now what?
+
+00:56:55 Yeah. One more I love to discuss. Actually, is something we talked about really early on is the idea of trying to do less work. So either not doing the work.
+
+00:57:04 I think something I'm quite proud of is that we'll try and not highlight anything if it's pretty optimal already. Now if your query is pretty optimal already and doing a lot of work and still not fast enough for what you want, you kind of need to rethink. You either need to think, should we estimate this number? Do we need to materialize it and run it once every few minutes and have every user look at kind of a cached version of it?
+
+00:57:29 So that's quite powerful. And then the other side of it is, if it's not efficient, it might be a sign of something else going wrong. So in Postgres, one of the things that it gets beaten with is effectively it's equivalent of garbage collection. So the way it does multi version currency control, it ends up bloating the tables and the indexes a little bit, sometimes a lot, which is a problem. It has automatic systems that people sometimes disable around that. But also in older versions, especially indexes on heavily updated tables, for example, can quite quickly and easily blow. So pointing out. So if you include the buffers flag we talked about, you can spot when Postgres is doing a lot of reads versus the amount of data is returning. And that's sometimes a sign that, for example, an index has got really badly voted and rebuilding that index, ideally concurrently if you're on production. But yeah, rebuilding that index.
+
+00:58:27 This is how you fix it. Michael, what you do, you put that little banner up there and you say we're going to be down for 4 hours on Sunday. So if you just don't mind, don't use our website on Sundays because that's when we rebuild the index.
+
+00:58:39 Those are often on the same site that have their really bad queries anyway.
+
+00:58:44 So we're trying to help them and trying to educate and trying to teach them how to avoid those things. But I know exactly what you mean.
+
+00:58:51 That's good.
+
+00:58:53 I think the more I talk to people that really know this topic and they've spent 2030 years on it, they focus mostly on work done and really trying to minimize and reduce that as much as possible. Less is more and all of that.
+
+00:59:08 Yes. Okay. So let's maybe highlight this through a couple of examples. I also have one final tool to suggest. You have a couple of examples that show how you can check this out. And over at app. Pgmuster.com, it will give you the visualization that you can dive into and then the recommendations. Right?
+
+00:59:27 Yeah. So this is just an example we've published. Maybe not the best example ever, but it's one that I like.
+
+00:59:32 Sure. All right, well, maybe let's just talk through the three examples here. Maybe really quickly. The UI you've got these nodes that are connected graph theory, like you can expand and clap the sections to get details about very much the indented way of the explain text right, yes.
+
+00:59:51 So we're trying to mimic the text format with that. So people that use the text format, this is the exact same structure but with less data. We're doing some of the calculations there. So those 200,000 that you see there, that's the number of rows being returned at each stage. And one thing you saw was that those two of those operations were hidden by default at the beginning when you first loaded it. That's one of the opinionated things we're doing by default. We'll hide some trees that are really fast already. So in this example, it's not great. There's only four nodes, but you can get queries that hundreds of nodes and even ones that return quickly. So hiding fast subtrees is a very opinionated thing to do. But I find very valuable.
+
+01:00:33 Sure. I like it. And it's about bringing your attention to the part where you can make improvements, where the time has been spent.
+
+01:00:42 That's what we're doing. At the top there, we have a timing bar which is a bit like a flame graph, but feud from the top. So kind of like a bird's eye view on that.
+
+01:00:50 Yeah. Maybe this one's got a little better breakdown.
+
+01:00:52 Definitely. So you can see the width of those is the amount of time spent. And they're ordered by slowest to fastest. So the idea is to quickly show you if there's one dominant issue versus maybe quite a few that are taking a similar amount of time.
+
+01:01:07 Sure. So for people to say there's this tree of nodes that you can explore to see what's happening, like a gather, merge or sort and so on. And there's the timing and the likelihood of good recommendations. They'll have numbers, and then across the top you can see, well, number one was the worst offender of performance, and then number zero. And then number two.
+
+01:01:27 Yeah. Just realize how UnPodcast friendly this might be.
+
+01:01:32 Well, you know, I'm going to link to these examples and people can go check them out.
+
+01:01:35 Yeah, thank you. And then the last thing that we're doing. So the other tools do that quite well, in my opinion, in terms of showing you where the time is going, I prefer a very visual way of seeing that. And that's similar to the Dallas over one we looked at. You can see quite quickly where those time bars are going. The thing we do Additionally is the scored tips. So we're trying to look for every issue we know about and we're trying to look at them on every single operation we see. And then we're calculating roughly how much time we think you could save if you fix the problem that we think might be there and then scoring that so that we only show you the top three maximum. Three in this case, just one. So even in this case, you can see that most of the time is being spent doing 200,000 loops of an index only scan so something that's probably extremely fast on its own. But the fact we're doing 200,000 loops over here adds up quite quickly. Yeah, exactly. And the real problem is a bad Row estimate. So in fact, it's the exact example we're discussing earlier. It's picked a nested loop because it's not expecting that many. It's not expecting to have to do that many loops.
+
+01:02:40 But in reality, there are nearly 200 times more rows than it was expecting. And that was probably a bad choice of joint algorithm.
+
+01:02:50 Right. Okay. Yeah. So if you just open it up right on the left, it says Top tips 4.6 out of five likelihood of improvement, operation zero row estimate out by a factor of 191.8. Then I can click on the details here. If I click on the node that it pulls up, it says that same thing, you can expand it out and it gives you a nice human English language description of that. And then the operations, the nested loop it describes, like what that is gives you some stats on the buffers and then the operational details. Like it was an inner join and how long it took and so on.
+
+01:03:26 Yeah, absolutely. And actually, it's a really good point on the operation descriptions. I also spent ages, probably a couple of months solid. Right. Like making documentation page or a glossary of terms that you can come across in writing a manual.
+
+01:03:38 But in like two paragraphs at a time to be delivered.
+
+01:03:43 Yes. So we put a lot of them in the product, but I've also put them online for people so they can freely access them as well.
+
+01:03:49 Those are all available on glossary on our website as well.
+
+01:03:52 Yeah. Okay. So in this example, what do I do? It tells me these things. What should I go do to make this better?
+
+01:03:58 Is there anything well, exactly. Here's what we're looking at. Row estimates are tricky, but Postcode has a thing called Analyze where it will gather statistics on each table. It will take a sample of them, it will look for most common values, so it can estimate joins accurately, that kind of thing. And it might be that Analyze hasn't run in a long time for whatever reason.
+
+01:04:25 I see the data has dramatically changed since it last took stats, so it's using out of date stats to make decisions.
+
+01:04:32 Okay. A really common cause of that is if you do a major version upgrade in Postgres, it doesn't bring along your statistics. So you do need to run and analyze as part of your upgrades. That's really important. Okay. But then there's a learn more link here as well. It will go into quite a few more things you can do. So if it's not analyzed, there's a bunch of other ways you can teach Postgres or ask Postgres to gather more statistics. So if it's a heavily skewed column anyway. So we've gone into quite a lot of detail in that blog Post. But yeah, there's a bunch of things.
+
+01:05:05 I love it, though, because if somebody told me this, well, I don't really know what to do.
+
+01:05:09 To be clear, I'm basically a beginner on Postgres, but not on relational databases, especially not on databases in general. Right. So I might look at this go, great. But Postgres even have a way to fix this. Right. And then right here next to it, you're like, okay, you just run this command and you'll probably be fine. That's super valuable because it's one thing to say, here's your problem, or this is where the problem resides. It's another like, now what?
+
+01:05:31 Yeah. And these days, developers are expected to know there are so many people that started back end and then they kind of went full stack, but then they have to worry about the database as well. And it feels like the surface area is expanding in a lot of cases. So we meet a lot of extremely smart developers that have been doing back end work for decades that only have to deal with Postgres every few months or maybe even every couple of years.
+
+01:05:57 And those people, we kind of want to help them because they know what they're doing. It's just this information is not top of mind right now.
+
+01:06:06 That tends to be who we can help most easily. And we're trying to make it a bit more beginner friendly as well.
+
+01:06:11 Yeah, that's fantastic. Ok, so that's example one, which I'll link to example two, we've got a more significant challenge here. More stuff happening at this point. We're throwing away too many rows.
+
+01:06:23 Yeah. Well, this is a great example. I have a tip I didn't mention, but it's probably index related. So we're throwing away rows at the end here, going down from 45,000 in the second to last operation down to 100 in the last one. If we could filter down to ideally as a much smaller number very earlier on, we could avoid there's a couple of large sequential scans, there a couple of hash joins, all on tens of thousands of rows of data.
+
+01:06:53 In this case, there's no big filter until the end. So we're not giving an index potential tip. But we're saying if you can in fact, we'll actually see on these sequential scans, we're saying index potential is zero because no rows are being filtered there. But the late filter at the end, the rose discarded, is depending on exactly how it's discarded and what it's doing. I think I remember from this example, we're actually sorting by columns in two different data in two different tables. So we're ordering by a column from one and then ordering by a column from the other, and neither of those columns is indexed. So if we could get the data from each of those in an ordered manner, this would probably be a lot faster. But it's tricky investigation because we don't know from what Postcode is telling us here, exactly how those are distributed and how many of them are going to be appropriate at each stage.
+
+01:07:50 Yeah. Another thing I find value is not necessarily the advice, but the nonadvice. You know what? There's zero index potential here. This is fine. So don't look down that path. Go look somewhere else. Right. Row estimates. Perfect operation happened. Memory. Don't worry about those things. Go find the problem somewhere else.
+
+01:08:08 Yeah, exactly. That was actually user feedback. Quite early on, people wanted to see the things that were not an issue. So it's been really helpful working with people and trying to understand what they do and don't fight. It wasn't something I thought of, but through feedback, it was really helpful to know that exactly what people want to see.
+
+01:08:28 Yeah, I think this is super valuable. So people want to check out PG Master. It's worth pointing out that it does cost money. Right? It is a product.
+
+01:08:38 Yeah. Sorry. Browser is commercial. But if there are students listening for non commercial use, we give it away to people. All you need to do is just contact us. And there's a couple of other reasons we give it away for free, so feel free to reach out. But we hope it's not too expensive as well, especially if you're doing this for work. It starts 95 per year for a single person, so hopefully affordable.
+
+01:09:02 Yeah.
+
+01:09:03 I don't mean to make that derogatory. Not at all. I just wanted people to know the other ones we talked about were free and open source. And this one, it is a product. You do pay for it. But boy, if you could save a database, upgrade to a new machine, or if you could save spending $100 a month on a larger server in the cloud every month, because this thing help you find that. Oh, you actually don't need it. You're just doing it wrong. Right. $100 once seems like a pretty good bargain.
+
+01:09:33 Yeah, absolutely. And I mean, not even talking about BG mustard, but tools in general. I think developers probably underestimate how valuable their time is, not just from a salary per hour perspective, but also from if your management team or your boss or whoever could choose whether you would ship the next year's worth of features today and they could pay, let's say, ten times your salary. A lot of them would actually take that trade. I think every company in the world is hiring developers. Most people have a huge backlog that they want to be building, so this is an awful example in terms of spending money to solve that. But even if it comes to more expensive tools, I think you'd be surprised how much if they can make you more efficient, companies will probably think of it as a better trade than you do.
+
+01:10:18 Yeah, I agree. I do think that we often muddle along using something that we should be better off paying a decent amount. I'm not talking about like $2,000 a month subscriptions of some insane tool that may or may not be helpful, but also just from a joy. Do you want to go to work and work on stuff or you're like, God, I'm in the log files again. I can't do it. I can't do another day of this Versus. I really have a good understanding. I'm building something that I'm proud to share with my friends. Look how fast and zippy this site is, Versus. Yeah, we're working on it.
+
+01:10:50 There is a pride and a joy aspect of being better. And if tools get you there, that's great. All right, speaking of tools, I think we're about out of time for this. But final two questions before we get out of here. I think I want to focus on Database GUI Editors rather than text Editors for this episode. And we talked about a bunch, so maybe we could just quick reference back to that. But favorite Database GUI tool these days.
+
+01:11:14 I'm going to give it.
+
+01:11:16 Do you want to go with Psquel?
+
+01:11:19 No, I'm going to risk the wrath of the Postgres crowd and say, Archetype.
+
+01:11:23 Archetype.
+
+01:11:23 All right.
+
+01:11:23 Yeah, archetype looks pretty neat. And then normally ask about Python extensions. How about Postgres or Python packages? How about Postgres extensions? For a notable one.
+
+01:11:32 Yeah. So I think the Postgres extension that everybody should install really is. If you use Postgres, of course, is PG stat statements. If you're using a cloud provider, it's probably on by default already. So in that case, I'd give a shout out to my favorite auto explain.
+
+01:11:48 Cool. Awesome. All right, Michael. Well, thanks for giving us insight to all these different things we can do to make our databases work better, especially Postgres. And they should make a PG mustard. I'm sure it will help a lot of people find a call to action. People want to get better with their databases, maybe pick up some of these tools or these ideas. What do you tell them?
+
+01:12:05 Don't be scared to let it probably looks more intimidated than it is. The Postgres documentation is awesome. So a lot of the other databases out there, I know it's a bit of a meme and a joke these days, but do read the documentation. It's written and revised over years by some really smart people, but it's very approachable still fantastic.
+
+01:12:25 All right. Well, thanks a bunch.
+
+01:12:27 Cheers, Michael. Thanks so much for me.
+
+01:12:28 You bet.
+
+01:12:30 This has been another episode of Talk Python to me. Thank you to our sponsors. Be sure to check out what they're offering. It really helps support the show. Take some stress out of your life. Get notified immediately about errors and performance issues in your web or mobile applications with Century. Just visit hawkpython. Fm. Century and get started for free. And be sure to use the promo code Talk Python. All one Word When you level up your Python, we have one of the largest catalogs of Python Video courses over at Talk Python Our content ranges from true beginners to deeply advanced topics like memory and async. And best of all, there's not a subscription in site. Check it out for yourself at training. Co Python. Fm be sure to subscribe to the show, open your favorite podcast app and search for Python. We should be right at the top. You can also find the itunes feed at itunes, the Google Play feed at Play and the direct RSS feed atrssontalkon FM we're live streaming most of our recordings these days. If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at talk. Python slash YouTube this is your host, Michael Kennedy. Thanks so much for listening. I really appreciate it. Now get out there and write some Python code.
