@@ -1,0 +1,565 @@
+00:00:00 Python is undergoing a performance renaissance. We already have Python 311, 20% to 40% faster than even Python 310. On this episode, we'll dive into a new proposal to make Python even more efficient using lazy imports laid out in Pep.
+
+00:00:15 We have all three folks involved on the episode carl Meyer, Erman Bravo and Barry Warsaw. Are you ready to get into making Python faster still? Let's dive in.
+
+00:00:38 Welcome to Talk Python To Me, a weekly podcast on Python. This is your host, Michael Kennedy. Follow me on Twitter, where I'm at.
+
+00:00:45 Mkennedy, and keep up with the show.
+
+00:00:47 And listen to past episodes at Talkpython.
+
+00:00:49 FM and follow the show on Twitter.
+
+00:00:51 Via at talk Python.
+
+00:00:53 We've started streaming most of our episodes live on YouTube. Subscribe to our YouTube channel over@talkpython.com YouTube.
+
+00:01:00 To get notified about upcoming shows and be part of that episode. This episode is brought to you by Century and US over at Talk Python Training. Please check out what we're both offering during our segments.
+
+00:01:11 It really helps support the show. Transcripts for this and all of our.
+
+00:01:15 Episodes are brought to you by Assembly AI.
+
+00:01:17 Do you need a great automatic speech to text API? Get human level accuracy in just a few lines of code?
+
+00:01:22 Visit Hawkpython Fmassemblyai.
+
+00:01:25 Hello, Barry, Armon, Carl, welcome to the show.
+
+00:01:28 Hello.
+
+00:01:29 It's wonderful to have you all here. I'm very excited about the work that you're all doing around Python performance. We're going to focus on imports and this Pep that you three proposed today, but it's really just the tip of the iceberg in terms of a bunch of cool stuff that's going on. So I'm very excited to dive into that with the three of you. Now, before we get to it, though, let's just do a quick round of introductions. Barry, you've been on the show before, talking about 1994 Python stuff and other things, so maybe just quick introduction for yourself.
+
+00:02:02 Yeah, barry Warsaw.
+
+00:02:04 So I'm still here, still hanging around. I guess I should mention, as we get into this Pep, though, I'm really just the sponsor I got to handle. A lot of thanks to Jeffrey and Carl for doing all the work on it. Most pets these days require a core developer to sponsor. I'm just super interested in the topic. I think it's a super clever approach and so I think it'll help specific needs that I have at work, and so I was really eager to sponsor it.
+
+00:02:38 Yeah, fantastic. All right, very cool. Ermadin, how about you?
+
+00:02:42 I'm just working at Meta with Carl and I wrote the initial approach for Lacyport, and here I am, right on.
+
+00:02:50 Carl, quick introduction.
+
+00:02:51 I've been around the Python community for a while. I think the first, maybe semi notable thing that I did was write the first version of Pip Uninstall back in 2009, and that led to being a maintainer of Pip in virtualand for a while. And I worked on the Django core team for a while. And so, yeah, I've been doing Python things for a long time, and I've been working at Meta.
+
+00:03:15 Those are a lot of big projects there.
+
+00:03:16 Yeah, they're projects that I was using, and so I was interested in working on them. And same goes for Python itself.
+
+00:03:22 Yeah, absolutely. I'm sorry, I kind of cut you off there. You said working at Meta since 2016. Is that what you said?
+
+00:03:27 Yeah, I've been working at Meta since 2016, working mostly on how Meta uses Python. How Instagram uses Python.
+
+00:03:34 Yeah. There have been some really cool looks inside what's going on, especially at Instagram there with some of the typing talks that Lucas gave, as well as sort of suspending the garbage collector for other various things. Was that you guys? I think it was, right? Yeah, we had a lot of neat stuff.
+
+00:03:52 We turned off the garbage collector, turned back on the garbage collector. There's been multiple blog posts along the way explaining why we've done each of those silly sounding things.
+
+00:04:01 Sure. I mean, they seem insane. Well, a lot of the projects, a lot of the stuff that's coming out here has to do with the Cinder project.
+
+00:04:08 Right.
+
+00:04:09 And maybe I don't know who's best to give the introduction for Cinder, but Cinder is a really cool project about taking a whole bunch of optimizations and specializations you all have done and sharing that back with the community a little bit, right?
+
+00:04:23 Yeah. So we started Cinder in, I think, 2017 or 2018. There was actually two projects kind of started simultaneously. We realized around that time that the trajectory for Instagram's kind of server footprint was not really sustainable just in terms of how much server CPU time we were spending running Python code. And so we kicked off two projects. One was called now called Sky Bison. It was like a ground up rewritten Python interpreter using all the modern dynamic language VM ideas, like a moving garbage collector and all these different things. We weren't the first people to try that, and we also weren't the first people to fail. That project was wound down last year. Just weren't able to get the performance, particularly trying to emulate compatibility with the C API and all the C extensions, which is the same reason many prior rewrite efforts didn't go very far. So at the same time as we kicked off Sky Bison, we had sort of kicked off what we thought was a short term project of just like, what can we squeeze out of C Python? Where can we get a little more performance out of it? And that turned into Cinder and then ended up kind of becoming our primary approach to Python performance.
+
+00:05:32 Isn't it always the story that the C interrupt stuff is the big sticking point here?
+
+00:05:38 Yeah.
+
+00:05:38 I mean, you must have seen a whole bunch of examples from a court of perspective, right?
+
+00:05:49 Yeah, I mean, it's both Python's advantage pros and cons, right. Like the approachability and the usability of the C API has led directly to the incredible ecosystem of extension modules.
+
+00:06:04 Right.
+
+00:06:05 But those also are also the hindrance for moving ahead in a revolutionary way with the interpreter, I think.
+
+00:06:12 Right.
+
+00:06:13 You kind of got to live within the box with the walls that are put up by those constraints. But I do think it's super important. A lot of people would maybe just think, well, let's just get rid of it, let's just try to move beyond it. But when you hear people say that Python is slow or it has these other problems, so often what you'll see as well and what I did was I did a for loop in Python and did some math and that was slow. It's like, well, but if a thing is slow so often that gets rewritten and C and then all of a sudden it's faster than I don't know what Java or whatever else it is they're trying to node but they're trying to compare it to. And so there's this kind of crazy switch that gets flipped for like really high performance and then maybe accessible most of the time performance. And it's this interop with C that is the thing that's the escape hatch at LinkedIn.
+
+00:06:59 We don't have the same kind of workloads that they have at Meta, but we've done analysis. And one of the reasons why I was particularly interested in this project is because we write a lot of our CLI's in Python. And so we've had proponents of other languages say complain here Python is really slow, I write a CLI in Python and then it takes a long time to start up. But if you actually do the analysis, what you find is that people are not writing a lot of the internal libraries that those CLI's import do things like they go hit the network and they go try to do the service and create really expensive resources at module scope time. Right. So those are the types of analysis that you really need to do to say is it really Python or is the way we use Python? For us it's a little of both for sure, but often it's sort of the way Python is being used in a non idiomatic or not in the highest performance way.
+
+00:07:53 Right.
+
+00:07:53 A little bit of rewrite of some internal code can get you a long way.
+
+00:07:57 You sure can also just give a quick shout out back on episode 347. I talked with Dino Villain all about the Cinder project. So if you want to check that out, they could definitely go find that. But there's a lot of cool things that were taken out of Cinder and are being proposed and I guess that sort of brings us to our main topic for today is imports and the Pep 690 that you all have proposed, which I am also excited for. I think imports are one of those things that are a little bit mysterious to people because they have conceptions coming from other languages, especially compiled languages, that are very different than what the reality is. So I do want to talk a whole bunch about what you're offering here and what you're proposing here in this lazy import.
+
+00:08:42 But before we do, let's maybe just set the stage with what happens when I write import requests or I write import Fast API, or even something built in like import collections. Who wants to take this one? Tell people what really happens when the import statement runs. Or is there?
+
+00:09:01 There was a time where the import system for Python was written in C and it was even more mysterious, I think, at that point, and I don't remember when it was, but Brett Cannon rewrote the import system into Python. And then about that time, I sort of went through sort of line by line and tried to understand because imports are probably one of the oldest features of Python. Right. They've been around so long and there's so many corner cases. Right. It's a very complex system. It has lots of features, lots of hooks, lots of places where you can hook in your own behavior and really understanding how all of that fits together. I think I probably took a couple of months to sort of walk through the entire system line by line and document. Unfortunately. Now, if you go to the Language Reference Guide, I think it goes into all the gory detail about how imports work. Everything from namespace packages to concrete packages and all the file system hooks and metapach hooks.
+
+00:10:03 Right?
+
+00:10:04 Yeah, definitely a lot going on. I think the key thing, though, that you are hinting at there is this is a runtime type of behavior, this is a runtime experience. Carla, you're shaking your head. What do you want to add to this? What Barrier saying here?
+
+00:10:19 Oh, yeah. I mean, I think what a lot of people don't consciously realize initially about imports is that it's just executing some more code, right? So it's like you can almost think of imports in Python as like syntax sugar for a function call, where the body of the function is the module level code of some module and the return value is the module object that you end up getting back from the import. But what it really is is just causing some more code to be executed, where the result is a module object that has stuff on it that you can use.
+
+00:10:48 One of the consequences of that is that literally anything can happen when you import a module. I mean, like Barry was saying, it could go off and talk to the Internet. I think people have even written stuff that automatically goes and finds modules on the Internet and downloads them just in time import them. Yeah, that's the key point, is that.
+
+00:11:08 You don't have install. We fix that for you.
+
+00:11:11 Exactly.
+
+00:11:13 It could be arbitrarily slow. It could fail. It could do anything.
+
+00:11:16 Yeah.
+
+00:11:17 If people have a conception of an import statement being like a using statement in C sharp or an include statement in C, that's kind of effectively the same intent, but the behavior is massively different.
+
+00:11:32 Right.
+
+00:11:33 In C, it says here's some symbols that should also be used for compilation. In Python, it's literally saying, let's just execute this file top to bottom. And usually execution means define a function to find a function, to find a local variable, to find a class. But it could mean run some random things, search the file system, all sorts of stuff. And it leads to things like this. The if done, do name equal dunder main. Right.
+
+00:12:00 This is a big confusion that people run into their why is this weird thing in Python? Why do they recommend it?
+
+00:12:07 Right.
+
+00:12:07 And it's just because when you do an import statement, it just runs top to bottom. And if you put behavior in there, well, that behavior happens. Right. So here's your way to skip that. Just as a sidebar. You all have been involved for a long time.
+
+00:12:20 Should Python have had a deaf main sort of entry point thing like so many languages have?
+
+00:12:27 I'm not saying it should or shouldn't. I just want to hear your thoughts on this.
+
+00:12:30 I think this is just one of those quirky things about not even really even about the language. It's just a quirky thing about the Python. The way you use Python, to me, it's like one of those things you learn it and then you just use it. But actually, I think I tend to use this much less now, now that we have things like packages and entry points and things like that. To me, I almost am defining a main function. And then in my package metadata, I say, well, there's my entry point, and the packaging system just does it magically. So this is kind of a convenience, and I don't think you really actually run into it as often nowadays as you probably did years ago.
+
+00:13:11 Sure.
+
+00:13:11 All my apps that are supposed to be run directly like that, they all have a deaf mane somewhere. And then this just calls the main with this symbol here.
+
+00:13:19 Right.
+
+00:13:20 What do you think?
+
+00:13:21 Yes, I totally get it. It's probably not something that we should be using as much for now.
+
+00:13:27 Of course.
+
+00:13:28 The really interesting thing here, right, is that it's dunder name.
+
+00:13:31 Right?
+
+00:13:31 Yeah.
+
+00:13:32 That's a deeper concept about Python that you should really understand is that modules are objects and they have this attribute called dunder name, and that's that attribute is set to some string. And when you call when you not import up a file, but call a file using the Python executable, that file gets done this string under main assigned to that attribute.
+
+00:13:59 Right.
+
+00:14:00 So kind of like understanding a little deeper about how Python works. Is really important, I think, to be able to use it effectively.
+
+00:14:08 It is.
+
+00:14:08 And you hinted on being more idiomatic to get better performance and I totally agree with you. All right, so now knowing kind of what it means to do an import, let's talk about your Pep. Who wants to introduce the Pep here? Iman, you're number one author here, so how about you go for it?
+
+00:14:24 Yeah, sure. Well, we only started long before the Pep in 2020 when I joined Meta, it was just one month before the Pandemic hit. And so I started working in Instagram code base at the time. But there have been a lot of problems there with the reload speeds in the development server and Instagram and also another ton of other comment line tools as well. So why did I work in Instagram calling base for a couple of years trying to fight and touch the startup performance problems that we were in the country all the time. And when you get into code bases besides Instagram, there are a whole bunch of problems that become part. One of those is, yeah, most people.
+
+00:15:11 Don'T work at the scale in terms of lines of code or negative servers or anything like that. You're definitely pushing the outer envelope there.
+
+00:15:18 Yeah, there are thousands and thousands of modules working here. So one of the problems that start to become a point is startup speed. The only problem is that refactoring modules becomes really hard. So if you try to modify something to get it working better, it suddenly starts getting import cycles and other things when you just move around import and try to split modules. So it gets really tricky and hard. It's complicated. So this target speed, when you run a module that is very important, modules and these modules are run, tendons to import all the modules and this goes on and on. So all transit dependencies are involved.
+
+00:16:05 Right. If you just import one thing, it seems minor, but then that could import two things and those two things could import four things. And then if you're talking thousands of modules that can explode. And Pep eight says import goes at the top first thing.
+
+00:16:20 Right.
+
+00:16:20 It's like just to get started before you can even figure out what your code is going to do, you and do all the imports, which is the transitive closure of every import, basically, right?
+
+00:16:28 Exactly. So it's uploading every single model. Nobody is going to be used immediately or if it's never going to be used at all. So this was a never ending battle with the Instagram server and as soon as I realized that it was doing repetitive work that was very complex and producing little very fragile changes, that was really hard to maintain. And at the end it didn't really yield any improvements that we needed. So I thought unless you're leasing force, that's when we started implementing that. Well, the Pedophile, when we tried to show to the world what we did and the results we were having. We get to be a US pike in 2020. In Salt Lake City, I was planning to discuss this long summit, but they ended up getting the really good overview there, explaining what it was.
+
+00:17:27 Yeah, I think Herman proposed a talk for the Language Summit at this last PyCon 2022 in Salt Lake City for the Language Summit, and there just wasn't space in the schedule, so the Language Summit organizers had to pick some things to leave out, and so they didn't squeeze in Lee Zimports. But then at the Language Summit, a couple of different people brought up Leisy Imports that they had heard that we had done this and want to know more about it. And there was a lightning talks slot at the end of the Language Summit. So in the middle of the afternoon, sitting there at the Language Summit, I just put together about ten slides on what Lazy Imports is and how it works and gave a quick lightning talk. And on the way back to my seat from giving the lightning talk, gito leaned over and said, just break the pep already.
+
+00:18:12 A little bit of positive encouragement and a nudge. Yeah, that's so then Herman was at the Springs, and so the two of us sat down together at the Springs on the first day and said, all right, let's write a pet. So we put together Pep 690.
+
+00:18:23 He said, Hey, Berry is walking by. Grab him.
+
+00:18:27 Well, this is something that's been on my radar at LinkedIn for quite a while, like I said, because we have tons of CLI's with the Python. And I think the thing that this is not the first attempt at Lazy Imports, like, you know, there's been lots of different approaches, but I think what really kind of struck certainly what struck me, and I suspect what struck Guido was the really clever implementation of this particular approach to it. I don't know who came up with that, but whoever did it was really a stroke of genius, because it really gives you the transparency that I think you need to make this a success.
+
+00:19:04 This portion of Talk Python to me is brought to you by Century. How would you like to remove a little stress from your life? Do you worry that users may be encountering errors, slowdowns or crashes with your app right now? Would you even know it until they sent you that support email?
+
+00:19:19 How much better would it be to.
+
+00:19:21 Have the error or performance details immediately sent to you, including the call stack and values of local variables and the active user recorded in the report? With Sentry, this is not only possible, it's simple. In fact, we use Sentry on all the top Python web properties. We've actually fixed a bug triggered by a user and had the upgrade ready to roll out. As we got the support email that was a great email to write back.
+
+00:19:45 Hey, we already saw your error and.
+
+00:19:47 Have already rolled out the fix. Imagine their surprise, surprise and delight your users. Create your sentry account at Talkpython Fmcentry.
+
+00:19:57 And if you sign up with the.
+
+00:19:58 Code Talk Python all one word. It's good for two free months of Century's business plan which will give you up to 20 times as many monthly events as well as other features, create better software, delight your users and support the podcast. Visit Talk Python FM century and use the coupon code Talk Python.
+
+00:20:20 Maybe Carl or Harmon can talk about.
+
+00:20:22 That a little bit.
+
+00:20:23 Yeah, well, let's first define just like what is the pep proposing? So we've described traditionally what it means when you say import thing, it executes all the python and if there's some inline behaviors that runs those behaviors and that all happens at the top. How is this different? What change is this proposing to the CPython runtime?
+
+00:20:42 Yes, the basic idea is just that when you hit an important statement, they say import foo instead of immediately at that point going off and finding the Foo module, the source code and executing the entire module top to bottom and doing all that work. And then of course all the transitive imports from that and etc, etc, etc. All we do when we hit import Foo is we basically remember, all right, we have this name Foo, it refers to a module somewhere. We're going to put off the work of figuring out what that module is and actually executing it. And we're just going to remember that whenever pho is used, that means we need to go find out what it is and actually execute it. So then that name Foo will just kind of sit there in the global namespace of whichever module imported it. And oftentimes Foo won't even be used or referenced anywhere in the module body of the module that imported it. So we can go through the whole way importing that module. And food just continues to sit there as kind of this deferred pending import. And then later at Runtime, maybe somebody calls a function from our module and within that function we have like we have a call to food bar or something like that, a reference attribute of the module. And at that moment, the first time we actually at Runtime, run into a reference to the name Foo, that's the moment when we'll suddenly say, okay, hold everything we need to go off, figure out what food is import it. Now we actually have the proper food module and now we can go ahead and figure out what food bars and move on. So that's kind of the essence of Pepsi 90 is to try to do that defer imports until the moment when they're first referenced, but try to do it transparently so that as much as possible, apart from side effects of the import itself, you really can't tell the difference in your code that the import was delayed.
+
+00:22:25 Right. The runtime behavior might be a little bit different, ideally faster and using less memory, which would be great, but other than that, your code shouldn't but maybe italics shouldn't know the difference.
+
+00:22:39 If you're doing good coding styles and good patterns, basically not creating side effects during imports, you shouldn't be able to tell the difference. Right. If you've got, say, a function that uses JSON parsing, but that only periodically gets called in under some past.
+
+00:22:55 Right.
+
+00:22:55 Like you could avoid import JSON effectively unless you need that bit of functionality and for larger projects, that can really cascade.
+
+00:23:03 Right.
+
+00:23:03 That's the whole idea. So if you think of like a command line program that maybe has ten subcommands right. And each of those subcommittees might do something fairly different and they might have very different dependencies. So at any given time that you run that command line program, if you're only using one sub command, you don't actually need any of the dependencies of the other nine sub commands. So with lazy imports, you can avoid you can basically pay for what you use every time you run a program and only pay for what you use.
+
+00:23:31 Yeah. I really like the idea. And the transparent aspect of it is what Barry was fond of is that we write code the way we traditionally wrote. We write important requests or import JSON or whatever at the top, and it's up to a special dictionary that replaces the standard dictionary that holds the global. It says when you access one of these things, if it's not yet materialized and really important, go do that and then hand it off. Otherwise, just hand off the module.
+
+00:23:59 Right.
+
+00:24:00 Something like that.
+
+00:24:01 Yeah.
+
+00:24:01 I think you put it really well.
+
+00:24:02 Thanks.
+
+00:24:03 It's actually a standard dictionary for the module, but it's just a specialized lookup function, essentially.
+
+00:24:09 Got it.
+
+00:24:09 Right.
+
+00:24:10 So when that deferred object gets installed into the modules dictionary and I think it's really key because at the point at which that the dictionary lookup function finds this deferred object, that's when the object is resolved. And what that really means is that at the Python level, and even if you're an extension writer accessing the modules dictionary, you never see those deferred objects. So they're completely hidden both from the C extension author and Python developer.
+
+00:24:42 And that's where the transparency really shines.
+
+00:24:45 That's weird.
+
+00:24:46 Yeah.
+
+00:24:46 Because if you're going to force a new programming model onto people, all of a sudden they're going to not like it. We saw how easy that was to go from two to three. Right.
+
+00:24:58 It was so easy. I guess before we get further into this, it's worth pointing out that this isn't Draft status.
+
+00:25:04 Right.
+
+00:25:04 It was created a month and a week ago. So it's not super old. It's in Draft. If it appears, it will be in 312, probably. What's the status of the Pep? It's basically proposed and under discussion.
+
+00:25:17 Yeah. Screen currently discussed.
+
+00:25:19 I think I went and looked recently and saw that in Discuss Python.org in the PEPs category. I think the Pepsi 90 thread has more posts than any other thread there.
+
+00:25:31 That's exciting.
+
+00:25:32 It's been thoroughly discussed, but at this point, I think to some extent the discussion is on hold while we work on getting an implementation against the Python main branch because our implementation in Cinder cinder is unfortunately still based on Python three eight. We're currently working on upgrading it to 310, but there are some changes in the underlying dictionary and other things between three eight and now 312 alpha. So the implementation needs some reworking and we need to get that available for people to look at and play with to really move to the next stage in discussion.
+
+00:26:05 Yeah.
+
+00:26:05 Just a side note. So with projects like Sender and stuff, it's based on 38, which is great. There's a lot of good features. I mean, basically three six and beyond, you get F strings, you get Asynchronous, you get a lot of amazing stuff there. But the shift from ten to eleven, there's a big performance boost that's sort of coming along there. Are you guys looking to sort of bring all of this stuff into eleven as sort of a stable point or what's the story there for syndrome in general?
+
+00:26:31 Yeah, we're currently upgrading to 310 just to go two versions at a time instead of trying to leap three versions in one bound. And also because, as he said, there's a lot of changes between 310 and 311. So we want to kind of isolate those and get 310s stable first and get an introduction for instagram and everything. So that's our current target. And then once that's done, we'll probably look at 312 next.
+
+00:26:57 Sure.
+
+00:26:58 We do want to bring Cinder up to date, and also we're really looking at trying to upstream a lot of the things that are in Cinder so that more people can benefit from them and to reduce the amount of work we have to do to be constantly rebasing all of our stuff on newer versions of Python. So our goal, hopefully, is that leave the imports.
+
+00:27:14 Sure. Everything that you get accepted is just one fewer thing you have to maintain. You can kick it to Barry. Let Barry do it.
+
+00:27:22 Well, we hope to continue to help maintain those things upstream.
+
+00:27:27 Yeah, of course. But if you can make it part of the broader community thing, it's no longer your team, it's the community's benefit. Okay, let's talk a little bit about some of the different forms of imports and how they affect us. Because out in the audience, hybrid Robotics asks, when you do from library import function, does this really save memory? I think that maybe sets the stage for talking about when there's different styles of imports we can do. Obviously, we can just do import library. We can do from library import function or import star, all these different things. And there are rules in the pep about how that controls the laziness or the alternative. I guess the current default way is called eager loading or eager imports.
+
+00:28:07 Right.
+
+00:28:08 I think it's really good that hyperbolic. I brought up this question of from library import function because that's actually a key way that Pepsi 90 is different from the existing ways of doing lazy imports. So there are existing things out there. There's a lazy import loader in the standard library and there's something called demand import on the package index that came out of Mccurryl. And all of these things take the approach of having a custom module object that when you do a get attribute on it, it has a get adder or dunder get attribute implementation that waits for an attribute access and then goes out and does the import. And that works for import flu, but it doesn't make from foo import bar lazy because from foo import bar gets the foo module and then you immediately access the bar attribute on it. And so if you're using this lazy module object style, then effectively it's just eager because you get the attribute of it right away and that makes the import happened. And the difference with Pepsi 90 is that with from foo import bar we just stick a lazy object into the namespace of the importing module under the name bar instead of under the name Foo. But it's still a lazy object and the import still won't happen until something later actually uses the name bar. So even in the case of from foo import bar, we're still able to make it easy and it still will save memory, at least until or unless you actually use the imported thing.
+
+00:29:30 Yeah, that's a great summary. I would like to point out maybe just not entirely sure where they're coming from here. So today if you write from library import function versus just import Library or from library Import star, you're not really saving any memory. It basically is doing the same thing.
+
+00:29:45 Right.
+
+00:29:45 The module object is created, it's imported, all the stuff is done. It's just what symbols are defined for. You right. It's more of a syntax thing than it is a memory thing right now.
+
+00:29:56 That's correct, yes.
+
+00:29:57 But in the thing you are proposing, this will still be the lazy version, which is great. Yes.
+
+00:30:03 So there's different ways in which we do import. Sometimes people even do imports inside of try blocks. So try to import this thing and if it's not there, maybe try to shim it in or report that this module is a dependency or other things. And it's literally the import statement that is supposed to succeed or fail that communicates back whether or not that was okay.
+
+00:30:25 Right.
+
+00:30:25 And with this lazy version you're going to change. It's not going to fail within that try block because within the try block it's going to create a deferred lazy thing. And that'll always work.
+
+00:30:36 Right?
+
+00:30:36 It actually could also fail in certain circumstances, but for the most part I should just work. If you have an import inside a try block or inside a class or inside a function, all those eager reports, right? Exactly.
+
+00:30:50 So what I was getting at is that you're actually specifying that if there's an import within a try accept or within a wix block, you're actually not letting that be laser, you're making them be eager.
+
+00:31:01 Right?
+
+00:31:01 That's right. Yeah, exactly. On the inside, this importance thing are lazy. So if any of those fail and you are expecting those to fail, it could not throw an exception there in that reason. In that case okay.
+
+00:31:16 And then also from being import, star has to be eager. Why is that one has to be eager?
+
+00:31:22 Yeah. Because we don't have the same names that are being imported, so there's no way to add this lazy objects to these names. So we need to just import everything and see what are the names that are being imported. That's the main reason for it.
+
+00:31:38 Yeah, right. Because when you say Star, you don't know what to put into the modules. Simple table.
+
+00:31:44 Right.
+
+00:31:44 So you've got to actually do the import to figure out the star. That's pretty interesting. So there are some interesting examples you have in the Pep that people can check out about here's. Sort of a fake slow module that just does time sleep, but it effectively shows that it could be slow and you can run it like do an import and it'll run instantly, basically, because if you're not accessing that module really at that point, it's pretty much instant, I guess. One thing to point out here and this is I don't know how I feel about this, but maybe we could talk about it a bit is the proposal is that this is not the default behavior for Python indefinitely into the future, that you have to pass a L flag to the interpreter or set an environment variable or something along those lines. Do you want to talk about why make it opt in instead of maybe opt out?
+
+00:32:37 I wish it was a default. That's what I wish to but the thing in the reality is that there are a lot of applications and modules that are using reliance in for side effects, so we can just expect those to be compatible anytime soon.
+
+00:32:55 So you're saying there's a lot of bad code out there? Is that what you're saying? No, just TV.
+
+00:32:59 But if it has side effects right. If it's like, oh, because you imported this, we've initialized the database connection.
+
+00:33:05 There's actually some really good discussion on the discourse thread about I feel like this is actually an important aspect of the path because one of the things that it was sort of pointed out in this discussion is that I both author libraries and I author applications.
+
+00:33:23 Right.
+
+00:33:23 As a library author, I can't really reason about whether I can sort of say, yeah, maybe my library is unsafe for lazy, but I can never really say assert that my module is safe for laziness and be certain that in all the ways that all my downstream consumers are going to use my library. Right. That it's always going to be safe for lazy import. So as a library author, it's not really something that I can necessarily assert.
+
+00:33:53 Right.
+
+00:33:54 But as an application author, I'm really in the only position to reason about how my dependencies are used inside my application. So in my mind, it's my responsibility as an application author to say, I know how all my dependencies are used and therefore I can assert that lazy imports are safe for my application. So by using it, by having the I'm a little uncertain about the environment variable, but I feel pretty strongly like the flag, the capella flag.
+
+00:34:24 Yeah.
+
+00:34:24 It's the responsibility of the person running it, sort of.
+
+00:34:32 Yeah.
+
+00:34:33 To give an example of what Barry is talking about is like, I mean, for better or worse, some level of import side effects are just kind of built into Python. Like if you have a module that subclasses a class from another module, you may think that you have a module with no import side effects, but actually importing your module adds something to the dunder subclasses of the module you inherited from. And so even code that apparently looks very clean and clear of important side effects does technically have some side effects that import. And the real question is, is anybody actually looking at under subclasses on the parent module? And there's a lot of common library patterns, like decorators, that when you decorate a function, they register that function of that class and some registry and some other module. So then suddenly, again, you have an.
+
+00:35:21 Important flag or something, right?
+
+00:35:23 Exactly. So it really has to be the person writing the application and testing the application. He says, I'm going to try to leave the imports. I'm going to see if things work. I know how my dependencies are used. If it works well and all my tests pass, then I can consider just turning this on at that level.
+
+00:35:40 Sure. Okay.
+
+00:35:41 Interesting.
+
+00:35:42 Taking Barry's idea that it's the application owner who should sort of make this decision, what about having some code artifact that allows you to signal that as well?
+
+00:35:53 Right.
+
+00:35:53 So as I run it, I can control whether or not this happens. But what if I just the very first line of my app stop higher, whatever it is, I just say import lazy or something like that, and then every subsequent thing from there on behaves that way. That way, if I distribute my app to someone else, I don't have to convince them or teach them about Dashl. I can say, no, just double click this thing or run this and it'll go in a consistent way.
+
+00:36:21 I can have, like, PTH files that are getting in the way before your name gets called.
+
+00:36:27 Right?
+
+00:36:28 Go ahead, Carl. Sorry.
+
+00:36:30 I was just going to say there was a lot of discussion about that in the thread. And there actually is a draft of a heavily revised version of the Pep for Barry's review, actually. So, Barry, let me pull it up.
+
+00:36:46 One of the changes that is made in that draft is both removing the environment variable because people are concerned about the risk that if somebody just got the idea that lazy imports makes everything faster, they might try to just get the environment variable in their shell, and then all of the Python programs they run will try to run with lazy imports and might break, and they're reporting bugs. And that's not a great experience. We want it to be really limited to an application tested with lazy imports. So the latest draft that removes the environment variable and actually adds exactly what you're talking about, a programmatic way to enable lazy imports for your application income.
+
+00:37:22 What is the code way?
+
+00:37:23 Well, I mean, it's just a proposal in my draft PR to the Pep tech right now. So we'll see what Barry says about it. Sure, it could well change.
+
+00:37:31 I just love her stampede.
+
+00:37:34 So the reason I ask is there's sometimes certain things you've got to do to tweak the path or something to get imports to work right. If you're running from some weird location or something to get up, like Olympic migrations and stuff like that. But in a lot of the editors and the lenders, they'll whine at you and say, no, these imports that go below that modification to the past statement, they go above it. The whole point of the thing above it is so the things below it don't fail, whatever it is. I just want to put in a little hint. Like, if you could make the editors not complain, the stuff below it should.
+
+00:38:11 Go above it, because the stuff below.
+
+00:38:12 It is controlled by the stuff above it. You know what I mean?
+
+00:38:14 Yeah. The current proposal, I don't think I suppose if it becomes merged, the renters and such could specialize it, and hopefully that's not too huge of an issue because the idea is you potentially have a large application, and this would occur, like in one main module where you.
+
+00:38:30 Would call that function. You hit the hash ignore and then you're good to go. Got it. Okay, cool. Let's go talk about some benefits here. So in terms of performance, it says it's already been demonstrated for startup time improvements of 70% in memory reduction of real world CLI's by 40%. Those are not joking around. This is not like playing at the edges of performance changes. This is significant. So are those numbers from what you're doing with Instagram or other tools that you tested on or something like that.
+
+00:39:02 These are numbers from Instagram server and also a lot of common line tools that we use inside meta. So these are real numbers.
+
+00:39:12 It's about to 70% sometimes. We've seen 50% improvement in startup speed. Memory is also up to 40%, we've seen 20%.
+
+00:39:22 And these are upper bounds of course. Sure. But what I think is good about that is it's not sometime people say well, let's see how fast Python is, I'm going to do a while true loop and see how many at times I can increment a number and compare that to do that and see OK, nobody does this and they don't really care about how fast, how do real apps behave? This is you taking the stuff that you all work with day to day and try to make it faster and getting significant benefits from it. Not weird little edge case benchmarks.
+
+00:39:50 Yeah, I think an important thing to note there that Herman mentioned is that this isn't just one code base. So we've seen this as repeatable scale of improvement across a variety of different tools. In fact, recently we've started to see, we have a lot of data science people and researchers who use a lot of jupyter notebooks and they started to really quickly pick up Jupiter notebooks kernels based on cinder with lazy imports enabled because they're seeing similar startup time and memory used numbers for their Jupiter notebooks. So like across a fairly wide range of use cases and types of programs, we are seeing these kinds of numbers as consistently repeatable.
+
+00:40:27 Yes, that's interesting. The data science side, a lot of those libraries are pretty large and so I suspect that's probably pretty valuable. So one of the things you'll talk about is that this proposal also will eliminate what would you call false import cycles? I don't know. Do you want to talk about the cycle benefit that we might get here? Yeah, throw it out to all of you. Who wants to grab it?
+
+00:40:49 I can try to say something about the import cycles. When you have imports at the top of the model, you're not using these imports and some of the imports that you are declaring there are importing something on interest at some point ends up importing the first module and have a cycle. Right. So if one of these reports is not actually being used and it's being deferred to a use case where it's only resolved inside a function further down which is not being immediately called, then we won't have these articles. And a lot of times when we have these kind of imports directly on the top of the modules because Pet hates that is recommended to have all imports in the top of the module. And so people just start putting imports there because it's cleaner and it looks better. But in terms of provoking the important cycles, nice.
+
+00:41:49 So hopefully this will solve some of those issues. I know when I first got into python. I didn't understand why there wasn't a better way out of like sharing code in a bidirectional way. It took a lot of thinking like OK, how can I structure my code into different files that don't feel like it's all just went in one file and yet allow me to reference it. Like for example, if I've got one class and it works with another and it has a function that returns one type of it but the other one might have a field which is one of those and you want to do a type declaration of saying which one is which or you need to create the all initializer of one or something. Those kinds of bi directional relationships are hard to model and it sounds like this doesn't really address or fix or change those in any significant way, but the other ones just about the timing can go away.
+
+00:42:38 Right?
+
+00:42:38 The only important cycles that lazy imports don't fix are the ones where basically it would be a cycle even if you had it in the same module, like where you're literally using names in a bi directional way at module level and so there's no way you could order them even within one module and have it work. So essentially forward references those kinds of cycles the lazy doesn't fix, but really any other kind of cycle or anywhere in the cycle, one of the uses is inside a function. All of those are taken care of. So even for the type annotation ones, if you use from future import annotations Pep 563 or another proposal 649, anything that makes the type annotations also lazy evaluated so they aren't yearly evaluated at important time, then all of a sudden your cycles with that plus lazy imports, then all the cycle problems of type annotations also just disappear. Okay, I was just going to say.
+
+00:43:31 I think one of the interesting things that I think it was Carl pointed out when we were talking about this is that if you've got the conversation right, if you've got an application or something that's using these lazy imports and then you turn them off, you might be hit with a bunch of cycles that were sort of hidden from you because of the lazy feature.
+
+00:43:51 Right.
+
+00:43:51 So you have to be a little bit careful about engaging with lazy imports and then turning them off and getting everything here.
+
+00:43:59 So it's just one of those things.
+
+00:44:00 To watch out for.
+
+00:44:01 Oh, interesting. Yeah. If you're doing it by running it with the run flag, you could be effectively hiding a runtime error that someone else would hit if they ran it without kind of back to my like could the code define this instead of a runtime flag? So it's like absolutely consistent. Let's talk about debug ability a little bit. So normally when you have an exception, if I import thing and there's a problem importing that thing, I'll get an exception on the line that the import did. But with this lazy thing, the import arrow will occur where the first attempt to touch it happens. Right. But you all do some work to figure out and sort of report back the error came from where the original import statement was, right.
+
+00:44:42 Yes. It should be reported where the report is being declared so that it's easier to also the importance of anywhere. So the only thing that we are thinking about adding to this implementation is to have an error wrapper around a real error that has been drowned. So we can easily know that it's just an important error coming from lazy import.
+
+00:45:07 Got it.
+
+00:45:08 Yeah.
+
+00:45:08 It could, theoretically, I guess, get caught in a situation where people would have not expected it.
+
+00:45:14 Right.
+
+00:45:14 It could have an overly aggressive try accept block. Well, there's only two types of exceptions that come out of here, possibly ever, and either of them I'm going to handle it in this case. Well, now, here's a third surprise.
+
+00:45:27 Yeah.
+
+00:45:28 Okay. But at least from sort of figuring out where the error came from, I guess what do you call it? Deferred exceptions is what you actually called that.
+
+00:45:36 Right.
+
+00:45:36 So there's a couple of code examples in here and I'm going to kind of flip through here and check out. You also have some code APIs. I talked about my wish for some code thing to declare laziness, I guess it's a way to put it. But different things happen. Like if you do the important within a try block, that forces them to be eager. But you also have defined this eager imports context manager, sort of, that will force the imports to be eager.
+
+00:46:02 Right.
+
+00:46:02 And I say sort of because it's not actually the eager imports thing, it's the width block. Whatever you put in there, if you do an import in it, is what's going to trigger it.
+
+00:46:09 Right.
+
+00:46:10 Yeah. It doesn't matter. Yeah.
+
+00:46:11 And then the third way is you can import set eager imports and actually pass namespace, names in there. Because one of the problems is I'm going to import a thing that's a package whose code I don't control, and I need it to, for one particular thing, eagerly import. That right. So you kind of have to force it down the line where it's out of the chain of control there. So you can sort of set like I want to do fast API, whatever, like exceptions or whatever is in there. I want to make sure that that eager loads, even though I don't control fast API. Right. Do you want to talk about some of these code tricks that you have here?
+
+00:46:48 Yeah.
+
+00:46:48 Or tools, I guess, is a better word.
+
+00:46:50 Yeah. Saving our imports just for opting out certain modules. Application owners should be the ones adding the uncompatible libraries here if they find that, figure out that they are playing well with place imports.
+
+00:47:04 Yeah.
+
+00:47:04 So if I write a library and I see that my sub module cannot deal with being lazy. I could put this in my code to avoid no matter what people set for the runtime flag, I could avoid that problem for my library.
+
+00:47:17 Right?
+
+00:47:17 Yeah, exactly. So you can always try first and if you are the application out there and you know exactly what you need to do this application to work, you can try modules and a lot of the libraries just work out of the box so you don't need to do anything.
+
+00:47:33 There are some libraries that don't work and if you can make those work in some other way, you can then add this.
+
+00:47:43 It's a blazing import in those libraries.
+
+00:47:47 Yeah, these are really interesting to see here. You can even pass a callback that would be handed a module name and it can decide. You could say I don't want to just say all the names that are of this sub module, but just anything that matches this pattern. Let's just tell it we want to eagerly import that. Yeah, it looks nice. I like it. There's another question from audience back to a code question and explicit opt in as hybrid robotics also asked, I really liked the idea of import lazy or lazy import library or something like that, to be explicit about it. And you all actually specifically addressed whether or not there should be some syntax code that makes this happen instead of changing the default one.
+
+00:48:29 Right.
+
+00:48:30 What's the thoughts there?
+
+00:48:31 I think generally we're not opposed to the idea of syntax for lazy imports, but the kinds of like memory and startup time winds that we've seen really depend on very broad application of lazy imports with just very narrowly targeted opt outs. That's what you need in order to really get to a situation where you're actually paying for what you use in a robust way, where you're not in a situation where you just accidentally add one import in one place and all of a sudden all your games just disappear like that. If it's really across the code base, then it's very robust startup time and memory wins where you add one import and well, you might pay for a little more, but you're not going to suddenly start paying 100% of the cost again. It feels like adding new syntax is a much bigger hurdle in terms of the steering council and having to change the Python grammar and all that. And when the pre important syntax isn't really even useful in gaining the winds that are the primary motivation for the Pet and it doesn't feel like a good trade off to add that to the Pet.
+
+00:49:36 Yeah, I think I agree with that. It seems pretty reasonable to me. What about the reverse? What about if you instead of doing something like this where you say, I'm going to force these to be I'm going to run some code to make these modules eager, what if as a library author. I could write eager import my thing or something along those lines. Now I really don't want to see more syntax and Python. There was a huge battle over whether a colon goes by an equal sign. So I'm not necessarily suggesting that we should do this.
+
+00:50:04 I would say there's nothing necessarily wrong with that. It's more just that adding new syntax is a higher bar and maybe we should get some experience when the same thing is easily possible with existing syntax, like a contact manager, we may as well get some experience with the feature in a less invasive way before we go adding syntax.
+
+00:50:21 Right.
+
+00:50:21 If you see so many people using it and benefiting from it, then you could consider one example of that is like three, four to 35 when there was Async IO introduced and then there was Async and away introduced on top of that.
+
+00:50:34 Right.
+
+00:50:34 Even things like property.
+
+00:50:36 Right.
+
+00:50:36 Like the property decorator was a feature that was available for the decorator syntax was added. So it's a tried and true strategy for Python. Let's get experience with the feature and then we can make adjustments and syntax to make it prettier down the road.
+
+00:50:54 Yeah, that's a good path. Awesome. All right, well, really good work on this, you guys. This is exciting. I would like to see the status change from draft to I guess I.
+
+00:51:07 Have to go do something after this chat.
+
+00:51:12 Awesome. But now people know about the conversation much more broadly and maybe we'll get some more, even more comments on the discourse thread there. Let's maybe wrap that up because I think we're about out of time. But before I let you go out of here, you've got the two questions to quickly answer. Since there are three of you, if you're going to write some code and what editor are using these days, it's.
+
+00:51:32 Always going to be emacs for me. It's funny because Brett works at Microsoft and so LinkedIn and Microsoft we share.
+
+00:51:40 He has something to do with some editor. I think a few people may hurry up or something.
+
+00:51:44 Yeah.
+
+00:51:45 And I keep telling Brett, if I was starting today, kind of deeply in my bones.
+
+00:51:54 Got it.
+
+00:51:55 I used to use Sublime text even though it didn't have autocomplete. So I added some autocomplete from porting commodo ID editor how to complete to Sublime text. But nowadays in Meta, I'm using BS code and also being when I'm in the terminal.
+
+00:52:15 Right on, Carl.
+
+00:52:16 Yeah. I used to be an emax Caesar. I mentioned that's how Barry and I very first connected back at PyCon 2008. But I have switched to Vs code. There's a lot of integrations with Vs code in terms of meta infrastructure and maintaining all that stuff myself for Remax just became more of a hassle than I wanted to pay.
+
+00:52:35 I want two jobs. That one was enough.
+
+00:52:38 Right?
+
+00:52:39 All right. And then notable pipe package, something that you think is pretty cool. You just want to give a shout out to Popular or not go in reverse order. Carl, how are you?
+
+00:52:48 Well, I guess I'll give a shout out to somebody that I use in all of my projects, which is, I guess, depending on the project, either Pyre or my Pi. I'm a big fan of type. Checking my Python code.
+
+00:52:58 Yeah.
+
+00:52:58 Fantastic.
+
+00:52:59 Yeah. Well, Pirate is pretty good.
+
+00:53:03 Microsoft, which sorts your imports at the top of the file. So it's very useful if there's an.
+
+00:53:09 Import syntax that makes all the other ones lazy. All these tools are going to have to learn about. Well, this one doesn't go before the other. Or you could give it something like a lazy.
+
+00:53:26 All right, Barry, how about your notable package?
+
+00:53:28 For me, it's a PDM, which is a package manager and sort of a build back end. I went through an exercise a couple of months ago where I just finally wanted to get rid of all my set up pies and set up CFGs and just fully embrace Pi Project Tamil and see how far it could go. And I was actually pretty happy with being able to get rid of both of those legacy packaging files. So I tried a bunch of the different package managers, and I really liked PDM, so I kind of settled on that one for my personal stuff.
+
+00:53:59 Yeah.
+
+00:54:00 Fantastic. All right, well, final call to action. People want to maybe have their thoughts heard on this. What do they do?
+
+00:54:06 I guess the discourse thread discussed Python.org, look for the PEPs category and look for Pepsi.
+
+00:54:12 Yeah, you can love it or not love it or stuff like that. There's sort of ways to give just a heartfeedback as well.
+
+00:54:20 The other thing you can do is.
+
+00:54:21 Pressure the sponsor of the Pep to stop being so lazy.
+
+00:54:26 I would find it incorrect if you were not lazy on this particular one.
+
+00:54:33 You got to just swim in that waterfall and see how it feels before you can really make a decision.
+
+00:54:38 Right?
+
+00:54:40 Awesome.
+
+00:54:41 All right, gentlemen, thank you for being here. It's been great having you all on the show.
+
+00:54:45 Thanks so much. Michael, thanks very much.
+
+00:54:47 Thank you. Appreciate it.
+
+00:54:48 Yes, you bet. Bye.
+
+00:54:49 Bye. Bye.
+
+00:54:50 This has been another episode of Talk Python to me. Thank you to our sponsors. Be sure to check out what they're offering.
+
+00:54:57 It really helps support the show.
+
+00:54:59 Take some stress out of your life. Get notified immediately about errors and performance issues in your web or mobile applications with Sentry. Just visit Talkpython Fmcry and get started for free. And be sure to use the promo code Talkpython all one word when you.
+
+00:55:16 Level up your Python.
+
+00:55:17 We have one of the largest catalogs of Python video courses over at Talk Python. Our content ranges from true beginners to deeply advanced topics like memory and Async. And best of all, there's not a subscription in site check it out for yourself at training. Talk python FM be sure to subscribe.
+
+00:55:33 To the show, open your favorite podcast.
+
+00:55:35 App and search for Python. We should be right at the top. You can also find the itunes feed at itunes, the Google Play feed at Play, and the Directrssfeed atrssontalkon FM.
+
+00:55:48 We're live streaming most of our recordings these days. If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at talk python FM. YouTube, this is your host, Michael Kennedy. Thanks so much for listening.
+
+00:56:01 I really appreciate it. Now get out there and write some Python code.
