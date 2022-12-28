@@ -1,10 +1,10 @@
-00:00:00 If you maintain projects on places like GitHub, you know that having a classy README is important and that maintaining a change log can be helpful for you and consumers of your project. It can also be a pain. That's why I'm excited to welcome Ned Batch Elder, to the show. He has a lot of tools to help here, as well as some opinions we're looking forward to hearing. We cover his tools and a bunch of others he and I found along the way.
+00:00:00 If you maintain projects on places like GitHub, you know that having a classy README is important and that maintaining a change log can be helpful for you and consumers of your project. It can also be a pain. That's why I'm excited to welcome Ned Batchelder, to the show. He has a lot of tools to help here, as well as some opinions we're looking forward to hearing. We cover his tools and a bunch of others he and I found along the way.
 
-00:00:24 Is talk. Python to Me episode 395 Recorded monday, December 5, 2022 welcome to Utalk Python to Me a weekly podcast on Python. This is your host, Michael Kennedy. Follow me on Mastodon, where I am at Mckinnedy, and follow the podcast using at Talk Python, both on Bostodon.org. Be careful with impersonating accounts on other instances. There are many. Keep up with the show and listen to over seven years of past episodes at Talkpython FM. We've started streaming most of our episodes live on YouTube. Subscribe to our YouTube channel over at Talkpython FM YouTube to get notified about upcoming shows and be part of that episode.
+00:00:24 This is Talk Python to Me episode 395 Recorded monday, December 5, 2022. Welcome to Talk Python to Me a weekly podcast on Python. This is your host, Michael Kennedy. Follow me on Mastodon, where I am @mkennedy, and follow the podcast using at Talk Python, both on Bostodon.org. Be careful with impersonating accounts on other instances. There are many. Keep up with the show and listen to over seven years of past episodes at Talkpython FM. We've started streaming most of our episodes live on YouTube. Subscribe to our YouTube channel over at Talkpython.FM/YouTube to get notified about upcoming shows and be part of that episode.
 
-00:01:17 This episode is brought to you by the local Maximum Podcast Over@localmaxradio.com, and it's brought to you by Century. Don't let those errors go unnoticed. Use sentry. Get started at Talkpathon Fmcentry.
+00:01:17 This episode is brought to you by The Local Maximum Podcast Over@localmaxradio.com, and it's brought to you by Sentry. Don't let those errors go unnoticed. Use sentry. Get started at Talkpathon.Fm/sentry.
 
-00:01:31 Transcripts for this episode are sponsored by AssemblyAI, the API platform for state of the art AI models that automatically transcribe and understand audio data at a large scale. To learn more, visit talk python FM AssemblyAI.
+00:01:31 Transcripts for this episode are sponsored by AssemblyAI, the API platform for state of the art AI models that automatically transcribe and understand audio data at a large scale. To learn more, visit talkpython.FM/AssemblyAI.
 
 00:01:47 Ned. Welcome back to talk python me.
 
@@ -18,9 +18,9 @@
 
 00:02:39 Yeah, it's an interesting topic too, because as a project maintainer, there's all this project level automation that goes on and there are all these fascinating tools to get parts of it done in different ways and competing philosophies.
 
-00:02:50 Yeah, absolutely. I know some of them because I fork different projects and then I'll sink it or something and it'll say that my automation couldn't run. I'm like, well, that wasn't my automation, but that's okay, it's fine if it runs or it doesn't run. I'm just here to follow. But before we get into all that, maybe let's just do a quick recap for those of you, those listeners out there who don't know you, maybe what's the elevator pitch and what have you been up to the last six months or so?
+00:02:50 Yeah, absolutely. I know some of them because I fork different projects and then I'll sync it or something and it'll say that my automation couldn't run. I'm like, well, that wasn't my automation, but that's okay, it's fine if it runs or it doesn't run. I'm just here to follow. But before we get into all that, maybe let's just do a quick recap for those of you, those listeners out there who don't know you, maybe what's the elevator pitch and what have you been up to the last six months or so?
 
-00:03:14 I've been working in the python world for a very long time, I don't know, 20 years now or something crazy like that. But my day job is at Edx, which is part of two you now learning tech education, tech company, and I do open source logistics there. Edx.org runs open source software that we've created called Open Edx, which also runs a couple of thousand other sites. And my main day job is making sure that that collaboration continues well between the people inside to you and the people out in the community. So it's an interesting dynamic of open source. But on the side, I also maintain a number of projects, including coverage Pi, which has been going for 18 years now and is used by a lot of people. So that's a whole other kind of open source that I do in the python world.
+00:03:14 I've been working in the python world for a very long time, I don't know, 20 years now or something crazy like that. But my day job is at Edx, which is part of two you now learning tech education, tech company, and I do open source logistics there. Edx.org runs open source software that we've created called Open Edx, which also runs a couple of thousand other sites. And my main day job is making sure that that collaboration continues well between the people inside to you and the people out in the community. So it's an interesting dynamic of open source. But on the side, I also maintain a number of projects, including coverage.Py, which has been going for 18 years now and is used by a lot of people. So that's a whole other kind of open source that I do in the python world.
 
 00:04:01 Yeah, that's a really rewarding job. Right. It's not optimizing ad clicks or other things like that. Right. It's helping people.
 
@@ -50,13 +50,13 @@
 
 00:05:04 Country.
 
-00:05:04 Sorry. So folks, but this place README So, it says this is the easiest way to create a README. Now, before we get into the details of this, maybe we should just talk about let me pull up coverage. Coverage high on GitHub. Not to put you on the spot or that, I don't mean to do that, but let's just talk about that's.
+00:05:04 Sorry. So folks, but this place README So, it says this is the easiest way to create a README. Now, before we get into the details of this, maybe we should just talk about let me pull up coverage. Coverage.py on GitHub. Not to put you on the spot or that, I don't mean to do that, but let's just talk about that's.
 
 00:05:24 Fine.
 
 00:05:25 What kind of stuff should you put on your project? And like I said, we're going to have to expand a little bit. Like, for example, there's tags and there's a link and there's should you have releases shown and other stuff that you might kind of think of it what you get when you land on a project. So maybe start there with kind of how you think about what should be here. Then we'll talk about some of the tools.
 
-00:05:45 The first thing your README should do is say what the project is, and that's sometimes difficult for people to wrap their head around. And it really gets at one of the fundamental problems of writing almost anything, which is you have to decide who you're writing for, and it's hard to know who might show up on your front page of your GitHub project. And you don't know what they already know, and so you don't know what you have to tell them. So it's a little bit tricky to get all that information out there. But, for instance, under about here, it says the code coverage tool for Python, which was the sort of pithiest, shortest description I could come up with to say, what is coverage pi? And I think that covers it pretty well. I don't try to explain what code coverage is, because that's a topic you can Google for if you don't know what it is, but so that covers it.
+00:05:45 The first thing your README should do is say what the project is, and that's sometimes difficult for people to wrap their head around. And it really gets at one of the fundamental problems of writing almost anything, which is you have to decide who you're writing for, and it's hard to know who might show up on your front page of your GitHub project. And you don't know what they already know, and so you don't know what you have to tell them. So it's a little bit tricky to get all that information out there. But, for instance, under about here, it says the code coverage tool for Python, which was the sort of pithiest, shortest description I could come up with to say, what is coverage.py? And I think that covers it pretty well. I don't try to explain what code coverage is, because that's a topic you can Google for if you don't know what it is, but so that covers it.
 
 00:06:28 If you don't know what it is and you don't know you want it, you might not care about this. So that's not your audience.
 
@@ -64,11 +64,11 @@
 
 00:06:36 But go ahead and start on your way out the door, please. Thank you very much.
 
-00:06:39 Right, exactly. Yeah. By the way, I could use a bunch more stars on coverage pi because it's not a JavaScript project and it didn't start on GitHub, so it's a little low on stars.
+00:06:39 Right, exactly. Yeah. By the way, I could use a bunch more stars on coverage.py because it's not a JavaScript project and it didn't start on GitHub, so it's a little low on stars.
 
 00:06:49 Yeah.
 
-00:06:49 But so, yeah, so I try to say what it is and then how to get started on it. And I think those might be the front top two things. I've got a thing there about Ukraine and badges, which we're going to get to, but there's the first paragraph there. Coverage pi measures code coverage, typically during text execution, so it tries to give sort of a little bit deeper explanation of it, what you can run it on and then getting started. There's a for enterprise thing there that links off to Tidelift, but then the getting started tries to be very quick about you just want to try it. Here are some commands you can run to see how it works for you, because a lot of people, they just want to get going and if you can give them a quick instruction, then they'll be really happy.
+00:06:49 But so, yeah, so I try to say what it is and then how to get started on it. And I think those might be the front top two things. I've got a thing there about Ukraine and badges, which we're going to get to, but there's the first paragraph there. Coverage py measures code coverage, typically during text execution, so it tries to give sort of a little bit deeper explanation of it, what you can run it on and then getting started. There's a for enterprise thing there that links off to Tidelift, but then the getting started tries to be very quick about you just want to try it. Here are some commands you can run to see how it works for you, because a lot of people, they just want to get going and if you can give them a quick instruction, then they'll be really happy.
 
 00:07:30 Yeah. Often four or five lines of code. Here's how you use my thing. Do I put a decorator onto a function and it does caching? Do I await a database call or what am I doing with this thing? Right? You don't have to be super complicated, right.
 
@@ -98,7 +98,7 @@
 
 00:09:39 Yes.
 
-00:09:39 But if you actually read the text it's actually mentioned, which goes up the badge goes up to three point eleven. The text says it goes up to three point twelve, the alpha alpha too. And that's because of how the badges work. And there's reasons why people don't like badges because of that. But badges look cool, so you want the badges in. What's going on here is that the badges show the status of the latest release on Pipi and so they're not in sync with what's in the repo. And it's kind of a challenge to figure out what you want to do about that. Unfortunately.
+00:09:39 But if you actually read the text it's actually mentioned, which goes up the badge goes up to three point eleven. The text says it goes up to 3.12, the alpha alpha too. And that's because of how the badges work. And there's reasons why people don't like badges because of that. But badges look cool, so you want the badges in. What's going on here is that the badges show the status of the latest release on Pypi and so they're not in sync with what's in the repo. And it's kind of a challenge to figure out what you want to do about that. Unfortunately.
 
 00:10:11 I do see, though, that you are a believer of badges.
 
@@ -150,13 +150,13 @@
 
 00:14:11 People used to be confused by Twitter. We figured it out. Yeah, I know, but I agree that it's an interesting kind of marketing angle for software, which is a little bit weird, right?
 
-00:14:23 But I should say so coverage Pie does have a mascot, which was drawn by my son. So it's got that cute aspect to it, but not the whole page isn't cute. And actually you're scrolling it on the screen. I'm noticing the mascot isn't on the GitHub.
+00:14:23 But I should say so coverage.py does have a mascot, which was drawn by my son. So it's got that cute aspect to it, but not the whole page isn't cute. And actually you're scrolling it on the screen. I'm noticing the mascot isn't on the GitHub.
 
 00:14:38 Should I go to the docs page?
 
 00:14:39 Yeah, if you go to the docs.
 
-00:14:40 You'Ll see there we go.
+00:14:40 You'll see there we go.
 
 00:14:41 There in the upper right.
 
@@ -168,25 +168,25 @@
 
 00:14:56 He's relaxing because he knows his tests are all covering his product and he is sleeping well.
 
-00:15:05 This portion of Talk Python, I mean, it's brought to you by the local Maximum podcast. It's an interesting and technical podcast that dives into trends in technology, stats and more. But rather than tell you about it, let's hear from Max and Aaron about their show.
+00:15:05 This portion of Talk Python to Me, it's brought to you by the Local Maximum podcast. It's an interesting and technical podcast that dives into trends in technology, stats and more. But rather than tell you about it, let's hear from Max and Aaron about their show.
 
 00:15:19 We are now on with Talk Python to me. Let's say hi to all the Python fans.
 
 00:15:23 Hi, Python fans.
 
-00:15:24 I'm Max Clark. I have actually done a lot with Python myself, so I am a fan of Talk Python. Do you know Python Aaron?
+00:15:24 I'm Max Clark. I have actually done a lot with Python myself, so I am a fan of Talk Python to Me. Do you know Python Aaron?
 
 00:15:32 I took a course years ago, but I am a little rusty.
 
 00:15:35 We are here today to talk about our podcast, The Local Maximum. We've been on a roll lately with a new episode every week and I wanted to share with you what we've been up to. Here on The Local Maximum, we tackle subjects in software and technology topics as diverse as the philosophy of probability to Elon Musk's next move for Talk Python listeners, I want to highlight a couple of recent episodes of The Local Maximum. In 248, for example, I found out about an open source library that maps the world into Hexagons and some Pentagons. I had a discussion with an author about games and puzzles and another on a novel approach to doing the job search.
 
-00:16:11 Well, we discussed the ramifications of Aigenerated art. Have we reached peak creativity? Or is this just another local maximum?
+00:16:11 Well, we discussed the ramifications of Ai generated art. Have we reached peak creativity? Or is this just another local maximum?
 
 00:16:19 So check out The Local Maximum podcast available on your podcast app.
 
 00:16:24 Okay, well, I think that sets the stage for this conversation pretty well. Let's talk about README as a service. Have you played with this any so.
 
-00:16:31 I haven't played with this. I tend to be very low tech in the way I approach things. Edit some text files, build some tooling to make the result you want and get going. So this looks like a good way to get started. Like if you don't know what to do, this looks like a good onramp. So it looks great. If that's the way you like to approach things, definitely do it. My philosophy is any way you can get a good README is a good way to get a good read me. So if this is going to help people, then I'm all for it.
+00:16:31 I haven't played with this. I tend to be very low tech in the way I approach things. Edit some text files, build some tooling to make the result you want and get going. So this looks like a good way to get started. Like if you don't know what to do, this looks like a good on ramp. So it looks great. If that's the way you like to approach things, definitely do it. My philosophy is any way you can get a good README is a good way to get a good read me. So if this is going to help people, then I'm all for it.
 
 00:17:02 It's not something you tie into your README. It's a web app. And it looks like one of these marketing page landing page builders on the left. It's got a bunch of different sections. Like you can drag them in, so you drag in the title and description, you drag in the acknowledgments and fill it out and it will create the skeleton markdown and then you just take the markdown and run with it.
 
@@ -228,23 +228,23 @@
 
 00:21:10 If they built some good ones that are out there. So let me see if I can find a section. There's a little part that's it the impressive thing.
 
-00:21:17 So when I first came to this, I thought, I haven't heard of this hatch fancy Pipi README project, but under showcases. The Black README is built using this tool. And that's fine credential right there that the Black project is using it.
+00:21:17 So when I first came to this, I thought, I haven't heard of this hatch fancy PyPI README project, but under showcases. The Black README is built using this tool. And that's fine credential right there that the Black project is using it.
 
 00:21:32 Yeah, absolutely. And you've also, as well as a bunch of others yeah, structlog and JSON. Schema.
 
 00:21:38 JSON schema, yeah.
 
-00:21:39 So maybe I could read this one paragraph and this might give people the sense. Do you want your Pipi README to be the project README, but without badges, followed by the license file and the change log section only for the latest release? Well, you've come to the right place.
+00:21:39 So maybe I could read this one paragraph and this might give people the sense. Do you want your PyPI README to be the project README, but without badges, followed by the license file and the change log section only for the latest release? Well, you've come to the right place.
 
 00:21:53 So it's like he's got this whole assembly line model of there's already a bunch of information out there, so don't copy it around, don't try to write it in two places. Instead, have a tool pick up the information and then put it together into the README, which is what you want. And I totally understand that because I've done some of that kind of tooling myself in my projects so that I can put a piece of information in just one place and then it goes to where it has to go to be read.
 
 00:22:19 It's a bit like a static site generator. A bit, a little bit.
 
-00:22:23 The thing I still haven't wrapped my head around here. Is that what feels like? It could be one template MD file or something that says, you know, grab this from there, and that from there is instead in your Piproject Tommel sections so you don't end up with sort of what looks like a README MD file with call outs to where the information should come from. It's pieced together from the Piproject Tommel sections.
+00:22:23 The thing I still haven't wrapped my head around here. Is that what feels like? It could be one template MD file or something that says, you know, grab this from there, and that from there is instead in your Pyproject.toml sections so you don't end up with sort of what looks like a README MD file with call outs to where the information should come from. It's pieced together from the Pyproject.Toml sections.
 
-00:22:48 I see. The tom will let you reach into the different segments of the thing in this area.
+00:22:48 I see. The toml will let you reach into the different segments of the thing in this area.
 
-00:22:53 Yeah, and I understand why he's taking that approach because the Piproject tomo is there, and this is a hatch plug in, so he's already got access to that information and it's bolted into the process of building the distribution, which is the exact best time to build the README.
+00:22:53 Yeah, and I understand why he's taking that approach because the Pyproject toml is there, and this is a hatch plug in, so he's already got access to that information and it's bolted into the process of building the distribution, which is the exact best time to build the README.
 
 00:23:10 So it's cool that he's explored it this way. I have to take a deeper look at it to see if it would fit in with my workflow. I don't use hatch.
 
@@ -252,11 +252,11 @@
 
 00:23:27 Absolutely.
 
-00:23:28 One of the problems with coverage pi, which is my main side project, is because it's 18 years old, there are bits of it that are using the latest, greatest technology as of 15 years ago. And because it's just kept working until it breaks, I'm not going to go and fiddle with it or until I'm interested in fiddling with it. I might fiddle with it, but there's a lot of stuff that's just old and weird and just keeps rattling along.
+00:23:28 One of the problems with coverage.py, which is my main side project, is because it's 18 years old, there are bits of it that are using the latest, greatest technology as of 15 years ago. And because it's just kept working until it breaks, I'm not going to go and fiddle with it or until I'm interested in fiddling with it. I might fiddle with it, but there's a lot of stuff that's just old and weird and just keeps rattling along.
 
 00:23:51 For such a highly used project, I can see the danger here, but have you considered, or have you run it through things like Flint to convert all the strings to F strings? Or some of these, like, upgrades to the latest Idioms, where you can say, I want it to be 37 and above, and anything that's older than that, you know, kind of rework it.
 
-00:24:08 I have used Pi upgrade on it when I dropped 2.7, which was a couple of years back, and there are now F strings all through it. But for instance, I don't use black. There is a pull request to add type annotations to it, but it's a big project that not gaining the momentum it needs to get done. So I tend to let sleeping dogs lie where it's working, or if I don't, I don't know what I'm going to get out of it. For instance, I use Opt Parse to parse the command line arguments, and that wasn't even the right thing to use in 2.7. That was the old thing that Arg Parse replaced. But it still works. It's still in there. Parse, it's fine.
+00:24:08 I have used Py upgrade on it when I dropped 2.7, which was a couple of years back, and there are now F strings all through it. But for instance, I don't use black. There is a pull request to add type annotations to it, but it's a big project that not gaining the momentum it needs to get done. So I tend to let sleeping dogs lie where it's working, or if I don't, I don't know what I'm going to get out of it. For instance, I use Opt Parse to parse the command line arguments, and that wasn't even the right thing to use in 2.7. That was the old thing that Arg Parse replaced. But it still works. It's still in there. Parse, it's fine.
 
 00:24:48 Sometimes there's no value and possibly adding bugs to something that you don't intend to touch at all.
 
@@ -268,7 +268,7 @@
 
 00:25:39 So you just call the Mastodon API, public API, to get stuff about your account and pull it.
 
-00:25:45 If you look at my Mastodon badge, which is on Githubnedbat or on the coverage PY page, it has my count of followers, and that's coming from a JSON response from the Mastodon API on my server, on my Master. And then Shields IO is incorporating that number into the image that it then serves to GitHub to display into the README. I don't want to think about how many computers are actually involved to get that stupid number on that page, but it's very impressive that it can do all that.
+00:25:45 If you look at my Mastodon badge, which is on Github/nedbat or on the coverage PY page, it has my count of followers, and that's coming from a JSON response from the Mastodon API on my server, on my Mastadon server then Shields IO is incorporating that number into the image that it then serves to GitHub to display into the README. I don't want to think about how many computers are actually involved to get that stupid number on that page, but it's very impressive that it can do all that.
 
 00:26:14 I sure hope it's cash somewhere.
 
@@ -284,7 +284,7 @@
 
 00:26:39 Stuff that I don't spend as much time on over here.
 
-00:26:42 Yeah. There's things I've never even heard of that it shows. They don't even document all the things it can do. I mentioned earlier that the badge on the Pipi page will show the status of the latest Pipi release, which means if you go back ten years to the coverage Pi version three release, there's a badge on it that shows you that it supports Python 311, because the badge is showing you the most recent release. Even though you're looking at the badge on the ten year old release, there's a syntax in Shields IO that will let you say, show me this factoids as of this particular release. 3.0 I see. And they don't document it, so I didn't realize I could do that. So there's an awful lot going on in Shields IO.
+00:26:42 Yeah. There's things I've never even heard of that it shows. They don't even document all the things it can do. I mentioned earlier that the badge on the PyPI page will show the status of the latest PyPI release, which means if you go back ten years to the coverage.py version three release, there's a badge on it that shows you that it supports Python 311, because the badge is showing you the most recent release. Even though you're looking at the badge on the ten year old release, there's a syntax in Shields IO that will let you say, show me this factoids as of this particular release. 3.0 I see. And they don't document it, so I didn't realize I could do that. So there's an awful lot going on in Shields IO.
 
 00:27:21 Yeah. So if you want a shield for one of those little badges, for basically anything, these are downloads, users, test coverage, all these things.
 
@@ -302,7 +302,7 @@
 
 00:28:54 In this case, he's talking about FAQ questions, and I think he said somewhere here. I got tired of answering the same questions over and over, so I made a tool to make an FAQ or something like that. Yeah. I don't have the same problem of needing FAQs produced or why it's easier to put them all in separate little files that are combined together later than just editing one big FAQ page. But Will is a smart guy. He must have had a problem, and he solved it with this tool. And it's cool to see this is.
 
-00:29:20 A little more similar to the way you described how you might see building up the README. Instead of defining an automo file, reaching into a giant document, have a bunch of small ones that get assembled into a result here.
+00:29:20 A little more similar to the way you described how you might see building up the README. Instead of defining an toml file, reaching into a giant document, have a bunch of small ones that get assembled into a result here.
 
 00:29:32 Right. And that's a lot like some of the change log management tools that we're going to get to also.
 
@@ -316,7 +316,7 @@
 
 00:30:56 Exactly.
 
-00:31:00 This portion of Talk Python to me is brought to you by Sentry. How would you like to remove a little stress from your life? Do you worry that users may be encountering errors, slowdowns or crashes with your app right now? Would you even know it until they sent you that support email? How much better would it be to have the error or performance details immediately sent to you, including the call stack and values of local variables and the active user recorded in the report? With Sentry, this is not only possible, it's simple. In fact, we use Sentry on all the Talk Python web properties. We've actually fixed a bug triggered by a user and had the upgrade ready to roll out as we got the support email. That was a great email to write back. Hey, we already saw your error and have already rolled out the fix. Imagine their surprise, surprise and delight your users. Create your Century account at Talkpython Fmcentry and if you sign up with the code Talk Python all one word, it's good for two free months of Sentry's business plan, which will give you up to 20 times as many monthly events as well as other features. Create better software, delight your users, and support the podcast. Visit Talk Python Fmcentry and use the coupon code talk Python We talked about contributions and how people appreciate getting credit for participating.
+00:31:00 This portion of Talk Python to me is brought to you by Sentry. How would you like to remove a little stress from your life? Do you worry that users may be encountering errors, slowdowns or crashes with your app right now? Would you even know it until they sent you that support email? How much better would it be to have the error or performance details immediately sent to you, including the call stack and values of local variables and the active user recorded in the report? With Sentry, this is not only possible, it's simple. In fact, we use Sentry on all the Talk Python web properties. We've actually fixed a bug triggered by a user and had the upgrade ready to roll out as we got the support email. That was a great email to write back. Hey, we already saw your error and have already rolled out the fix. Imagine their surprise, surprise and delight your users. Create your Century account at Talkpython Fm/sentry and if you sign up with the code Talkpython all one word, it's good for two free months of Sentry's business plan, which will give you up to 20 times as many monthly events as well as other features. Create better software, delight your users, and support the podcast. Visit Talk Python Fm/sentry and use the coupon code talkpython We talked about contributions and how people appreciate getting credit for participating.
 
 00:32:23 I'm sure there are people who have closed a small issue or found and fixed a small bug and coverage up high or added a small feature and feel really proud of that, right? But they would feel more proud if you acknowledged that they did it.
 
@@ -326,7 +326,7 @@
 
 00:32:39 So tell us about this all contributors place here.
 
-00:32:42 This is a GitHub bot that on an issue you can say at all. Contributors add Michael Kennedy to the bug fix sections of the contributors because he did it right here in this issue that we're talking about. And that's really cool because I don't use this tool. Like I said, I tend to be very low tech. I do acknowledge my contributors, I'll mention them in the change log, and I have a contributors. Txtp file that lists everyone who's contributed in some way. And I will hand edit that. And it can be I have to remember to put it over there and put it over there. I don't get so many contributions to coverage pi that it's a burden. And I kind of actually like that little sort of moment of Zen of finishing the paperwork and crossing the t and dotting the I's. But if you're on a big project where you are getting a lot of contributions. I could see how doing this with a bot would be save you that little bit of work that could become a big amount of work and you don't want to skip it. Right. Because like we said, it seems like a small thing to us and maybe like I don't want to have to bother, but it's a huge thing to the contributor to have their name mentioned. Yes. Yeah.
+00:32:42 This is a GitHub bot that on an issue you can say at all. Contributors add Michael Kennedy to the bug fix sections of the contributors because he did it right here in this issue that we're talking about. And that's really cool because I don't use this tool. Like I said, I tend to be very low tech. I do acknowledge my contributors, I'll mention them in the change log, and I have a contributors. Txt file that lists everyone who's contributed in some way. And I will hand edit that. And it can be I have to remember to put it over there and put it over there. I don't get so many contributions to coverage.py that it's a burden. And I kind of actually like that little sort of moment of Zen of finishing the paperwork and crossing the t and dotting the I's. But if you're on a big project where you are getting a lot of contributions. I could see how doing this with a bot would be save you that little bit of work that could become a big amount of work and you don't want to skip it. Right. Because like we said, it seems like a small thing to us and maybe like I don't want to have to bother, but it's a huge thing to the contributor to have their name mentioned. Yes. Yeah.
 
 00:33:47 And maybe not just pride. Maybe they get a job because of it. Right. They could say, I'm getting hired to work on Flask. Look here, I'm listed as a contributor on Flask. That puts me above 99% of the other people applying, at least in that regard.
 
@@ -346,7 +346,7 @@
 
 00:34:22 Then you're really in for it. So the way that this allcontributors.org bot seems to work, I don't use it personally because I don't have projects that are big enough to really justify this in terms of open source projects, but in the comment on an issue or on a PR or one of those types of things, you can just say at all. Contributors, please add at GitHub name of contributor. And then it says for design or for bug fixes or for documentation. And then the bot says added them as contributor. That's really cool.
 
-00:34:54 Yeah. So, like I said, I have a text file. One of the one of the unusual things I do with my text file is that when I build for coverage Pi, when I build the release, if you go and look at who who the author of coverage Pi is, it says Ned Batchelder and 137 other people. And that number 137 is counting the number of lines in the distributors text. Because I wanted to be clear that yeah, it's not just me. There's lots of people helping with this. And you can help too.
+00:34:54 Yeah. So, like I said, I have a text file. One of the one of the unusual things I do with my text file is that when I build for coverage Pi, when I build the release, if you go and look at who who the author of coverage.py is, it says Ned Batchelder and 137 other people. And that number 137 is counting the number of lines in the distributors text. Because I wanted to be clear that yeah, it's not just me. There's lots of people helping with this. And you can help too.
 
 00:35:20 Yeah. Especially over 18 years.
 
@@ -404,13 +404,13 @@
 
 00:39:55 Right. The Keep a Change log just says, look, you should write this stuff and here's how you should write it. It's not a tool, it's just encouraging people to do a good job. I looked around at tools when I wanted to get people to make better change logs, and there was one called Town Crier from the Twisted Project, and they solved the problem that a lot of change logs have. So if you just have a change log file and everyone who makes a change to the code is supposed to put an entry into the change log file, then that file becomes a merged conflict every time. Right. Because I added a feature, I put my thing at the top. You added a feature, you put a thing at the top op and it's a merge conflict. Years ago at work, what I tried to do is have a change log file and I told developers, put your change near the top of the file in the hopes that they wouldn't merge conflict. And developers would come to me and say, what do you mean by near the top of the file? Because they're engineers, they need precise directions. Right. So, okay, that wasn't going to work. So the idea that town crier uses and also the c python source code has a thing called blurb that does the same idea, which is when you make a change to the code, you also write one small file. Which has just the entry for the change log in it. And you check that in. There's a special directory that just has those little fragments in it. And so when you make your code change, you also add a fragment to that directory. And then later, when it's time to actually make a release, all those fragments can be concatenated together to become the change log. And the good thing about that is that you don't have merge conflicts because everyone creates their own fragment. They have unique names based on some principle, and then at publication time, when the release is made, they can get concatenated together. And like I said, Town Cryer did this and Blurb also did this. I looked at them and they were both a bit more opinionated than I wanted. I knew that if I was going to get a lot of people to use this thing that it needed to be very, very flexible. And I actually took an approach when I was building SCRIV of what's the least opinionated I can be? How many different ways can I let you decide how you want it to work? At the time, Black was rising in its popularity and it was famously opinionated, and so I sort of took the opposite approach.
 
-00:41:58 Nice scripts.
+00:41:58 Nice scrivs.
 
-00:41:59 The idea is that it's got a few commands. You say script create to make a fragment, script collect to collect them all together. Those are the two main ones.
+00:41:59 The idea is that it's got a few commands. You say scriv create to make a fragment, scriv collect to collect them all together. Those are the two main ones.
 
 00:42:07 SCRIV looks like it looks like a great tool. And it looks like one of these things you could pip x install. Because you're not going to, it's unlikely you'll depend upon it for your code to run. You just need that command around to manage a project, right?
 
-00:42:21 Or you can put it into your development requirements. Text, however it is, you manage your project tooling. But sure, pipex would work too. And it's actually grown one other command for making GitHub releases. So it will actually parse your change log file. Even if your change log file wasn't made by SCRIV, it will parse your change log file and then create a GitHub release from your change log file, which gets at a philosophical opinionated point of mind, which is that the information should live in just one place. And that place should be a file that you check into git. It should be a file that people can clone when they clone your repo. If they want to just look at the change log in emacs or whatever locally, they should be able to do that. And since you don't want to duplicate information but people do seem to like having GitHub releases publish a GitHub release based on the information from the change log file, rather than having the release be the source of truth, where it can't be cloned, it can't be edited.
+00:42:21 Or you can put it into your development requirements. Text, however it is, you manage your project tooling. But sure, pipx would work too. And it's actually grown one other command for making GitHub releases. So it will actually parse your change log file. Even if your change log file wasn't made by SCRIV, it will parse your change log file and then create a GitHub release from your change log file, which gets at a philosophical opinionated point of mind, which is that the information should live in just one place. And that place should be a file that you check into git. It should be a file that people can clone when they clone your repo. If they want to just look at the change log in emacs or whatever locally, they should be able to do that. And since you don't want to duplicate information but people do seem to like having GitHub releases publish a GitHub release based on the information from the change log file, rather than having the release be the source of truth, where it can't be cloned, it can't be edited.
 
 00:43:17 There's no commits that you can track to see who put that text there, those sorts of things.
 
@@ -422,13 +422,13 @@
 
 00:44:10 There's more information there than any one person needs, but everything that's there, someone.
 
-00:44:15 Does need that's, right. And each one of those links to like, a GitHub issue or a Pep or something like that.
+00:44:15 Does need that's, right. And each one of those links to like, a GitHub issue or a Pip or something like that.
 
 00:44:22 And there's a lot of those. I just noticed, I think it was today that they got GitHub issued number 100,000 in the C Python read. Wow.
 
 00:44:29 Okay, that's major. It's been chugging along for a while. All right, so this looks like a great idea. What do we got up next? I just also wanted to just give credit, speaking of GitHub credit, from Colin Sullivan, who sent this in, amongst some other things as well, over on Mastodon. So thanks for sharing that. This is another one. I'm going to go quick because it's not a Python tool and it's actually in a technology I've never heard of. Maybe you've heard of it, Ned.
 
-00:44:52 So I hadn't heard of this. So this is called Change Log Manager from Masoko Me, and it's interesting that he, masukomi is one of those bloggers from 15 or 20 years ago that I'd lost track of and suddenly got reconnected to on Mastodon. And when I asked about I, I got a little petulant on Mastodon about a change log that I found completely useless. And he chimed in with a long thread about how aggravated he is by change logs and how hard it is to get people to do them well, and pointed me at this tool that he had written about it.
+00:44:52 So I hadn't heard of this. So this is called Change Log Manager from Masukoni, and it's interesting that he, masukoni is one of those bloggers from 15 or 20 years ago that I'd lost track of and suddenly got reconnected to on Mastodon. And when I asked about I, I got a little petulant on Mastodon about a change log that I found completely useless. And he chimed in with a long thread about how aggravated he is by change logs and how hard it is to get people to do them well, and pointed me at this tool that he had written about it.
 
 00:45:22 It looks like a cool tool. People can check it out if it works. Well, it's written in a language called or technology called crystal.
 
@@ -462,7 +462,7 @@
 
 00:48:22 That's controversial in these days of AI, but I think humans can do a good job writing.
 
-00:48:27 Indeed. As we say, Get a copilot, write me a snow. So the next one we come to is Dinghy. Dingy, dingy. Okay. Dingy. Got it. Just like the little boat thing.
+00:48:27 Indeed. As we say, Get a copilot, write me a network. So the next one we come to is Dinghy. Dingy, dingy. Okay. Dingy. Got it. Just like the little boat thing.
 
 00:48:37 Yeah, the little boat. That's right.
 
@@ -476,7 +476,7 @@
 
 00:49:10 There you go.
 
-00:49:11 Dengue gives you a digest of your GitHub activity. I was finding at work that I had to track lots of issues and pull requests, and there were lots of repos where I wanted to know what was going on. And so I found it useful to just summarize the activity on issues and pull requests across repos.
+00:49:11 Dinghy gives you a digest of your GitHub activity. I was finding at work that I had to track lots of issues and pull requests, and there were lots of repos where I wanted to know what was going on. And so I found it useful to just summarize the activity on issues and pull requests across repos.
 
 00:49:27 Nice.
 
@@ -512,11 +512,11 @@
 
 00:52:14 Another big benefit I would say to that approach is every time it runs, it could just warm your heart with a joy. Like you know what? A whole another 2 hours I didn't do that thing.
 
-00:52:23 That's right. The downside is when it does the wrong thing. So this weekend, I actually had a big weekend this weekend. I released 1.0 of both SCRIV and Dingy and the first beta of coverage 7.0. And it turns out that the links to Pipi on the read me, the links to my documentation from the Pipi README are broken because they don't work if it's a beta release. And I didn't know that until the release was published. And betas happen. So infrequently it'll change again before I make another one. And it'll probably be broken too, because it's hard to test this kind of automation. Like the good thing about building the product and building your test suite for the product is that that is automation. You can run the crank on and you know, if it's working or not releasing projects. If you build automation for that, how do you test that? If release happened correctly, other than actually making a release and then getting bug reports from people about the 404S on your Pipi page? Which is how I found out about this. Yeah, it's a little frustrating, but for.
+00:52:23 That's right. The downside is when it does the wrong thing. So this weekend, I actually had a big weekend this weekend. I released 1.0 of both SCRIV and Dingy and the first beta of coverage 7.0. And it turns out that the links to Pipi on the read me, the links to my documentation from the PyPI README are broken because they don't work if it's a beta release. And I didn't know that until the release was published. And betas happen. So infrequently it'll change again before I make another one. And it'll probably be broken too, because it's hard to test this kind of automation. Like the good thing about building the product and building your test suite for the product is that that is automation. You can run the crank on and you know, if it's working or not releasing projects. If you build automation for that, how do you test that? If release happened correctly, other than actually making a release and then getting bug reports from people about the 404S on your PyPI page? Which is how I found out about this. Yeah, it's a little frustrating, but for.
 
 00:53:21 As much fantastic testing software and automation, sometimes you got to hold your breath and push the button.
 
-00:53:28 And you're not going to write a unit test that says, let's push this thing to test Pipi.org and see if all the links on the readmeer right. That's maybe you I guess you could, but you could. If anyone's done that, please get in touch because I messed that up this weekend.
+00:53:28 And you're not going to write a unit test that says, let's push this thing to test.pypi.org and see if all the links on the readmeer right. That's maybe you I guess you could, but you could. If anyone's done that, please get in touch because I messed that up this weekend.
 
 00:53:43 Yeah, at some point you got to go, okay, we've tested enough, it's got to go. And even if you write a unit test, it's not necessarily exactly the same.
 
@@ -550,13 +550,13 @@
 
 00:56:29 If there's a tool out there that launches missiles, I don't want to know how you're testing the code in your README.
 
-00:56:35 Yeah, there's another one that is a little bit tough to test. One of the things that's interesting, by the way, this tool comes from Vincent Warmerdam, but it deals with multiple code blocks. So if you do the language specifier in markdown, so the triple back tick, you just say the word Python or JavaScript or C Sharp or whatever, that will tell the formatters. Format. It like this, right? It's this type of syntax you should see. So if you do the Python one, it will run those, and it'll also do Bash as well, I believe. But what's interesting is you could have like and here's how you set it up, and then here's how you call it type of series of code blocks. And it will run all the code blocks. Or you can actually say, remember what you saw before, because that was the first half of what you need to.
+00:56:35 Yeah, there's another one that is a little bit tough to test. One of the things that's interesting, by the way, this tool comes from Vincent Warmerdam, but it deals with multiple code blocks. So if you do the language specifier in markdown, so the triple back tick, you just say the word Python or JavaScript or C# or whatever, that will tell the formatters. Format. It like this, right? It's this type of syntax you should see. So if you do the Python one, it will run those, and it'll also do Bash as well, I believe. But what's interesting is you could have like and here's how you set it up, and then here's how you call it type of series of code blocks. And it will run all the code blocks. Or you can actually say, remember what you saw before, because that was the first half of what you need to.
 
-00:57:23 Do the second half, right, because you're trying to tell a story. This is like a Jupiter notebook where you're interspersing code with commentary and then more code, and you need the multiple blocks of code to all be executed together or one after the other, you need the first one's results in the second one.
+00:57:23 Do the second half, right, because you're trying to tell a story. This is like a Jupyter notebook where you're interspersing code with commentary and then more code, and you need the multiple blocks of code to all be executed together or one after the other, you need the first one's results in the second one.
 
-00:57:39 I certainly appreciate don't completely repeat yourself every time. In your code example, it would say you get started by importing this, and then you would create a class like this that derives from you wouldn't want to have to have import over and over, right? Yeah, this is cool. I don't use this one either, but it definitely looks like something I could see adopting. Now, here's something called Shed, which is not exactly what I want to talk about, but it's for formatting code. So it runs Autoflake, it runs Pi, upgrade. You mentioned that before, I believe you can specify a version. Pi upgrade me to Python 38, but not further, please.
+00:57:39 I certainly appreciate don't completely repeat yourself every time. In your code example, it would say you get started by importing this, and then you would create a class like this that derives from you wouldn't want to have to have import over and over, right? Yeah, this is cool. I don't use this one either, but it definitely looks like something I could see adopting. Now, here's something called Shed, which is not exactly what I want to talk about, but it's for formatting code. So it runs Autoflake, it runs Py, upgrade. You mentioned that before, I believe you can specify a version. Py upgrade me to Python 38, but not further, please.
 
-00:58:17 Pi Upgrade is good.
+00:58:17 Py Upgrade is good.
 
 00:58:18 Yeah, it runs black. But what I do want to talk about is it runs Black in Docs.
 
@@ -576,13 +576,13 @@
 
 00:59:42 Yeah, cog is one of those tools that I wrote very long time ago to do one particular thing, and it ended up being useful in lots of other ways. Basically, Cog is a way that you can make a text file like a README MD and put little bits of Python in the middle of it. Not because you're trying to display that code to people, but because you want the results of that code to be part of your document.
 
-01:00:05 A little bit like a Ginger, a template, maybe.
+01:00:05 A little bit like a Jinja, a template, maybe.
 
-01:00:08 Exactly. But it's a little bit backwards because Ginger starts with the idea, well, it is like Ginger. Actually, I shouldn't say that it's just.
+01:00:08 Exactly. But it's a little bit backwards because Jinja starts with the idea, well, it is like Jinja. Actually, I shouldn't say that it's just.
 
-01:00:16 Like Ginger, but instead of being HTML, you want it to be text or something, right?
+01:00:16 Like Jinja, but instead of being HTML, you want it to be text or something, right?
 
-01:00:19 It can be anything you want. Ginger is particular to HTML in some ways, but Cog is completely agnostic. The bigger difference from Ginger with Cog is that the output of your code can go into the document. So that you process, you run the document, the output of your code becomes part of the document. So sort of the input file and the output file are the same file, so that you get sort of an item potent kind of processing of the file so you can have a README MD. You run cog on it. You still just have a reading me MD, but now you've got the results of the computation in the file. So, for instance, I use this in the coverage PY docs. There's a database schema for the SQL light data file that coverage Pi writes that schema is in a string in a Python file someplace, but I also want it to be in my docs. So I use Cog in the Restructured text file to go and get the string from the Python code and splat it into the Restructured text file so that I know that the two are the same, because there's one source of truth and an automated process to bring it into the Restructured text file.
+01:00:19 It can be anything you want. Jinja is particular to HTML in some ways, but Cog is completely agnostic. The bigger difference from Jinja with Cog is that the output of your code can go into the document. So that you process, you run the document, the output of your code becomes part of the document. So sort of the input file and the output file are the same file, so that you get sort of an item potent kind of processing of the file so you can have a README MD. You run cog on it. You still just have a reading me MD, but now you've got the results of the computation in the file. So, for instance, I use this in the coverage.py docs. There's a database schema for the SQL light data file that coverage Py writes that schema is in a string in a Python file someplace, but I also want it to be in my docs. So I use Cog in the Restructured text file to go and get the string from the Python code and splat it into the Restructured text file so that I know that the two are the same, because there's one source of truth and an automated process to bring it into the Restructured text file.
 
 01:01:22 You know how they say there's like two hard problems in computer science? Naming things, cache and validation and off by one errors? Yes. I feel like maybe a fourth one should be identifying and controlling and keeping the one source of truth.
 
@@ -602,7 +602,7 @@
 
 01:03:46 Yeah.
 
-01:03:47 The main thing I used Cog for, I used Cog on my README, and one of the things I did with it was to write Python code to generate that markdown syntax for badges and to put together Shields IO badge URLs. So both of those things are complicated, right? Shields IO is amazingly powerful, but how you actually put all the bits of information into the URL is hard to get. Right? And it's fiddly there's like ampersands and you have to quote them in the markdown regular expression. Yeah, it's just too intense. So I wrote Python functions to put together shields. O URLs. And then I called those Python functions from the Cog code in my README MD, and there's a GitHub action that runs the cog on it. Whenever I publish a blog post, my blog publishing triggers the GitHub action that recalcs my GitHub read me so that my latest blog post is on the top of the GitHub read me. Like I said, you can take this a long way. I might have gone too far with this.
+01:03:47 The main thing I used Cog for, I used Cog on my README, and one of the things I did with it was to write Python code to generate that markdown syntax for badges and to put together Shields IO badge URLs. So both of those things are complicated, right? Shields IO is amazingly powerful, but how you actually put all the bits of information into the URL is hard to get. Right? And it's fiddly there's like ampersands and you have to quote them in the markdown regular expression. Yeah, it's just too intense. So I wrote Python functions to put together shields.io URLs. And then I called those Python functions from the Cog code in my README MD, and there's a GitHub action that runs the cog on it. Whenever I publish a blog post, my blog publishing triggers the GitHub action that recalcs my GitHub read me so that my latest blog post is on the top of the GitHub read me. Like I said, you can take this a long way. I might have gone too far with this.
 
 01:04:44 No, I love it, but yeah, it's.
 
@@ -634,7 +634,7 @@
 
 01:07:00 Right. And the point of the profile is to let people know about you and hopefully they'll be interested in you in whatever way you want them to be interested. So all of these things that attract attention and you can choose something here that sort of has your vibe in whatever way. For instance, my page is very text heavy, but that's my vibe, that's the way I am. And if that's not for you, then you should look for someone else's profile. But if you want to know what I'm listening to on Spotify, then that's a thing to put on a profile page. So it's great. I mean, self expression is a wonderful thing and the fact that GitHub lets you build your own profile and that there are all these tools to do whatever you want with it, it's amazing.
 
-01:07:41 It is amazing. All right, I think this is probably going to be it for our final thing to COVID Read me and friends, let's close this out just really quickly with a give us the 70 story on coverage.
+01:07:41 It is amazing. All right, I think this is probably going to be it for our final thing to cover Read me and friends, let's close this out just really quickly with a give us the 70 story on coverage.py
 
 01:07:56 That's a big deal. Alright, if you're going to make that big of a number, it might not.
 
@@ -646,7 +646,7 @@
 
 01:09:29 Absolutely. I can totally understand that. All right, final two questions before you get out of here. Write some code with write some python code. What editor are you using these days?
 
-01:09:37 Right on.
+01:09:37 Vim, Right on.
 
 01:09:38 And I do not have any code completion plugins.
 
@@ -654,7 +654,7 @@
 
 01:09:40 I've said this before, I'm very low tech.
 
-01:09:42 Perfect. And then notable pipi package. I kind of feel like we've covered a bunch, but is there anything you want to give a shout out?
+01:09:42 Perfect. And then notable pypi package. I kind of feel like we've covered a bunch, but is there anything you want to give a shout out?
 
 01:09:48 We did cover a bunch. I've been very enamored of rich, I have to say. It's very cool. I'm looking forward to hearing more about what textual is going to be for building terminal UI interfaces for applications. But rich is astoundingly competent at what it tries to do.
 
@@ -688,6 +688,6 @@
 
 01:11:51 Listen to the local Maximum podcast. Learn about topics as diverse as the philosophy of probability and Elon Musk's next move. Just search for Local Maximum in your favorite podcast player.
 
-01:12:03 Take some stress out of your life. Get notified immediately about errors and performance issues in your web or mobile applications with Sentry. Just visit Hawk Python Fmcentry and get started for free. And be sure to use the promo code Talk Python all one word when you level up your Python. We have one of the largest catalogs of Python video courses over at Talk Python. Our content ranges from true beginners to deeply advanced topics like memory and Async. And best of all, there's not a subscription in sight. Check it out for yourself at training. Talk Python FM be sure to subscribe to the show, open your favorite podcast app and search for Python. We should be right at the top. You can also find the itunes feed at itunes, the Google Play feed at Slash Play and the direct RSS feed at RSS on Talk Python FM.
+01:12:03 Take some stress out of your life. Get notified immediately about errors and performance issues in your web or mobile applications with Sentry. Just visit Hawk Python Fm/sentry and get started for free. And be sure to use the promo code Talk Python all one word when you level up your Python. We have one of the largest catalogs of Python video courses over at Talk Python. Our content ranges from true beginners to deeply advanced topics like memory and Async. And best of all, there's not a subscription in sight. Check it out for yourself at training. Talk Python.FM be sure to subscribe to the show, open your favorite podcast app and search for Python. We should be right at the top. You can also find the itunes feed at /itunes, the Google Play feed at /Play and the direct RSS feed at RSS on Talk Python FM.
 
-01:12:52 We're live streaming most of our recordings these days. If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at Talk Python FM. YouTube. This is your host, Michael Kennedy. Thanks so much for listening. I really appreciate it. Now get out there and write some Python code.
+01:12:52 We're live streaming most of our recordings these days. If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at Talkpython.FM/YouTube. This is your host, Michael Kennedy. Thanks so much for listening. I really appreciate it. Now get out there and write some Python code.
