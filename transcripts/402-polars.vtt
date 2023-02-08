@@ -1,0 +1,5048 @@
+
+00:00:00.000 --> 00:00:05.000
+When you think about processing tabular data in Python, what library comes to mind?
+
+
+00:00:05.000 --> 00:00:06.000
+Pandas, I guess.
+
+
+00:00:06.000 --> 00:00:11.000
+But there are other libraries out there, and Polars is one of the more exciting new ones.
+
+
+00:00:11.000 --> 00:00:17.000
+It's built in Rust, embraces parallelism, and can be 10 to 20 times faster than Pandas out of the box.
+
+
+00:00:17.000 --> 00:00:23.000
+We have Polars creator, Richie Vink, here to give us a look at this exciting new DataFrame library.
+
+
+00:00:23.000 --> 00:00:30.000
+history. This is Talk Python to Me, episode 402, recorded January 29th, 2023.
+
+
+00:00:30.000 --> 00:00:48.880
+Welcome to Talk Python to Me, a weekly podcast on Python. This is your host, Michael Kennedy.
+
+
+00:00:48.880 --> 00:00:53.760
+Follow me on Mastodon where I'm @mkennedy and follow the podcast using @talkpython,
+
+
+00:00:53.760 --> 00:00:56.080
+both on bastodon.org.
+
+
+00:00:56.080 --> 00:00:59.960
+Be careful with impersonating accounts on other instances, there are many.
+
+
+00:00:59.960 --> 00:01:05.440
+Keep up with the show and listen to over seven years of past episodes at talkpython.fm.
+
+
+00:01:05.440 --> 00:01:09.200
+We've started streaming most of our episodes live on YouTube.
+
+
+00:01:09.200 --> 00:01:15.040
+Subscribe to our YouTube channel over at talkpython.fm/youtube to get notified about upcoming shows and be
+
+
+00:01:15.040 --> 00:01:17.620
+part of that episode.
+
+
+00:01:17.620 --> 00:01:19.620
+This episode is brought to you by TaiPi.
+
+
+00:01:19.620 --> 00:01:23.940
+TaiPi is here to take on the challenge of rapidly transforming a bare algorithm in Python
+
+
+00:01:23.940 --> 00:01:27.620
+into a full-fledged decision support system for end users.
+
+
+00:01:27.620 --> 00:01:32.580
+Check them out at talkpython.fm/taipi, T-A-I-P-Y.
+
+
+00:01:32.580 --> 00:01:35.260
+And it's also brought to you by User Interviews.
+
+
+00:01:35.260 --> 00:01:38.780
+Earn extra income for sharing your software developer opinion.
+
+
+00:01:38.780 --> 00:01:43.380
+Head over to talkpython.fm/userinterviews to participate today.
+
+
+00:01:43.380 --> 00:01:45.060
+Hey, Richie.
+
+
+00:01:45.060 --> 00:01:46.060
+Welcome to Talk Python to Me.
+
+
+00:01:46.060 --> 00:01:47.060
+Hello, Michael.
+
+
+00:01:47.060 --> 00:01:52.220
+I feel like maybe I should rename my podcast, talk rust to me or something.
+
+
+00:01:52.220 --> 00:01:52.660
+I don't know.
+
+
+00:01:52.660 --> 00:01:59.460
+Rust is taken over as, as the low level part of, of how do we make Python go fast?
+
+
+00:01:59.460 --> 00:02:01.540
+There's some kind of synergy with rust.
+
+
+00:02:01.540 --> 00:02:02.340
+What's going on there?
+
+
+00:02:02.340 --> 00:02:02.940
+Yeah, there is.
+
+
+00:02:02.940 --> 00:02:07.220
+I'd say Python always already was low level languages that
+
+
+00:02:07.220 --> 00:02:09.460
+succeeded that made Python a success.
+
+
+00:02:09.460 --> 00:02:14.300
+I mean, like NumPy, Pandas, everything that was reasonable fast was so because
+
+
+00:02:14.300 --> 00:02:19.700
+of C or Cyton, which is also C, but Rust, different from C, Rust has made low level
+
+
+00:02:19.700 --> 00:02:23.740
+programming a lot more fun to use and a lot more safe.
+
+
+00:02:23.740 --> 00:02:28.300
+And especially if you regard multi-threaded programming, parallel programming, current
+
+
+00:02:28.300 --> 00:02:31.620
+programming, it is a lot easier in Rust.
+
+
+00:02:31.620 --> 00:02:33.060
+There's a lot of possibilities.
+
+
+00:02:33.060 --> 00:02:34.060
+Yeah.
+
+
+00:02:34.060 --> 00:02:39.300
+My understanding, I've only given a cursory look to Rust, just sort of scan some examples
+
+
+00:02:39.300 --> 00:02:44.260
+and we're going to see some examples of code in a little bit, actually related to Polar's,
+
+
+00:02:44.260 --> 00:02:46.020
+It's kind of a low level language.
+
+
+00:02:46.020 --> 00:02:53.500
+It's not as simple as Python, maybe a JavaScript, but it's, it is easier than C, C++, not just
+
+
+00:02:53.500 --> 00:02:58.860
+in the syntax, but you know, it has, it does better memory tracking for you and the concurrency
+
+
+00:02:58.860 --> 00:02:59.860
+especially.
+
+
+00:02:59.860 --> 00:03:00.860
+Right?
+
+
+00:03:00.860 --> 00:03:01.860
+Yeah.
+
+
+00:03:01.860 --> 00:03:04.900
+Well, so Russ has got a, brings a whole new thing to the table, which is called ownership
+
+
+00:03:04.900 --> 00:03:05.900
+and a borrower checker.
+
+
+00:03:05.900 --> 00:03:07.300
+And Russ is really strict.
+
+
+00:03:07.300 --> 00:03:11.980
+There are things that Russ you cannot do in C or C++, because at a time there can only
+
+
+00:03:11.980 --> 00:03:16.900
+be one owner of a piece of memory and other people can you can lend out this piece of
+
+
+00:03:16.900 --> 00:03:19.260
+memory to other users but then they cannot mutate.
+
+
+00:03:19.260 --> 00:03:24.940
+So it can be only one owner which is able to mutate something and this restriction make
+
+
+00:03:24.940 --> 00:03:30.940
+Rust a really hard language to learn but once you once it's clicked once you went over that
+
+
+00:03:30.940 --> 00:03:35.740
+that steep learning curve it becomes a lot easier because it doesn't allow you things
+
+
+00:03:35.740 --> 00:03:40.740
+that you could do in C and C++ but those things were also things you shouldn't do in C and
+
+
+00:03:40.740 --> 00:03:44.620
+C++ because they probably led to set all set to memory issues.
+
+
+00:03:44.620 --> 00:03:49.380
+And this border checker also makes writing concurrent programming safe.
+
+
+00:03:49.380 --> 00:03:53.220
+You can have many threads reading a variable all they want.
+
+
+00:03:53.220 --> 00:03:54.260
+They can read concurrently.
+
+
+00:03:54.260 --> 00:03:58.780
+It's when you have writers and readers that this whole thread safety,
+
+
+00:03:58.780 --> 00:04:02.420
+critical section, take your locks or the locks re-entrant, all of that
+
+
+00:04:02.420 --> 00:04:04.260
+really difficult stuff comes in.
+
+
+00:04:04.260 --> 00:04:08.980
+And so, yeah, it sounds like an important key to making that.
+
+
+00:04:08.980 --> 00:04:13.780
+And the same word checker also knows when memory has to be freed and not.
+
+
+00:04:13.780 --> 00:04:18.020
+But it doesn't have to, unlike in Go or Java, where you have a garbage collector,
+
+
+00:04:18.020 --> 00:04:22.500
+it doesn't have to do garbage collection and it doesn't have to do reference counting by Python.
+
+
+00:04:22.500 --> 00:04:27.220
+It does so by just statically. So at compile time, it knows when something is out of scope
+
+
+00:04:27.220 --> 00:04:31.220
+and not used anymore. And this is real power. I guess the takeaway for listeners who are
+
+
+00:04:31.220 --> 00:04:36.740
+wondering, you know, why is Rust seemingly taking over so much of the job that C
+
+
+00:04:36.740 --> 00:04:38.180
+And variations of C, right?
+
+
+00:04:38.180 --> 00:04:41.260
+Like you said, Cython have traditionally played in Python.
+
+
+00:04:41.260 --> 00:04:44.980
+It's easier to write modern, faster, safer code.
+
+
+00:04:44.980 --> 00:04:45.220
+Yeah.
+
+
+00:04:45.220 --> 00:04:45.780
+Okay.
+
+
+00:04:45.780 --> 00:04:47.260
+Probably more fun too, right?
+
+
+00:04:47.260 --> 00:04:48.020
+Yeah, definitely.
+
+
+00:04:48.020 --> 00:04:51.260
+And it's a, it's a language which has got its tools, right?
+
+
+00:04:51.260 --> 00:04:54.140
+So it's got a package manager, which is really great to use.
+
+
+00:04:54.140 --> 00:04:58.140
+It's got a real great WL, which is similar to the PyPI index.
+
+
+00:04:58.140 --> 00:04:59.700
+Feels like a modern language.
+
+
+00:04:59.700 --> 00:04:59.980
+Yeah.
+
+
+00:04:59.980 --> 00:05:02.740
+Builds low level, more low level code.
+
+
+00:05:02.900 --> 00:05:14.620
+You can also write high level stuff like REST APIs, which is, I will say also for high level stuff, I like to write it in ROS because of the safety guarantees and also the correctness guarantees.
+
+
+00:05:14.620 --> 00:05:23.940
+If my program compiles in ROS, I'm much more certain it is correct than when I write my Python program, which is dynamic and types are not enforced.
+
+
+00:05:23.940 --> 00:05:26.460
+So it's always a bit fraying on that side.
+
+
+00:05:26.460 --> 00:05:30.260
+Python is great to use, but it's harder to write correct code in Python.
+
+
+00:05:30.660 --> 00:05:30.940
+Yeah.
+
+
+00:05:30.940 --> 00:05:36.080
+And you can optionally write very loose code, or you could opt into things like
+
+
+00:05:36.080 --> 00:05:40.960
+type hints and even my PI, and then you get closer to the static languages.
+
+
+00:05:40.960 --> 00:05:41.200
+Right.
+
+
+00:05:41.200 --> 00:05:43.600
+Are you a fan of, um, on typing?
+
+
+00:05:43.600 --> 00:05:44.200
+Definitely.
+
+
+00:05:44.200 --> 00:05:47.960
+But because they're optional, they are as strong as the weakest link.
+
+
+00:05:47.960 --> 00:05:52.400
+So one library, which you use, if it doesn't do the start, correct.
+
+
+00:05:52.400 --> 00:05:53.400
+Or it doesn't do it.
+
+
+00:05:53.400 --> 00:05:53.920
+Yeah.
+
+
+00:05:53.920 --> 00:05:54.440
+It breaks.
+
+
+00:05:54.440 --> 00:05:56.580
+It's, it's quite brittle because it's optional.
+
+
+00:05:56.760 --> 00:06:00.840
+I hope we get something really enforces it and really can check it.
+
+
+00:06:00.840 --> 00:06:04.400
+I don't know if it's possible because of the dynamic nature of Python.
+
+
+00:06:04.400 --> 00:06:07.560
+Python can do so many things, job dynamically.
+
+
+00:06:07.560 --> 00:06:12.760
+And technically we just cannot know from, I don't know, how far it can go.
+
+
+00:06:12.760 --> 00:06:19.120
+But yeah, in Power BI as well, we use MyPy type prints, which prevent us from having
+
+
+00:06:19.120 --> 00:06:20.720
+a lot of bugs most of the way.
+
+
+00:06:20.720 --> 00:06:22.640
+The IDE experience much nicer.
+
+
+00:06:22.640 --> 00:06:23.640
+Yeah.
+
+
+00:06:23.640 --> 00:06:24.640
+My prints are great.
+
+
+00:06:24.640 --> 00:06:26.580
+help you also think about your library.
+
+
+00:06:26.580 --> 00:06:32.200
+I think we really see a shift in modern Python and Python 10 years ago, where
+
+
+00:06:32.200 --> 00:06:35.960
+it was more dynamic and dynamic, the dynamic, I remember, I thought it
+
+
+00:06:35.960 --> 00:06:39.920
+depends on Python were more seen as a strength than currently I believe.
+
+
+00:06:39.920 --> 00:06:41.180
+Yeah, I, I totally agree.
+
+
+00:06:41.180 --> 00:06:44.880
+And I feel like when type pens first came out, you know, this was, yes.
+
+
+00:06:44.880 --> 00:06:45.140
+Wow.
+
+
+00:06:45.140 --> 00:06:49.480
+At this point, kind of early Python three, but it didn't feel like it at the time.
+
+
+00:06:49.480 --> 00:06:52.960
+You know, Python three had been out for quite a while when type pens were
+
+
+00:06:52.960 --> 00:06:57.040
+introduced, I feel like that was Python three, four, but anyway, that was, put
+
+
+00:06:57.040 --> 00:07:01.120
+it maybe six years into the life cycle of Python three, but still, I feel like a
+
+
+00:07:01.120 --> 00:07:03.880
+lot of people were suspicious of that at the moment.
+
+
+00:07:03.880 --> 00:07:06.200
+You know, they're like, Oh, what is this weird thing?
+
+
+00:07:06.200 --> 00:07:09.440
+We're not really sure we want to put these types into our Python.
+
+
+00:07:09.440 --> 00:07:13.200
+And now a lot less, there's a lot less of those reactions.
+
+
+00:07:13.200 --> 00:07:13.600
+I feel.
+
+
+00:07:13.600 --> 00:07:14.200
+Yeah.
+
+
+00:07:14.200 --> 00:07:14.560
+Yeah.
+
+
+00:07:14.560 --> 00:07:19.480
+I see Python having two, probably more, but I often see Python as the really
+
+
+00:07:19.480 --> 00:07:24.160
+fun, nice to your own, Duck tape language where I can, my princess and took the
+
+
+00:07:24.160 --> 00:07:29.040
+notebook, I can just hack away and try interactively what happens and for such
+
+
+00:07:29.040 --> 00:07:33.840
+code, pipelines don't matter, but once I write more of a library or product or
+
+
+00:07:33.840 --> 00:07:36.120
+tool, then pipelines were really great.
+
+
+00:07:36.120 --> 00:07:39.200
+I believe they came about the Dropbox really needed them.
+
+
+00:07:39.200 --> 00:07:40.680
+They have a huge pipeline.
+
+
+00:07:40.680 --> 00:07:43.280
+It's really tough for me to get out.
+
+
+00:07:43.280 --> 00:07:44.560
+I'm not really sure.
+
+
+00:07:44.560 --> 00:07:44.800
+Yeah.
+
+
+00:07:44.800 --> 00:07:47.280
+And I heard some guy who has something to do with Python used to work there.
+
+
+00:07:47.280 --> 00:07:47.680
+Yeah.
+
+
+00:07:47.680 --> 00:07:47.960
+Yeah.
+
+
+00:07:47.960 --> 00:07:50.560
+I think even at that time.
+
+
+00:07:50.560 --> 00:07:51.060
+All right.
+
+
+00:07:51.060 --> 00:07:54.200
+So a bit of a diversion from how I often start the show.
+
+
+00:07:54.200 --> 00:07:56.600
+So let's just circle back real quick and get your story.
+
+
+00:07:56.600 --> 00:07:59.520
+How'd you get into programming and Python and Rust as well?
+
+
+00:07:59.520 --> 00:08:00.040
+I suppose.
+
+
+00:08:00.040 --> 00:08:01.440
+I got into programming.
+
+
+00:08:01.440 --> 00:08:02.960
+I just wanted to learn programming.
+
+
+00:08:02.960 --> 00:08:07.360
+A friend of mine who did, who programmed a lot of PHP said, learn Python.
+
+
+00:08:07.360 --> 00:08:07.840
+Like that.
+
+
+00:08:07.840 --> 00:08:13.680
+Or give me an interactive website where I could do some, some puzzles and I really
+
+
+00:08:13.680 --> 00:08:14.360
+got hooked to it.
+
+
+00:08:14.360 --> 00:08:16.000
+It was a fun summer.
+
+
+00:08:16.280 --> 00:08:18.240
+And, uh, programming a lot.
+
+
+00:08:18.240 --> 00:08:19.520
+I started automating.
+
+
+00:08:19.520 --> 00:08:22.980
+I, my job was civil engineer at the moment that I'd started.
+
+
+00:08:22.980 --> 00:08:27.880
+It was a lot of mundane tasks, repetitive, and I just found ways to automate my job.
+
+
+00:08:27.880 --> 00:08:32.020
+And eventually I was doing that for a year or three or, and then I got
+
+
+00:08:32.020 --> 00:08:34.480
+into data science and I switched jobs.
+
+
+00:08:34.480 --> 00:08:37.700
+Uh, I became a data scientist and later a data engineer.
+
+
+00:08:37.700 --> 00:08:38.240
+Yeah.
+
+
+00:08:38.240 --> 00:08:39.320
+So then was Python.
+
+
+00:08:39.320 --> 00:08:44.360
+Mostly I've always been looking for more languages, playing with Haskell,
+
+
+00:08:44.360 --> 00:08:49.920
+playing with Go, playing with Dubstrip, or just playing with Scala.
+
+
+00:08:49.920 --> 00:08:51.080
+And then I found Rust.
+
+
+00:08:51.080 --> 00:08:56.880
+And Rust really, really, like you learn a lot about how computers work.
+
+
+00:08:56.880 --> 00:08:57.040
+Yeah.
+
+
+00:08:57.040 --> 00:08:57.320
+Yeah.
+
+
+00:08:57.320 --> 00:09:00.960
+So I had a new renaissance of the first experience with Python.
+
+
+00:09:00.960 --> 00:09:04.200
+And now this summer at Rust, I've been doing a lot of other projects, like
+
+
+00:09:04.200 --> 00:09:08.920
+writing and interpreter, I don't know, a lot of projects and always
+
+
+00:09:08.920 --> 00:09:12.640
+getting one of those hobby projects just to use Rust more.
+
+
+00:09:12.680 --> 00:09:16.700
+Now it's, uh, it's got quite the following and we're going to definitely dive into
+
+
+00:09:16.700 --> 00:09:18.440
+that, but let me pull it up.
+
+
+00:09:18.440 --> 00:09:19.220
+It does right here.
+
+
+00:09:19.220 --> 00:09:21.180
+13,000 get up stars.
+
+
+00:09:21.180 --> 00:09:25.160
+That's a good number of people using that project.
+
+
+00:09:25.160 --> 00:09:25.440
+Yeah.
+
+
+00:09:25.440 --> 00:09:25.660
+Yeah.
+
+
+00:09:25.660 --> 00:09:25.960
+Crazy.
+
+
+00:09:25.960 --> 00:09:26.300
+Isn't it?
+
+
+00:09:26.300 --> 00:09:27.140
+Yeah, it is.
+
+
+00:09:27.140 --> 00:09:31.240
+It's it's, um, on GitHub stars, it's the fastest where I will data to agree.
+
+
+00:09:31.240 --> 00:09:32.120
+Wow.
+
+
+00:09:32.120 --> 00:09:32.960
+Incredible.
+
+
+00:09:32.960 --> 00:09:35.120
+It, um, you must be really proud of that.
+
+
+00:09:35.120 --> 00:09:35.640
+Yeah.
+
+
+00:09:35.640 --> 00:09:36.120
+Yeah.
+
+
+00:09:36.120 --> 00:09:40.940
+If you would have told me this two years ago, I would never be, but it was, it
+
+
+00:09:40.940 --> 00:09:43.500
+happen slow enough so you can get accustomed to that.
+
+
+00:09:43.500 --> 00:09:43.860
+Yeah.
+
+
+00:09:43.860 --> 00:09:44.860
+That's cool.
+
+
+00:09:44.860 --> 00:09:46.300
+Kind of like being a parent.
+
+
+00:09:46.300 --> 00:09:50.220
+The challenges that the kids are, are small, they they're, they're intense,
+
+
+00:09:50.220 --> 00:09:52.220
+but there are only a few things they need when they're small and
+
+
+00:09:52.220 --> 00:09:53.260
+you grow, you kind of grow with it.
+
+
+00:09:53.260 --> 00:09:58.820
+So a couple of thoughts, one, you had the inverse style of learning to
+
+
+00:09:58.820 --> 00:10:02.260
+program that I think a lot of computer science people do, and certainly that
+
+
+00:10:02.260 --> 00:10:06.220
+I did, that could also just be that I learned it a long time ago, but when
+
+
+00:10:06.220 --> 00:10:10.140
+I learned programming, it was, I'm going to learn C and C plus plus.
+
+
+00:10:10.220 --> 00:10:13.860
+And then you're kind of allowed to learn the easier languages,
+
+
+00:10:13.860 --> 00:10:15.740
+but you will learn your pointers.
+
+
+00:10:15.740 --> 00:10:18.580
+You'll have your void star star, and you're going to like it.
+
+
+00:10:18.580 --> 00:10:21.180
+You're going to understand what a pointer to a pointer means.
+
+
+00:10:21.180 --> 00:10:27.140
+I mean, you start inside of the most complex, closest to the machine.
+
+
+00:10:27.140 --> 00:10:28.140
+You work your way out.
+
+
+00:10:28.140 --> 00:10:30.460
+You kind of took this opposite, like let me learn Python,
+
+
+00:10:30.460 --> 00:10:32.420
+where it's much more high level.
+
+
+00:10:32.420 --> 00:10:37.060
+It's much-- if you choose to be, often say, very much more away
+
+
+00:10:37.060 --> 00:10:40.340
+from the hardware and the ideas of memories and threads and all that.
+
+
+00:10:40.340 --> 00:10:41.740
+And then you went to rust.
+
+
+00:10:41.740 --> 00:10:45.740
+So was it kind of an intense experience where you're like, Oh my gosh, this is
+
+
+00:10:45.740 --> 00:10:49.140
+intense, or had you studied enough languages by then to become comfortable?
+
+
+00:10:49.140 --> 00:10:50.500
+Well, yeah, yeah, no.
+
+
+00:10:50.500 --> 00:10:55.500
+So the going from high level to low level, I think it makes natural sense.
+
+
+00:10:55.500 --> 00:10:56.700
+You're learning yourself.
+
+
+00:10:56.700 --> 00:10:59.700
+There's no professor telling me you learn your pointers.
+
+
+00:10:59.700 --> 00:11:00.180
+Yeah.
+
+
+00:11:00.180 --> 00:11:04.260
+I think this also helped a lot because at that point you're really
+
+
+00:11:04.260 --> 00:11:06.260
+custom programming to algorithms.
+
+
+00:11:06.260 --> 00:11:06.700
+Yeah.
+
+
+00:11:06.820 --> 00:11:11.140
+So you can, I believe you should learn one thing, one new thing at a time, and that you
+
+
+00:11:11.140 --> 00:11:14.060
+can really own that knowledge later on.
+
+
+00:11:14.060 --> 00:11:17.580
+But Ross, I wouldn't say you should learn Ross as a first language.
+
+
+00:11:17.580 --> 00:11:19.180
+It would be really terrible.
+
+
+00:11:19.180 --> 00:11:22.000
+That would be terrible.
+
+
+00:11:22.000 --> 00:11:26.960
+But other languages also don't help you much because the PowerChecker, it's quite unique.
+
+
+00:11:26.960 --> 00:11:29.540
+It doesn't let you do things you can do in other languages.
+
+
+00:11:29.540 --> 00:11:35.620
+So what you learn there, the languages that allow you to do that, they just purge because
+
+
+00:11:35.620 --> 00:11:37.340
+So you can do a lot of things with it.
+
+
+00:11:37.340 --> 00:11:38.740
+And you can do a lot of things with it.
+
+
+00:11:38.740 --> 00:11:39.940
+And you can do a lot of things with it.
+
+
+00:11:39.940 --> 00:11:40.940
+And you can do a lot of things with it.
+
+
+00:11:40.940 --> 00:11:41.940
+And you can do a lot of things with it.
+
+
+00:11:41.940 --> 00:11:42.940
+And you can do a lot of things with it.
+
+
+00:11:42.940 --> 00:11:43.940
+And you can do a lot of things with it.
+
+
+00:11:43.940 --> 00:11:44.940
+And you can do a lot of things with it.
+
+
+00:11:44.940 --> 00:11:45.940
+And you can do a lot of things with it.
+
+
+00:11:45.940 --> 00:11:46.940
+And you can do a lot of things with it.
+
+
+00:11:46.940 --> 00:11:47.940
+And you can do a lot of things with it.
+
+
+00:11:47.940 --> 00:11:48.940
+And you can do a lot of things with it.
+
+
+00:11:48.940 --> 00:11:49.940
+And you can do a lot of things with it.
+
+
+00:11:49.940 --> 00:11:50.940
+And you can do a lot of things with it.
+
+
+00:11:50.940 --> 00:11:51.940
+And you can do a lot of things with it.
+
+
+00:11:51.940 --> 00:11:52.940
+And you can do a lot of things with it.
+
+
+00:11:52.940 --> 00:11:56.660
+is really clear who owns the memory, how deep your nesting is.
+
+
+00:11:56.660 --> 00:11:58.740
+It's always one D deeper.
+
+
+00:11:58.740 --> 00:12:01.700
+Most of the times it's, it's not that complicated.
+
+
+00:12:01.700 --> 00:12:05.700
+You, you make things really bad and really isn't easy to reason about.
+
+
+00:12:05.700 --> 00:12:10.260
+And in the beginning of project seems okay, but over-constraining,
+
+
+00:12:10.260 --> 00:12:14.700
+but when I mean software will become complex and complicated, and then you're
+
+
+00:12:14.700 --> 00:12:16.780
+happy to compile a notch to this.
+
+
+00:12:16.780 --> 00:12:17.700
+Yeah, absolutely.
+
+
+00:12:17.700 --> 00:12:18.420
+In this direction.
+
+
+00:12:18.420 --> 00:12:20.180
+It seems like a better way, honestly.
+
+
+00:12:20.260 --> 00:12:24.580
+You get a sense of programming in a more simple language
+
+
+00:12:24.580 --> 00:12:28.020
+that doesn't ask so many low-level concepts of you.
+
+
+00:12:28.020 --> 00:12:30.980
+And then you can add on these new ones.
+
+
+00:12:30.980 --> 00:12:33.580
+So I feel like a lot of how we teach programming,
+
+
+00:12:33.580 --> 00:12:35.500
+how people learn programming is a little bit backwards,
+
+
+00:12:35.500 --> 00:12:36.340
+to be honest.
+
+
+00:12:36.340 --> 00:12:37.940
+Anyway, enough on that.
+
+
+00:12:37.940 --> 00:12:40.140
+So you were a civil engineer for a while,
+
+
+00:12:40.140 --> 00:12:41.860
+and then you became a data scientist,
+
+
+00:12:41.860 --> 00:12:43.420
+and now you've created this library.
+
+
+00:12:43.420 --> 00:12:45.020
+Still working as a data scientist now?
+
+
+00:12:45.020 --> 00:12:45.860
+- No, no.
+
+
+00:12:45.860 --> 00:12:48.060
+I got sponsored two years ago,
+
+
+00:12:48.060 --> 00:12:53.060
+put two days a week and yeah, just to use the time to get a partner.
+
+
+00:12:53.060 --> 00:12:58.340
+And currently I thought all my day jobs, you know, going full time or
+
+
+00:12:58.340 --> 00:13:01.820
+there's, I'm trying to live on sponsorships, which is not really
+
+
+00:13:01.820 --> 00:13:03.940
+working well enough at this time.
+
+
+00:13:03.940 --> 00:13:07.140
+I hope to start a foundation and get some proper sponsorship.
+
+
+00:13:07.140 --> 00:13:07.700
+Yeah.
+
+
+00:13:07.700 --> 00:13:08.420
+That'd be great.
+
+
+00:13:08.420 --> 00:13:08.980
+Yeah.
+
+
+00:13:08.980 --> 00:13:10.300
+That's awesome.
+
+
+00:13:10.300 --> 00:13:13.700
+It's still awesome that you're able to do that, even if you know, you
+
+
+00:13:13.700 --> 00:13:14.980
+still need it to grow a little bit.
+
+
+00:13:14.980 --> 00:13:15.380
+Yeah.
+
+
+00:13:15.380 --> 00:13:18.940
+we'll have you on a podcast and let other people know out there who, who maybe are
+
+
+00:13:18.940 --> 00:13:23.260
+using your library, maybe they can, you know, put a little sponsorship and get up
+
+
+00:13:23.260 --> 00:13:23.820
+sponsors.
+
+
+00:13:23.820 --> 00:13:29.380
+I feel like get up sponsors really made it a lot easier for people to, to support.
+
+
+00:13:29.380 --> 00:13:34.900
+Cause there used to be like PayPal donate buttons and other, other things like that.
+
+
+00:13:34.900 --> 00:13:37.520
+And one, those are not really recurring.
+
+
+00:13:37.520 --> 00:13:40.740
+And two, you've got to go find someplace and put your credit card.
+
+
+00:13:40.740 --> 00:13:43.980
+Many of us already have a credit card registered at GitHub.
+
+
+00:13:44.220 --> 00:13:47.340
+It's just a matter of checking the box and monthly, it'll just go, you know,
+
+
+00:13:47.340 --> 00:13:49.900
+it's kind of like the app store versus buying independent apps.
+
+
+00:13:49.900 --> 00:13:51.700
+It just cuts down a lot of friction.
+
+
+00:13:51.700 --> 00:13:55.140
+I feel like it's been really positive mostly for open source.
+
+
+00:13:55.140 --> 00:13:55.340
+Yeah.
+
+
+00:13:55.340 --> 00:13:59.060
+I think it's good to, as a way to say, thank you with them.
+
+
+00:13:59.060 --> 00:14:00.740
+It doesn't need not to pay the bills.
+
+
+00:14:00.740 --> 00:14:04.100
+I think for most people, it isn't, but, um, I hope we get there.
+
+
+00:14:04.100 --> 00:14:08.540
+Big companies who use it should give a bit more, a bit more back.
+
+
+00:14:08.540 --> 00:14:09.580
+I mean, you have a lot of money.
+
+
+00:14:09.580 --> 00:14:10.060
+I agree.
+
+
+00:14:10.340 --> 00:14:15.860
+It's really, really ridiculous that there are banks and VC funded companies and
+
+
+00:14:15.860 --> 00:14:19.780
+things like that, that have not necessarily in terms of the VC ones, but
+
+
+00:14:19.780 --> 00:14:24.180
+definitely in terms of financial and other large companies that make billions
+
+
+00:14:24.180 --> 00:14:27.740
+and billions of dollars in profit on top of open source technology.
+
+
+00:14:27.740 --> 00:14:31.500
+And many of them don't give anything back, which is, it's not criminal
+
+
+00:14:31.500 --> 00:14:35.820
+because the licenses allow it, but it's, it's certainly borders on immoral to
+
+
+00:14:35.820 --> 00:14:41.300
+say, we made all this money and not at all support the people who are really
+
+
+00:14:41.300 --> 00:14:43.060
+building the foundations that we build upon.
+
+
+00:14:43.060 --> 00:14:44.660
+Most of my sponsors are developers.
+
+
+00:14:44.660 --> 00:14:44.940
+Yeah.
+
+
+00:14:44.940 --> 00:14:45.820
+Yeah.
+
+
+00:14:45.820 --> 00:14:48.700
+So, uh, yeah, we'll, let's hope it changes.
+
+
+00:14:48.700 --> 00:14:49.340
+I don't know.
+
+
+00:14:49.340 --> 00:14:49.580
+Yeah.
+
+
+00:14:49.580 --> 00:14:52.140
+Well, I'll continue to beat that drum.
+
+
+00:14:52.140 --> 00:14:59.020
+This portion of talk Python to me is brought to you by Type I Type I is the
+
+
+00:14:59.020 --> 00:15:03.300
+next generation open source Python application builder with Type I you can
+
+
+00:15:03.300 --> 00:15:07.260
+turn data and AI algorithms into full web apps in no time.
+
+
+00:15:07.260 --> 00:15:08.420
+Here's how it works.
+
+
+00:15:08.420 --> 00:15:11.380
+You start with a bare algorithm written in Python.
+
+
+00:15:11.380 --> 00:15:13.580
+You then use TypeEye's innovative tool set
+
+
+00:15:13.580 --> 00:15:15.580
+that enables Python developers to build
+
+
+00:15:15.580 --> 00:15:18.580
+interactive end-user applications quickly.
+
+
+00:15:18.580 --> 00:15:20.300
+There's a visual designer to develop
+
+
+00:15:20.300 --> 00:15:22.680
+highly interactive GUIs ready for production,
+
+
+00:15:22.680 --> 00:15:24.220
+and for inbound data streams,
+
+
+00:15:24.220 --> 00:15:27.780
+you can program against the TypeEye Core layer as well.
+
+
+00:15:27.780 --> 00:15:30.380
+TypeEye Core provides intelligent pipeline management,
+
+
+00:15:30.380 --> 00:15:33.920
+data caching and scenario and cycle management facilities.
+
+
+00:15:33.920 --> 00:15:36.700
+That's it, you'll have transformed a bare algorithm
+
+
+00:15:36.700 --> 00:15:40.480
+into a full-fledged decision support system for end users.
+
+
+00:15:40.480 --> 00:15:42.920
+Type-I is pure Python and open source,
+
+
+00:15:42.920 --> 00:15:45.800
+and you install it with a simple pip install type-I.
+
+
+00:15:45.800 --> 00:15:48.300
+For large organizations that need fine-grained control
+
+
+00:15:48.300 --> 00:15:49.940
+and authorization around their data,
+
+
+00:15:49.940 --> 00:15:52.520
+there is a paid Type-I Enterprise Edition,
+
+
+00:15:52.520 --> 00:15:54.860
+but the Type-I core and GUI described above
+
+
+00:15:54.860 --> 00:15:56.900
+is completely free to use.
+
+
+00:15:56.900 --> 00:15:58.640
+Learn more and get started by visiting
+
+
+00:15:58.640 --> 00:16:01.160
+talk, by Thon dot FM slash type high.
+
+
+00:16:01.160 --> 00:16:04.180
+That's T a I P Y the links in your show notes.
+
+
+00:16:04.180 --> 00:16:06.980
+Thank you to type high for sponsoring the show.
+
+
+00:16:06.980 --> 00:16:10.540
+Let's talk about your project.
+
+
+00:16:10.540 --> 00:16:14.360
+So Polars and the RS is for rust.
+
+
+00:16:14.360 --> 00:16:18.320
+I imagine at the end, but tell us about the name Polars, like Polar bear.
+
+
+00:16:18.320 --> 00:16:19.100
+But Polars.
+
+
+00:16:19.100 --> 00:16:19.460
+Yeah.
+
+
+00:16:19.460 --> 00:16:24.620
+So I started writing a data from library and initially it was only for, for us.
+
+
+00:16:24.860 --> 00:16:29.660
+And I wanted to give a week to the pandas project, but I wanted a beer that was better, faster.
+
+
+00:16:29.660 --> 00:16:30.600
+I don't know, stronger.
+
+
+00:16:30.600 --> 00:16:35.480
+So luckily a Panda beer is the most practical beer.
+
+
+00:16:35.480 --> 00:16:38.580
+So I had a few to choose, to choose.
+
+
+00:16:38.580 --> 00:16:41.300
+But the Polaris has the RRF.
+
+
+00:16:41.300 --> 00:16:42.940
+So that's a lucky coincidence.
+
+
+00:16:42.940 --> 00:16:43.700
+Yeah.
+
+
+00:16:43.700 --> 00:16:44.140
+Yeah.
+
+
+00:16:44.140 --> 00:16:48.140
+So the subtitle here is lightning fast, but you can't get it.
+
+
+00:16:48.140 --> 00:16:48.920
+You can't get it.
+
+
+00:16:48.920 --> 00:16:49.580
+You can't get it.
+
+
+00:16:49.580 --> 00:16:50.380
+But you can get it.
+
+
+00:16:50.380 --> 00:16:52.420
+And it's a, it's a, it's a really, really good beer.
+
+
+00:16:52.420 --> 00:16:57.620
+So the subtitle here is lightning fast data frame library for rust and Python.
+
+
+00:16:57.620 --> 00:17:00.060
+And you have two APIs that people can use.
+
+
+00:17:00.060 --> 00:17:01.740
+We'll get to dive into those.
+
+
+00:17:01.740 --> 00:17:02.140
+Yeah.
+
+
+00:17:02.140 --> 00:17:06.340
+Cause we read an angle and Ross, it's a complete data from library and Ross
+
+
+00:17:06.340 --> 00:17:09.940
+thing you can expose that to many fun bits, but we have this already front
+
+
+00:17:09.940 --> 00:17:11.860
+end and Ross Python, no JS.
+
+
+00:17:11.860 --> 00:17:16.260
+R is coming up and normal JavaScript is coming up and Ruby.
+
+
+00:17:16.260 --> 00:17:18.340
+There's also a polar to group.
+
+
+00:17:18.340 --> 00:17:18.860
+So,
+
+
+00:17:18.860 --> 00:17:20.060
+how interesting.
+
+
+00:17:20.100 --> 00:17:23.300
+So for the JavaScript one, are you going to use web assembly?
+
+
+00:17:23.300 --> 00:17:23.580
+Yeah.
+
+
+00:17:23.580 --> 00:17:23.860
+Right.
+
+
+00:17:23.860 --> 00:17:27.460
+Which is pretty straightforward because Rust comes from Mozilla web
+
+
+00:17:27.460 --> 00:17:29.500
+assembly, I believe also originated.
+
+
+00:17:29.500 --> 00:17:33.100
+They kind of originated as a somewhat tied together story.
+
+
+00:17:33.100 --> 00:17:33.660
+Yeah.
+
+
+00:17:33.660 --> 00:17:36.220
+C++ C can compile to web assembly.
+
+
+00:17:36.220 --> 00:17:39.740
+It's not really straightforward because the web assembly virtual machine
+
+
+00:17:39.740 --> 00:17:41.500
+isn't like your normal OS.
+
+
+00:17:41.500 --> 00:17:44.740
+So there are a lot of things harder, but we're, we are working on it.
+
+
+00:17:44.740 --> 00:17:45.940
+Okay.
+
+
+00:17:45.940 --> 00:17:49.500
+Well, that's pretty interesting, but for now you got Python and you've got Rust.
+
+
+00:17:49.780 --> 00:17:50.580
+And that's great.
+
+
+00:17:50.580 --> 00:17:55.100
+Let's, I think a lot of people listening, myself included, when I started looking
+
+
+00:17:55.100 --> 00:18:01.140
+into this immediately go to, it's like pandas, but rust, you know, it's like
+
+
+00:18:01.140 --> 00:18:04.300
+pandas, but instead of C at the bottom, it's, it's rust at the bottom.
+
+
+00:18:04.300 --> 00:18:07.580
+And that's somewhat true, but mostly not true.
+
+
+00:18:07.580 --> 00:18:11.860
+So let's start with you telling us, you know, how is this like pandas
+
+
+00:18:11.860 --> 00:18:13.380
+and how is it different from pandas?
+
+
+00:18:13.380 --> 00:18:13.740
+Yeah.
+
+
+00:18:13.740 --> 00:18:16.260
+So it's not like pandas.
+
+
+00:18:16.260 --> 00:18:18.500
+I think it's different on two ways.
+
+
+00:18:18.620 --> 00:18:21.500
+So we have the API and we have the page.
+
+
+00:18:21.500 --> 00:18:23.340
+And which one should I start with?
+
+
+00:18:23.340 --> 00:18:23.980
+Bottom up?
+
+
+00:18:23.980 --> 00:18:25.140
+That's I think bottom up.
+
+
+00:18:25.140 --> 00:18:25.340
+Yeah.
+
+
+00:18:25.340 --> 00:18:25.540
+Yeah.
+
+
+00:18:25.540 --> 00:18:26.020
+Bottom up.
+
+
+00:18:26.020 --> 00:18:26.260
+Sure.
+
+
+00:18:26.260 --> 00:18:26.660
+All right.
+
+
+00:18:26.660 --> 00:18:29.580
+So that was my critique from pandas.
+
+
+00:18:29.580 --> 00:18:34.260
+And if they didn't start bottom up, they do whatever was there already
+
+
+00:18:34.260 --> 00:18:36.380
+with work for that purpose.
+
+
+00:18:36.380 --> 00:18:39.100
+And pandas built on NumPy.
+
+
+00:18:39.100 --> 00:18:40.980
+And NumPy is a great library.
+
+
+00:18:40.980 --> 00:18:44.100
+It's, well, it's built for numerical processing and not for relational
+
+
+00:18:44.100 --> 00:18:47.260
+processing, relational data is completely different.
+
+
+00:18:47.260 --> 00:18:50.380
+You have string data, nested data, and this data is probably
+
+
+00:18:50.380 --> 00:18:54.340
+as put as Python object in those NumPy arrays.
+
+
+00:18:54.340 --> 00:18:58.580
+And if you know anything about, about memory, then in this array, you have
+
+
+00:18:58.580 --> 00:19:02.460
+pointer with where each Python object is somewhere else, so if you traverse this
+
+
+00:19:02.460 --> 00:19:06.500
+memory, every pointer you emit must look it up somewhere else, but memory is not a
+
+
+00:19:06.500 --> 00:19:11.660
+cache, but cache miss, which is a 200x slowdown per element you traverse.
+
+
+00:19:11.660 --> 00:19:11.980
+Yeah.
+
+
+00:19:11.980 --> 00:19:16.900
+So for people listening, what you're saying the 200x slowdown is, the L1,
+
+
+00:19:16.900 --> 00:19:24.100
+L2, L3 caches, which all have different speeds and stuff, but the caches that are near the CPU versus main memory.
+
+
+00:19:24.100 --> 00:19:30.500
+It's like two to 400 times slower, not aging off a disk or something. It's really different, right? It's really a big deal.
+
+
+00:19:30.500 --> 00:19:36.660
+It's a big deal. It's terribly slow. It also, Python has a gill. It also blocks multi-threading.
+
+
+00:19:36.660 --> 00:19:40.260
+If you want to read the string, you cannot do this on different threads.
+
+
+00:19:40.260 --> 00:19:44.020
+If you want to modify the string, there's only one thread that connects this five-finger.
+
+
+00:19:44.020 --> 00:19:49.620
+So they also didn't take into account anything from databases.
+
+
+00:19:49.620 --> 00:19:53.220
+So databases are facing from the 1950s.
+
+
+00:19:53.220 --> 00:19:57.340
+There's been a lot of research in databases and how we do things fast,
+
+
+00:19:57.340 --> 00:20:01.460
+write a query and then optimize this query because the user that uses
+
+
+00:20:01.460 --> 00:20:03.380
+your library is not the expert.
+
+
+00:20:03.380 --> 00:20:04.740
+It doesn't write optimized query.
+
+
+00:20:04.740 --> 00:20:09.380
+No, but we have a lot of information so we can optimize this query and execute
+
+
+00:20:09.380 --> 00:20:11.580
+this in the most, in a very efficient way.
+
+
+00:20:11.580 --> 00:20:13.020
+Well, that's an interesting idea.
+
+
+00:20:13.100 --> 00:20:17.100
+Yeah, and Pongos just executes it and gives you what you ask.
+
+
+00:20:17.100 --> 00:20:18.500
+What you ask is probably not...
+
+
+00:20:18.500 --> 00:20:20.900
+Yeah, that's interesting because as programmers,
+
+
+00:20:20.900 --> 00:20:23.500
+when I have my Python hat on,
+
+
+00:20:23.500 --> 00:20:26.300
+I want my code to run exactly as I wrote it.
+
+
+00:20:26.300 --> 00:20:30.000
+I don't want it to get clever and change it.
+
+
+00:20:30.000 --> 00:20:31.900
+If I said do a loop, do a loop.
+
+
+00:20:31.900 --> 00:20:35.000
+If I said put it in a dictionary, put it in a dictionary.
+
+
+00:20:35.000 --> 00:20:37.300
+But when I write a database query,
+
+
+00:20:37.300 --> 00:20:41.400
+be that against Postgres with relational or MongoDB,
+
+
+00:20:41.400 --> 00:20:45.720
+There's a query planner and the query planner looks at all the different steps.
+
+
+00:20:45.720 --> 00:20:47.360
+Should we do the filter first?
+
+
+00:20:47.360 --> 00:20:48.480
+Can we use an index?
+
+
+00:20:48.480 --> 00:20:51.240
+Can we use a compo, which index should we choose?
+
+
+00:20:51.240 --> 00:20:52.880
+All of those things, right?
+
+
+00:20:52.880 --> 00:20:57.240
+And so what you tell it and what happens, you don't tell it how to do
+
+
+00:20:57.240 --> 00:21:01.600
+finding the data, the database, you just give it, here's kind of the expressions
+
+
+00:21:01.600 --> 00:21:04.800
+that I need, the, the, the predicates that I need you to work with.
+
+
+00:21:04.800 --> 00:21:06.120
+And then you figure it out.
+
+
+00:21:06.120 --> 00:21:06.640
+You're smart.
+
+
+00:21:06.640 --> 00:21:07.360
+You're the database.
+
+
+00:21:07.600 --> 00:21:12.340
+So one of the differences I got from reading what you've got here so far is
+
+
+00:21:12.340 --> 00:21:16.120
+it looks like, I don't know if it goes as far as this database stuff that we're
+
+
+00:21:16.120 --> 00:21:20.960
+talking about, but there's a way for it to build up the code it's supposed to run.
+
+
+00:21:20.960 --> 00:21:23.960
+And it can decide things like, you know, these two things could go in parallel
+
+
+00:21:23.960 --> 00:21:25.920
+or things along those lines.
+
+
+00:21:25.920 --> 00:21:26.200
+Right?
+
+
+00:21:26.200 --> 00:21:26.400
+Yeah.
+
+
+00:21:26.400 --> 00:21:26.840
+Yeah.
+
+
+00:21:26.840 --> 00:21:29.040
+Well, it is actually very similar.
+
+
+00:21:29.040 --> 00:21:30.480
+It is a vectorized query engine.
+
+
+00:21:30.480 --> 00:21:34.680
+And you can, the only thing that doesn't make us a database is that we don't have
+
+
+00:21:34.680 --> 00:21:38.320
+any, we don't bother with, uh, with file structures.
+
+
+00:21:38.320 --> 00:21:38.680
+And we've
+
+
+00:21:38.680 --> 00:21:38.940
+right.
+
+
+00:21:38.940 --> 00:21:41.400
+Like the persistence and transactions and all that.
+
+
+00:21:41.400 --> 00:21:45.880
+So we have different kinds of late databases, you have OLAP and OLTP
+
+
+00:21:45.880 --> 00:21:50.880
+transactional modeling, which works often on one, but if you do a rest API query
+
+
+00:21:50.880 --> 00:21:55.240
+and you modify one user ID, then your transactional, and if you're doing OLAP,
+
+
+00:21:55.240 --> 00:21:59.800
+that's more analytical and then you do large aggregations of large old tables.
+
+
+00:21:59.800 --> 00:22:03.240
+And then you need to process all the data and those different databases
+
+
+00:22:03.240 --> 00:22:06.600
+So you can see that we have a lot of different things that we can do.
+
+
+00:22:06.600 --> 00:22:08.400
+And I think that's a really cool feature.
+
+
+00:22:08.400 --> 00:22:09.840
+And I think that's a really cool feature.
+
+
+00:22:09.840 --> 00:22:10.840
+And I think that's a really cool feature.
+
+
+00:22:10.840 --> 00:22:11.840
+And I think that's a really cool feature.
+
+
+00:22:11.840 --> 00:22:12.840
+And I think that's a really cool feature.
+
+
+00:22:12.840 --> 00:22:13.840
+And I think that's a really cool feature.
+
+
+00:22:13.840 --> 00:22:14.840
+And I think that's a really cool feature.
+
+
+00:22:14.840 --> 00:22:15.840
+And I think that's a really cool feature.
+
+
+00:22:15.840 --> 00:22:16.840
+And I think that's a really cool feature.
+
+
+00:22:16.840 --> 00:22:17.840
+And I think that's a really cool feature.
+
+
+00:22:17.840 --> 00:22:18.840
+And I think that's a really cool feature.
+
+
+00:22:18.840 --> 00:22:19.840
+And I think that's a really cool feature.
+
+
+00:22:19.840 --> 00:22:20.840
+And I think that's a really cool feature.
+
+
+00:22:20.840 --> 00:22:21.840
+And I think that's a really cool feature.
+
+
+00:22:21.840 --> 00:22:22.840
+And I think that's a really cool feature.
+
+
+00:22:22.840 --> 00:22:23.840
+And I think that's a really cool feature.
+
+
+00:22:23.840 --> 00:22:26.720
+And then we write down the whole algorithm, how to get a copy.
+
+
+00:22:26.720 --> 00:22:28.760
+You could just say, get me a healthy Nintendo.
+
+
+00:22:28.760 --> 00:22:34.880
+I'd like some sugar and then let the query engine decide how to test it.
+
+
+00:22:34.880 --> 00:22:35.880
+And that's more declarative.
+
+
+00:22:35.880 --> 00:22:38.060
+You describe the end result.
+
+
+00:22:38.060 --> 00:22:41.960
+And as it turns out, this is also very readable because you declare what you want and the
+
+
+00:22:41.960 --> 00:22:45.200
+intent is readable in the query.
+
+
+00:22:45.200 --> 00:22:50.160
+And if you're doing more procedural programming, you describe what you're doing and the intent
+
+
+00:22:50.160 --> 00:22:52.000
+often needs to come from comments.
+
+
+00:22:52.000 --> 00:22:54.880
+And then we have a lot of things that we can do with the API.
+
+
+00:22:54.880 --> 00:22:57.280
+So we have a lot of things that we can do with the API.
+
+
+00:22:57.280 --> 00:22:59.840
+And then we have a lot of things that we can do with the API.
+
+
+00:22:59.840 --> 00:23:02.320
+And then we have a lot of things that we can do with the API.
+
+
+00:23:02.320 --> 00:23:04.320
+And then we have a lot of things that we can do with the API.
+
+
+00:23:04.320 --> 00:23:06.320
+And then we have a lot of things that we can do with the API.
+
+
+00:23:06.320 --> 00:23:08.320
+And then we have a lot of things that we can do with the API.
+
+
+00:23:08.320 --> 00:23:10.320
+And then we have a lot of things that we can do with the API.
+
+
+00:23:10.320 --> 00:23:12.320
+And then we have a lot of things that we can do with the API.
+
+
+00:23:12.320 --> 00:23:14.320
+And then we have a lot of things that we can do with the API.
+
+
+00:23:14.320 --> 00:23:16.320
+And then we have a lot of things that we can do with the API.
+
+
+00:23:16.320 --> 00:23:18.320
+And then we have a lot of things that we can do with the API.
+
+
+00:23:18.320 --> 00:23:23.920
+exposed on this API and then we noticed how bad it was for writing fast data.
+
+
+00:23:23.920 --> 00:23:29.320
+On this API it just isn't really for this declarative analyzing of what the user wants
+
+
+00:23:29.320 --> 00:23:30.320
+to do.
+
+
+00:23:30.320 --> 00:23:34.800
+So we just cut it off and took the freedom to design an API that makes most sense.
+
+
+00:23:34.800 --> 00:23:36.000
+Well, that's interesting.
+
+
+00:23:36.000 --> 00:23:40.440
+I didn't realize that you had started trying to be closer to pandas than you ended up.
+
+
+00:23:40.440 --> 00:23:41.440
+Yeah.
+
+
+00:23:41.440 --> 00:23:43.440
+Well, it was very short-list I must say.
+
+
+00:23:43.440 --> 00:23:44.440
+It was painful.
+
+
+00:23:44.440 --> 00:23:49.000
+Yeah. And that's not necessarily saying pandas are bad. I don't think it's
+
+
+00:23:49.000 --> 00:23:52.120
+approaching the problem differently and it has different goals. Right. Yeah.
+
+
+00:23:52.120 --> 00:23:56.520
+So maybe we could look at an example of some of the code that we're talking
+
+
+00:23:56.520 --> 00:24:01.880
+about, I guess also one of the other differences there is much of this has
+
+
+00:24:01.880 --> 00:24:06.000
+to do with what you would call, I guess you refer to them as lazy APIs or
+
+
+00:24:06.000 --> 00:24:08.640
+streaming APIs, kind of like a generator.
+
+
+00:24:08.640 --> 00:24:13.000
+Yeah. So what you think about a join, for instance, in pandas, if you would
+
+
+00:24:13.000 --> 00:24:17.700
+right at join and then take only do and only want to first 100 rows with that
+
+
+00:24:17.700 --> 00:24:20.100
+result, then it would first do the join.
+
+
+00:24:20.100 --> 00:24:23.860
+And then that might produce 1 million, 10 million rows.
+
+
+00:24:23.860 --> 00:24:27.780
+And then you take only 100 of them and then you have materialized a million,
+
+
+00:24:27.780 --> 00:24:29.200
+but you take only a fraction of that.
+
+
+00:24:29.200 --> 00:24:33.860
+And by having that lazy, you can, can optimize for the whole query at a time
+
+
+00:24:33.860 --> 00:24:35.340
+and just see how we do this.
+
+
+00:24:35.340 --> 00:24:36.900
+Join, but we only need 100 rows.
+
+
+00:24:36.900 --> 00:24:38.380
+So that's how we materialize.
+
+
+00:24:38.380 --> 00:24:40.260
+That gets you more realistic.
+
+
+00:24:40.260 --> 00:24:41.340
+That's really cool.
+
+
+00:24:41.460 --> 00:24:44.700
+I didn't realize it had so many similarities to databases,
+
+
+00:24:44.700 --> 00:24:46.220
+but yeah, it makes a lot of sense.
+
+
+00:24:46.220 --> 00:24:50.500
+All right, let's look at maybe a super simple example
+
+
+00:24:50.500 --> 00:24:53.660
+you've got on polar.rs.
+
+
+00:24:53.660 --> 00:24:54.980
+What country is rs?
+
+
+00:24:54.980 --> 00:24:57.540
+I always love how different countries
+
+
+00:24:57.540 --> 00:24:59.780
+that often have nothing to do with domain names
+
+
+00:24:59.780 --> 00:25:01.500
+get grabbed because they have a cool ending
+
+
+00:25:01.500 --> 00:25:04.740
+like Libya that was .ly for a while.
+
+
+00:25:04.740 --> 00:25:06.620
+You know, it still is, but like it was used frequently
+
+
+00:25:06.620 --> 00:25:07.980
+like bit.ly and stuff.
+
+
+00:25:07.980 --> 00:25:08.940
+Do you know what rs is?
+
+
+00:25:08.940 --> 00:25:10.940
+- I believe it's Serbia.
+
+
+00:25:10.940 --> 00:25:12.280
+- Serbia, okay, cool. - I'm not sure.
+
+
+00:25:12.280 --> 00:25:13.200
+- Yeah, yeah, very cool.
+
+
+00:25:13.200 --> 00:25:17.280
+All right, so polar.rs, like polar.rs.
+
+
+00:25:17.280 --> 00:25:20.280
+Over here, you've got on the homepage here,
+
+
+00:25:20.280 --> 00:25:22.660
+the landing page, and then through the documentation as well,
+
+
+00:25:22.660 --> 00:25:23.920
+you've got a lot of places where you're like,
+
+
+00:25:23.920 --> 00:25:26.840
+show me the Rust API or show me the Python API.
+
+
+00:25:26.840 --> 00:25:29.120
+People can come and check out the Rust code.
+
+
+00:25:29.120 --> 00:25:33.000
+It's a little bit longer because it's that kind of language,
+
+
+00:25:33.000 --> 00:25:35.360
+but it's not terribly more complex.
+
+
+00:25:35.360 --> 00:25:37.920
+But maybe talk us through this little example
+
+
+00:25:37.920 --> 00:25:40.360
+here on the homepage in Python,
+
+
+00:25:40.360 --> 00:25:42.520
+just to give people a sense of what the API looks like.
+
+
+00:25:42.520 --> 00:25:48.000
+Yeah. So we started with a scanned CSV, which is a lazy read, which is,
+
+
+00:25:48.000 --> 00:25:50.240
+so read CSV tells what to do.
+
+
+00:25:50.240 --> 00:25:52.960
+And then it reads the CSV and you get the data frame.
+
+
+00:25:52.960 --> 00:25:56.400
+And a scanned CSV, we start a computation graph.
+
+
+00:25:56.400 --> 00:25:57.680
+It's called a lazy frame.
+
+
+00:25:57.680 --> 00:26:01.200
+And a lazy frame is actually just, it holds, it remembers the steps of
+
+
+00:26:01.200 --> 00:26:02.440
+the operations you want to do.
+
+
+00:26:02.440 --> 00:26:06.080
+Then it tells it, oh, large, what it looks at this, this very plan and
+
+
+00:26:06.080 --> 00:26:09.200
+optimize it, and we'll think of how to execute it.
+
+
+00:26:09.200 --> 00:26:12.080
+And we have different engines, so you can have an engine that's more
+
+
+00:26:12.080 --> 00:26:15.720
+specialized for data that doesn't fit into memory and an engine that's more
+
+
+00:26:15.720 --> 00:26:17.920
+specialized for data that does fit into memory.
+
+
+00:26:17.920 --> 00:26:23.900
+So we start with a scan and then we do a doc filter and we want to use verbs.
+
+
+00:26:23.900 --> 00:26:26.380
+Verbs, that's the declarative part.
+
+
+00:26:26.380 --> 00:26:32.360
+In pandas we often do indexes or a, and those indexes are ambiguous in my opinion,
+
+
+00:26:32.360 --> 00:26:36.820
+because you can, you can pass in a NumPy array with booleans, but you can also
+
+
+00:26:36.820 --> 00:26:38.720
+pass in a NumPy array with integers.
+
+
+00:26:38.980 --> 00:26:43.180
+So you can do slicing, you can also pass in a list of strings,
+
+
+00:26:43.180 --> 00:26:44.780
+and then you do column selection.
+
+
+00:26:44.780 --> 00:26:46.480
+So it has three functions.
+
+
+00:26:46.480 --> 00:26:51.280
+One thing that I find really interesting about Pandas is it's so incredible,
+
+
+00:26:51.280 --> 00:26:55.380
+and people who are very good with Pandas, they can just make it fly.
+
+
+00:26:55.380 --> 00:26:58.780
+They can make it really write expressions that are super powerful,
+
+
+00:26:58.780 --> 00:27:02.980
+but it's not obvious that you should have been able to do that before you see it.
+
+
+00:27:02.980 --> 00:27:05.280
+You know, there's a lot of not quite magic,
+
+
+00:27:05.280 --> 00:27:10.240
+but stuff that doesn't seem to come really straight out of the API directly.
+
+
+00:27:10.240 --> 00:27:14.480
+You pass in some sort of a Boolean expression
+
+
+00:27:14.480 --> 00:27:19.680
+that involves a vector and some other test into the brackets.
+
+
+00:27:19.680 --> 00:27:21.520
+I wait, how do I know I can do that?
+
+
+00:27:21.520 --> 00:27:26.400
+Whereas this, your API is a lot more of a fluent API where you say,
+
+
+00:27:26.400 --> 00:27:33.560
+PD would say PL, PL.scan, CSV.filter.groupby.aggregate.collect,
+
+
+00:27:33.560 --> 00:27:35.600
+And it kind of just flows together.
+
+
+00:27:35.600 --> 00:27:39.560
+Does that mean that the editors and IDEs can be more helpful
+
+
+00:27:39.560 --> 00:27:41.540
+suggesting what happens at each step?
+
+
+00:27:41.540 --> 00:27:43.960
+Yes, we are really strict on type.
+
+
+00:27:43.960 --> 00:27:49.600
+So we also only return a single type from a method and we only a dot filter
+
+
+00:27:49.600 --> 00:27:53.080
+just expects a Boolean expression that produces a Boolean, not only
+
+
+00:27:53.080 --> 00:27:54.200
+integer and not a string.
+
+
+00:27:54.200 --> 00:27:58.040
+So we want our methods from reading or code.
+
+
+00:27:58.040 --> 00:28:00.800
+You should be able to understand what should go in.
+
+
+00:28:00.800 --> 00:28:02.440
+That's really important to me.
+
+
+00:28:02.680 --> 00:28:04.000
+It should be unambiguous.
+
+
+00:28:04.000 --> 00:28:06.980
+It should be consistent and you, your knowledge of the API should
+
+
+00:28:06.980 --> 00:28:08.800
+expand to different parts of the API.
+
+
+00:28:08.800 --> 00:28:12.240
+And that's where I think we'll talk about this later, but that's where
+
+
+00:28:12.240 --> 00:28:14.280
+expressions are going to be coming over.
+
+
+00:28:14.280 --> 00:28:19.840
+This portion of talk Python to me is brought to you by user interviews.
+
+
+00:28:19.840 --> 00:28:23.760
+As a developer, how often do you find yourself talking back to
+
+
+00:28:23.760 --> 00:28:25.520
+products and services that you use?
+
+
+00:28:25.520 --> 00:28:29.360
+Sometimes it may be frustration over how it's working poorly.
+
+
+00:28:29.360 --> 00:28:35.200
+And if they just did such and such, it would work better and it's easy to do.
+
+
+00:28:35.200 --> 00:28:36.640
+Other times it might be delight.
+
+
+00:28:36.640 --> 00:28:39.040
+Wow, they auto-filled that section for me.
+
+
+00:28:39.040 --> 00:28:40.440
+How did they even do that?
+
+
+00:28:40.440 --> 00:28:41.440
+Wonderful.
+
+
+00:28:41.440 --> 00:28:42.440
+Thanks.
+
+
+00:28:42.440 --> 00:28:45.600
+While this verbalization might be great to get the thoughts out of your head, did you
+
+
+00:28:45.600 --> 00:28:49.400
+know that you can earn money for your feedback on real products?
+
+
+00:28:49.400 --> 00:28:53.400
+User interviews connects researchers with professionals that want to participate in
+
+
+00:28:53.400 --> 00:28:55.000
+research studies.
+
+
+00:28:55.000 --> 00:28:59.960
+There is a high demand for developers to share their opinions on products being created for
+
+
+00:28:59.960 --> 00:29:00.960
+developers.
+
+
+00:29:00.960 --> 00:29:04.960
+Aside from the extra cash, you'll talk to people building products in your space.
+
+
+00:29:04.960 --> 00:29:09.120
+You will not only learn about new tools being created, but you'll also shape the future
+
+
+00:29:09.120 --> 00:29:11.380
+of the products that we all use.
+
+
+00:29:11.380 --> 00:29:16.340
+It's completely free to sign up and you can apply to your first study in under five minutes.
+
+
+00:29:16.340 --> 00:29:18.600
+The average study pays over $60.
+
+
+00:29:18.600 --> 00:29:23.920
+However, many studies specifically interested in developers pay several hundreds of dollars
+
+
+00:29:23.920 --> 00:29:29.360
+for a one-on-one interview. Are you ready to earn extra income from sharing your expert opinion?
+
+
+00:29:29.360 --> 00:29:35.280
+Head over to talkpython.fm/userinterviews to participate today. The link is in your
+
+
+00:29:35.280 --> 00:29:38.960
+podcast player show notes. Thank you to User Interviews for supporting the show.
+
+
+00:29:38.960 --> 00:29:47.520
+I just derailed you a little bit here as you were describing this. So you start out with
+
+
+00:29:47.520 --> 00:29:53.440
+scanning a CSV, which is sort of creating and kicking off a data frame equivalent here.
+
+
+00:29:53.440 --> 00:29:55.000
+And then you, a lazy frame.
+
+
+00:29:55.000 --> 00:29:55.240
+Okay.
+
+
+00:29:55.240 --> 00:29:59.320
+And then you say a dot filter and you give it an expression like this column
+
+
+00:29:59.320 --> 00:30:00.960
+is greater than five, right.
+
+
+00:30:00.960 --> 00:30:03.840
+Or some expression that we would understand in Python.
+
+
+00:30:03.840 --> 00:30:05.000
+And that's the filter statement.
+
+
+00:30:05.000 --> 00:30:05.240
+Right?
+
+
+00:30:05.240 --> 00:30:05.560
+Yeah.
+
+
+00:30:05.560 --> 00:30:10.080
+And then we follow it a group by argument and then an aggregation where we say,
+
+
+00:30:10.080 --> 00:30:12.280
+okay, take all columns and some of them.
+
+
+00:30:12.280 --> 00:30:15.880
+And this again, as an expression, these are really easy expressions.
+
+
+00:30:15.880 --> 00:30:19.960
+And then we take this lazy frame and we materialize it into a
+
+
+00:30:19.960 --> 00:30:21.160
+data framework called connect.
+
+
+00:30:21.520 --> 00:30:27.360
+And collect means, okay, all those steps you recorded, now you can do your magic, query
+
+
+00:30:27.360 --> 00:30:29.040
+optimizer, get all the stuff.
+
+
+00:30:29.040 --> 00:30:34.640
+And what this will do here, it will recognize that, okay, we've taken the iris.csv, which
+
+
+00:30:34.640 --> 00:30:35.640
+got different columns.
+
+
+00:30:35.640 --> 00:30:37.620
+And now in this case, it won't.
+
+
+00:30:37.620 --> 00:30:41.920
+So if you would have finished with a semect, where we only selected two columns, it would
+
+
+00:30:41.920 --> 00:30:46.000
+have recognized, oh, we don't need all those columns in the cc file.
+
+
+00:30:46.000 --> 00:30:47.480
+We only take the ones we need.
+
+
+00:30:47.480 --> 00:30:51.520
+it will do, it will push the filter, the predicate down to the scan.
+
+
+00:30:51.520 --> 00:30:55.200
+So during the reading of the CSV, we will take this predicate.
+
+
+00:30:55.200 --> 00:30:59.160
+We say, okay, where the sample length is larger than five, the rows that don't
+
+
+00:30:59.160 --> 00:31:01.520
+match the predicate will not be materialized.
+
+
+00:31:01.520 --> 00:31:05.880
+So if you have a really large CSV file, if we really, let's say you have a
+
+
+00:31:05.880 --> 00:31:11.000
+CSV file with tens of gigabytes, but your, your predicate only selects 5% of that.
+
+
+00:31:11.000 --> 00:31:14.120
+Then you only materialize 5% of the 10 gigabytes.
+
+
+00:31:14.120 --> 00:31:14.360
+Yeah.
+
+
+00:31:14.360 --> 00:31:17.160
+So 500 megs instead of 10 gigabytes or something like that.
+
+
+00:31:17.280 --> 00:31:20.920
+or 200 megs, whatever it is, quite a bit less.
+
+
+00:31:20.920 --> 00:31:22.280
+That's really interesting.
+
+
+00:31:22.280 --> 00:31:26.520
+And this is all part of the benefits of what we're talking about with the lazy,
+
+
+00:31:26.520 --> 00:31:28.920
+lazy frames, lazy APIs and
+
+
+00:31:28.920 --> 00:31:32.200
+and building up all of the steps before you say go.
+
+
+00:31:32.200 --> 00:31:34.240
+Because in Pandas, you would say read CSV.
+
+
+00:31:34.240 --> 00:31:36.080
+So, okay, it's going to read the CSV.
+
+
+00:31:36.080 --> 00:31:36.720
+Now what?
+
+
+00:31:36.720 --> 00:31:37.520
+- Yes. - Right?
+
+
+00:31:37.520 --> 00:31:40.640
+And then you apply your filter if that's the order you want to do it in.
+
+
+00:31:40.640 --> 00:31:42.960
+And then you group and then and so on and so on, right?
+
+
+00:31:42.960 --> 00:31:46.400
+- Right. - It's interesting in that it does allow more database like
+
+
+00:31:46.400 --> 00:31:48.240
+behavior behind the scenes.
+
+
+00:31:48.240 --> 00:31:54.560
+Yeah, yeah. And yet, in my opinion, the data frame is should be seen as a table in a database.
+
+
+00:31:54.560 --> 00:31:59.920
+It's the final view of computation. Like you can see it as a materialized view.
+
+
+00:31:59.920 --> 00:32:05.920
+It's we have some data on this and we want to get it into another table, which we would feed
+
+
+00:32:05.920 --> 00:32:12.400
+into our machine learning model or whatever. And we do a lot of operations on them before we get
+
+
+00:32:12.400 --> 00:32:16.080
+So I wouldn't see a data frame as a data.
+
+
+00:32:16.080 --> 00:32:20.240
+It's not only a data structure, it's not only a list or a dictionary.
+
+
+00:32:20.240 --> 00:32:25.120
+There are lots of steps before we get into those tables eventually.
+
+
+00:32:25.120 --> 00:32:28.560
+Right. So here's an interesting challenge.
+
+
+00:32:28.560 --> 00:32:32.080
+There's a lot of visualization libraries.
+
+
+00:32:32.080 --> 00:32:39.080
+There are a lot of other data science libraries that know and expect Pandas data frames.
+
+
+00:32:39.080 --> 00:32:42.160
+So like, okay, what you do is you send me the Pandas data frame here,
+
+
+00:32:42.160 --> 00:32:46.160
+where we're going to patch pandas so that if you call this function on the data frame,
+
+
+00:32:46.160 --> 00:32:50.880
+it's going to do this thing. And they may say, "Richie, fantastic job you've done here in Polars,
+
+
+00:32:50.880 --> 00:32:55.280
+but my stuff is already all built around pandas, so I'm not going to use this."
+
+
+00:32:55.280 --> 00:32:58.800
+But it's worth pointing out there's some cool pandas integration, right?
+
+
+00:32:58.800 --> 00:33:04.720
+Yeah. So Polars doesn't want to do plotting. I don't think it should be in the data frame.
+
+
+00:33:04.720 --> 00:33:09.680
+Maybe another library can do it on top of Polars, just that you like it.
+
+
+00:33:09.680 --> 00:33:12.960
+It shouldn't be a part of it in my opinion, but often when you do plotting,
+
+
+00:33:12.960 --> 00:33:16.160
+you're plotting the number of rows will not be billions.
+
+
+00:33:16.160 --> 00:33:19.180
+I mean, there's no plotting engine that can deal with that.
+
+
+00:33:19.180 --> 00:33:23.260
+So you will be reducing your, your big data sets to something small,
+
+
+00:33:23.260 --> 00:33:24.800
+and then you can send it to the plot.
+
+
+00:33:24.800 --> 00:33:25.040
+Yeah.
+
+
+00:33:25.040 --> 00:33:29.280
+There's hardly a monitor that has enough pixels to show you that.
+
+
+00:33:29.280 --> 00:33:29.640
+Right.
+
+
+00:33:29.640 --> 00:33:29.960
+Right.
+
+
+00:33:29.960 --> 00:33:30.600
+So yeah.
+
+
+00:33:30.600 --> 00:33:31.080
+Yeah.
+
+
+00:33:31.080 --> 00:33:34.360
+You can call it two pandas and then we transform our Polish data frame to
+
+
+00:33:34.360 --> 00:33:39.440
+pandas, and then you can integrate with, I could learn with, and we often find
+
+
+00:33:39.440 --> 00:33:42.080
+that progressively rewriting some fondos
+
+
+00:33:42.080 --> 00:33:45.320
+into polars already is cheaper than keeping it in fondos.
+
+
+00:33:45.320 --> 00:33:47.840
+If you do a, if you call from fondos,
+
+
+00:33:47.840 --> 00:33:50.440
+polars do a join in polars and then back to fondos,
+
+
+00:33:50.440 --> 00:33:52.880
+we probably made up for those double copies.
+
+
+00:33:52.880 --> 00:33:54.400
+Fondos does a lot of internal copies.
+
+
+00:33:54.400 --> 00:33:56.680
+If you do a reset index, copies all data.
+
+
+00:33:56.680 --> 00:33:59.360
+If you do, there are a lot of internal copies in fondos
+
+
+00:33:59.360 --> 00:34:01.280
+which aren't listed, so I wouldn't worry
+
+
+00:34:01.280 --> 00:34:04.960
+about an explicit copy in the end of your ETL
+
+
+00:34:04.960 --> 00:34:07.240
+to go to plotting when the data is already.
+
+
+00:34:07.240 --> 00:34:08.080
+- Right, right.
+
+
+00:34:08.080 --> 00:34:08.920
+So let's look at the benchmarks
+
+
+00:34:08.920 --> 00:34:11.600
+'Cause it sounds like to a large degree,
+
+
+00:34:11.600 --> 00:34:14.880
+even if you do have to do this conversion in the end,
+
+
+00:34:14.880 --> 00:34:17.760
+many times, it still might even be quicker.
+
+
+00:34:17.760 --> 00:34:19.760
+So you've got some benchmarks over here,
+
+
+00:34:19.760 --> 00:34:20.960
+and you compared,
+
+
+00:34:20.960 --> 00:34:22.800
+I'm gonna need some good vision for this one,
+
+
+00:34:22.800 --> 00:34:26.160
+you compared Polar's, Panda's, Dask,
+
+
+00:34:26.160 --> 00:34:28.640
+and then two things which are too small for me to read.
+
+
+00:34:28.640 --> 00:34:29.680
+Tell us what you compared.
+
+
+00:34:29.680 --> 00:34:30.520
+- Moding and Vax.
+
+
+00:34:30.520 --> 00:34:31.680
+- Moding and Vax, okay.
+
+
+00:34:31.680 --> 00:34:33.520
+And for people listening,
+
+
+00:34:33.520 --> 00:34:35.800
+you go out here and look at these benchmarks,
+
+
+00:34:35.800 --> 00:34:38.560
+they're linked right off the homepage.
+
+
+00:34:38.560 --> 00:34:42.200
+There's like a little tiny purple thing and a whole bunch of really tall
+
+
+00:34:42.200 --> 00:34:46.940
+bar graphs at the rest and the little tiny thing that you can kind of miss.
+
+
+00:34:46.940 --> 00:34:49.880
+If you don't look carefully, that's the time it takes for.
+
+
+00:34:49.880 --> 00:34:50.600
+Polars.
+
+
+00:34:50.600 --> 00:34:54.880
+And then all the others are up there in like 60 seconds, a hundred seconds.
+
+
+00:34:54.880 --> 00:34:57.180
+And then Polars is like quarter of a second.
+
+
+00:34:57.180 --> 00:35:01.260
+So, you know, it's, it's easy to miss it in the graph, but the quick takeaway
+
+
+00:35:01.260 --> 00:35:03.160
+here, I think is this some fast stuff.
+
+
+00:35:03.160 --> 00:35:03.400
+Yeah.
+
+
+00:35:03.400 --> 00:35:03.800
+Yeah.
+
+
+00:35:03.800 --> 00:35:06.460
+We're often orders of magnitude faster than pandas.
+
+
+00:35:06.460 --> 00:35:08.200
+So it's not uncommon to hear it.
+
+
+00:35:08.340 --> 00:35:14.340
+then 20x storage files, especially if you write proper pandas and proper portals, it's
+
+
+00:35:14.340 --> 00:35:17.860
+probably 20x if we deal with I/O as well.
+
+
+00:35:17.860 --> 00:35:20.700
+So what we see here are the TPCH benchmarks.
+
+
+00:35:20.700 --> 00:35:28.060
+TPCH is a database query benchmark standard, which is used by every query engine to show
+
+
+00:35:28.060 --> 00:35:29.460
+how fast it is.
+
+
+00:35:29.460 --> 00:35:35.020
+And those are really hard questions that really, really collects the muscles of a query engine.
+
+
+00:35:35.020 --> 00:35:40.660
+So you have joins on several tables, different group bys, different nested group bys, et
+
+
+00:35:40.660 --> 00:35:41.660
+cetera.
+
+
+00:35:41.660 --> 00:35:44.580
+And yeah, yeah, I really tried to make those other tools faster.
+
+
+00:35:44.580 --> 00:35:50.260
+But so in memory, Dask and Modin, it was really hard to make stuff faster than Pandas except
+
+
+00:35:50.260 --> 00:35:51.260
+for Podas.
+
+
+00:35:51.260 --> 00:35:53.620
+Well, on a few occasions.
+
+
+00:35:53.620 --> 00:35:58.460
+Once we include I/O, all those tools first needed to go via Pandas.
+
+
+00:35:58.460 --> 00:36:03.780
+And yeah, what this sort of shows is that we have Pandas, which is a single threaded
+
+
+00:36:03.780 --> 00:36:05.980
+data frame and data frame engine.
+
+
+00:36:05.980 --> 00:36:11.340
+And then we have tools that parallelize funnels and it's not always, they don't
+
+
+00:36:11.340 --> 00:36:13.760
+just parallelizing funnels doesn't make it faster.
+
+
+00:36:13.760 --> 00:36:18.900
+So if we have a filter or a element wise modification, parallelization is easy.
+
+
+00:36:18.900 --> 00:36:21.740
+You just split it up in chunks and do your parallelization and
+
+
+00:36:21.740 --> 00:36:23.700
+then those tools go through it.
+
+
+00:36:23.700 --> 00:36:23.980
+Yeah.
+
+
+00:36:23.980 --> 00:36:27.740
+10 cores, you can start 10 threads and I can take one 10th of the data and start
+
+
+00:36:27.740 --> 00:36:31.300
+to answer yes or no for the filter question, for example, right?
+
+
+00:36:31.300 --> 00:36:36.540
+people don't realize that a lot of data frame operations are not embarrassingly parallel.
+
+
+00:36:36.540 --> 00:36:39.420
+A group by is definitely not embarrassingly parallel.
+
+
+00:36:39.420 --> 00:36:42.980
+A filter or sorry, a join needs to shuffle.
+
+
+00:36:42.980 --> 00:36:45.260
+Doesn't not embarrassingly parallel.
+
+
+00:36:45.260 --> 00:36:48.180
+That's why you see those tools being slower than pandas.
+
+
+00:36:48.180 --> 00:36:52.380
+Because they, their string data and they, then you have problems.
+
+
+00:36:52.380 --> 00:36:56.740
+We need to do multi-processing or we need to send those Python objects to, to, to another
+
+
+00:36:56.740 --> 00:37:00.620
+project and we copy data, which is slow or we need to do multi-threading and we're bound
+
+
+00:37:00.620 --> 00:37:03.820
+by the GIL over single thread, and then there are steeper benches.
+
+
+00:37:03.820 --> 00:37:09.420
+Yeah, I think there's some interesting parallels for Dask and Polars.
+
+
+00:37:09.420 --> 00:37:13.740
+On these benchmarks, at least, you're showing much better performance than Dask.
+
+
+00:37:13.740 --> 00:37:18.740
+I've had Matthew Rocklin on a couple times to talk about Dask and some of the work they're doing there.
+
+
+00:37:18.740 --> 00:37:24.140
+It's very cool, and one of the things that I think Dask is interesting for is
+
+
+00:37:24.140 --> 00:37:27.820
+allowing you to scale your code out to multi-cores on your machine,
+
+
+00:37:27.820 --> 00:37:33.060
+or even distributed grid computing or process data that doesn't fit in memory.
+
+
+00:37:33.060 --> 00:37:36.100
+And they can behind the scenes juggle all that for you.
+
+
+00:37:36.100 --> 00:37:40.420
+I feel like Polar's kind of has a different way, but attempts to
+
+
+00:37:40.420 --> 00:37:42.540
+solve some of those problems as well.
+
+
+00:37:42.540 --> 00:37:44.740
+The Polar has full control over it.
+
+
+00:37:44.740 --> 00:37:45.460
+Over everything.
+
+
+00:37:45.460 --> 00:37:47.140
+So it's built from the ground up.
+
+
+00:37:47.140 --> 00:37:50.300
+It controls I/O, it controls their own memory, it controls
+
+
+00:37:50.300 --> 00:37:52.020
+which trap gets which data.
+
+
+00:37:52.020 --> 00:37:57.340
+And in DOS, it goes through, it takes this other tool and then parallelizes that.
+
+
+00:37:57.340 --> 00:38:01.220
+but it is limited by what this other tool also is limited by.
+
+
+00:38:01.220 --> 00:38:04.780
+But I think, so on a single machine, it has those challenges.
+
+
+00:38:04.780 --> 00:38:07.740
+I think Dask Distributor does have these challenges.
+
+
+00:38:07.740 --> 00:38:10.540
+And I think for Distributor, they work really well.
+
+
+00:38:10.540 --> 00:38:13.420
+Yeah, the interesting part with Dask, I think, is that it's
+
+
+00:38:13.420 --> 00:38:17.020
+kind of like Pandas, but it scales in all these interesting ways.
+
+
+00:38:17.020 --> 00:38:20.500
+Across cores, bigger memory, but also across machines,
+
+
+00:38:20.500 --> 00:38:23.820
+and then, you know, across cores, across machines, like all that stuff.
+
+
+00:38:23.820 --> 00:38:27.180
+I feel like Dask is a little bit, maybe it's trying to solve like a little bit
+
+
+00:38:27.180 --> 00:38:31.580
+bigger compute problem, like how can we use a cluster of computers to answer
+
+
+00:38:31.580 --> 00:38:32.300
+these questions?
+
+
+00:38:32.300 --> 00:38:34.620
+The documentation also says it for themselves.
+
+
+00:38:34.620 --> 00:38:38.780
+They say that they're probably not faster than Pandas on a single machine.
+
+
+00:38:38.780 --> 00:38:41.540
+So they're more for the, for the large big data.
+
+
+00:38:41.540 --> 00:38:41.940
+Yeah.
+
+
+00:38:41.940 --> 00:38:46.020
+But Pandas wants to be, and a lot faster on a single machine, but also wants to be
+
+
+00:38:46.020 --> 00:38:48.620
+able to do out of store processing on a single machine.
+
+
+00:38:48.620 --> 00:38:53.900
+So if you, we don't support all queries yet, but we want to, we already do basic
+
+
+00:38:53.900 --> 00:38:58.180
+Devoids, groupbytes, sorts, predicates, element wise operations.
+
+
+00:38:58.180 --> 00:39:02.140
+And then we can process, uh, I process Python gigabytes on my, yeah.
+
+
+00:39:02.140 --> 00:39:02.900
+On my laptop.
+
+
+00:39:02.900 --> 00:39:04.140
+That's pretty good.
+
+
+00:39:04.140 --> 00:39:06.340
+Your laptop probably doesn't have 500 gigs.
+
+
+00:39:06.340 --> 00:39:06.740
+No, no, no, no.
+
+
+00:39:06.740 --> 00:39:07.580
+It's 16 gigs.
+
+
+00:39:07.580 --> 00:39:08.060
+Yeah.
+
+
+00:39:08.060 --> 00:39:09.580
+Nice.
+
+
+00:39:09.580 --> 00:39:14.220
+It's probably actually a value to, as you develop this product to not have
+
+
+00:39:14.220 --> 00:39:16.460
+too massive of a computer to work on.
+
+
+00:39:16.460 --> 00:39:22.700
+If you had a $5,000 workstation, you know, you might be a little out of touch
+
+
+00:39:22.700 --> 00:39:25.500
+with many people using your code and so on.
+
+
+00:39:25.500 --> 00:39:30.300
+Although I think there, I think boilers like scaling on a single machine
+
+
+00:39:30.300 --> 00:39:32.600
+makes sense for different reasons as well.
+
+
+00:39:32.600 --> 00:39:36.660
+I think a lot of people talk about distributed, but if you think about
+
+
+00:39:36.660 --> 00:39:40.140
+the complexity of distributed, you need to send data, shuffle data over
+
+
+00:39:40.140 --> 00:39:41.460
+the network to other machines.
+
+
+00:39:41.460 --> 00:39:45.920
+So there are a lot of people using boilers in our discord who have one
+
+
+00:39:45.920 --> 00:39:50.160
+terabyte of rack and say it's cheaper and a lot faster than Spark because
+
+
+00:39:50.160 --> 00:39:52.760
+They can walk all this fast on a single machine.
+
+
+00:39:52.760 --> 00:39:58.140
+And while two, they have a, a beefy machine with like one on the 20 boards
+
+
+00:39:58.140 --> 00:40:01.560
+and they don't have to go over the network to parallelize.
+
+
+00:40:01.560 --> 00:40:04.440
+And yeah, so I think times are changing.
+
+
+00:40:04.440 --> 00:40:08.560
+I think also scaling out data on a single machine is getting more and more.
+
+
+00:40:08.560 --> 00:40:12.320
+It is one of the areas in which it's interesting is GPUs.
+
+
+00:40:12.320 --> 00:40:15.680
+Do you have any integration with GPUs or any of those sort of things?
+
+
+00:40:15.680 --> 00:40:18.240
+Not suggesting that necessarily is even a good idea.
+
+
+00:40:18.240 --> 00:40:19.160
+I'm just wondering if it does.
+
+
+00:40:19.160 --> 00:40:23.320
+I get this question, but I'm not really convinced I can get the memory.
+
+
+00:40:23.320 --> 00:40:25.920
+I can get the data fast enough into the memory.
+
+
+00:40:25.920 --> 00:40:28.720
+I, we want to process gigabytes of data.
+
+
+00:40:28.720 --> 00:40:33.200
+I, the challenge already on the CPU is, is getting the data or
+
+
+00:40:33.200 --> 00:40:35.800
+cache or memory fast enough on a CPU.
+
+
+00:40:35.800 --> 00:40:37.320
+This I don't know.
+
+
+00:40:37.320 --> 00:40:38.120
+I don't know.
+
+
+00:40:38.120 --> 00:40:38.480
+Yeah.
+
+
+00:40:38.480 --> 00:40:42.640
+So maybe we could talk really quickly about platforms that it runs on.
+
+
+00:40:42.640 --> 00:40:46.520
+You know, I just, this is the very first show that I'm doing on my M2
+
+
+00:40:46.520 --> 00:40:49.160
+Pro processor, which is fun.
+
+
+00:40:49.160 --> 00:40:51.740
+I literally been using it for like an hour and a half, so I don't
+
+
+00:40:51.740 --> 00:40:54.780
+really have much to say, but it looks neat anyway, you know, that's
+
+
+00:40:54.780 --> 00:40:57.620
+very different than an Intel machine, which is different than a Raspberry
+
+
+00:40:57.620 --> 00:41:02.800
+Pi, which is different than, you know, some version of Linux running on arm.
+
+
+00:41:02.800 --> 00:41:03.940
+Or on AMD.
+
+
+00:41:03.940 --> 00:41:07.460
+So where, where do these, what's the reach?
+
+
+00:41:07.460 --> 00:41:10.160
+Well, we sported, we sported, we don't.
+
+
+00:41:10.160 --> 00:41:13.860
+So partners also has a lot of like SIMD optimizations and these
+
+
+00:41:13.860 --> 00:41:18.580
+for a single instruction mock data where for instance, if you do a floating point operation
+
+
+00:41:18.580 --> 00:41:23.620
+and that doing a single floating point at a time, you can fill in those vector lanes
+
+
+00:41:23.620 --> 00:41:29.300
+into your CPU with a fit eight floating points in a single operation can compute eight at
+
+
+00:41:29.300 --> 00:41:30.300
+a time.
+
+
+00:41:30.300 --> 00:41:32.540
+And they have eight times the parallelism on a single point.
+
+
+00:41:32.540 --> 00:41:36.540
+Those instructions are only activated for Intel.
+
+
+00:41:36.540 --> 00:41:41.500
+So we don't have these instructions activated for ARM, but we do compile to ARM.
+
+
+00:41:41.500 --> 00:41:43.500
+I think it performs on.
+
+
+00:41:43.500 --> 00:41:44.500
+Yeah.
+
+
+00:41:44.500 --> 00:41:46.500
+But so if the standard machines, right?
+
+
+00:41:46.500 --> 00:41:50.500
+Mac OS, windows Linux, or we're all good to go.
+
+
+00:41:50.500 --> 00:41:51.500
+And it ships as a wheel.
+
+
+00:41:51.500 --> 00:41:54.500
+So you don't have to have any, you don't have to have Rusty or anything like that.
+
+
+00:41:54.500 --> 00:41:55.500
+Chips are hanging around.
+
+
+00:41:55.500 --> 00:41:57.500
+We also have Kunda.
+
+
+00:41:57.500 --> 00:42:00.500
+But Kunda is always a bit lagging BI.
+
+
+00:42:00.500 --> 00:42:05.500
+So I could try to install a bit because we can, we control this volume.
+
+
+00:42:05.500 --> 00:42:06.500
+Yeah, exactly.
+
+
+00:42:06.500 --> 00:42:10.500
+You push it out to, to the IPI and that's what pip sees and it's going to go.
+
+
+00:42:10.500 --> 00:42:12.140
+to go right pretty much instantly.
+
+
+00:42:12.140 --> 00:42:15.980
+I guess it's worth pointing out while we're sitting here is, um, not
+
+
+00:42:15.980 --> 00:42:16.940
+that thing I highlighted this.
+
+
+00:42:16.940 --> 00:42:21.040
+You do have a whole section in your user guide, the Polar's book called
+
+
+00:42:21.040 --> 00:42:25.700
+coming from pandas that actually talks about the differences, not just how do
+
+
+00:42:25.700 --> 00:42:30.320
+I do this versus, you know, this operation and pandas versus Polar's, but it also
+
+
+00:42:30.320 --> 00:42:34.580
+talks about some of the philosophy, like this lazy concepts that we've spoken
+
+
+00:42:34.580 --> 00:42:36.500
+about and a query optimization.
+
+
+00:42:36.500 --> 00:42:38.900
+I feel like we covered it pretty well.
+
+
+00:42:38.900 --> 00:42:39.300
+Yeah.
+
+
+00:42:39.360 --> 00:42:42.080
+Unless there's maybe some other stuff that you want to throw in here really
+
+
+00:42:42.080 --> 00:42:45.300
+quick, but I mostly just want to throw this out as resource, because I know
+
+
+00:42:45.300 --> 00:42:48.720
+many people are coming from pandas and they may be interested in this, and
+
+
+00:42:48.720 --> 00:42:50.420
+this is probably a good place to start.
+
+
+00:42:50.420 --> 00:42:51.420
+I'll link to it in the show notes.
+
+
+00:42:51.420 --> 00:42:55.580
+I think the most controversial one is that we don't have the multi-index.
+
+
+00:42:55.580 --> 00:42:59.040
+You don't have anything other than zero based zero one, two, three.
+
+
+00:42:59.040 --> 00:43:00.960
+You know, where is it in the array type of, yeah.
+
+
+00:43:00.960 --> 00:43:04.520
+Well, we can, we will support beta structures that make new
+
+
+00:43:04.520 --> 00:43:08.440
+groups faster, like index in a database sense, but it will not
+
+
+00:43:08.480 --> 00:43:11.160
+It will not chase the cement.
+
+
+00:43:11.160 --> 00:43:11.640
+Great.
+
+
+00:43:11.640 --> 00:43:13.040
+That's important.
+
+
+00:43:13.040 --> 00:43:14.000
+Okay.
+
+
+00:43:14.000 --> 00:43:14.400
+Yeah.
+
+
+00:43:14.400 --> 00:43:18.560
+So I encourage people who are mostly pandas people that come down here and,
+
+
+00:43:18.560 --> 00:43:19.360
+you know, look through this.
+
+
+00:43:19.360 --> 00:43:20.840
+It's, it's pretty straightforward.
+
+
+00:43:20.840 --> 00:43:26.200
+Another thing that I think is interesting and we're talking about maybe is we could
+
+
+00:43:26.200 --> 00:43:31.040
+touch a little bit on some of the, how can I, and your user guide you've got, how can
+
+
+00:43:31.040 --> 00:43:32.080
+I work with IO?
+
+
+00:43:32.080 --> 00:43:33.760
+How can I work with time series?
+
+
+00:43:33.760 --> 00:43:36.240
+How can I work with multi-processing and so on?
+
+
+00:43:36.240 --> 00:43:38.280
+What do you think is good to highlight out of here?
+
+
+00:43:38.280 --> 00:43:40.440
+Well, the user guard is a bit out of data.
+
+
+00:43:40.440 --> 00:43:42.040
+So you can see your own.
+
+
+00:43:42.040 --> 00:43:45.640
+So the princess IO is changing.
+
+
+00:43:45.640 --> 00:43:49.400
+Oilers writes as its own IO readers.
+
+
+00:43:49.400 --> 00:43:55.480
+So we've written our own C-SPRE reader, JSON reader, RK, IPC, Arrow.
+
+
+00:43:55.480 --> 00:43:57.560
+And that's all in our control.
+
+
+00:43:57.560 --> 00:44:01.880
+But for interaction with databases, it's often a bit more complicated.
+
+
+00:44:01.880 --> 00:44:04.040
+Deal with different drivers, different ways.
+
+
+00:44:04.040 --> 00:44:07.640
+And currently we do this with ConnectorX, which is really great.
+
+
+00:44:07.640 --> 00:44:11.960
+and allows us to read from a lot of different databases, but it doesn't allow us to write
+
+
+00:44:11.960 --> 00:44:17.560
+from databases yet. And this is happening, this is luckily changing. I want to play a bit why.
+
+
+00:44:17.560 --> 00:44:23.320
+So Kotlin is built upon the Arrow memory specification. And the Arrow memory specification
+
+
+00:44:23.320 --> 00:44:29.000
+is sort of standard of how memory or data, our memory for columnar data should look into,
+
+
+00:44:29.000 --> 00:44:34.760
+how columnar data should be, should be represented in memory. And this is becoming a new standard.
+
+
+00:44:34.760 --> 00:44:38.760
+and Mark is using it, Dremel, Pandas itself.
+
+
+00:44:38.760 --> 00:44:41.960
+For instance, if you read a Parquet in Pandas,
+
+
+00:44:41.960 --> 00:44:45.720
+it reads in first into error memory and then copies that into Pandas memory.
+
+
+00:44:45.720 --> 00:44:48.760
+So the error memory specification coming as standard,
+
+
+00:44:48.760 --> 00:44:52.360
+and this is a way to share data to processes,
+
+
+00:44:52.360 --> 00:44:57.080
+to other libraries within a process without copying data.
+
+
+00:44:57.080 --> 00:45:00.600
+We can just swap our pointers if we know that we both support error.
+
+
+00:45:00.600 --> 00:45:04.580
+Oh, how so arrow defines basically a in memory.
+
+
+00:45:04.580 --> 00:45:05.720
+It looks like this.
+
+
+00:45:05.720 --> 00:45:08.760
+And if you both agree on that, we can just swap out quite the same.
+
+
+00:45:08.760 --> 00:45:09.580
+Right.
+
+
+00:45:09.580 --> 00:45:14.520
+Because a.net object, a C plus plus object and a Python object, those don't look like
+
+
+00:45:14.520 --> 00:45:16.640
+anything similar to any of them.
+
+
+00:45:16.640 --> 00:45:17.040
+Right.
+
+
+00:45:17.040 --> 00:45:17.880
+In, in memory.
+
+
+00:45:17.880 --> 00:45:22.580
+And yeah, so, so this is from the Apache arrow project.
+
+
+00:45:22.580 --> 00:45:22.840
+Yeah.
+
+
+00:45:22.840 --> 00:45:28.000
+And this is really, really used a lot by a lot different tools already.
+
+
+00:45:28.300 --> 00:45:32.340
+And currently there is coming the ADBC, which is the Apache Arrow database
+
+
+00:45:32.340 --> 00:45:36.000
+connector, which will solve all those problems because then we can write
+
+
+00:45:36.000 --> 00:45:39.380
+read arrives from a lot of databases in Arrow and then it will be really
+
+
+00:45:39.380 --> 00:45:41.620
+fast and very easy for us to do.
+
+
+00:45:41.620 --> 00:45:46.600
+So luckily we, we, that's one of those foundations of boilers.
+
+
+00:45:46.600 --> 00:45:51.480
+I'm really happy about it because supporting Arrow and using Arrow memory
+
+
+00:45:51.480 --> 00:45:54.840
+gives us a lot of interaction, interval with other library.
+
+
+00:45:54.840 --> 00:45:55.060
+Yeah.
+
+
+00:45:55.060 --> 00:45:56.140
+That's interesting.
+
+
+00:45:56.140 --> 00:46:00.680
+And when you think of pandas, you know, it's kind of built on top of NumPy as its core
+
+
+00:46:00.680 --> 00:46:05.900
+foundation and it can exchange NumPy arrays with other things that do that.
+
+
+00:46:05.900 --> 00:46:09.300
+So Apache Arrow is kind of, kind of your, your base.
+
+
+00:46:09.300 --> 00:46:10.300
+Yeah.
+
+
+00:46:10.300 --> 00:46:14.140
+Well, it's kind of full circle because Apache Arrow is started by Wes McKinney.
+
+
+00:46:14.140 --> 00:46:17.860
+Wes McKinney being known as the creator of pandas.
+
+
+00:46:17.860 --> 00:46:22.780
+And when he got out of pandas, he thought, okay, the memory representation of NumPy is
+
+
+00:46:22.780 --> 00:46:24.740
+just not, we should not use it.
+
+
+00:46:24.740 --> 00:46:29.700
+And then he was inspired to build Touch Arrow, which mirrored from Palm Browser.
+
+
+00:46:29.700 --> 00:46:30.700
+Yeah.
+
+
+00:46:30.700 --> 00:46:32.780
+So that's how you learn about these projects, right?
+
+
+00:46:32.780 --> 00:46:36.700
+This is how you, you realize, Oh, we, we had put this thing in place.
+
+
+00:46:36.700 --> 00:46:37.700
+Maybe we work better.
+
+
+00:46:37.700 --> 00:46:38.700
+Right.
+
+
+00:46:38.700 --> 00:46:41.220
+You, you work on a project for five years and you're like, if I got a chance to start
+
+
+00:46:41.220 --> 00:46:46.660
+over, but it's too late now, but every now and then you do actually get a chance to start
+
+
+00:46:46.660 --> 00:46:47.660
+over.
+
+
+00:46:47.660 --> 00:46:48.660
+Yeah.
+
+
+00:46:48.660 --> 00:46:50.580
+I didn't realize that Wes was involved with both.
+
+
+00:46:50.580 --> 00:46:52.820
+I mean, I knew from Pandas, but I didn't realize it's.
+
+
+00:46:52.820 --> 00:46:53.820
+Yeah.
+
+
+00:46:53.820 --> 00:46:55.620
+CTO, alternate with share.
+
+
+00:46:55.620 --> 00:47:00.660
+You already started a Jero and that's a Jero is sort of super big,
+
+
+00:47:00.660 --> 00:47:04.860
+like use everywhere, but sort of middleware like it's end users are
+
+
+00:47:04.860 --> 00:47:08.660
+developers and not end users are developers who build tools and not
+
+
+00:47:08.660 --> 00:47:10.060
+developers who use library.
+
+
+00:47:10.060 --> 00:47:11.060
+That's like that.
+
+
+00:47:11.060 --> 00:47:11.300
+Right.
+
+
+00:47:11.300 --> 00:47:13.900
+You might not even know that you're using it.
+
+
+00:47:13.900 --> 00:47:17.860
+You just use, I just use pullers and oh, by the way, it happens to
+
+
+00:47:17.860 --> 00:47:20.180
+internally be better because of this.
+
+
+00:47:20.180 --> 00:47:20.500
+Yeah.
+
+
+00:47:20.500 --> 00:47:20.940
+Yeah.
+
+
+00:47:20.940 --> 00:47:21.340
+Very cool.
+
+
+00:47:21.340 --> 00:47:21.860
+Okay.
+
+
+00:47:21.900 --> 00:47:24.900
+Let's see, we've got a little bit of time left to talk about it.
+
+
+00:47:24.900 --> 00:47:27.280
+So for example, some of these, how can I,
+
+
+00:47:27.280 --> 00:47:29.480
+let me just touch on a couple that are nice here.
+
+
+00:47:29.480 --> 00:47:31.520
+So you talked about ConnectorX,
+
+
+00:47:31.520 --> 00:47:32.600
+you talked about the database,
+
+
+00:47:32.600 --> 00:47:36.720
+but it's like three lines of code to define a connection string,
+
+
+00:47:36.720 --> 00:47:38.900
+define a SQL query,
+
+
+00:47:38.900 --> 00:47:42.660
+and then you just say PL.readSQL, and there you go.
+
+
+00:47:42.660 --> 00:47:45.920
+You call it DataFrame or what do you call the thing you get back here?
+
+
+00:47:45.920 --> 00:47:47.780
+>> So reading is always DataFrame,
+
+
+00:47:47.780 --> 00:47:49.320
+scanning will be a SQL.
+
+
+00:47:49.320 --> 00:47:49.560
+Got it.
+
+
+00:47:49.560 --> 00:47:49.820
+Okay.
+
+
+00:47:49.820 --> 00:47:52.320
+Is there a scan SQL as well?
+
+
+00:47:52.320 --> 00:47:55.020
+This might happen in the future.
+
+
+00:47:55.020 --> 00:47:59.200
+The challenge is, are we going to push back our optimizations?
+
+
+00:47:59.200 --> 00:48:04.900
+So you write a orders query and then we must translate that into SQL, into
+
+
+00:48:04.900 --> 00:48:07.060
+the SQL we send to their database.
+
+
+00:48:07.060 --> 00:48:10.140
+But that needs to be consistent over different databases.
+
+
+00:48:10.140 --> 00:48:12.940
+That's a whole other rabbit hole we might get into.
+
+
+00:48:12.940 --> 00:48:17.980
+I'm not sure it's right because you can already do many of these operations
+
+
+00:48:18.260 --> 00:48:20.540
+in the SQL query that you're sending over, right?
+
+
+00:48:20.540 --> 00:48:25.120
+You have sort of two layers of query engines and optimizers and query plans.
+
+
+00:48:25.120 --> 00:48:31.180
+And it's not like you can't add on additional filters, joins, sorts, and so
+
+
+00:48:31.180 --> 00:48:33.700
+on before it ever gets back to you.
+
+
+00:48:33.700 --> 00:48:37.560
+It would be terrible if someone writes select star from table and then writes
+
+
+00:48:37.560 --> 00:48:42.260
+the filters in polars and then the database has sent all those data over the network.
+
+
+00:48:42.260 --> 00:48:47.720
+So yeah, ideally we'd be able to push those predicates down into the SQL.
+
+
+00:48:47.880 --> 00:48:50.840
+Yeah, but you know, somebody is going to do it because they're more comfortable
+
+
+00:48:50.840 --> 00:48:54.740
+writing polar API in Python than they are writing T-SQL.
+
+
+00:48:54.740 --> 00:48:54.980
+Yeah.
+
+
+00:48:54.980 --> 00:48:56.040
+You will not.
+
+
+00:48:56.040 --> 00:48:56.520
+Yeah.
+
+
+00:48:56.520 --> 00:48:58.560
+If it's possible, someone will write it.
+
+
+00:48:58.560 --> 00:48:59.440
+It's not optimal.
+
+
+00:48:59.440 --> 00:49:00.760
+That's right.
+
+
+00:49:00.760 --> 00:49:01.440
+That is right.
+
+
+00:49:01.440 --> 00:49:02.040
+Let's see.
+
+
+00:49:02.040 --> 00:49:03.240
+What else can you do here?
+
+
+00:49:03.240 --> 00:49:07.960
+So you can, we've already talked about the CSV files and this is the part of that I
+
+
+00:49:07.960 --> 00:49:11.760
+was talking about where you've got the, the, the toggle to see the rust code and
+
+
+00:49:11.760 --> 00:49:15.600
+the Python code, so I think people might appreciate that parquet files.
+
+
+00:49:15.840 --> 00:49:19.540
+So Parquet files is a more efficient format.
+
+
+00:49:19.540 --> 00:49:23.900
+Maybe talk about using Parquet files versus CSV and why you might want to get
+
+
+00:49:23.900 --> 00:49:28.860
+rid of your CSV and like store these intermediate files and then load them.
+
+
+00:49:28.860 --> 00:49:31.200
+Parquet is a really good file reader.
+
+
+00:49:31.200 --> 00:49:33.000
+I really did my best on that one.
+
+
+00:49:33.000 --> 00:49:39.380
+But you can use Parquet or Arrow, IPC because the data is tight.
+
+
+00:49:39.380 --> 00:49:41.980
+There's no ambiguity on reading.
+
+
+00:49:41.980 --> 00:49:43.180
+We know type it is.
+
+
+00:49:43.220 --> 00:49:43.460
+Right.
+
+
+00:49:43.460 --> 00:49:47.660
+Because CSV files, even though it might be representing a date, it's still a string.
+
+
+00:49:47.660 --> 00:49:50.300
+Yeah.
+
+
+00:49:50.300 --> 00:49:51.620
+It's slow to parse it.
+
+
+00:49:51.620 --> 00:49:52.300
+Yeah.
+
+
+00:49:52.300 --> 00:49:55.700
+It also, we can just, so it, okay.
+
+
+00:49:55.700 --> 00:49:58.420
+Interact really nicely with query optimization.
+
+
+00:49:58.420 --> 00:50:01.460
+So we can select just a single column from the file without
+
+
+00:50:01.460 --> 00:50:02.900
+touching any of the other columns.
+
+
+00:50:02.900 --> 00:50:04.620
+We can read statistics.
+
+
+00:50:04.620 --> 00:50:09.300
+And so for K file can write statistics, which knows, okay, this page is
+
+
+00:50:09.300 --> 00:50:11.500
+got this maximum value, this minimum value.
+
+
+00:50:11.740 --> 00:50:15.360
+And if you have written a part of the query, which has also already
+
+
+00:50:15.360 --> 00:50:19.340
+give me the result where the value is larger than this, and we see that
+
+
+00:50:19.340 --> 00:50:22.920
+the, that, that statistics say it cannot be in this file.
+
+
+00:50:22.920 --> 00:50:24.580
+We can just skip the whole column.
+
+
+00:50:24.580 --> 00:50:25.700
+We don't have to read.
+
+
+00:50:25.700 --> 00:50:26.080
+Yeah.
+
+
+00:50:26.080 --> 00:50:26.840
+Oh, interesting.
+
+
+00:50:26.840 --> 00:50:27.460
+Oh, okay.
+
+
+00:50:27.460 --> 00:50:31.780
+There are a lot of optimizations, which sort of best work is work.
+
+
+00:50:31.780 --> 00:50:33.380
+You don't have to do and proclaim.
+
+
+00:50:33.380 --> 00:50:34.740
+Exactly.
+
+
+00:50:34.740 --> 00:50:38.140
+Or you've done it when you created the file and you never do it
+
+
+00:50:38.140 --> 00:50:39.420
+again or something like that.
+
+
+00:50:39.420 --> 00:50:39.700
+Yeah.
+
+
+00:50:39.820 --> 00:50:39.940
+Yeah.
+
+
+00:50:39.940 --> 00:50:44.060
+So you've got a read parquet, a scan parquet, I suppose that's
+
+
+00:50:44.060 --> 00:50:45.940
+the data frame versus lazy frame.
+
+
+00:50:45.940 --> 00:50:47.680
+And then you also have the ability to write them.
+
+
+00:50:47.680 --> 00:50:48.460
+That's pretty interesting.
+
+
+00:50:48.460 --> 00:50:50.660
+JSON, multiple files.
+
+
+00:50:50.660 --> 00:50:51.060
+Yeah.
+
+
+00:50:51.060 --> 00:50:51.320
+Yeah.
+
+
+00:50:51.320 --> 00:50:54.420
+There's just a whole bunch of how do I, how can I rather,
+
+
+00:50:54.420 --> 00:50:55.420
+but a bunch of neat things.
+
+
+00:50:55.420 --> 00:50:56.880
+What else would you like to highlight here?
+
+
+00:50:56.880 --> 00:50:57.300
+The next
+
+
+00:50:57.300 --> 00:51:00.620
+most important thing I want to touch on is the expression API.
+
+
+00:51:00.620 --> 00:51:02.620
+So that's a bit, you go a bit higher.
+
+
+00:51:02.620 --> 00:51:08.180
+So you swallow up or is it, they got their own, one of the goals of the
+
+
+00:51:08.220 --> 00:51:12.020
+The Poilers API is to keep the API small,
+
+
+00:51:12.020 --> 00:51:14.620
+but give you a lot of things you can do.
+
+
+00:51:14.620 --> 00:51:16.720
+And this is where the Poilers expressions come in.
+
+
+00:51:16.720 --> 00:51:20.520
+So Poilers expressions are expressions of what you want to do,
+
+
+00:51:20.520 --> 00:51:23.520
+which are run and parallelized on a query engine
+
+
+00:51:23.520 --> 00:51:25.280
+and can combine them in depth.
+
+
+00:51:25.280 --> 00:51:28.180
+So an expression takes a series and produces a series.
+
+
+00:51:28.180 --> 00:51:31.540
+And because the input is the same as the output, you can combine them.
+
+
+00:51:31.540 --> 00:51:34.580
+And as you can see, we can do pretty complicated stuff.
+
+
+00:51:34.580 --> 00:51:36.840
+And you can keep chaining them.
+
+
+00:51:36.920 --> 00:51:40.520
+And this is the same, like, um, I'd like to see it.
+
+
+00:51:40.520 --> 00:51:43.240
+Francis the Python vocabulary is quite small.
+
+
+00:51:43.240 --> 00:51:45.000
+So we have a while we have a loop.
+
+
+00:51:45.000 --> 00:51:46.440
+We have a variable assignment.
+
+
+00:51:46.440 --> 00:51:52.020
+If you, I think it fits into maybe two, two pieces of paper, but with this, you
+
+
+00:51:52.020 --> 00:51:56.240
+can write any program you want with the combination of all those, all those.
+
+
+00:51:56.240 --> 00:51:56.700
+Yeah.
+
+
+00:51:56.700 --> 00:51:57.720
+This vocabulary.
+
+
+00:51:57.720 --> 00:51:58.040
+Yeah.
+
+
+00:51:58.040 --> 00:52:00.840
+And that's what we want to do with the Polish questions as well.
+
+
+00:52:00.840 --> 00:52:06.120
+So we, you've got a lot of small building blocks, which can be combined into.
+
+
+00:52:06.120 --> 00:52:06.640
+Yeah.
+
+
+00:52:06.640 --> 00:52:15.360
+So somebody could say I want to select a column back, but then I don't want the actual values. I want the unique ones, a uniqueness.
+
+
+00:52:15.360 --> 00:52:23.680
+So if there's duplicate, remove those and you can do a .account. Then you can add an alias, which gives it a new, which basically defines the column name.
+
+
+00:52:23.680 --> 00:52:24.720
+You could read it as...
+
+
+00:52:24.720 --> 00:52:26.720
+It's not names, it's some other one.
+
+
+00:52:26.720 --> 00:52:33.760
+You could read it as an as. So take column names as unique names. As is the keyword in Python, so I'm allowed to use it.
+
+
+00:52:33.760 --> 00:52:34.260
+Right.
+
+
+00:52:34.260 --> 00:52:35.860
+I mean, something else.
+
+
+00:52:35.860 --> 00:52:36.360
+Yeah.
+
+
+00:52:36.360 --> 00:52:37.900
+That's that's interesting.
+
+
+00:52:37.900 --> 00:52:38.480
+Okay.
+
+
+00:52:38.480 --> 00:52:38.860
+Yeah.
+
+
+00:52:38.860 --> 00:52:44.180
+So people, they use these expressions to do lots of transformations and
+
+
+00:52:44.180 --> 00:52:46.120
+filtering and things like that.
+
+
+00:52:46.120 --> 00:52:46.300
+That's
+
+
+00:52:46.300 --> 00:52:46.500
+Yeah.
+
+
+00:52:46.500 --> 00:52:47.340
+So this is precious.
+
+
+00:52:47.340 --> 00:52:52.220
+Can we use in a select on different places, but the knowledge of expressions
+
+
+00:52:52.220 --> 00:52:54.100
+extrapolates to different locations.
+
+
+00:52:54.100 --> 00:52:57.180
+So you can do it in a, in a select statement and then you select, well, on
+
+
+00:52:57.180 --> 00:53:01.180
+that, we select this expression and you get a result, but you can also do this
+
+
+00:53:01.180 --> 00:53:02.920
+And then the same logic applies.
+
+
+00:53:02.920 --> 00:53:06.220
+It runs on the same engine and we make sure everything is positive.
+
+
+00:53:06.220 --> 00:53:11.020
+And this is really powerful because it's so expensive.
+
+
+00:53:11.020 --> 00:53:15.060
+People don't have to use custom apply with Lambda because when you use a
+
+
+00:53:15.060 --> 00:53:16.620
+Lambda, it's like bug to us.
+
+
+00:53:16.620 --> 00:53:19.740
+It will be slow because it's Python and we don't know what will happen.
+
+
+00:53:19.740 --> 00:53:22.020
+So a Lambda is, it will be slow.
+
+
+00:53:22.020 --> 00:53:25.140
+It will kill parallelization because it kills, but yeah, a
+
+
+00:53:25.140 --> 00:53:26.820
+Lambda is three times better.
+
+
+00:53:26.820 --> 00:53:27.420
+Right.
+
+
+00:53:27.660 --> 00:53:28.660
+three times back.
+
+
+00:53:28.660 --> 00:53:29.260
+Right.
+
+
+00:53:29.260 --> 00:53:32.260
+It gets in the way of a lot of your optimizations
+
+
+00:53:32.260 --> 00:53:34.100
+and a lot of your speedups there.
+
+
+00:53:34.100 --> 00:53:37.060
+That's why we want to make this expression API
+
+
+00:53:37.060 --> 00:53:39.860
+very complete so you don't need that as much.
+
+
+00:53:39.860 --> 00:53:41.780
+Yeah, so people who are wanting to get this,
+
+
+00:53:41.780 --> 00:53:43.580
+get seriously into this, they should check out
+
+
+00:53:43.580 --> 00:53:45.460
+chapter three expressions, right?
+
+
+00:53:45.460 --> 00:53:46.620
+And just go through there.
+
+
+00:53:46.620 --> 00:53:49.540
+Probably, especially, you know, sort of browse through the
+
+
+00:53:49.540 --> 00:53:51.300
+Python examples so they can
+
+
+00:53:51.300 --> 00:53:53.540
+see where, go back and see what they need to learn
+
+
+00:53:53.540 --> 00:53:54.660
+more about, but
+
+
+00:53:54.660 --> 00:53:56.660
+it's a very interesting API.
+
+
+00:53:56.660 --> 00:53:59.260
+The speed is very compelling thing.
+
+
+00:53:59.260 --> 00:53:59.500
+Yeah.
+
+
+00:53:59.500 --> 00:54:00.340
+I think it's a cool project.
+
+
+00:54:00.340 --> 00:54:02.260
+Like I said, how many people we got here?
+
+
+00:54:02.260 --> 00:54:04.180
+13,000 people using it already.
+
+
+00:54:04.180 --> 00:54:06.020
+So that's a pretty big community.
+
+
+00:54:06.020 --> 00:54:06.260
+Yeah.
+
+
+00:54:06.260 --> 00:54:10.420
+So if you're interested in project, we have a discord where, where you can chat
+
+
+00:54:10.420 --> 00:54:14.220
+with us and ask questions and see how you can best do things.
+
+
+00:54:14.220 --> 00:54:15.220
+Pretty active there.
+
+
+00:54:15.220 --> 00:54:15.460
+Cool.
+
+
+00:54:15.460 --> 00:54:17.460
+The discord's linked right off the homepage.
+
+
+00:54:17.460 --> 00:54:18.540
+So that's awesome.
+
+
+00:54:18.540 --> 00:54:19.420
+People can find it there.
+
+
+00:54:19.420 --> 00:54:20.500
+Contributions.
+
+
+00:54:20.500 --> 00:54:21.860
+People want to make contributions.
+
+
+00:54:21.860 --> 00:54:25.260
+I'm sure you're willing to accept PRs and other feedback.
+
+
+00:54:25.260 --> 00:54:31.540
+Or you put in a really large PR, please first open an issue with a, with a, with a,
+
+
+00:54:31.540 --> 00:54:34.900
+to start a discussion of this is, uh, this contribution is welcome.
+
+
+00:54:34.900 --> 00:54:39.220
+And we also have a few getting started, good for the contributors.
+
+
+00:54:39.220 --> 00:54:39.740
+Okay.
+
+
+00:54:39.740 --> 00:54:40.020
+Yes.
+
+
+00:54:40.020 --> 00:54:44.180
+You've, you've tagged or labeled some of the issues as look here.
+
+
+00:54:44.180 --> 00:54:46.100
+If you want to get, get into this.
+
+
+00:54:46.100 --> 00:54:46.300
+Yeah.
+
+
+00:54:46.300 --> 00:54:50.620
+I must say, I think we're an interesting project to contribute to because we're,
+
+
+00:54:50.620 --> 00:54:53.620
+you can, it's not, not everything is set in stone.
+
+
+00:54:53.860 --> 00:54:56.920
+So there are still places where you can play.
+
+
+00:54:56.920 --> 00:54:57.640
+I'm not sure.
+
+
+00:54:57.640 --> 00:54:59.920
+There's still interesting work to be done.
+
+
+00:54:59.920 --> 00:55:04.440
+It's not completely 100% polished and finalized.
+
+
+00:55:04.440 --> 00:55:04.680
+Yeah.
+
+
+00:55:04.680 --> 00:55:05.560
+On the periphery.
+
+
+00:55:05.560 --> 00:55:06.600
+Uh, yeah.
+
+
+00:55:06.600 --> 00:55:07.040
+Yeah.
+
+
+00:55:07.040 --> 00:55:07.280
+Yeah.
+
+
+00:55:07.280 --> 00:55:07.760
+Very cool.
+
+
+00:55:07.760 --> 00:55:10.000
+Let's wrap it up with a comment from the audience here.
+
+
+00:55:10.000 --> 00:55:12.280
+Ajit says excellent content guys.
+
+
+00:55:12.280 --> 00:55:15.920
+This certainly helps me kickstart my journey from pandas to pollers.
+
+
+00:55:15.920 --> 00:55:16.720
+Awesome.
+
+
+00:55:16.720 --> 00:55:17.280
+Awesome.
+
+
+00:55:17.280 --> 00:55:18.560
+I'm glad glad to help.
+
+
+00:55:18.560 --> 00:55:19.360
+I'm sure it will.
+
+
+00:55:19.360 --> 00:55:20.480
+Many people do that.
+
+
+00:55:20.480 --> 00:55:23.520
+So Richie, let's close it out with final call action.
+
+
+00:55:23.520 --> 00:55:26.760
+people are interested in this project, they want to start playing and learning
+
+
+00:55:26.760 --> 00:55:30.640
+Polars, maybe try it out on some of their code that is, and is at the moment.
+
+
+00:55:30.640 --> 00:55:31.260
+What do they do?
+
+
+00:55:31.260 --> 00:55:34.520
+I'd recommend if you have a new project, just start in Polars.
+
+
+00:55:34.520 --> 00:55:39.640
+And because you can also rewrite some formats, but the most fun experience
+
+
+00:55:39.640 --> 00:55:42.240
+will just start a new project in Polars.
+
+
+00:55:42.240 --> 00:55:45.560
+And because then you can really enjoy what Polars offers.
+
+
+00:55:45.560 --> 00:55:50.240
+Learning expression API, learn how you use it declaratively and yeah,
+
+
+00:55:50.240 --> 00:55:52.560
+we'll be, then it will be most fun.
+
+
+00:55:52.560 --> 00:55:53.200
+Absolutely.
+
+
+00:55:53.240 --> 00:55:53.780
+Sounds great.
+
+
+00:55:53.780 --> 00:55:58.680
+And like we did point out, it has the to and from hand as data frames.
+
+
+00:55:58.680 --> 00:56:02.600
+So you can work on a section of your code and still have it consistent, right.
+
+
+00:56:02.600 --> 00:56:06.820
+With, with other parts that have to be, you can progressively rewrite
+
+
+00:56:06.820 --> 00:56:08.560
+some performance heavy parts.
+
+
+00:56:08.560 --> 00:56:13.660
+Or I also think supporters is really strict on the, on the schema and the types.
+
+
+00:56:13.660 --> 00:56:17.820
+It's also, if you write any ETL, you will be really happy to do that
+
+
+00:56:17.820 --> 00:56:21.620
+part of us because you can check the scheme of lazy frame before executing it.
+
+
+00:56:21.860 --> 00:56:26.380
+Then you know, the apps core running the query and the data comes in and it
+
+
+00:56:26.380 --> 00:56:31.460
+doesn't apply to this schema and you can fail fast instead of having strange
+
+
+00:56:31.460 --> 00:56:31.980
+outputs.
+
+
+00:56:31.980 --> 00:56:35.900
+Oh, that's interesting because you definitely don't want zero when you
+
+
+00:56:35.900 --> 00:56:40.060
+expected something else because it could have pars or other weird, whatever.
+
+
+00:56:40.060 --> 00:56:40.260
+Right.
+
+
+00:56:40.260 --> 00:56:40.500
+Yeah.
+
+
+00:56:40.500 --> 00:56:45.420
+So this was my, um, for missing data and Polar's doesn't change the schema.
+
+
+00:56:45.420 --> 00:56:51.660
+So Polar's is the schema is defined by the operations and the data and not by
+
+
+00:56:51.660 --> 00:56:55.780
+their values in data. So you can directly check behind.
+
+
+00:56:55.780 --> 00:57:00.540
+Excellent. All right. Well, congratulations on a cool project. I'm glad we got to share
+
+
+00:57:00.540 --> 00:57:02.260
+with everybody. Thanks for coming on the show.
+
+
+00:57:02.260 --> 00:57:03.260
+Bye.
+
+
+00:57:03.260 --> 00:57:04.460
+You bet. Bye.
+
+
+00:57:04.460 --> 00:57:09.220
+This has been another episode of Talk Python to Me. Thank you to our sponsors. Be sure
+
+
+00:57:09.220 --> 00:57:13.140
+to check out what they're offering. It really helps support the show. Typy is here to take
+
+
+00:57:13.140 --> 00:57:17.860
+on the challenge of rapidly transforming a bare algorithm in Python into a full-fledged
+
+
+00:57:17.860 --> 00:57:20.180
+decision support system for end users.
+
+
+00:57:20.180 --> 00:57:22.700
+Get started with Typy core and GUI for free
+
+
+00:57:22.700 --> 00:57:27.620
+at talkpython.fm/typy, T-A-I-P-Y.
+
+
+00:57:27.620 --> 00:57:30.420
+Earn extra income from sharing your software development
+
+
+00:57:30.420 --> 00:57:32.540
+opinion at user interviews.
+
+
+00:57:32.540 --> 00:57:35.860
+Head over to talkpython.fm/userinterviews
+
+
+00:57:35.860 --> 00:57:37.060
+to participate today.
+
+
+00:57:37.060 --> 00:57:39.180
+Want to level up your Python?
+
+
+00:57:39.180 --> 00:57:40.980
+We have one of the largest catalogs
+
+
+00:57:40.980 --> 00:57:43.340
+of Python video courses over at TalkPython.
+
+
+00:57:43.340 --> 00:57:45.380
+Our content ranges from true beginners
+
+
+00:57:45.380 --> 00:57:48.340
+to deeply advanced topics like memory and async.
+
+
+00:57:48.340 --> 00:57:51.020
+And best of all, there's not a subscription in sight.
+
+
+00:57:51.020 --> 00:57:54.040
+Check it out for yourself at training.talkpython.fm.
+
+
+00:57:54.040 --> 00:57:55.660
+Be sure to subscribe to the show,
+
+
+00:57:55.660 --> 00:57:58.660
+open your favorite podcast app, and search for Python.
+
+
+00:57:58.660 --> 00:58:00.020
+We should be right at the top.
+
+
+00:58:00.020 --> 00:58:02.900
+You can also find the iTunes feed at /iTunes,
+
+
+00:58:02.900 --> 00:58:05.100
+the Google Play feed at /play,
+
+
+00:58:05.100 --> 00:58:09.100
+and the Direct RSS feed at /rss on talkpython.fm.
+
+
+00:58:09.100 --> 00:58:12.620
+We're live streaming most of our recordings these days.
+
+
+00:58:12.620 --> 00:58:13.780
+If you want to be part of the show
+
+
+00:58:13.780 --> 00:58:16.060
+and have your comments featured on the air,
+
+
+00:58:16.060 --> 00:58:17.940
+be sure to subscribe to our YouTube channel
+
+
+00:58:17.940 --> 00:58:20.940
+at talkpython.fm/youtube.
+
+
+00:58:20.940 --> 00:58:22.340
+This is your host, Michael Kennedy.
+
+
+00:58:22.340 --> 00:58:23.500
+Thanks so much for listening.
+
+
+00:58:23.500 --> 00:58:24.740
+I really appreciate it.
+
+
+00:58:24.740 --> 00:58:26.980
+Now get out there and write some Python code.
+
+
+00:58:26.980 --> 00:58:29.560
+(upbeat music)
+
+
+00:58:29.560 --> 00:58:46.560
+[Music]
+
+
+00:58:46.560 --> 00:58:56.560
+[BLANK_AUDIO]
+
