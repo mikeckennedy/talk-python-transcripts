@@ -1,0 +1,5020 @@
+WEBVTT
+00:00:00.000 --> 00:00:02.960
+So you know about dependencies and testing, right?
+
+
+00:00:02.960 --> 00:00:05.120
+If you're going to talk to your database in your app,
+
+
+00:00:05.120 --> 00:00:07.520
+you have to decide how to approach that with your test.
+
+
+00:00:07.520 --> 00:00:12.160
+There are a lot of solid options you might pick from, and they vary by goals.
+
+
+00:00:12.160 --> 00:00:14.800
+Do you mock out the DB layer for isolation?
+
+
+00:00:14.800 --> 00:00:18.240
+Or do you use a test DB to make it as real as possible?
+
+
+00:00:18.240 --> 00:00:22.960
+Or do you even just punt and use the real DB for expediency?
+
+
+00:00:22.960 --> 00:00:27.760
+What if your dependency was a huge array of radio telescopes
+
+
+00:00:27.760 --> 00:00:33.200
+and a rack of hundreds of bespoke servers. That's the challenge on deck for today,
+
+
+00:00:33.200 --> 00:00:39.520
+where we discuss testing radio astronomy with PyTest and our guest, James Smith. He's a digital
+
+
+00:00:39.520 --> 00:00:44.400
+signal processing engineer at the South African Radio Astronomy Observatory and has some great
+
+
+00:00:44.400 --> 00:01:02.400
+stories and tips to share. This is Talk Python to Me, episode 405, recorded February 13th, 2023.
+
+
+00:01:02.400 --> 00:01:10.560
+Welcome to Talk Python to Me, a weekly podcast on Python. This is your host, Michael Kennedy.
+
+
+00:01:10.560 --> 00:01:15.760
+Follow me on Mastodon, where I'm @mkennedy and follow the podcast using @talkpython,
+
+
+00:01:15.760 --> 00:01:20.560
+both on fosstodon.org. Be careful with impersonating accounts on other instances,
+
+
+00:01:20.560 --> 00:01:26.400
+there are many. Keep up with the show and listen to over seven years of past episodes at talkpython.fm.
+
+
+00:01:26.400 --> 00:01:32.240
+We've started streaming most of our episodes live on YouTube. Subscribe to our YouTube channel over
+
+
+00:01:32.240 --> 00:01:38.000
+at talkpython.fm/youtube to get notified about upcoming shows and be part of that episode.
+
+
+00:01:39.120 --> 00:01:42.000
+This episode of Talk Python to Me is brought to you by Taipy.
+
+
+00:01:42.000 --> 00:01:46.160
+They're here to take on the challenge of rapidly transforming a bare algorithm in Python
+
+
+00:01:46.160 --> 00:01:48.800
+into a full-fledged decision support system.
+
+
+00:01:48.800 --> 00:01:55.680
+Check them out at talkpython.fm/taipy and it's brought to you by Sentry.
+
+
+00:01:55.680 --> 00:01:57.760
+Don't let those errors go unnoticed.
+
+
+00:01:57.760 --> 00:01:58.800
+Use Sentry.
+
+
+00:01:58.800 --> 00:02:01.360
+Get started at talkpython.fm/sentry.
+
+
+00:02:01.360 --> 00:02:04.720
+James, welcome to Talk Python to Me.
+
+
+00:02:04.720 --> 00:02:08.240
+Normally, I talk Python to computers, Michael, but this will be a first.
+
+
+00:02:08.240 --> 00:02:10.240
+You are a human, right?
+
+
+00:02:10.240 --> 00:02:12.240
+You gotta ask chatGTP about that, we'll see.
+
+
+00:02:12.240 --> 00:02:16.240
+There's a lot of people who are interested in talking about Python.
+
+
+00:02:16.240 --> 00:02:18.240
+When I first put this podcast together, I thought,
+
+
+00:02:18.240 --> 00:02:20.240
+"Who's going to be the target audience?"
+
+
+00:02:20.240 --> 00:02:22.240
+I thought people were really into Python.
+
+
+00:02:22.240 --> 00:02:24.240
+People make things like Flask and stuff.
+
+
+00:02:24.240 --> 00:02:26.240
+It's kind of a big part of the world.
+
+
+00:02:26.240 --> 00:02:28.240
+But there's a ton of people who are scientists,
+
+
+00:02:28.240 --> 00:02:30.240
+or just curious about programming,
+
+
+00:02:30.240 --> 00:02:32.240
+who listen as well.
+
+
+00:02:32.240 --> 00:02:34.240
+It really surprised me how many people
+
+
+00:02:34.240 --> 00:02:36.240
+you can talk Python to,
+
+
+00:02:36.240 --> 00:02:37.520
+They seem to appreciate it.
+
+
+00:02:37.520 --> 00:02:38.280
+So it's cool.
+
+
+00:02:38.280 --> 00:02:39.120
+- Indeed.
+
+
+00:02:39.120 --> 00:02:40.960
+- Yeah, but I also spend a fair amount of time
+
+
+00:02:40.960 --> 00:02:43.640
+talking Python to computers as well.
+
+
+00:02:43.640 --> 00:02:45.640
+Sometimes more fun, sometimes more frustrating.
+
+
+00:02:45.640 --> 00:02:47.200
+You never know.
+
+
+00:02:47.200 --> 00:02:49.000
+- Yes, we're familiar with that.
+
+
+00:02:49.000 --> 00:02:50.600
+- I'm sure, I'm sure.
+
+
+00:02:50.600 --> 00:02:52.600
+Well, you have this extra angle
+
+
+00:02:52.600 --> 00:02:56.040
+of it's not just talking to pure software, right?
+
+
+00:02:56.040 --> 00:02:59.040
+That lives in some internet API vacuum,
+
+
+00:02:59.040 --> 00:03:01.320
+but you have physical things,
+
+
+00:03:01.320 --> 00:03:03.600
+many, many physical things in radio astronomy
+
+
+00:03:03.600 --> 00:03:07.320
+and large arrays of telescopes and receivers
+
+
+00:03:07.320 --> 00:03:09.640
+and as we're gonna talk about, lots of different things.
+
+
+00:03:09.640 --> 00:03:12.400
+And I think that's one of the really interesting aspects
+
+
+00:03:12.400 --> 00:03:14.080
+of this episode to talk to you
+
+
+00:03:14.080 --> 00:03:17.440
+is Python against real world things out there
+
+
+00:03:17.440 --> 00:03:19.040
+and real time as well.
+
+
+00:03:19.040 --> 00:03:20.840
+- Perhaps sort of to jump back
+
+
+00:03:20.840 --> 00:03:23.120
+and put the listeners in a bit of context,
+
+
+00:03:23.120 --> 00:03:25.880
+I work at the South African Radio Astronomy Observatory.
+
+
+00:03:25.880 --> 00:03:28.400
+Our sort of primary project is called Meerkat.
+
+
+00:03:28.400 --> 00:03:31.140
+It's a precursor of one of the world's biggest
+
+
+00:03:31.140 --> 00:03:33.860
+radio telescopes, which is planned.
+
+
+00:03:33.860 --> 00:03:38.740
+So the project is called SKA, so it stands for Square Kilometer Array, which refers to
+
+
+00:03:38.740 --> 00:03:42.700
+the size of the collecting area of the telescope that will eventually be built.
+
+
+00:03:42.700 --> 00:03:44.260
+It's in its beginning stages now.
+
+
+00:03:44.260 --> 00:03:49.140
+And that has a lot of moving parts, right from the actual antennas that are pointing
+
+
+00:03:49.140 --> 00:03:53.760
+in into the sky and recording radio emissions from the universe somewhere, through down
+
+
+00:03:53.760 --> 00:03:59.500
+to the point where a scientist actually sits down with a data product in order to analyze
+
+
+00:03:59.500 --> 00:04:02.000
+to write his paper that he's hoping to publish
+
+
+00:04:02.000 --> 00:04:04.500
+and win his Nobel Prize.
+
+
+00:04:04.500 --> 00:04:07.000
+And so everything from the beginning of the end there
+
+
+00:04:07.000 --> 00:04:09.000
+needs some software control.
+
+
+00:04:09.000 --> 00:04:12.000
+And Python is the sort of weapon of choice
+
+
+00:04:12.000 --> 00:04:13.500
+for all of those applications.
+
+
+00:04:13.500 --> 00:04:15.500
+- Yeah, it's pretty interesting to see
+
+
+00:04:15.500 --> 00:04:17.000
+what you're going to talk about.
+
+
+00:04:17.000 --> 00:04:20.500
+You gave a couple of presentations at PyCon South Africa,
+
+
+00:04:20.500 --> 00:04:21.500
+is that right? - Zeday.
+
+
+00:04:21.500 --> 00:04:23.000
+- Zeday. - That's right, yes.
+
+
+00:04:23.000 --> 00:04:24.500
+Last year. - Yeah, fantastic.
+
+
+00:04:24.500 --> 00:04:27.000
+And people, of course, link to those in the show notes
+
+
+00:04:27.000 --> 00:04:28.500
+and people can check them out.
+
+
+00:04:28.500 --> 00:04:31.220
+a lot of cool graphics and stuff there.
+
+
+00:04:31.220 --> 00:04:34.180
+The fact that you built this real-time aspect
+
+
+00:04:34.180 --> 00:04:38.580
+involving Python, which is not normal use perhaps,
+
+
+00:04:38.580 --> 00:04:40.620
+I think is really something that we're gonna have
+
+
+00:04:40.620 --> 00:04:42.420
+a good time talking about, as well as just
+
+
+00:04:42.420 --> 00:04:46.900
+how do you test something like a large receiver array
+
+
+00:04:46.900 --> 00:04:49.680
+rather than, you know, is the user logged in
+
+
+00:04:49.680 --> 00:04:52.140
+in the database, yes or no, and let's mock that out, right?
+
+
+00:04:52.140 --> 00:04:54.540
+This is both, I think, very similar
+
+
+00:04:54.540 --> 00:04:55.980
+and yet very different, right?
+
+
+00:04:55.980 --> 00:04:57.420
+- Yes, it can be.
+
+
+00:04:57.420 --> 00:04:59.820
+And there's a lot that you can do,
+
+
+00:04:59.820 --> 00:05:01.220
+but there's also some interesting gotchas
+
+
+00:05:01.220 --> 00:05:04.020
+which we can talk about there.
+
+
+00:05:04.020 --> 00:05:06.340
+So, I mean, I don't know where you wanna start.
+
+
+00:05:06.340 --> 00:05:07.900
+- Let's get a real quick introduction with you
+
+
+00:05:07.900 --> 00:05:10.020
+before we get too far down in this topic.
+
+
+00:05:10.020 --> 00:05:13.220
+And so tell people how you got into programming
+
+
+00:05:13.220 --> 00:05:15.660
+and astronomy and all that kind of stuff.
+
+
+00:05:15.660 --> 00:05:18.620
+- Well, programming, well, both of those have become,
+
+
+00:05:18.620 --> 00:05:19.900
+both of those started out as hobbies
+
+
+00:05:19.900 --> 00:05:21.580
+and they've sort of become my job,
+
+
+00:05:21.580 --> 00:05:23.900
+which means I don't do them as a hobby anymore,
+
+
+00:05:23.900 --> 00:05:25.300
+which is always fun.
+
+
+00:05:25.300 --> 00:05:29.300
+I was younger in school, I made the mistake during a summer holiday of telling my dad that I was
+
+
+00:05:29.300 --> 00:05:36.580
+bored. And so he handed me a book and this book was programming in C, I think. I forget exactly.
+
+
+00:05:36.580 --> 00:05:41.540
+And being young and naive, I thought this was a great idea and started working my way through it.
+
+
+00:05:41.540 --> 00:05:46.900
+So since then, I've been programming more or less continuously. It was sort of the
+
+
+00:05:46.900 --> 00:05:50.420
+mid to late 2000s that Python started to become more prominent and I picked that up and
+
+
+00:05:51.380 --> 00:05:56.900
+haven't looked back. Astronomy was also another hobby. In my student days, I spent many South
+
+
+00:05:56.900 --> 00:06:02.660
+African, cold South African nights looking at the stars. And then a job opportunity opened up
+
+
+00:06:02.660 --> 00:06:08.180
+at Sareo to do electronic engineering, which was the field that I trained in university.
+
+
+00:06:08.180 --> 00:06:12.660
+That was about seven years ago. And so I've been combining these sort of programming and
+
+
+00:06:12.660 --> 00:06:17.780
+electronic engineering and my astronomy hobby, which has shifted now into radio instead of
+
+
+00:06:17.780 --> 00:06:20.980
+optical. But yeah, I basically come from that. Fantastic.
+
+
+00:06:20.980 --> 00:06:24.420
+I remember getting a book in C, thinking,
+
+
+00:06:24.420 --> 00:06:25.780
+"Oh, I'm going to learn programming,"
+
+
+00:06:25.780 --> 00:06:27.500
+and then read it like, "Okay, this..."
+
+
+00:06:27.500 --> 00:06:28.340
+When I was pretty young, I was like,
+
+
+00:06:28.340 --> 00:06:30.860
+"Okay, this is a little bit much to bite off at the moment,"
+
+
+00:06:30.860 --> 00:06:32.100
+but came back to it as well.
+
+
+00:06:32.100 --> 00:06:33.140
+But that's how it was, right?
+
+
+00:06:33.140 --> 00:06:37.660
+We used to get books pre-internet, YouTube,
+
+
+00:06:37.660 --> 00:06:38.980
+and where you just fired up and say,
+
+
+00:06:38.980 --> 00:06:40.820
+"Teach me programming in the next half hour."
+
+
+00:06:40.820 --> 00:06:43.140
+- With listings of code and you have to type them in,
+
+
+00:06:43.140 --> 00:06:45.580
+and then you miss a semicolon somewhere
+
+
+00:06:45.580 --> 00:06:46.980
+and scratch your head for half a day.
+
+
+00:06:46.980 --> 00:06:47.820
+(laughing)
+
+
+00:06:47.820 --> 00:06:48.660
+- That's right.
+
+
+00:06:48.660 --> 00:06:49.900
+- But I think that was a good preparation, though.
+
+
+00:06:49.900 --> 00:06:52.400
+I mean, as great as Python is, it is somewhat high level,
+
+
+00:06:52.400 --> 00:06:54.540
+and I think it's helpful to have a sort of a,
+
+
+00:06:54.540 --> 00:06:56.720
+even if you don't often work at that level,
+
+
+00:06:56.720 --> 00:06:58.200
+to have an understanding of what's going on
+
+
+00:06:58.200 --> 00:07:00.480
+at a slightly lower level than what the computer is doing.
+
+
+00:07:00.480 --> 00:07:02.180
+- It's valuable to have that experience,
+
+
+00:07:02.180 --> 00:07:04.720
+but I'm also, even though I did it professionally
+
+
+00:07:04.720 --> 00:07:07.120
+for a couple years, happy that I'm not,
+
+
+00:07:07.120 --> 00:07:09.520
+I don't have to continuously work at that level, right?
+
+
+00:07:09.520 --> 00:07:10.840
+You can just be so more productive
+
+
+00:07:10.840 --> 00:07:13.520
+in a higher level language like Python, indeed.
+
+
+00:07:13.520 --> 00:07:14.520
+- Totally. - Yeah.
+
+
+00:07:14.520 --> 00:07:17.340
+So I think you introduced this a little bit,
+
+
+00:07:17.340 --> 00:07:21.620
+But tell people about Serao, this project, how'd you get to that place?
+
+
+00:07:21.620 --> 00:07:22.620
+Yeah.
+
+
+00:07:22.620 --> 00:07:28.020
+Serao, well, I got there by responding to a job advert and interviewing and what have
+
+
+00:07:28.020 --> 00:07:29.020
+you.
+
+
+00:07:29.020 --> 00:07:33.700
+Serao sort of started out as a response to the international kind of scientific project
+
+
+00:07:33.700 --> 00:07:35.700
+to build a square kilometer array telescope.
+
+
+00:07:35.700 --> 00:07:40.620
+The idea is to make it the most sensitive radio telescope that has ever been built.
+
+
+00:07:40.620 --> 00:07:44.500
+And when you're doing that kind of project, you want to build it in an ideal setting,
+
+
+00:07:44.500 --> 00:07:47.500
+like optical telescopes, if you want to do proper science,
+
+
+00:07:47.500 --> 00:07:50.100
+you want to do it far away from cities where there's no light pollution.
+
+
+00:07:50.100 --> 00:07:54.300
+Similarly, radio telescopes, you want to do them where there's no radio interference.
+
+
+00:07:54.300 --> 00:07:57.100
+So cell phones, TV signals, Wi-Fi, that kind of stuff.
+
+
+00:07:57.100 --> 00:07:59.300
+The Southern Hemisphere also has a bit of an advantage
+
+
+00:07:59.300 --> 00:08:03.500
+in that we can see parts of the galaxy that the Northern Hemisphere can't.
+
+
+00:08:03.500 --> 00:08:07.700
+And so, as this project progressed, various sites were identified
+
+
+00:08:07.700 --> 00:08:11.900
+and ultimately the decision was made to put part of the telescope in South Africa
+
+
+00:08:11.900 --> 00:08:13.100
+and part of it in Australia.
+
+
+00:08:13.100 --> 00:08:15.980
+And Sareo is really the, just the organization around
+
+
+00:08:15.980 --> 00:08:19.440
+developing the South African part of that telescope.
+
+
+00:08:19.440 --> 00:08:20.280
+That's where we are.
+
+
+00:08:20.280 --> 00:08:21.680
+- It's a very cool project.
+
+
+00:08:21.680 --> 00:08:24.880
+I think a square kilometer array of telescope,
+
+
+00:08:24.880 --> 00:08:26.140
+that's pretty impressive, right?
+
+
+00:08:26.140 --> 00:08:29.240
+And also something that's much easier to do with radio
+
+
+00:08:29.240 --> 00:08:31.640
+than with optical, I would imagine.
+
+
+00:08:31.640 --> 00:08:34.140
+- Yes, when it comes to telescopes, bigger is better,
+
+
+00:08:34.140 --> 00:08:37.240
+but there reaches a point of where building a bigger one
+
+
+00:08:37.240 --> 00:08:40.040
+becomes expensive and very difficult.
+
+
+00:08:40.040 --> 00:08:42.440
+And so a trick that you can use in radio
+
+
+00:08:42.440 --> 00:08:47.560
+is called interferometry. So if you measure your radio waves at different points and you measure
+
+
+00:08:47.560 --> 00:08:53.000
+them in phase with each other or what they call coherently, then you can get away with making a
+
+
+00:08:53.000 --> 00:08:57.600
+lot of smaller telescopes to build up the same kind of area, which will give you the same effect
+
+
+00:08:57.600 --> 00:09:02.360
+as a bigger one, but much cheaper because you can do a lot of smaller, cheaper telescopes.
+
+
+00:09:02.360 --> 00:09:06.800
+If that in a nutshell is really why these telescope arrays exist, it's very difficult
+
+
+00:09:06.800 --> 00:09:11.040
+to do that with optical telescopes because the wavelength is so short, the frequency is so high,
+
+
+00:09:11.040 --> 00:09:14.720
+that getting, getting the, it is possible, it can be done,
+
+
+00:09:14.720 --> 00:09:17.280
+but getting the signal coherent or in phase
+
+
+00:09:17.280 --> 00:09:18.400
+is very, very difficult.
+
+
+00:09:18.400 --> 00:09:19.240
+- I see.
+
+
+00:09:19.240 --> 00:09:20.060
+- That's why we do it in radio.
+
+
+00:09:20.060 --> 00:09:21.200
+- Yeah, you don't have much time.
+
+
+00:09:21.200 --> 00:09:23.320
+There's not much of a gap between
+
+
+00:09:23.320 --> 00:09:25.320
+how you've got to coordinate the signals across the radio,
+
+
+00:09:25.320 --> 00:09:27.160
+but it's even worse in optical, I see.
+
+
+00:09:27.160 --> 00:09:28.360
+- Exactly, exactly.
+
+
+00:09:28.360 --> 00:09:29.200
+- Nice.
+
+
+00:09:29.200 --> 00:09:31.200
+So people who listened to the episode
+
+
+00:09:31.200 --> 00:09:34.440
+about imaging the black hole, we talked a lot about that.
+
+
+00:09:34.440 --> 00:09:36.600
+So, you know, I don't necessarily need to,
+
+
+00:09:36.600 --> 00:09:39.320
+think we need to cover too much depth about it.
+
+
+00:09:39.320 --> 00:09:42.120
+But one thing I think that people might find interesting is,
+
+
+00:09:42.120 --> 00:09:44.760
+I think, remember from your talk that you said,
+
+
+00:09:44.760 --> 00:09:46.960
+this is part, some of the work that you're doing
+
+
+00:09:46.960 --> 00:09:48.880
+is part of the deep space network
+
+
+00:09:48.880 --> 00:09:50.800
+for communicating with, is that right?
+
+
+00:09:50.800 --> 00:09:52.320
+With NASA.
+
+
+00:09:52.320 --> 00:09:54.080
+- So African radio astronomy has its origins
+
+
+00:09:54.080 --> 00:09:55.360
+in the deep space network.
+
+
+00:09:55.360 --> 00:09:57.800
+So if you're trying to communicate with spacecraft
+
+
+00:09:57.800 --> 00:09:59.300
+that are outside of earth orbit,
+
+
+00:09:59.300 --> 00:10:00.640
+you need a very powerful,
+
+
+00:10:00.640 --> 00:10:02.680
+or something that looks a bit like a radio telescope
+
+
+00:10:02.680 --> 00:10:05.880
+in much, except that you're transmitting as well,
+
+
+00:10:05.880 --> 00:10:07.640
+because you need to be able to talk to the,
+
+
+00:10:07.640 --> 00:10:12.960
+know, Voyager or your Mars Rover that's out there in space. But very inconveniently for
+
+
+00:10:12.960 --> 00:10:17.480
+scientific purposes, the earth rotates. So for about a third of the day, if you have
+
+
+00:10:17.480 --> 00:10:22.900
+a telescope in California, for example, I think is where one of NASA's big ones are,
+
+
+00:10:22.900 --> 00:10:26.660
+you know, half of the day you can't really talk to your, to your spaceships. And NASA
+
+
+00:10:26.660 --> 00:10:31.520
+built a network of telescopes around the world and one was in Australia and one was here
+
+
+00:10:31.520 --> 00:10:35.940
+in South Africa. And some of the early Mars missions were actually used the telescope
+
+
+00:10:35.940 --> 00:10:38.020
+in South Africa for communication.
+
+
+00:10:38.020 --> 00:10:39.780
+But that was, I think in the seventies,
+
+
+00:10:39.780 --> 00:10:41.100
+I forget my history exactly,
+
+
+00:10:41.100 --> 00:10:43.220
+but they got a better one in Spain.
+
+
+00:10:43.220 --> 00:10:46.380
+And so the one in South Africa was kind of converted
+
+
+00:10:46.380 --> 00:10:48.140
+into a facility just for science.
+
+
+00:10:48.140 --> 00:10:51.560
+And it's been operated by our national research foundation,
+
+
+00:10:51.560 --> 00:10:55.460
+which evolved into Sareo for the last sort of few years.
+
+
+00:10:55.460 --> 00:10:56.860
+And that's what kind of gave us our leg up.
+
+
+00:10:56.860 --> 00:10:57.700
+- Yeah, exactly.
+
+
+00:10:57.700 --> 00:10:59.300
+It was already built and it was there.
+
+
+00:10:59.300 --> 00:11:00.580
+And they're like, you know what?
+
+
+00:11:00.580 --> 00:11:02.500
+Instead of just let it, put it on mothballs,
+
+
+00:11:02.500 --> 00:11:04.060
+why don't you guys do science with it, right?
+
+
+00:11:04.060 --> 00:11:04.900
+That's cool.
+
+
+00:11:04.900 --> 00:11:06.900
+And we've been using it quite well since then.
+
+
+00:11:06.900 --> 00:11:09.400
+They've done, I wouldn't say groundbreaking science.
+
+
+00:11:09.400 --> 00:11:11.200
+I don't know that any Nobel prizes have happened,
+
+
+00:11:11.200 --> 00:11:13.200
+but we have some great radio astronomers,
+
+
+00:11:13.200 --> 00:11:14.200
+originally from South Africa,
+
+
+00:11:14.200 --> 00:11:15.700
+that have used data from this telescope.
+
+
+00:11:15.700 --> 00:11:16.700
+So, yeah.
+
+
+00:11:16.700 --> 00:11:17.700
+- Excellent.
+
+
+00:11:17.700 --> 00:11:21.500
+All right, let's talk about first the real-time aspect,
+
+
+00:11:21.500 --> 00:11:24.900
+this thing that you focus on called the correlator, right?
+
+
+00:11:24.900 --> 00:11:27.700
+And maybe give us this side of the story,
+
+
+00:11:27.700 --> 00:11:30.700
+because I think this alone is pretty interesting,
+
+
+00:11:30.700 --> 00:11:32.900
+what you've built here with Python, you and your team.
+
+
+00:11:32.900 --> 00:11:38.020
+So from a conceptual point of view, in the episode a few weeks ago, when you interviewed
+
+
+00:11:38.020 --> 00:11:43.060
+Dr. Sarah Asun, I don't know if I'm pronouncing her name correctly, the Event Horizon telescope
+
+
+00:11:43.060 --> 00:11:48.420
+worked by pointing different telescopes around the world at the same object. Or all radio,
+
+
+00:11:48.420 --> 00:11:53.940
+shall I say, all radio telescopes arrays, whether they're very long baseline, like what she used,
+
+
+00:11:53.940 --> 00:11:58.820
+or much shorter, have something called a correlator. And this is the thing that basically
+
+
+00:11:58.820 --> 00:12:04.620
+combines the signals from the individual telescopes in a way that is, that enables downstream
+
+
+00:12:04.620 --> 00:12:10.100
+users or scientists to actually make sense of this data. So in order for that to work,
+
+
+00:12:10.100 --> 00:12:14.220
+the data needs to be in phase, it needs to be coherent. And at very long baselines, they
+
+
+00:12:14.220 --> 00:12:19.300
+do this by having each station having their very own atomic clock to generate very precise
+
+
+00:12:19.300 --> 00:12:20.300
+reference signals.
+
+
+00:12:20.300 --> 00:12:23.180
+- So as a reminder for people maybe didn't hear that episode is, you know, the earth
+
+
+00:12:23.180 --> 00:12:26.780
+- Earth is curved, as we all know, hopefully.
+
+
+00:12:26.780 --> 00:12:30.420
+And the radio waves come in, and as it hits that sphere,
+
+
+00:12:30.420 --> 00:12:32.380
+they hit the different parts of the array.
+
+
+00:12:32.380 --> 00:12:34.620
+The more spread out it is, even more exaggerated.
+
+
+00:12:34.620 --> 00:12:36.520
+But it hits the different parts of the array
+
+
+00:12:36.520 --> 00:12:39.520
+at different times, so you have to offset
+
+
+00:12:39.520 --> 00:12:40.820
+those back in the signal to say,
+
+
+00:12:40.820 --> 00:12:41.940
+well, it came in at this angle,
+
+
+00:12:41.940 --> 00:12:42.900
+and it came in at this time,
+
+
+00:12:42.900 --> 00:12:45.180
+and the speed of light says this one is
+
+
+00:12:45.180 --> 00:12:46.820
+a nanosecond behind that one.
+
+
+00:12:46.820 --> 00:12:49.520
+So you gotta figure out how to realign those
+
+
+00:12:49.520 --> 00:12:51.140
+so it looks like a flat surface
+
+
+00:12:51.140 --> 00:12:53.020
+that they hit all simultaneously
+
+
+00:12:53.020 --> 00:12:54.660
+to look like a single picture, right?
+
+
+00:12:54.660 --> 00:12:57.220
+So that's basically the job of this thing.
+
+
+00:12:57.220 --> 00:12:59.260
+- So partially, you can do the first bit
+
+
+00:12:59.260 --> 00:13:00.620
+with just with geometry.
+
+
+00:13:00.620 --> 00:13:03.020
+We know what the rotation of the earth is.
+
+
+00:13:03.020 --> 00:13:05.300
+We know where our different telescopes are.
+
+
+00:13:05.300 --> 00:13:06.620
+And so we can calculate roughly
+
+
+00:13:06.620 --> 00:13:08.220
+what the time difference will be.
+
+
+00:13:08.220 --> 00:13:10.740
+The job of the correlator is once you've got those signals
+
+
+00:13:10.740 --> 00:13:13.060
+and you've applied your sort of rough delay offset
+
+
+00:13:13.060 --> 00:13:14.460
+to each of those signals,
+
+
+00:13:14.460 --> 00:13:16.820
+the correlator will find the correlations
+
+
+00:13:16.820 --> 00:13:18.700
+between the incoming signals
+
+
+00:13:18.700 --> 00:13:20.940
+simply by multiplying the signals together.
+
+
+00:13:20.940 --> 00:13:22.860
+Mathematically is not terribly complicated.
+
+
+00:13:22.860 --> 00:13:26.260
+It's really just multiplication of each pair of antennas.
+
+
+00:13:26.260 --> 00:13:28.620
+But it's with that, you may remember
+
+
+00:13:28.620 --> 00:13:30.140
+from your high school mathematics,
+
+
+00:13:30.140 --> 00:13:31.580
+the trigonometric identity.
+
+
+00:13:31.580 --> 00:13:34.500
+When you multiply two sine waves together,
+
+
+00:13:34.500 --> 00:13:36.620
+you get a somewhat a difference product.
+
+
+00:13:36.620 --> 00:13:38.220
+And it's a similar kind of concept,
+
+
+00:13:38.220 --> 00:13:41.180
+applying to not just to abstract sine waves,
+
+
+00:13:41.180 --> 00:13:44.740
+but to radio waves that are at various frequencies.
+
+
+00:13:44.740 --> 00:13:46.860
+The main engineering challenge is just doing this
+
+
+00:13:46.860 --> 00:13:49.100
+fast enough for practical purposes.
+
+
+00:13:49.100 --> 00:13:52.700
+So in the example of the Event Horizon Telescope
+
+
+00:13:52.700 --> 00:13:55.060
+with very long baseline interferometry,
+
+
+00:13:55.060 --> 00:13:56.660
+it's not possible to do it in real time
+
+
+00:13:56.660 --> 00:13:59.360
+because your individual elements are just too far apart.
+
+
+00:13:59.360 --> 00:14:00.980
+You can't get all the data together.
+
+
+00:14:00.980 --> 00:14:04.360
+- Not for math, but because the actual data quantity,
+
+
+00:14:04.360 --> 00:14:06.340
+getting them all back and forth across the world
+
+
+00:14:06.340 --> 00:14:08.740
+is too hard. - Exactly.
+
+
+00:14:08.740 --> 00:14:09.580
+Exactly.
+
+
+00:14:09.580 --> 00:14:12.960
+So there's specialized hardware that takes those signals
+
+
+00:14:12.960 --> 00:14:15.420
+and writes them basically just straight onto hard drives.
+
+
+00:14:15.420 --> 00:14:18.780
+Then these hard drives are physically taken
+
+
+00:14:18.780 --> 00:14:19.940
+to a central location.
+
+
+00:14:19.940 --> 00:14:22.380
+I think Sarah did talk about that in her episode.
+
+
+00:14:22.380 --> 00:14:26.480
+- Yeah, I think it was Boston and maybe Cambridge and London,
+
+
+00:14:26.480 --> 00:14:27.320
+something.
+
+
+00:14:27.320 --> 00:14:28.160
+- One was in Europe, yes.
+
+
+00:14:28.160 --> 00:14:29.400
+- No, it was Max Planck Institute in Germany
+
+
+00:14:29.400 --> 00:14:30.400
+is what it was, I believe.
+
+
+00:14:30.400 --> 00:14:31.460
+- That's right, yeah.
+
+
+00:14:31.460 --> 00:14:33.460
+One was in the States, one was in Europe.
+
+
+00:14:33.460 --> 00:14:36.600
+- This portion of "Talk Python to Me"
+
+
+00:14:36.600 --> 00:14:38.400
+is brought to you by Taipy.
+
+
+00:14:38.400 --> 00:14:39.960
+Taipy is the next generation
+
+
+00:14:39.960 --> 00:14:42.200
+open source Python application builder.
+
+
+00:14:42.200 --> 00:14:45.200
+With Taipy, you can turn data and AI algorithms
+
+
+00:14:45.200 --> 00:14:47.240
+into full web apps in no time.
+
+
+00:14:47.240 --> 00:14:48.400
+Here's how it works.
+
+
+00:14:48.400 --> 00:14:51.360
+You start with a bare algorithm written in Python.
+
+
+00:14:51.360 --> 00:14:56.200
+You then use TypeEye's innovative toolset that enables Python developers to build interactive
+
+
+00:14:56.200 --> 00:14:58.000
+end-user applications quickly.
+
+
+00:14:58.000 --> 00:15:02.800
+There's a visual designer to develop highly interactive GUIs ready for production, and
+
+
+00:15:02.800 --> 00:15:07.480
+for inbound data streams, you can program against the TypeEye Core layer as well.
+
+
+00:15:07.480 --> 00:15:11.960
+TypeEye Core provides intelligent pipeline management, data caching, and scenario and
+
+
+00:15:11.960 --> 00:15:13.280
+cycle management facilities.
+
+
+00:15:13.280 --> 00:15:18.600
+That's it, you'll have transformed a bare algorithm into a full-fledged decision support
+
+
+00:15:18.600 --> 00:15:19.600
+system for end-users.
+
+
+00:15:19.600 --> 00:15:25.000
+users. TypeEye is pure Python and open source, and you install it with a simple pip install
+
+
+00:15:25.000 --> 00:15:29.360
+typeeye. For large organizations that need fine-grained control and authorization around
+
+
+00:15:29.360 --> 00:15:34.320
+their data, there is a paid TypeEye Enterprise Edition, but the TypeEye core and GUI described
+
+
+00:15:34.320 --> 00:15:43.200
+above is completely free to use. Learn more and get started by visiting talkpython.fm/typeeye.
+
+
+00:15:43.200 --> 00:15:46.960
+The link's in your show notes. Thank you to TypeEye for sponsoring the show.
+
+
+00:15:46.960 --> 00:15:54.320
+Yes, and then the same, well, similar equipment does the reverse process. It reads the data
+
+
+00:15:54.320 --> 00:15:58.480
+off and then it basically batch processes it. This happens in software, so you cross
+
+
+00:15:58.480 --> 00:16:04.400
+multiply all of the signals together. That's great if you have a limited number of telescopes,
+
+
+00:16:04.400 --> 00:16:09.800
+up to a few dozen or so, as with the Event Horizon Telescope. In the Meerkat case, we've
+
+
+00:16:09.800 --> 00:16:15.000
+got 64 of them and we're building a few more. And as it becomes the full square kilometer
+
+
+00:16:15.000 --> 00:16:19.440
+array we're going to be talking about hundreds or possibly even thousands of individual telescope
+
+
+00:16:19.440 --> 00:16:24.280
+elements. So recording everything onto a hard drive at that data rate becomes impractical.
+
+
+00:16:24.280 --> 00:16:28.820
+So the approach that we take is we use what we call a real-time correlator. It processes
+
+
+00:16:28.820 --> 00:16:34.280
+and reduces the data as a sort of first stage in real-time live before recording to the
+
+
+00:16:34.280 --> 00:16:38.640
+disk and as a part of that step we integrate for a little while. So if you think about
+
+
+00:16:38.640 --> 00:16:43.520
+it from point of view if you've done some photography at night time you want to do a
+
+
+00:16:43.520 --> 00:16:45.840
+a long exposure, so you open your camera shutter
+
+
+00:16:45.840 --> 00:16:47.600
+for a long time to get them all signal.
+
+
+00:16:47.600 --> 00:16:48.640
+It's very similar to that.
+
+
+00:16:48.640 --> 00:16:50.280
+So we would integrate over, you know,
+
+
+00:16:50.280 --> 00:16:52.980
+half a second or a second or, you know, eight seconds.
+
+
+00:16:52.980 --> 00:16:55.440
+And that gives you a much reduced,
+
+
+00:16:55.440 --> 00:16:57.640
+there's still a lot of data that comes out
+
+
+00:16:57.640 --> 00:16:59.880
+of the other side, but it's much, much smaller
+
+
+00:16:59.880 --> 00:17:01.960
+than if you were recording straight onto hard drives
+
+
+00:17:01.960 --> 00:17:03.560
+from the telescope, the way that they do
+
+
+00:17:03.560 --> 00:17:05.560
+in Event Horizon Telescope.
+
+
+00:17:05.560 --> 00:17:06.640
+- Right, that is interesting.
+
+
+00:17:06.640 --> 00:17:08.240
+I guess it is just like taking a picture,
+
+
+00:17:08.240 --> 00:17:10.080
+just a different frequency, right?
+
+
+00:17:10.080 --> 00:17:11.320
+But same basic idea?
+
+
+00:17:11.320 --> 00:17:12.560
+- Exactly, exactly.
+
+
+00:17:12.560 --> 00:17:15.680
+- Nice, and so there's a lot of data coming through here.
+
+
+00:17:15.680 --> 00:17:16.940
+You talked about how Event Horizon
+
+
+00:17:16.940 --> 00:17:19.400
+couldn't even ship it around the world quick enough,
+
+
+00:17:19.400 --> 00:17:21.480
+or even though they were very, very far apart
+
+
+00:17:21.480 --> 00:17:23.680
+and pretty remote, but there's a lot of data here.
+
+
+00:17:23.680 --> 00:17:26.920
+And so maybe give people a sense of the data center.
+
+
+00:17:26.920 --> 00:17:28.880
+Excuse me, give people a sense of the data center.
+
+
+00:17:28.880 --> 00:17:31.040
+And like, you've got this array of,
+
+
+00:17:31.040 --> 00:17:33.080
+I don't remember how many of these correlators,
+
+
+00:17:33.080 --> 00:17:35.240
+server, U1 slices you've got,
+
+
+00:17:35.240 --> 00:17:38.760
+but it's not just one corner, a PC in the corner, is it?
+
+
+00:17:38.760 --> 00:17:40.080
+- No, no.
+
+
+00:17:40.080 --> 00:17:46.000
+Although with the way that technology progresses, maybe one day, no. So our current generation
+
+
+00:17:46.000 --> 00:17:52.000
+Correlator uses an FPGA based computing platform. We call it Scarab. There's a bit of a tradition
+
+
+00:17:52.000 --> 00:17:57.280
+to name radio astronomy compute things after insects. So the previous generation one was
+
+
+00:17:57.280 --> 00:18:02.080
+called Roach. This one is called Scarab. They stand for something. Reconfigurable Open
+
+
+00:18:02.080 --> 00:18:07.600
+Architecture for Computing Hardware, I think was the Roach. And Scarab, the first three letters
+
+
+00:18:07.600 --> 00:18:13.640
+is ISKA. Yeah, there we go. There's the scarab. And what that is, is an FPGA is a field programmable
+
+
+00:18:13.640 --> 00:18:18.440
+gate array. So it's a little piece of reconfigurable silicon that has, it's like having a hardware
+
+
+00:18:18.440 --> 00:18:23.400
+accelerated signal processing. It's very fast and it's wired straight into Ethernet for
+
+
+00:18:23.400 --> 00:18:28.480
+interconnect. So in our data center in the Karoo in South Africa, we've got about 280
+
+
+00:18:28.480 --> 00:18:33.280
+of these individual scarabs and each of them has a role to play in the signal processing
+
+
+00:18:33.280 --> 00:18:38.040
+pipeline. They talk to each other via Ethernet and they're controlled by a central master
+
+
+00:18:38.040 --> 00:18:45.000
+controller computer that runs Python. So it uses an asynchronous little routine to coordinate
+
+
+00:18:45.000 --> 00:18:49.920
+the activities of each of these scarabs. The processing parameters need to be updated from
+
+
+00:18:49.920 --> 00:18:54.800
+time to time. So for example, as the earth turns, the geometric delay between a given
+
+
+00:18:54.800 --> 00:19:00.520
+pair of telescopes will change slightly. And so that gets updated periodically in the scarab
+
+
+00:19:00.520 --> 00:19:05.800
+so that it can carry on processing the data at the full rate that the telescope is taking
+
+
+00:19:05.800 --> 00:19:06.800
+data in.
+
+
+00:19:06.800 --> 00:19:11.600
+So to give you an idea of that, each telescope is producing data at about 35 gigabit per
+
+
+00:19:11.600 --> 00:19:12.600
+second.
+
+
+00:19:12.600 --> 00:19:13.600
+- 35 gigabit a second?
+
+
+00:19:13.600 --> 00:19:14.600
+- Yeah, times 64.
+
+
+00:19:14.600 --> 00:19:18.000
+- Yeah, that's a lot of data.
+
+
+00:19:18.000 --> 00:19:22.800
+- After the processing, the other end of the correlator, so we get about four or five gigabit
+
+
+00:19:22.800 --> 00:19:24.580
+per second, so that's reduced.
+
+
+00:19:24.580 --> 00:19:28.760
+Due to kind of the long exposure effect, it's averaged over a few seconds, so it's four
+
+
+00:19:28.760 --> 00:19:31.200
+or five gigabits per second out the other end.
+
+
+00:19:31.200 --> 00:19:33.000
+And then that gets stored on hard drives
+
+
+00:19:33.000 --> 00:19:34.560
+for processing and imaging
+
+
+00:19:34.560 --> 00:19:36.920
+so that scientists can do their science later on.
+
+
+00:19:36.920 --> 00:19:37.920
+But that's the initial stage
+
+
+00:19:37.920 --> 00:19:39.400
+of the signal processing pipeline.
+
+
+00:19:39.400 --> 00:19:43.040
+- Yeah, so you've got 64 of these running in concert.
+
+
+00:19:43.040 --> 00:19:46.760
+What is uptime in DevOps look like for you all?
+
+
+00:19:46.760 --> 00:19:49.200
+Is this continuously 24 hours a day recording
+
+
+00:19:49.200 --> 00:19:52.280
+or is it offline for a certain number of hours?
+
+
+00:19:52.280 --> 00:19:53.600
+- Yes, it is.
+
+
+00:19:53.600 --> 00:19:55.520
+And the limiting factor I'm happy to say
+
+
+00:19:55.520 --> 00:19:57.680
+is usually not the correlator.
+
+
+00:19:57.680 --> 00:20:01.080
+We don't need all 280 scarabs to run.
+
+
+00:20:01.080 --> 00:20:05.280
+We can run with about 190 of them with full science capability, so there is capacity for
+
+
+00:20:05.280 --> 00:20:06.480
+spares.
+
+
+00:20:06.480 --> 00:20:10.480
+And when you have a system with this many moving parts, there is downtime.
+
+
+00:20:10.480 --> 00:20:14.400
+You know, people actually need to go and change the oil in the motors on the telescope and
+
+
+00:20:14.400 --> 00:20:16.600
+routine maintenance kinds of things like that.
+
+
+00:20:16.600 --> 00:20:22.200
+I don't remember our numbers exactly, but I believe it's above 75% of the time that
+
+
+00:20:22.200 --> 00:20:24.120
+the telescope is busy and doing science.
+
+
+00:20:24.120 --> 00:20:25.360
+This is more recent.
+
+
+00:20:25.360 --> 00:20:29.160
+It's only in the last sort of few years that the technology platform has become a bit more
+
+
+00:20:29.160 --> 00:20:30.160
+mature.
+
+
+00:20:30.160 --> 00:20:33.560
+In the early stages, it was really still sort of engineering commissioning, but I think
+
+
+00:20:33.560 --> 00:20:37.960
+we're using above 75% of time now for actual science observations.
+
+
+00:20:37.960 --> 00:20:40.960
+- That's pretty impressive for considering all the pieces involved.
+
+
+00:20:40.960 --> 00:20:42.400
+And what are these scarabs?
+
+
+00:20:42.400 --> 00:20:46.640
+Each one is basically assigned to an individual telescope, part of the array?
+
+
+00:20:46.640 --> 00:20:47.640
+- Partially.
+
+
+00:20:47.640 --> 00:20:51.200
+So the first one will do what is called channelization.
+
+
+00:20:51.200 --> 00:20:56.560
+So it's much easier to operate on narrow signals of, you know, very close to a sine wave.
+
+
+00:20:56.560 --> 00:21:00.520
+So the telescope will sample a little bit more than a gigahertz with the bandwidth and
+
+
+00:21:00.520 --> 00:21:04.580
+that will be chopped up into, you know, a few thousand channels.
+
+
+00:21:04.580 --> 00:21:09.840
+Then those channels will get sort of dished out and another scarab later on will cross
+
+
+00:21:09.840 --> 00:21:14.820
+multiply the corresponding frequency channels from every single telescope together.
+
+
+00:21:14.820 --> 00:21:16.340
+So this architecture is called FX.
+
+
+00:21:16.340 --> 00:21:19.740
+So first frequency generalization, then cross-correlation,
+
+
+00:21:19.740 --> 00:21:21.980
+cross-correlation, pardon me,
+
+
+00:21:21.980 --> 00:21:23.620
+before you get your ultimate, well,
+
+
+00:21:23.620 --> 00:21:25.340
+product which gets stored in the archive
+
+
+00:21:25.340 --> 00:21:27.900
+and on which then further science process is done.
+
+
+00:21:27.900 --> 00:21:31.060
+- People start to ask questions and draw graphs and things.
+
+
+00:21:31.060 --> 00:21:31.900
+- Exactly.
+
+
+00:21:31.900 --> 00:21:34.740
+- Yeah, so one of the parts that you employ
+
+
+00:21:34.740 --> 00:21:38.660
+to make this run fast is, I think you said you use CUDA,
+
+
+00:21:38.660 --> 00:21:41.060
+CUDA cores on NVIDIA GPUs or something like that.
+
+
+00:21:41.060 --> 00:21:41.900
+Is that right?
+
+
+00:21:41.900 --> 00:21:42.720
+Do I remember this correctly?
+
+
+00:21:42.720 --> 00:21:43.560
+- Yes, that's right.
+
+
+00:21:43.560 --> 00:21:49.360
+So the Scarab that you showed on the screen, that's our previous but current generation
+
+
+00:21:49.360 --> 00:21:51.940
+correlator is working on that platform.
+
+
+00:21:51.940 --> 00:21:53.200
+It has its pros and cons.
+
+
+00:21:53.200 --> 00:21:54.600
+It's kind of a bespoke piece of hardware.
+
+
+00:21:54.600 --> 00:21:59.660
+It is reconfigurable, but there are not that many customers for this particular board.
+
+
+00:21:59.660 --> 00:22:03.080
+The problem with doing your own hardware is that it takes a lot of time, particularly
+
+
+00:22:03.080 --> 00:22:06.920
+if you're an organization that you want to do science.
+
+
+00:22:06.920 --> 00:22:12.040
+So for the next expansion of Meerkat, to build more antennas, we need more processing capability
+
+
+00:22:12.040 --> 00:22:17.200
+to be able to handle more bandwidth. We've kind of figured out that where they are now,
+
+
+00:22:17.200 --> 00:22:22.720
+GPUs can do the work. GPUs have actually been powerful enough to do the work for a while
+
+
+00:22:22.720 --> 00:22:28.320
+now. The problem has actually been the memory bandwidth to actually get your data from your
+
+
+00:22:28.320 --> 00:22:33.080
+telescope onto your GPU to do the number crunching. So for Scarab, it was very easy. It has some
+
+
+00:22:33.080 --> 00:22:37.760
+40 gigabit ethernet and that's wired straight into the FPGA. So there's no operating system
+
+
+00:22:37.760 --> 00:22:41.760
+taking its time, there's no PCI Express that needs to be negotiated.
+
+
+00:22:41.760 --> 00:22:45.000
+The data just comes straight off the network and it can do its processing.
+
+
+00:22:45.000 --> 00:22:48.760
+Previously computers were not fast enough to get the numbers on and off the card.
+
+
+00:22:48.760 --> 00:22:57.000
+But since PCIe 4 has become a thing and sort of the GeForce RTX 3000 series cards, which
+
+
+00:22:57.000 --> 00:22:59.920
+we're using PCIe 4, we can do it on GPUs now.
+
+
+00:22:59.920 --> 00:23:01.720
+So we haven't deployed one yet.
+
+
+00:23:01.720 --> 00:23:03.760
+What I spoke about is the prototype that we've developed.
+
+
+00:23:03.760 --> 00:23:07.200
+And that's part Python and part CUDA, right?
+
+
+00:23:07.200 --> 00:23:13.440
+Yes, yes. So the CUDA is actually quite small. As I mentioned earlier, the processing is quite
+
+
+00:23:13.440 --> 00:23:19.280
+quite simple. So there's a stage for channelizing. So that uses a piece of math called a Fourier
+
+
+00:23:19.280 --> 00:23:22.960
+transform. And there's been years of research gone into that to make it very computationally
+
+
+00:23:22.960 --> 00:23:27.280
+efficient. It's very fast. The other part is simply multiplying lots of numbers together.
+
+
+00:23:27.280 --> 00:23:31.520
+And that's something that GPUs are really, really good at. So we've made good use of
+
+
+00:23:31.520 --> 00:23:35.920
+technology advances driven by things like AI and machine learning, which relies on really
+
+
+00:23:35.920 --> 00:23:41.920
+large matrix multiplications. So we just piggyback off of that technology. And the bonus is we
+
+
+00:23:41.920 --> 00:23:44.280
+don't have to develop our own hardware anymore, which is nice.
+
+
+00:23:44.280 --> 00:23:48.120
+And those things are only getting faster, right? If you could have done it on a 3070
+
+
+00:23:48.120 --> 00:23:52.440
+or whatever, an NVIDIA 3070, then, you know, it's getting faster and going to get easier
+
+
+00:23:52.440 --> 00:23:56.840
+and easier as things go. You might need a small power generator to run one of those
+
+
+00:23:56.840 --> 00:24:00.000
+cards these days. They're kind of insane, but...
+
+
+00:24:00.000 --> 00:24:03.880
+The 30 series are a little bit easier than the 40 series. To give you an idea, in our
+
+
+00:24:03.880 --> 00:24:07.400
+- Our prototype system, we're using 3070 TIs at the moment,
+
+
+00:24:07.400 --> 00:24:10.080
+and one of those GPUs does the work of four Scarabs.
+
+
+00:24:10.080 --> 00:24:10.920
+- Wow.
+
+
+00:24:10.920 --> 00:24:13.360
+- So it's the rate that technology moves forward.
+
+
+00:24:13.360 --> 00:24:16.160
+To be fair, the Scarab is about six or seven years old.
+
+
+00:24:16.160 --> 00:24:17.840
+It was revolutionary at the time,
+
+
+00:24:17.840 --> 00:24:20.760
+but commercial technology has moved forward a lot.
+
+
+00:24:20.760 --> 00:24:22.160
+- Yeah, it sure has.
+
+
+00:24:22.160 --> 00:24:23.680
+You talked, just a bit of a sidebar,
+
+
+00:24:23.680 --> 00:24:25.800
+you talked about one of the challenges
+
+
+00:24:25.800 --> 00:24:28.920
+being getting the data in and out of the GPUs
+
+
+00:24:28.920 --> 00:24:30.560
+from a bandwidth perspective.
+
+
+00:24:30.560 --> 00:24:32.460
+Do things like systems on a chip
+
+
+00:24:32.460 --> 00:24:36.140
+in this Apple unified memory where the bandwidth,
+
+
+00:24:36.140 --> 00:24:39.780
+the memory of the CPU is the memory of the GPU.
+
+
+00:24:39.780 --> 00:24:41.540
+Does that, have you guys considered playing with that?
+
+
+00:24:41.540 --> 00:24:42.460
+Is that interesting?
+
+
+00:24:42.460 --> 00:24:44.660
+- We have had a look.
+
+
+00:24:44.660 --> 00:24:47.020
+That's, so Apple's model is something
+
+
+00:24:47.020 --> 00:24:49.020
+that's not really reached mainstream yet.
+
+
+00:24:49.020 --> 00:24:51.620
+And Apple doesn't really sell a computer in a form factor
+
+
+00:24:51.620 --> 00:24:53.700
+that would be amenable to deployment
+
+
+00:24:53.700 --> 00:24:54.820
+in a data center environment.
+
+
+00:24:54.820 --> 00:24:56.460
+- Yeah, you have to put a bunch of minis
+
+
+00:24:56.460 --> 00:24:57.940
+on their edge or something, yeah.
+
+
+00:24:57.940 --> 00:24:59.060
+- Exactly, yes.
+
+
+00:24:59.060 --> 00:25:00.860
+So it's something that we've got an eye on,
+
+
+00:25:00.860 --> 00:25:04.260
+but we haven't got a usable kind of hardware prototype at this point.
+
+
+00:25:04.260 --> 00:25:06.900
+We're currently using AMD EPYC platforms.
+
+
+00:25:06.900 --> 00:25:10.340
+They have lots of PCIe lanes and lots of memory channels.
+
+
+00:25:10.340 --> 00:25:12.740
+So that lets you get data on and off,
+
+
+00:25:12.740 --> 00:25:15.260
+you know, from your network to your GPU very quickly.
+
+
+00:25:15.260 --> 00:25:18.100
+Advances such as direct memory addressing
+
+
+00:25:18.100 --> 00:25:22.060
+and other such things, I forget all the terminology now.
+
+
+00:25:22.060 --> 00:25:24.300
+But basically, the faster that you can get it off the,
+
+
+00:25:24.300 --> 00:25:27.140
+into the GPU's RAM so that the GPU can do its thing, the better.
+
+
+00:25:27.140 --> 00:25:29.220
+Yeah, it's an interesting trade-off to consider
+
+
+00:25:29.220 --> 00:25:33.420
+because the GPUs, even in the new higher end Apple stuff,
+
+
+00:25:33.420 --> 00:25:36.080
+is still quite a bit slower than NVIDIA.
+
+
+00:25:36.080 --> 00:25:39.280
+But the memory is instant, so there's, you know,
+
+
+00:25:39.280 --> 00:25:41.540
+where we have trade-off, cross the line.
+
+
+00:25:41.540 --> 00:25:42.380
+It's gonna be interesting
+
+
+00:25:42.380 --> 00:25:43.980
+as this kind of architecture evolves.
+
+
+00:25:43.980 --> 00:25:46.020
+- Yeah, we've definitely got eyes on that,
+
+
+00:25:46.020 --> 00:25:47.340
+and we'll see how it goes.
+
+
+00:25:47.340 --> 00:25:49.700
+- All right, for doing the CUDA stuff,
+
+
+00:25:49.700 --> 00:25:51.840
+what's the Python side look like?
+
+
+00:25:51.840 --> 00:25:53.940
+Is that, what library is she using and stuff?
+
+
+00:25:53.940 --> 00:25:56.860
+- So the Python, that's got to kind of do,
+
+
+00:25:56.860 --> 00:25:59.380
+So the GPUs are very good at crunching numbers,
+
+
+00:25:59.380 --> 00:26:01.860
+but they're not very good at anything else.
+
+
+00:26:01.860 --> 00:26:04.260
+So there's a lot of steps in that for a GPU
+
+
+00:26:04.260 --> 00:26:06.620
+to be able to do all of those calculations.
+
+
+00:26:06.620 --> 00:26:08.700
+You have a high-speed network,
+
+
+00:26:08.700 --> 00:26:11.820
+100 gigabit, 200 gigabit, that's very fast.
+
+
+00:26:11.820 --> 00:26:15.580
+And so you need software to be able to
+
+
+00:26:15.580 --> 00:26:17.600
+run your network stack, receive data,
+
+
+00:26:17.600 --> 00:26:19.180
+and that comes into system RAM.
+
+
+00:26:19.180 --> 00:26:21.940
+You need to be able to DMA it into the GPU's memory.
+
+
+00:26:21.940 --> 00:26:25.020
+You need to be able to know when the work is finished
+
+
+00:26:25.020 --> 00:26:26.620
+so that you can copy the data back,
+
+
+00:26:26.620 --> 00:26:30.140
+packet that up in Ethernet packets again and send it out.
+
+
+00:26:30.140 --> 00:26:33.140
+And so there's a lot of things that we use in Python
+
+
+00:26:33.140 --> 00:26:34.220
+to enable that.
+
+
+00:26:34.220 --> 00:26:36.780
+The first and most sort of obvious one
+
+
+00:26:36.780 --> 00:26:38.580
+would be a library called PyCuda,
+
+
+00:26:38.580 --> 00:26:41.460
+which allows you to wrap up Cuda functions
+
+
+00:26:41.460 --> 00:26:44.980
+in a nice Python handle and interact with your GPU
+
+
+00:26:44.980 --> 00:26:48.660
+in a way that's more amenable to Python code.
+
+
+00:26:48.660 --> 00:26:49.820
+There we go, that's the one.
+
+
+00:26:49.820 --> 00:26:50.660
+- Yeah, very cool.
+
+
+00:26:50.660 --> 00:26:52.300
+- So the other one,
+
+
+00:26:52.300 --> 00:26:54.060
+the thing that you've got to think about carefully then
+
+
+00:26:54.060 --> 00:26:59.060
+is coordinating your activities where your GPU is executing,
+
+
+00:26:59.060 --> 00:27:00.700
+CUDA calls the streams,
+
+
+00:27:00.700 --> 00:27:02.900
+if you're working in an OpenCL kind of abstraction,
+
+
+00:27:02.900 --> 00:27:04.340
+it calls it command queues.
+
+
+00:27:04.340 --> 00:27:07.260
+So they work almost like threads on a computer.
+
+
+00:27:07.260 --> 00:27:10.220
+So you need to have some sort of way of coordinating
+
+
+00:27:10.220 --> 00:27:13.380
+so that when you start one calculation,
+
+
+00:27:13.380 --> 00:27:14.860
+you want to make sure that the data is there,
+
+
+00:27:14.860 --> 00:27:16.700
+that it can work on it.
+
+
+00:27:16.700 --> 00:27:19.060
+And similarly, you don't want to start copying it back
+
+
+00:27:19.060 --> 00:27:21.040
+before the calculation is finished.
+
+
+00:27:21.040 --> 00:27:23.380
+So PyCUDA makes this quite easy.
+
+
+00:27:23.380 --> 00:27:26.220
+you could use, I think, Nvidia calls it events,
+
+
+00:27:26.220 --> 00:27:28.020
+but they're basically semaphores and markers
+
+
+00:27:28.020 --> 00:27:31.380
+to help you to coordinate between your different threads
+
+
+00:27:31.380 --> 00:27:34.540
+for sending, processing, and receiving data from the GPU.
+
+
+00:27:34.540 --> 00:27:36.420
+It's similarly getting it off the network
+
+
+00:27:36.420 --> 00:27:37.500
+and onto the network again.
+
+
+00:27:37.500 --> 00:27:39.060
+- Yeah, PyCuda looks great.
+
+
+00:27:39.060 --> 00:27:41.500
+Another thing you spoke about that was pretty interesting
+
+
+00:27:41.500 --> 00:27:44.060
+is your use of async and await.
+
+
+00:27:44.060 --> 00:27:46.900
+Do all the network stuff, which I think is,
+
+
+00:27:46.900 --> 00:27:49.380
+it's clearly a good choice and fits right here,
+
+
+00:27:49.380 --> 00:27:51.940
+but I feel like a lot of people don't consider it
+
+
+00:27:51.940 --> 00:27:53.440
+fast enough or good enough?
+
+
+00:27:53.440 --> 00:27:56.280
+Network, but not just that, also the GPU.
+
+
+00:27:56.280 --> 00:27:58.820
+You have a few functions and they're running loops.
+
+
+00:27:58.820 --> 00:28:01.020
+So the way that we've structured our code,
+
+
+00:28:01.020 --> 00:28:03.900
+and you can, we've got, I'll share a link with you,
+
+
+00:28:03.900 --> 00:28:06.100
+there's documentation in Read the Docs as well,
+
+
+00:28:06.100 --> 00:28:08.360
+explaining this, but we have one loop
+
+
+00:28:08.360 --> 00:28:11.280
+that just waits for traffic to come in off the network,
+
+
+00:28:11.280 --> 00:28:13.740
+but bundles it up, and this is kind of one of the trick
+
+
+00:28:13.740 --> 00:28:16.380
+things you need to do things in batches.
+
+
+00:28:16.380 --> 00:28:18.540
+If you involve the Python interpreter,
+
+
+00:28:18.540 --> 00:28:20.300
+every time a packet hits the NIC,
+
+
+00:28:20.300 --> 00:28:22.340
+then it'll end up being very slow.
+
+
+00:28:22.340 --> 00:28:25.020
+So we have a lower level library written in C++
+
+
+00:28:25.020 --> 00:28:26.360
+that batches up a whole chunk
+
+
+00:28:26.360 --> 00:28:29.840
+in the order of about 100 or 200 megabytes worth of data.
+
+
+00:28:29.840 --> 00:28:32.300
+And you use that await keyword
+
+
+00:28:32.300 --> 00:28:34.420
+to let you know when there's a chunk of data ready.
+
+
+00:28:34.420 --> 00:28:35.580
+So when there's a chunk of data ready--
+
+
+00:28:35.580 --> 00:28:37.780
+- I see, you wait until enough is buffered up
+
+
+00:28:37.780 --> 00:28:41.700
+and then you pull it back on the resume or whatever, okay.
+
+
+00:28:41.700 --> 00:28:44.620
+- Exactly, so you mark that for upload,
+
+
+00:28:44.620 --> 00:28:47.840
+you put an event in the stream or the command queue
+
+
+00:28:47.840 --> 00:28:49.340
+and let that run.
+
+
+00:28:49.340 --> 00:28:51.900
+And then in the next, you're using the await,
+
+
+00:28:51.900 --> 00:28:53.440
+so you're waiting for that event.
+
+
+00:28:53.440 --> 00:28:54.280
+And when you see that,
+
+
+00:28:54.280 --> 00:28:56.440
+you know that the data is uploaded to the GPU.
+
+
+00:28:56.440 --> 00:28:57.820
+You trigger the processing,
+
+
+00:28:57.820 --> 00:29:00.020
+whichever processing task needs to happen,
+
+
+00:29:00.020 --> 00:29:02.980
+and put another event and then pass it on to the next.
+
+
+00:29:02.980 --> 00:29:05.600
+So the third loop waits for that final event.
+
+
+00:29:05.600 --> 00:29:08.120
+When it sees it, it knows that the processing is done,
+
+
+00:29:08.120 --> 00:29:11.180
+and you can initiate the copy of the GPU RAM
+
+
+00:29:11.180 --> 00:29:12.220
+back to the system.
+
+
+00:29:12.220 --> 00:29:16.100
+And then you can transmit that out on the network.
+
+
+00:29:16.100 --> 00:29:18.060
+So those two things working in tandem.
+
+
+00:29:18.060 --> 00:29:22.160
+- Yeah, I didn't expect the GPU to have this async interface,
+
+
+00:29:22.160 --> 00:29:23.320
+but it does make a lot of sense.
+
+
+00:29:23.320 --> 00:29:25.820
+There's a lot of parallels in a GPU.
+
+
+00:29:25.820 --> 00:29:28.440
+- I don't think that it's natively in PyCuda.
+
+
+00:29:28.440 --> 00:29:30.940
+I think that's a wrapper that we've done around it.
+
+
+00:29:30.940 --> 00:29:31.780
+It's been a little while
+
+
+00:29:31.780 --> 00:29:32.900
+since I've touched that particular code,
+
+
+00:29:32.900 --> 00:29:35.120
+but there's no reason that you can't do that at all.
+
+
+00:29:35.120 --> 00:29:37.700
+And it's a process that we find has been very, very useful.
+
+
+00:29:37.700 --> 00:29:39.120
+- Okay, but your assessment overall
+
+
+00:29:39.120 --> 00:29:41.920
+is that async and await, pythons, async.io
+
+
+00:29:41.920 --> 00:29:44.420
+has been a solid choice for this whole platform.
+
+
+00:29:44.420 --> 00:29:46.840
+- It's been, I've seen this approach used
+
+
+00:29:46.840 --> 00:29:49.800
+in other places as well, even since before Async.io
+
+
+00:29:49.800 --> 00:29:51.640
+has been part of core Python,
+
+
+00:29:51.640 --> 00:29:53.920
+using things like Flask or Tornado.
+
+
+00:29:53.920 --> 00:29:55.880
+So the approach, it's a very good approach.
+
+
+00:29:55.880 --> 00:29:56.840
+It's very helpful.
+
+
+00:29:56.840 --> 00:29:58.620
+Debugging Async stuff when it goes wrong
+
+
+00:29:58.620 --> 00:29:59.820
+is a little bit more tricky,
+
+
+00:29:59.820 --> 00:30:01.560
+but when it works, it works very, very well.
+
+
+00:30:01.560 --> 00:30:02.760
+- Yeah, that's for sure.
+
+
+00:30:02.760 --> 00:30:05.320
+You get the highs and bugs, keep it in the science space.
+
+
+00:30:05.320 --> 00:30:07.400
+Okay, so-- - Exactly.
+
+
+00:30:07.400 --> 00:30:10.160
+- Quick audience question, I think is gonna be interesting.
+
+
+00:30:10.160 --> 00:30:12.900
+Before we move on to the testing of this whole system.
+
+
+00:30:12.900 --> 00:30:15.600
+So out in the audience, Slavik asks,
+
+
+00:30:15.600 --> 00:30:19.880
+What do you think about simple distributed radio astronomy experiments for like citizen
+
+
+00:30:19.880 --> 00:30:20.880
+science?
+
+
+00:30:20.880 --> 00:30:22.080
+Are they possible?
+
+
+00:30:22.080 --> 00:30:23.080
+That's a very good question.
+
+
+00:30:23.080 --> 00:30:24.500
+Yes, they are.
+
+
+00:30:24.500 --> 00:30:29.800
+It's possible to do amateur radio astronomy using a relatively affordable SDR dongles.
+
+
+00:30:29.800 --> 00:30:32.260
+SDR standing for software defined radio.
+
+
+00:30:32.260 --> 00:30:35.200
+It's been a little while since I've looked at this, I must confess, as I've mentioned
+
+
+00:30:35.200 --> 00:30:38.280
+earlier since I do this professionally, I don't bother with it that much anymore.
+
+
+00:30:38.280 --> 00:30:42.280
+You have a square kilometer array you're building, you don't worry too much about it.
+
+
+00:30:42.280 --> 00:30:43.280
+Exactly.
+
+
+00:30:43.280 --> 00:30:44.280
+I've got a big telescope at work.
+
+
+00:30:44.280 --> 00:30:45.460
+I don't need a small one at home.
+
+
+00:30:45.460 --> 00:30:50.000
+You can do science, it's difficult in most practical cases because most people live in
+
+
+00:30:50.000 --> 00:30:52.500
+cities where there's a lot of interference.
+
+
+00:30:52.500 --> 00:30:54.100
+But it definitely can be done.
+
+
+00:30:54.100 --> 00:30:58.380
+One of the fun projects that I've seen has been using a satellite dish like what you
+
+
+00:30:58.380 --> 00:31:02.820
+would connect to satellite TV, but with a little bit of electronic knowledge and you
+
+
+00:31:02.820 --> 00:31:05.800
+don't need a degree, you can just be on a hobbyist level to do that.
+
+
+00:31:05.800 --> 00:31:10.500
+You can build a square law receiver, so it's very much just is there signal or isn't there,
+
+
+00:31:10.500 --> 00:31:13.000
+you're not going to be decoding any TV streams.
+
+
+00:31:13.000 --> 00:31:16.680
+you can measure, for example, the temperature of the sun using this and you can measure
+
+
+00:31:16.680 --> 00:31:21.560
+its angular dimensions by simply pointing it and then letting the sun drift through
+
+
+00:31:21.560 --> 00:31:26.680
+a few times. Yeah, so there are fun projects that can be done. As to say whether it can
+
+
+00:31:26.680 --> 00:31:31.640
+be useful as citizen science, in other words, useful from a scientific point of view over
+
+
+00:31:31.640 --> 00:31:36.200
+more than just something interesting to do, I'd have to go and have a look. I'm not 100%
+
+
+00:31:36.200 --> 00:31:40.340
+sure. It's very difficult to get meaningful results without very, very expensive equipment.
+
+
+00:31:40.340 --> 00:31:45.500
+That's why we've got such expensive facilities being built.
+
+
+00:31:45.500 --> 00:31:48.840
+This portion of Talk Python to Me is brought to you by Sentry.
+
+
+00:31:48.840 --> 00:31:51.400
+How would you like to remove a little stress from your life?
+
+
+00:31:51.400 --> 00:31:56.340
+Do you worry that users may be encountering errors, slowdowns, or crashes with your app
+
+
+00:31:56.340 --> 00:31:57.600
+right now?
+
+
+00:31:57.600 --> 00:32:00.540
+Would you even know it until they sent you that support email?
+
+
+00:32:00.540 --> 00:32:04.740
+How much better would it be to have the error or performance details immediately sent to
+
+
+00:32:04.740 --> 00:32:09.820
+you, including the call stack and values of local variables and the active user recorded
+
+
+00:32:09.820 --> 00:32:15.500
+in the report. With Sentry, this is not only possible, it's simple. In fact, we use Sentry
+
+
+00:32:15.500 --> 00:32:20.940
+on all the Talk Python web properties. We've actually fixed a bug triggered by a user and
+
+
+00:32:20.940 --> 00:32:25.660
+had the upgrade ready to roll out as we got the support email. That was a great email to write
+
+
+00:32:25.660 --> 00:32:30.700
+back. Hey, we already saw your error and have already rolled out the fix. Imagine their surprise.
+
+
+00:32:30.700 --> 00:32:37.420
+Surprise and delight your users. Create your Sentry account at talkpython.fm/sentry,
+
+
+00:32:37.420 --> 00:32:42.540
+And if you sign up with the code Talk Python, all one word, it's good for two free months
+
+
+00:32:42.540 --> 00:32:47.620
+of Sentry's business plan, which will give you up to 20 times as many monthly events
+
+
+00:32:47.620 --> 00:32:49.620
+as well as other features.
+
+
+00:32:49.620 --> 00:32:53.860
+Create better software, delight your users, and support the podcast.
+
+
+00:32:53.860 --> 00:33:00.580
+Visit Talk Python.fm/Sentry and use the coupon code Talk Python.
+
+
+00:33:00.580 --> 00:33:04.280
+One thing you did point out, I can't remember which in the two talks it was, but you did
+
+
+00:33:04.280 --> 00:33:09.080
+say that you can go and rent at least optical telescopes remotely, right?
+
+
+00:33:09.080 --> 00:33:14.200
+Yes, most optical telescopes are operated remotely, but a lot of ones that you can,
+
+
+00:33:14.200 --> 00:33:18.200
+that are commercially available as well, you know, head over to telescopes.com and you
+
+
+00:33:18.200 --> 00:33:22.920
+can buy ones that can be electronically controlled. And those you can do interesting, is it telescopes
+
+
+00:33:22.920 --> 00:33:28.040
+or telescope.com? Yeah, that's the one. You can buy ones that are electronically controlled.
+
+
+00:33:28.040 --> 00:33:32.320
+Those can actually be useful for citizen science. There's a lot of, for example, astronomy organizations
+
+
+00:33:32.320 --> 00:33:37.880
+that do regular observations of variable stars or binary stars and they rely a lot on data
+
+
+00:33:37.880 --> 00:33:44.120
+submitted by amateurs. While any particular observation will not necessarily be that useful,
+
+
+00:33:44.120 --> 00:33:48.880
+but in aggregate thousands of these observations are very helpful for doing the science that
+
+
+00:33:48.880 --> 00:33:53.200
+they would be doing then. That could typically be run by university faculty and over, you
+
+
+00:33:53.200 --> 00:33:57.480
+know, they would aggregate these observations over long periods of time from different locations
+
+
+00:33:57.480 --> 00:33:58.480
+to…
+
+
+00:33:58.480 --> 00:33:59.480
+Yeah, that sounds like a cool research project.
+
+
+00:33:59.480 --> 00:34:02.080
+To draw some scientific conclusions about what's happening with these stars.
+
+
+00:34:02.080 --> 00:34:03.160
+- Very neat. - It's a good question though.
+
+
+00:34:03.160 --> 00:34:04.780
+Yeah, it is indeed. Thanks.
+
+
+00:34:04.780 --> 00:34:08.320
+So let's talk about the testing side.
+
+
+00:34:08.320 --> 00:34:10.420
+From my sort of engineering background,
+
+
+00:34:10.420 --> 00:34:13.960
+one of the sort of key questions that you've got to ask as an engineer is,
+
+
+00:34:13.960 --> 00:34:16.720
+if you have specifications for a system to build, to design,
+
+
+00:34:16.720 --> 00:34:20.280
+at what point do you know that it's doing the thing that it's expected to do?
+
+
+00:34:20.280 --> 00:34:22.860
+So you've got a certain set of user requirements.
+
+
+00:34:22.860 --> 00:34:25.320
+The user needs to be able to have this level of sensitivity
+
+
+00:34:25.320 --> 00:34:28.060
+and this level of bandwidth and, you know, accuracy.
+
+
+00:34:28.060 --> 00:34:30.360
+Less than this much noise or something, yeah?
+
+
+00:34:30.360 --> 00:34:32.080
+Exactly, in terms of hard numbers.
+
+
+00:34:32.080 --> 00:34:34.360
+So you need to have some sort of way to prove
+
+
+00:34:34.360 --> 00:34:36.280
+that the system that you've designed and built
+
+
+00:34:36.280 --> 00:34:38.080
+is going to meet those specifications.
+
+
+00:34:38.080 --> 00:34:41.040
+And so testing is a fundamental part of that.
+
+
+00:34:41.040 --> 00:34:43.200
+Sometimes you can prove by analysis,
+
+
+00:34:43.200 --> 00:34:45.560
+you know, just by using maths and showing,
+
+
+00:34:45.560 --> 00:34:47.560
+you know, this is what the system is designed to do.
+
+
+00:34:47.560 --> 00:34:50.000
+But the first prize is if you can run a test and say,
+
+
+00:34:50.000 --> 00:34:51.560
+"Look, we've got a controlled set of inputs,
+
+
+00:34:51.560 --> 00:34:52.920
+we can measure the outputs,
+
+
+00:34:52.920 --> 00:34:54.560
+and we can determine from this
+
+
+00:34:54.560 --> 00:34:56.800
+that the system is doing what we said it is doing
+
+
+00:34:56.800 --> 00:34:58.480
+and how well it is."
+
+
+00:34:58.480 --> 00:35:02.880
+So, you know, what the noise level is or what the sensitivity is, whatever the case is.
+
+
+00:35:02.880 --> 00:35:07.840
+And that's something that is often a little bit neglected in scientific projects,
+
+
+00:35:07.840 --> 00:35:12.160
+particularly astronomy is that's the one that I've got experience with. Other fields I've seen as
+
+
+00:35:12.160 --> 00:35:16.080
+well, often physicists and astronomers are very, very clever and they're trained in a lot of fields.
+
+
+00:35:16.080 --> 00:35:19.840
+They tend to build their own instruments and hardware and write their own software.
+
+
+00:35:19.840 --> 00:35:25.360
+It has a kind of amateurish aspect to it sometimes, not universally, but this is the tendency until
+
+
+00:35:25.360 --> 00:35:30.520
+until it's more or less doing what the researcher wants and then he carries on. So many a software
+
+
+00:35:30.520 --> 00:35:36.120
+project has been written by a PhD student, he's generated some results and you know
+
+
+00:35:36.120 --> 00:35:40.720
+published his paper, gotten his PhD. That's very difficult to scrutinize because the code
+
+
+00:35:40.720 --> 00:35:44.980
+is written by someone and the logic lives in someone's head. And so I'm kind of keen
+
+
+00:35:44.980 --> 00:35:48.760
+on this concept of testing because I think it adds a level of rigor and transparency
+
+
+00:35:48.760 --> 00:35:52.920
+to the scientific process because if I've got tests in place then anyone can come along
+
+
+00:35:52.920 --> 00:35:59.080
+and look at how I've tested my instrument and, you know, criticize or evaluate whether
+
+
+00:35:59.080 --> 00:36:03.160
+it actually does what I say it does when I publish my research.
+
+
+00:36:03.160 --> 00:36:05.320
+So I think the concept is really important.
+
+
+00:36:05.320 --> 00:36:06.320
+I do too.
+
+
+00:36:06.320 --> 00:36:12.720
+And it's in open source, one of the important signals that people use when they go and look
+
+
+00:36:12.720 --> 00:36:18.060
+at a package they might consider like PyCuda or Pandas or whatever is, does this thing
+
+
+00:36:18.060 --> 00:36:22.280
+have tests as part of its design, right?
+
+
+00:36:22.280 --> 00:36:25.860
+If I'm going to depend on somebody else's library, or if I'm a maintainer and I create
+
+
+00:36:25.860 --> 00:36:30.320
+a library and someone's going to send me a PR, how do I know whether their changes that
+
+
+00:36:30.320 --> 00:36:33.360
+they're suggesting to me broke something I didn't see coming, right?
+
+
+00:36:33.360 --> 00:36:38.600
+And having unit tests or some kind of test typically driven with PyTest for Python is
+
+
+00:36:38.600 --> 00:36:44.400
+a really important, not just supporting pillar of that project, but also a signal to others
+
+
+00:36:44.400 --> 00:36:45.400
+from the outside.
+
+
+00:36:45.400 --> 00:36:47.160
+Like this thing, people care about this.
+
+
+00:36:47.160 --> 00:36:48.160
+They've verified it.
+
+
+00:36:48.160 --> 00:36:49.160
+They want to keep it strong.
+
+
+00:36:49.160 --> 00:36:52.640
+- And it sounds to me like this might also be really
+
+
+00:36:52.640 --> 00:36:55.000
+important for science in the same way.
+
+
+00:36:55.000 --> 00:36:58.040
+You talked about people coming to review your work
+
+
+00:36:58.040 --> 00:36:59.920
+or to try to reproduce it.
+
+
+00:36:59.920 --> 00:37:02.680
+And if they see the test and they can run the test,
+
+
+00:37:02.680 --> 00:37:06.520
+it communicates something additional rather than just,
+
+
+00:37:06.520 --> 00:37:08.720
+well, I thought a lot about it and here's my graph.
+
+
+00:37:08.720 --> 00:37:09.720
+- Exactly, yes.
+
+
+00:37:09.720 --> 00:37:11.080
+We want to do groundbreaking science
+
+
+00:37:11.080 --> 00:37:14.640
+and we want to be able to say that when we make observations
+
+
+00:37:14.640 --> 00:37:16.520
+that what we're seeing is real science.
+
+
+00:37:16.520 --> 00:37:18.000
+And it's not just some sort of anomaly
+
+
+00:37:18.000 --> 00:37:20.640
+that we found in the telescope signal chain.
+
+
+00:37:20.640 --> 00:37:23.120
+And the presence of good tests helps with that
+
+
+00:37:23.120 --> 00:37:26.920
+because then we have rigorous testing that we can say,
+
+
+00:37:26.920 --> 00:37:31.060
+look, this is the performance characteristics of our system.
+
+
+00:37:31.060 --> 00:37:32.680
+You know, it gives a little bit of extra confidence
+
+
+00:37:32.680 --> 00:37:35.000
+in your scientific results that way.
+
+
+00:37:35.000 --> 00:37:36.400
+- Indeed, so how does this look different
+
+
+00:37:36.400 --> 00:37:39.240
+than like testing flask or something, right?
+
+
+00:37:39.240 --> 00:37:40.880
+'Cause it's not exactly the same
+
+
+00:37:40.880 --> 00:37:43.840
+and you maybe are leaning on it a little bit more
+
+
+00:37:43.840 --> 00:37:47.040
+to communicate more information, not just pass or fail.
+
+
+00:37:47.040 --> 00:37:53.760
+There are a few things. In one sense, we do use unit tests in the same way that a lot of open source projects do.
+
+
+00:37:53.760 --> 00:37:59.600
+Just, you know, does each individual component of my module do the thing that I've designed it to do?
+
+
+00:37:59.600 --> 00:38:06.640
+But if you go a little bit beyond that, the same sort of philosophy and application can be applied to systems as a whole.
+
+
+00:38:06.640 --> 00:38:10.240
+If you have a complicated system with a lot of different parts talking to each other,
+
+
+00:38:10.240 --> 00:38:15.120
+it can be tricky to a change that you make might not break
+
+
+00:38:15.120 --> 00:38:17.120
+if you look at it in isolation,
+
+
+00:38:17.120 --> 00:38:19.280
+but do those interfaces still work?
+
+
+00:38:19.280 --> 00:38:21.280
+If you're unit testing something,
+
+
+00:38:21.280 --> 00:38:22.960
+often you mock out whatever's at the end.
+
+
+00:38:22.960 --> 00:38:27.040
+So you pretend that you'll get a real response from a website
+
+
+00:38:27.040 --> 00:38:29.360
+when you do an API call.
+
+
+00:38:29.360 --> 00:38:32.240
+But if you've touched the code that actually handles that API call,
+
+
+00:38:32.240 --> 00:38:34.320
+then your unit test is not going to pick that up.
+
+
+00:38:34.320 --> 00:38:37.680
+So we've got a relatively rigorous process
+
+
+00:38:37.680 --> 00:38:40.560
+for what one might call integration testing.
+
+
+00:38:40.560 --> 00:38:44.800
+So an entire system gets set up in a simulated environment,
+
+
+00:38:44.800 --> 00:38:48.300
+but an input like it might get from a real telescope
+
+
+00:38:48.300 --> 00:38:51.300
+and the ability to watch their output.
+
+
+00:38:51.300 --> 00:38:53.060
+And so we do that on a regular basis.
+
+
+00:38:53.060 --> 00:38:56.720
+We spin up an entire correlator in a system in the lab,
+
+
+00:38:56.720 --> 00:38:59.140
+give it a deterministic input,
+
+
+00:38:59.140 --> 00:39:01.140
+and so we can measure the output
+
+
+00:39:01.140 --> 00:39:04.640
+and determine whether or not it meets the criteria.
+
+
+00:39:04.640 --> 00:39:05.560
+- Yeah, cool.
+
+
+00:39:05.560 --> 00:39:09.800
+Is this like a software emulator in Docker,
+
+
+00:39:09.800 --> 00:39:14.040
+or is this an actual one of your one you FPGA things
+
+
+00:39:14.040 --> 00:39:16.360
+that's dedicated to this integration testing?
+
+
+00:39:16.360 --> 00:39:17.480
+- It can be both.
+
+
+00:39:17.480 --> 00:39:18.400
+It can be both.
+
+
+00:39:18.400 --> 00:39:20.920
+So we've used the same approach
+
+
+00:39:20.920 --> 00:39:23.520
+to testing the old Scarab correlator.
+
+
+00:39:23.520 --> 00:39:26.780
+One of the Scarabs can be configured to emulate a telescope
+
+
+00:39:26.780 --> 00:39:28.320
+so it can produce a signal
+
+
+00:39:28.320 --> 00:39:30.200
+similar to what a telescope might be,
+
+
+00:39:30.200 --> 00:39:34.120
+except not having astronomical signals in the data.
+
+
+00:39:34.120 --> 00:39:39.200
+it would have a deterministic signal such as, you know, a normal frequency tone or just
+
+
+00:39:39.200 --> 00:39:43.680
+white noise, depending on what kind of test we want to run on the correlator itself.
+
+
+00:39:43.680 --> 00:39:47.200
+You don't replay the wow signal to it?
+
+
+00:39:47.200 --> 00:39:51.680
+We could, but it's faster just to generate signals. You're not going to get, with a strongly
+
+
+00:39:51.680 --> 00:39:54.840
+deterministic signal, in other words, if you know exactly what you're putting in, you can
+
+
+00:39:54.840 --> 00:40:00.720
+see what you're getting out as well. The wow signal, not as useful for determining the
+
+
+00:40:00.720 --> 00:40:01.720
+noise level.
+
+
+00:40:01.720 --> 00:40:02.720
+Yes, exactly.
+
+
+00:40:02.720 --> 00:40:03.720
+More fun, not as useful.
+
+
+00:40:03.720 --> 00:40:11.720
+So one of the things you did is you changed some of the output from PyTest to be more
+
+
+00:40:11.720 --> 00:40:16.320
+representative of talking about how you've met your requirements and stuff.
+
+
+00:40:16.320 --> 00:40:18.080
+Maybe tell folks about how that works.
+
+
+00:40:18.080 --> 00:40:20.600
+Yeah, that was an interesting exercise.
+
+
+00:40:20.600 --> 00:40:25.080
+Sereo uses a process called systems engineering, which was developed in Bell Labs, I think
+
+
+00:40:25.080 --> 00:40:26.080
+in the 40s.
+
+
+00:40:26.080 --> 00:40:31.180
+It was quite a while ago, and it's been strongly influenced by the sort of military processes.
+
+
+00:40:31.180 --> 00:40:36.340
+And it's people in a software environment would recognize it as like a waterfall pattern
+
+
+00:40:36.340 --> 00:40:38.500
+where you'd have a big design up front.
+
+
+00:40:38.500 --> 00:40:44.380
+So you'd have a lengthy analysis of what the requirements of your system are, and, you
+
+
+00:40:44.380 --> 00:40:48.420
+know, allocated different performance characteristics to different components.
+
+
+00:40:48.420 --> 00:40:53.260
+And once you've done with the design, you need reams and reams of documentation to prove
+
+
+00:40:53.260 --> 00:40:55.980
+that your design meets the specifications as well.
+
+
+00:40:55.980 --> 00:40:59.780
+Graphs, tables, pictures, numbers, all of these kinds of things.
+
+
+00:40:59.780 --> 00:41:04.340
+PyTest and other packages, there are other ones, but PyTest is the one that we've used.
+
+
+00:41:04.340 --> 00:41:06.200
+It has a much more simple output.
+
+
+00:41:06.200 --> 00:41:10.020
+In other words, it'll give you lots of details if something goes wrong.
+
+
+00:41:10.020 --> 00:41:14.140
+It'll give you a stack trace, it'll give you debug information of what the variables were
+
+
+00:41:14.140 --> 00:41:17.980
+at the time that there was a problem or that the assertion didn't meet.
+
+
+00:41:17.980 --> 00:41:18.980
+But if everything passes...
+
+
+00:41:18.980 --> 00:41:19.980
+It's all green.
+
+
+00:41:19.980 --> 00:41:20.980
+Okay, we're good to go.
+
+
+00:41:20.980 --> 00:41:21.980
+You got a dot.
+
+
+00:41:21.980 --> 00:41:27.140
+Yeah, you know, like, okay, the sensitivity is better than X, but how much better?
+
+
+00:41:27.140 --> 00:41:29.620
+And how does that vary with frequency?
+
+
+00:41:29.620 --> 00:41:32.880
+kinds of things, what we'd like to know and what we'd like to be able to present to the
+
+
+00:41:32.880 --> 00:41:36.160
+various stakeholders that are interested in the performance of the telescope. We have
+
+
+00:41:36.160 --> 00:41:40.960
+a system. Okay. You need to zoom out a little bit there. And I, for those of you who are
+
+
+00:41:40.960 --> 00:41:45.040
+watching on YouTube, I do apologize for the, it's difficult to put code on a screen in
+
+
+00:41:45.040 --> 00:41:47.120
+a way that's not going to put your audience to sleep.
+
+
+00:41:47.120 --> 00:41:50.160
+Yeah. And I just grabbed this off of your talk just so we had something to like kind
+
+
+00:41:50.160 --> 00:41:54.960
+of be concrete about. But you have this interesting reporting aspect that runs along with your
+
+
+00:41:54.960 --> 00:41:55.960
+test for sure.
+
+
+00:41:55.960 --> 00:42:02.720
+Yes, so PyTest has a plugin called Report Log and that if you sort of squint at it and
+
+
+00:42:02.720 --> 00:42:07.360
+look a little bit carefully, it allows you to kind of record metadata as you're going
+
+
+00:42:07.360 --> 00:42:11.580
+along. So things that are happening in your test. So there's several things happening
+
+
+00:42:11.580 --> 00:42:15.960
+at once here and maybe if I could just take a step back, this test that you've got up
+
+
+00:42:15.960 --> 00:42:21.480
+is a test of linearity. So what does that mean is that if I put in a signal x and I
+
+
+00:42:21.480 --> 00:42:26.380
+get an output y. So if I put in a signal 2x I should get 2y as the output so that they
+
+
+00:42:26.380 --> 00:42:30.620
+should be directly proportional to the other. And if there's, if they're not, then there's
+
+
+00:42:30.620 --> 00:42:34.940
+a non-linearity of some sort in the system. No system is perfectly linear so there will
+
+
+00:42:34.940 --> 00:42:39.780
+be some sort of margin for error. We don't have a specific spec on this particular linearity
+
+
+00:42:39.780 --> 00:42:43.760
+test. It's a quick one to run because it takes only a few minutes and it can give us a sort
+
+
+00:42:43.760 --> 00:42:48.300
+of a first eyeball of is, are things working as we expect them to do. PyTest, if for those
+
+
+00:42:48.300 --> 00:42:53.980
+of you who are not familiar with it, the tests are written in the same syntax as Python functions,
+
+
+00:42:53.980 --> 00:42:58.580
+except where the inputs of the function are either parameters or fixtures. So parameters
+
+
+00:42:58.580 --> 00:43:03.460
+can be if there's a parameter space over which your test will run. So in our case, for example,
+
+
+00:43:03.460 --> 00:43:07.980
+different numbers of frequency channels, different numbers of antennas, this one isn't parameterized,
+
+
+00:43:07.980 --> 00:43:14.460
+it uses only a few fixtures. The fixtures are things to ensure that you have a test
+
+
+00:43:14.460 --> 00:43:16.720
+that is reproducible.
+
+
+00:43:16.720 --> 00:43:20.460
+So in this case, the correlator fixture gives us a correlator.
+
+
+00:43:20.460 --> 00:43:23.320
+It spins up in the test cluster that we've got in our lab,
+
+
+00:43:23.320 --> 00:43:26.460
+and it gives-- so the type into there gives you
+
+
+00:43:26.460 --> 00:43:28.520
+the hint that we're getting a remote control,
+
+
+00:43:28.520 --> 00:43:30.720
+so that little correlator object there gives us
+
+
+00:43:30.720 --> 00:43:32.920
+the ability to communicate with it and control it.
+
+
+00:43:32.920 --> 00:43:36.020
+The next one is a receiver, so that's--
+
+
+00:43:36.020 --> 00:43:37.520
+you know, if a correlator is running,
+
+
+00:43:37.520 --> 00:43:40.560
+you need to be able to receive what it's outputting
+
+
+00:43:40.560 --> 00:43:43.160
+so that you can compare it against whatever the spec is.
+
+
+00:43:43.160 --> 00:43:45.300
+And the third one is the PDF report.
+
+
+00:43:45.300 --> 00:43:47.560
+So the name is a bit of a misnomer.
+
+
+00:43:47.560 --> 00:43:48.760
+Initially, I...
+
+
+00:43:48.760 --> 00:43:52.100
+So that little fixture is written using module called PyLatex.
+
+
+00:43:52.100 --> 00:43:54.200
+So shout out to the authors of that one.
+
+
+00:43:54.200 --> 00:43:55.360
+It's very useful.
+
+
+00:43:55.360 --> 00:43:57.160
+And the best way to generate...
+
+
+00:43:57.160 --> 00:43:59.560
+You can generate PDFs directly from Python,
+
+
+00:43:59.560 --> 00:44:01.500
+but it's very low-level and it's difficult.
+
+
+00:44:01.500 --> 00:44:04.160
+So we use LaTeX as a kind of intermediate step
+
+
+00:44:04.160 --> 00:44:07.200
+to do the typesetting and PDF generation for that.
+
+
+00:44:07.200 --> 00:44:10.260
+So with that, you can focus on actually just getting the content
+
+
+00:44:10.260 --> 00:44:15.060
+and then use LaTeX to arrange things and typeset and make sure that there's, you know,
+
+
+00:44:15.060 --> 00:44:21.060
+the lines wrap over and what have you. Ultimately, the output will be a PDF with a report of the test
+
+
+00:44:21.060 --> 00:44:24.740
+as it's run. So this is the configuration that we ran, these are the steps that we followed,
+
+
+00:44:24.740 --> 00:44:30.260
+and these are our results. Version 2 of that uses an intermediate product. So instead of
+
+
+00:44:30.260 --> 00:44:35.140
+outputting a PDF straight away, we just serialize the data and put it into a little JSON dictionary.
+
+
+00:44:35.140 --> 00:44:38.820
+The reason for that is sometimes in LaTeX, you got to tweak your formatting or something like
+
+
+00:44:38.820 --> 00:44:41.700
+and it would be nice to not have to rerun the entire test
+
+
+00:44:41.700 --> 00:44:44.500
+just to change the font or update the heading.
+
+
+00:44:44.500 --> 00:44:46.180
+And so there's actually an intermediate step
+
+
+00:44:46.180 --> 00:44:49.300
+and there's another step just later that takes that JSON,
+
+
+00:44:49.300 --> 00:44:51.420
+pauses it and generates the PDF later.
+
+
+00:44:51.420 --> 00:44:53.860
+- Right, well, you can also ask questions about it, right?
+
+
+00:44:53.860 --> 00:44:56.900
+You can analyze the test JSON
+
+
+00:44:56.900 --> 00:44:59.980
+and maybe draw averages over time
+
+
+00:44:59.980 --> 00:45:03.860
+or here's how much has varied as we've evolved our system,
+
+
+00:45:03.860 --> 00:45:06.700
+right, not just pass/fail or what did this one look like?
+
+
+00:45:06.700 --> 00:45:07.540
+So JSON's pretty good.
+
+
+00:45:07.540 --> 00:45:11.500
+- Exactly, when you incorporate this with other CI/CD tools,
+
+
+00:45:11.500 --> 00:45:14.100
+you get GitHub Actions or Jenkins or whatever the case is,
+
+
+00:45:14.100 --> 00:45:16.560
+you can do this repeatedly and then you have records
+
+
+00:45:16.560 --> 00:45:18.900
+of over time, you know, how your system has evolved
+
+
+00:45:18.900 --> 00:45:20.960
+versus, you know, what changes you've made
+
+
+00:45:20.960 --> 00:45:23.420
+and it makes it much easier to reason about
+
+
+00:45:23.420 --> 00:45:26.100
+and, you know, understand the performance of your system
+
+
+00:45:26.100 --> 00:45:27.220
+and how it changes over time.
+
+
+00:45:27.220 --> 00:45:28.060
+- I think that's really neat.
+
+
+00:45:28.060 --> 00:45:30.580
+I don't see that being done very often at all.
+
+
+00:45:30.580 --> 00:45:34.820
+And I think it's easy to look at this little bit of code
+
+
+00:45:34.820 --> 00:45:36.860
+that you put up in your presentation and say,
+
+
+00:45:36.860 --> 00:45:38.140
+oh, okay, well, that's PyTest,
+
+
+00:45:38.140 --> 00:45:39.220
+and now here's a fixture and so on.
+
+
+00:45:39.220 --> 00:45:42.380
+But like, if you think about what those fixtures are doing,
+
+
+00:45:42.380 --> 00:45:44.260
+one of those fixtures maybe is controlling
+
+
+00:45:44.260 --> 00:45:48.300
+one of those one-U FPGA machines to set it up, right?
+
+
+00:45:48.300 --> 00:45:50.060
+And then the other one is in our,
+
+
+00:45:50.060 --> 00:45:52.740
+there's a lot of power and stuff going on
+
+
+00:45:52.740 --> 00:45:53.580
+with these little, you know,
+
+
+00:45:53.580 --> 00:45:55.900
+here's a variable we call the correlator.
+
+
+00:45:55.900 --> 00:45:58.140
+- Exactly, yeah, so you're right.
+
+
+00:45:58.140 --> 00:46:00.420
+There is a lot of code hidden behind here,
+
+
+00:46:00.420 --> 00:46:02.180
+but it's code that you're gonna run every time.
+
+
+00:46:02.180 --> 00:46:03.740
+So it doesn't matter what test you're doing,
+
+
+00:46:03.740 --> 00:46:05.260
+you're gonna wanna spin up a correlator.
+
+
+00:46:05.260 --> 00:46:09.700
+and whether it's an FPGA or a GPU, doesn't really matter.
+
+
+00:46:09.700 --> 00:46:11.820
+You want to run through the same sort of steps
+
+
+00:46:11.820 --> 00:46:13.100
+so that your test is repeatable
+
+
+00:46:13.100 --> 00:46:14.700
+and that the result corresponds
+
+
+00:46:14.700 --> 00:46:16.180
+to the input that you give it.
+
+
+00:46:16.180 --> 00:46:18.260
+And so the PyTest fixtures are great for that
+
+
+00:46:18.260 --> 00:46:21.680
+because once they allow you to get the boring stuff done,
+
+
+00:46:21.680 --> 00:46:23.260
+once you're confident that you're doing it right,
+
+
+00:46:23.260 --> 00:46:24.660
+then you can just keep doing it.
+
+
+00:46:24.660 --> 00:46:27.140
+You use the same correlator fixture for every test.
+
+
+00:46:27.140 --> 00:46:29.180
+And if there's an update, if something changes,
+
+
+00:46:29.180 --> 00:46:31.420
+if there's a change to the hardware that you need
+
+
+00:46:31.420 --> 00:46:33.380
+or the protocol that communicate with them,
+
+
+00:46:33.380 --> 00:46:35.260
+then you can update it just in one place
+
+
+00:46:35.260 --> 00:46:38.340
+and all your tests will benefit from that update straight away.
+
+
+00:46:38.340 --> 00:46:41.540
+Yeah, it's a very powerful aspect of PyTest.
+
+
+00:46:41.540 --> 00:46:43.340
+You've taken it to quite a level here.
+
+
+00:46:43.340 --> 00:46:45.780
+One of the things that I kind of wanted to,
+
+
+00:46:45.780 --> 00:46:48.860
+when I did the talk last year, that I wanted to put forward is that,
+
+
+00:46:48.860 --> 00:46:51.460
+you know, these concepts of testing,
+
+
+00:46:51.460 --> 00:46:53.540
+you can apply them to real-world systems as well.
+
+
+00:46:53.540 --> 00:46:57.740
+So, if you can talk to it, then you can use PyTest to test it.
+
+
+00:46:57.740 --> 00:47:00.500
+If you can talk to it over the network, a serial cable,
+
+
+00:47:00.500 --> 00:47:02.660
+or, you know, USB or something like that,
+
+
+00:47:02.660 --> 00:47:07.700
+You can test actual hardware, make it do things, you know, so that you can, you can qualify it.
+
+
+00:47:07.700 --> 00:47:16.940
+It doesn't, it's not just restricted to, you know, little toy pieces of software, you know, your flask or your tornado or abstract conceptual things that live in the cloud somewhere.
+
+
+00:47:16.940 --> 00:47:18.860
+It can actually translate to real world things.
+
+
+00:47:18.860 --> 00:47:19.020
+Yeah.
+
+
+00:47:19.020 --> 00:47:28.180
+People say when they talk about tests and stuff, they say, well, look, it is sometimes I say it is your documentation or it is the way you verify things are working.
+
+
+00:47:28.180 --> 00:47:31.180
+But when you get to the engineering and the science level,
+
+
+00:47:31.180 --> 00:47:33.640
+and you're trying to verify physical things and stuff,
+
+
+00:47:33.640 --> 00:47:35.760
+it's cool to see how far you can push it
+
+
+00:47:35.760 --> 00:47:38.560
+to maybe even answer that question better, right?
+
+
+00:47:38.560 --> 00:47:41.380
+Like with this reporting, for example, over time.
+
+
+00:47:41.380 --> 00:47:44.020
+- I think it makes it more transparent as well.
+
+
+00:47:44.020 --> 00:47:45.020
+In the open source community,
+
+
+00:47:45.020 --> 00:47:46.520
+we like to quote Linus' law a lot,
+
+
+00:47:46.520 --> 00:47:49.320
+we say with enough eyeballs, all bugs are shallow.
+
+
+00:47:49.320 --> 00:47:50.520
+But if we're honest with ourselves,
+
+
+00:47:50.520 --> 00:47:52.520
+like not everyone is gonna go and read the code.
+
+
+00:47:52.520 --> 00:47:56.360
+But on the other hand, if you can see a graph of,
+
+
+00:47:56.360 --> 00:47:58.500
+So this is the frequency response of the system.
+
+
+00:47:58.500 --> 00:48:02.220
+That makes it much easier for interested parties to actually interrogate and say, look, you
+
+
+00:48:02.220 --> 00:48:05.740
+know, is this good or is it lacking in some aspects?
+
+
+00:48:05.740 --> 00:48:09.240
+So from that point of view, I think it just increases the transparency and allows not
+
+
+00:48:09.240 --> 00:48:12.860
+only yourself, but the sort of the general, the wider scientific community to have more
+
+
+00:48:12.860 --> 00:48:16.700
+confidence in the performance of your telescope.
+
+
+00:48:16.700 --> 00:48:18.340
+- Makes it more approachable too, I think.
+
+
+00:48:18.340 --> 00:48:19.340
+- Exactly.
+
+
+00:48:19.340 --> 00:48:20.340
+- Yeah.
+
+
+00:48:20.340 --> 00:48:23.040
+People maybe wouldn't read a unit test and what the heck are they supposed to make out
+
+
+00:48:23.040 --> 00:48:24.040
+of it anyway?
+
+
+00:48:24.040 --> 00:48:28.280
+know, they may well look at a graph that was generated by the unit test, right?
+
+
+00:48:28.280 --> 00:48:29.280
+Exactly.
+
+
+00:48:29.280 --> 00:48:30.280
+Yeah.
+
+
+00:48:30.280 --> 00:48:33.960
+And this is, it's much easier for me to pass as well because, you know, I get to the office
+
+
+00:48:33.960 --> 00:48:37.960
+in the morning and, you know, the CI run is done overnight and I can see at a glance,
+
+
+00:48:37.960 --> 00:48:39.920
+you know, are things working the way that they should.
+
+
+00:48:39.920 --> 00:48:40.920
+Yeah.
+
+
+00:48:40.920 --> 00:48:41.920
+Cool.
+
+
+00:48:41.920 --> 00:48:46.520
+What has been the reaction from other scientists and engineers when you talked to them about
+
+
+00:48:46.520 --> 00:48:47.520
+this?
+
+
+00:48:47.520 --> 00:48:48.520
+How's this perceived more broadly?
+
+
+00:48:48.520 --> 00:48:50.360
+It's been relatively positive.
+
+
+00:48:50.360 --> 00:48:53.040
+Scientists want to know when they can get time on the telescope and then I have to tell
+
+
+00:48:53.040 --> 00:48:57.800
+them well, there's a committee that evaluates scientific proposals. We can't short circuit
+
+
+00:48:57.800 --> 00:48:58.800
+that unfortunately.
+
+
+00:48:58.800 --> 00:49:04.320
+Beacat has gotten a lot of attention from, well, scientists who are interested in radio
+
+
+00:49:04.320 --> 00:49:11.280
+astronomy, particularly fields like pulsars and another of our sort of clients is possibly
+
+
+00:49:11.280 --> 00:49:15.960
+the wrong word, but is the project called Breakthrough Listen. If you've heard of SETI,
+
+
+00:49:15.960 --> 00:49:20.240
+it's the same crowd that are trying to search for extraterrestrial intelligence. Sometimes
+
+
+00:49:20.240 --> 00:49:23.060
+Sometimes they're interested in these kinds of things, sometimes not.
+
+
+00:49:23.060 --> 00:49:26.460
+Often it's a much shorter question of like, "Is it working and can I get some of the data?"
+
+
+00:49:26.460 --> 00:49:30.100
+If the answer of those two is yes, and they start looking at the data, then you know,
+
+
+00:49:30.100 --> 00:49:34.660
+this performance figures and test results are sometimes more interesting to them.
+
+
+00:49:34.660 --> 00:49:36.140
+But generally, it's quite well received.
+
+
+00:49:36.140 --> 00:49:38.420
+- It seems like a cool idea to me.
+
+
+00:49:38.420 --> 00:49:44.460
+Do you have, time on telescopes is really precious and rare, hard to come by.
+
+
+00:49:44.460 --> 00:49:48.760
+The more powerful the telescope, I imagine the more contention there is for that time.
+
+
+00:49:48.760 --> 00:49:53.980
+Is there a bunch of simulation and software and things that people can hand out to these
+
+
+00:49:53.980 --> 00:49:58.500
+folks that they can work with beforehand so they become more prepared?
+
+
+00:49:58.500 --> 00:50:04.500
+Yes, and well, it mostly consists, it depends on what you're interested in.
+
+
+00:50:04.500 --> 00:50:10.540
+Meerkat has an interesting architecture in that there are some of the clients that have
+
+
+00:50:10.540 --> 00:50:14.900
+hardware right on site that are subscribing to data and processing it in real time and
+
+
+00:50:14.900 --> 00:50:16.460
+Breakthrough Listen is one of them.
+
+
+00:50:16.460 --> 00:50:19.260
+You know, they're interested in very, very fast transient stuff.
+
+
+00:50:19.260 --> 00:50:22.220
+Other scientists are more, they're not in as much of a hurry.
+
+
+00:50:22.220 --> 00:50:25.540
+They're more interested in the end result, the output of the correlator.
+
+
+00:50:25.540 --> 00:50:28.860
+That has been through several stages of pre-processing.
+
+
+00:50:28.860 --> 00:50:30.980
+And it depends on what kind of science that they're doing.
+
+
+00:50:30.980 --> 00:50:35.300
+And so, as with most telescopes, certainly, but scientific instruments in general, we
+
+
+00:50:35.300 --> 00:50:38.240
+keep all of the data from observations of past.
+
+
+00:50:38.240 --> 00:50:39.820
+Typically there's an embargo on that.
+
+
+00:50:39.820 --> 00:50:44.700
+So it could be a period of 12 to 24 months to allow the original originating scientist
+
+
+00:50:44.700 --> 00:50:48.380
+of the observation enough time to do his analysis and publish his papers.
+
+
+00:50:48.380 --> 00:50:53.100
+But once that is lifted, then that data is available to basically anyone who
+
+
+00:50:53.100 --> 00:50:54.100
+wants to use it.
+
+
+00:50:54.100 --> 00:50:58.300
+So all they will need to do is contact us and we can give them access to
+
+
+00:50:58.300 --> 00:51:03.020
+historical data sets and they can begin to test their algorithms on actual
+
+
+00:51:03.020 --> 00:51:04.220
+historical observations.
+
+
+00:51:04.220 --> 00:51:05.220
+Yeah, that seems good.
+
+
+00:51:05.220 --> 00:51:05.700
+Excellent.
+
+
+00:51:05.700 --> 00:51:06.180
+All right.
+
+
+00:51:06.180 --> 00:51:07.140
+Quick question.
+
+
+00:51:07.140 --> 00:51:09.940
+Follow up question here before we kind of wrap things up.
+
+
+00:51:09.940 --> 00:51:12.100
+James asks, what happens to the raw data?
+
+
+00:51:12.100 --> 00:51:13.660
+Talking about coming out of the correlator.
+
+
+00:51:13.660 --> 00:51:19.580
+I suppose received how much of it is captured and stored versus process down and then storing
+
+
+00:51:19.580 --> 00:51:20.580
+the result.
+
+
+00:51:20.580 --> 00:51:21.580
+Okay.
+
+
+00:51:21.580 --> 00:51:27.320
+So as I mentioned earlier, each telescope generates data at about 35 gigabits per second.
+
+
+00:51:27.320 --> 00:51:30.140
+That is impractical to store.
+
+
+00:51:30.140 --> 00:51:34.780
+We have logic on site that will buffer up a few seconds worth of data.
+
+
+00:51:34.780 --> 00:51:38.340
+And then they have algorithms that are searching through it for interesting things.
+
+
+00:51:38.340 --> 00:51:41.940
+And if there's something that they notice, there's a mechanism to dump that to disk.
+
+
+00:51:41.940 --> 00:51:43.620
+So just a few seconds at a time.
+
+
+00:51:43.620 --> 00:51:45.320
+And that happens a few times a year.
+
+
+00:51:45.320 --> 00:51:47.240
+The generally the most interesting pieces
+
+
+00:51:47.240 --> 00:51:49.020
+are a little bit more downstream.
+
+
+00:51:49.020 --> 00:51:53.660
+So 35 gigabits per second times 64 is a large number.
+
+
+00:51:53.660 --> 00:51:57.100
+So that's north of two terabits per second
+
+
+00:51:57.100 --> 00:51:59.500
+that the antennas themselves generate.
+
+
+00:51:59.500 --> 00:52:02.020
+The output of a 64 antenna correlator
+
+
+00:52:02.020 --> 00:52:03.900
+is about four gigabits per second.
+
+
+00:52:03.900 --> 00:52:05.980
+You could ingest that on a Mac mini
+
+
+00:52:05.980 --> 00:52:08.540
+if you somehow had a USB for two--
+
+
+00:52:08.540 --> 00:52:09.780
+- Just somewhere there to keep plugging
+
+
+00:52:09.780 --> 00:52:11.580
+and unplugging drives really quickly, yeah.
+
+
+00:52:11.580 --> 00:52:16.300
+to Ethernet, yeah, you'd need to do it pretty quickly, but that is practical. That we have
+
+
+00:52:16.300 --> 00:52:20.920
+a storage cluster. So we have one on site in the desert in South Africa, it's relatively
+
+
+00:52:20.920 --> 00:52:25.520
+small only about five petabytes, but that acts as a cache. And then there is a fiber
+
+
+00:52:25.520 --> 00:52:30.480
+link to Cape Town where we have a data center with with a much larger archive that uses
+
+
+00:52:30.480 --> 00:52:36.080
+an object store. I believe it's Ceph, it was also an open source thing. And I'm speaking
+
+
+00:52:36.080 --> 00:52:40.600
+a little bit outside of my expertise now. But that data is retained in well, so far
+
+
+00:52:40.600 --> 00:52:43.800
+in perpetuity, we haven't gotten to the stage where we start deleting old data yet.
+
+
+00:52:43.800 --> 00:52:46.300
+So we've got all of the observations that we've ever run.
+
+
+00:52:46.300 --> 00:52:49.400
+And they range in size. It depends on the observation.
+
+
+00:52:49.400 --> 00:52:54.100
+But sometimes they're a few gigabytes and sometimes they're sort of many terabytes in size.
+
+
+00:52:54.100 --> 00:52:57.400
+Yeah, it's a lot of data. You wouldn't store the two terabit per second, though.
+
+
+00:52:57.400 --> 00:52:59.000
+That's too much.
+
+
+00:52:59.000 --> 00:52:59.900
+I don't know what we would do with that.
+
+
+00:52:59.900 --> 00:53:01.800
+That's one of the reasons that the correlator exists,
+
+
+00:53:01.800 --> 00:53:04.700
+to sort of get that down to a manageable, useful level.
+
+
+00:53:04.700 --> 00:53:05.900
+Yeah, indeed.
+
+
+00:53:05.900 --> 00:53:09.500
+All right. Well, anything else you want to add that we haven't talked about briefly
+
+
+00:53:09.500 --> 00:53:11.400
+about this testing side of things?
+
+
+00:53:11.400 --> 00:53:12.360
+Have we covered it pretty well?
+
+
+00:53:12.360 --> 00:53:14.320
+- The one thing that we haven't kind of talked about
+
+
+00:53:14.320 --> 00:53:15.700
+is we talked a little bit about earlier
+
+
+00:53:15.700 --> 00:53:18.560
+about how critical the performance of this is.
+
+
+00:53:18.560 --> 00:53:21.000
+And one of the things that testing has really enabled
+
+
+00:53:21.000 --> 00:53:24.020
+is for us to optimize the performance of the system.
+
+
+00:53:24.020 --> 00:53:26.460
+And in a way that's, I think, not immediately obvious.
+
+
+00:53:26.460 --> 00:53:29.120
+If you have a first naive implementation
+
+
+00:53:29.120 --> 00:53:30.960
+of your signal processing algorithm,
+
+
+00:53:30.960 --> 00:53:33.020
+that's easy to read, easy to reason about,
+
+
+00:53:33.020 --> 00:53:35.800
+it's not likely to be the fastest possible way
+
+
+00:53:35.800 --> 00:53:36.960
+to process the data.
+
+
+00:53:36.960 --> 00:53:38.120
+But it's good to have that.
+
+
+00:53:38.120 --> 00:53:39.360
+And then once you have that,
+
+
+00:53:39.360 --> 00:53:40.800
+then you can write a test for it.
+
+
+00:53:40.800 --> 00:53:43.800
+So you can compare a known input to a known output
+
+
+00:53:43.800 --> 00:53:46.060
+and see if your maths is correct.
+
+
+00:53:46.060 --> 00:53:47.900
+That way, when you iterate,
+
+
+00:53:47.900 --> 00:53:50.260
+perhaps we can change the memory access patterns
+
+
+00:53:50.260 --> 00:53:53.140
+or, you know, improve the coordination between the threads.
+
+
+00:53:53.140 --> 00:53:54.900
+It's very easy when you do that to make a mistake
+
+
+00:53:54.900 --> 00:53:56.500
+and start messing up your results.
+
+
+00:53:56.500 --> 00:53:57.900
+But when you have a unit test
+
+
+00:53:57.900 --> 00:53:59.060
+and you start messing up results,
+
+
+00:53:59.060 --> 00:54:00.440
+it can catch it straight away.
+
+
+00:54:00.440 --> 00:54:02.760
+So having that testing in place
+
+
+00:54:02.760 --> 00:54:05.660
+allows us a little bit of, you know, room to experiment
+
+
+00:54:05.660 --> 00:54:07.500
+to really push this to the limits
+
+
+00:54:07.500 --> 00:54:12.980
+of what these GPUs are capable of doing in terms of increasing bandwidth or more antennas
+
+
+00:54:12.980 --> 00:54:15.740
+that we can process or all these kinds of things.
+
+
+00:54:15.740 --> 00:54:19.260
+And you mentioned regressions earlier, that's an excellent thing.
+
+
+00:54:19.260 --> 00:54:23.400
+So you're working on another part of a system and something breaks, having these tests in
+
+
+00:54:23.400 --> 00:54:26.060
+place will let you know, "Oh, we've messed something up.
+
+
+00:54:26.060 --> 00:54:28.900
+Let's revert back and be a little bit more careful next time."
+
+
+00:54:28.900 --> 00:54:30.980
+So I think it's just a great concept.
+
+
+00:54:30.980 --> 00:54:36.300
+In industry, in science, in academia, everyone would benefit from having more embedded tests
+
+
+00:54:36.300 --> 00:54:37.300
+in place.
+
+
+00:54:37.300 --> 00:54:39.660
+You're not a panacea, you're not gonna anticipate
+
+
+00:54:39.660 --> 00:54:41.900
+all the possible failure modes in your tests,
+
+
+00:54:41.900 --> 00:54:45.220
+but it definitely helps catch many of the obvious ones.
+
+
+00:54:45.220 --> 00:54:46.700
+- Yeah, good advice.
+
+
+00:54:46.700 --> 00:54:48.340
+Testing science is tricky.
+
+
+00:54:48.340 --> 00:54:51.260
+It's usually a stream of numbers in some way, it's not,
+
+
+00:54:51.260 --> 00:54:53.500
+yes, there was a user, no, it came back none,
+
+
+00:54:53.500 --> 00:54:54.940
+or there was an exception.
+
+
+00:54:54.940 --> 00:54:57.580
+It's still shooting out a bunch of numbers.
+
+
+00:54:57.580 --> 00:54:58.420
+Are they good?
+
+
+00:54:58.420 --> 00:55:00.020
+Maybe they're better, I don't know, right?
+
+
+00:55:00.020 --> 00:55:03.020
+But having systems in place to record them,
+
+
+00:55:03.020 --> 00:55:05.920
+to test them, to say if it matches this curve
+
+
+00:55:05.920 --> 00:55:07.720
+within some tolerance, it's still good.
+
+
+00:55:07.720 --> 00:55:08.560
+- Yes.
+
+
+00:55:08.560 --> 00:55:10.160
+- It's really important in those areas
+
+
+00:55:10.160 --> 00:55:11.680
+because it's so hard to look at it
+
+
+00:55:11.680 --> 00:55:13.320
+and know what the deal is.
+
+
+00:55:13.320 --> 00:55:14.160
+- Exactly.
+
+
+00:55:14.160 --> 00:55:15.760
+And I mean, so it is a team effort.
+
+
+00:55:15.760 --> 00:55:18.440
+There's not necessarily any one person
+
+
+00:55:18.440 --> 00:55:21.280
+that's gonna have the experience to do all of these things.
+
+
+00:55:21.280 --> 00:55:24.040
+So the person who is a very experienced systems engineer
+
+
+00:55:24.040 --> 00:55:25.840
+who will know, you know, the methods
+
+
+00:55:25.840 --> 00:55:27.420
+by which we can evaluate the performance
+
+
+00:55:27.420 --> 00:55:29.200
+is not necessarily gonna be the best coder.
+
+
+00:55:29.200 --> 00:55:30.760
+So that's why we have a large team
+
+
+00:55:30.760 --> 00:55:32.760
+in order to pull all of these things in.
+
+
+00:55:32.760 --> 00:55:33.600
+So yes.
+
+
+00:55:33.600 --> 00:55:36.000
+So shout out to my colleagues at Sereo.
+
+
+00:55:36.000 --> 00:55:37.000
+We're doing good work.
+
+
+00:55:37.000 --> 00:55:38.480
+Or at least I like to think we are.
+
+
+00:55:38.480 --> 00:55:39.600
+- It sure seems like it.
+
+
+00:55:39.600 --> 00:55:41.960
+Cool, all right, well, we're about out of time
+
+
+00:55:41.960 --> 00:55:43.440
+to talk more about this.
+
+
+00:55:43.440 --> 00:55:44.960
+So let me ask you the final two questions
+
+
+00:55:44.960 --> 00:55:45.960
+before you get out of here.
+
+
+00:55:45.960 --> 00:55:47.840
+If you're gonna write some Python code
+
+
+00:55:47.840 --> 00:55:51.060
+for this crazy big system you've built,
+
+
+00:55:51.060 --> 00:55:52.400
+what editor do you use?
+
+
+00:55:52.400 --> 00:55:53.240
+- I'm a bit old school.
+
+
+00:55:53.240 --> 00:55:54.560
+I basically just use Vim.
+
+
+00:55:54.560 --> 00:55:55.400
+- Vim, right on.
+
+
+00:55:55.400 --> 00:55:57.200
+- I feel most comfortable in the terminal,
+
+
+00:55:57.200 --> 00:55:59.000
+so no fancy GUIs for me.
+
+
+00:55:59.000 --> 00:56:00.200
+- Yeah, there you go.
+
+
+00:56:00.200 --> 00:56:02.440
+And then notable PyPI package.
+
+
+00:56:02.440 --> 00:56:03.800
+Do you want to give a shout out to?
+
+
+00:56:03.800 --> 00:56:06.080
+- Well, a couple of ones that I've already mentioned.
+
+
+00:56:06.080 --> 00:56:07.320
+PyTest is very important.
+
+
+00:56:07.320 --> 00:56:12.080
+PyCuda has also been critical in our work so far.
+
+
+00:56:12.080 --> 00:56:13.540
+So yeah, shout out to those two.
+
+
+00:56:13.540 --> 00:56:14.600
+Thanks to the open source community
+
+
+00:56:14.600 --> 00:56:16.000
+for providing that for us.
+
+
+00:56:16.000 --> 00:56:17.320
+- Yeah, it's really cool how much
+
+
+00:56:17.320 --> 00:56:19.640
+of these general open source projects
+
+
+00:56:19.640 --> 00:56:23.760
+are supporting science and other types of exploration.
+
+
+00:56:23.760 --> 00:56:24.600
+- Cool. - Yeah.
+
+
+00:56:24.600 --> 00:56:25.880
+Okay, final call to action.
+
+
+00:56:25.880 --> 00:56:28.840
+People are interested in maybe adopting
+
+
+00:56:28.840 --> 00:56:29.940
+some of your practices.
+
+
+00:56:29.940 --> 00:56:31.200
+Maybe they want to learn more about
+
+
+00:56:31.200 --> 00:56:33.200
+how you did this reporting in PyTest,
+
+
+00:56:33.200 --> 00:56:36.680
+or even as someone in the audience asks,
+
+
+00:56:36.680 --> 00:56:37.760
+can they get access,
+
+
+00:56:37.760 --> 00:56:40.600
+how do they get access to the datasets potentially?
+
+
+00:56:40.600 --> 00:56:41.440
+What do you tell them?
+
+
+00:56:41.440 --> 00:56:43.320
+- The datasets, well, I hope you have
+
+
+00:56:43.320 --> 00:56:45.560
+a very big hard drive on your laptop.
+
+
+00:56:45.560 --> 00:56:48.720
+If you go to sereo.ac.za, there'll be a contact page.
+
+
+00:56:48.720 --> 00:56:50.440
+And if you can send us a question
+
+
+00:56:50.440 --> 00:56:52.880
+and we'll make sure that it gets to the right person.
+
+
+00:56:52.880 --> 00:56:55.640
+I'm not sure what the procedure is for access
+
+
+00:56:55.640 --> 00:56:57.480
+for people outside.
+
+
+00:56:57.480 --> 00:56:59.120
+I can get to it when I want to,
+
+
+00:56:59.120 --> 00:57:00.920
+but then I'm inside the organization.
+
+
+00:57:00.920 --> 00:57:02.480
+So start with an email.
+
+
+00:57:02.480 --> 00:57:04.560
+- But if you ask the question on our contact page,
+
+
+00:57:04.560 --> 00:57:06.880
+yeah, and then we'll send you to the right place.
+
+
+00:57:06.880 --> 00:57:09.920
+To learn more, I'll put the GitHub link
+
+
+00:57:09.920 --> 00:57:12.280
+to the software for the correlator.
+
+
+00:57:12.280 --> 00:57:15.600
+It's all there and the documentation is relatively good.
+
+
+00:57:15.600 --> 00:57:16.640
+If there's something that's missing,
+
+
+00:57:16.640 --> 00:57:19.640
+you're welcome to just raise an issue on the GitHub repo
+
+
+00:57:19.640 --> 00:57:21.000
+and then we'll see how we can help.
+
+
+00:57:21.000 --> 00:57:22.000
+- Excellent.
+
+
+00:57:22.000 --> 00:57:23.280
+Well, thanks for sharing your story
+
+
+00:57:23.280 --> 00:57:24.960
+and keep up the good work.
+
+
+00:57:24.960 --> 00:57:25.960
+- Michael, yeah, thanks very much.
+
+
+00:57:25.960 --> 00:57:27.400
+It's been great to be here.
+
+
+00:57:27.400 --> 00:57:28.720
+- Yeah, it has been great to talk to you.
+
+
+00:57:28.720 --> 00:57:29.560
+See you all later.
+
+
+00:57:29.560 --> 00:57:30.380
+- Cheers.
+
+
+00:57:30.380 --> 00:57:33.820
+This has been another episode of Talk Python to Me.
+
+
+00:57:33.820 --> 00:57:35.460
+Thank you to our sponsors.
+
+
+00:57:35.460 --> 00:57:36.940
+Be sure to check out what they're offering.
+
+
+00:57:36.940 --> 00:57:38.820
+It really helps support the show.
+
+
+00:57:38.820 --> 00:57:42.140
+TypeEye is here to take on the challenge of rapidly transforming
+
+
+00:57:42.140 --> 00:57:43.980
+a bare algorithm in Python into
+
+
+00:57:43.980 --> 00:57:47.040
+a full-fledged decision support system for end-users.
+
+
+00:57:47.040 --> 00:57:49.980
+Get started with TypeEye Core and GUI for free at
+
+
+00:57:49.980 --> 00:57:54.100
+talkpython.fm/typeye, T-A-I-P-Y.
+
+
+00:57:54.100 --> 00:57:55.940
+Take some stress out of your life.
+
+
+00:57:55.940 --> 00:57:58.580
+Get notified immediately about errors and
+
+
+00:57:58.580 --> 00:58:02.060
+performance issues in your web or mobile applications with Sentry.
+
+
+00:58:02.060 --> 00:58:06.980
+Just visit talkpython.fm/sentry and get started for free.
+
+
+00:58:06.980 --> 00:58:10.780
+And be sure to use the promo code talkpython, all one word.
+
+
+00:58:10.780 --> 00:58:12.100
+Want to level up your Python?
+
+
+00:58:12.100 --> 00:58:16.220
+We have one of the largest catalogs of Python video courses over at Talk Python.
+
+
+00:58:16.220 --> 00:58:21.260
+Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+
+00:58:21.260 --> 00:58:23.940
+And best of all, there's not a subscription in sight.
+
+
+00:58:23.940 --> 00:58:26.980
+Check it out for yourself at training.talkpython.fm.
+
+
+00:58:26.980 --> 00:58:28.620
+Be sure to subscribe to the show,
+
+
+00:58:28.620 --> 00:58:31.620
+open your favorite podcast app, and search for Python.
+
+
+00:58:31.620 --> 00:58:32.980
+We should be right at the top.
+
+
+00:58:32.980 --> 00:58:35.860
+You can also find the iTunes feed at /iTunes,
+
+
+00:58:35.860 --> 00:58:38.040
+the Google Play feed at /play,
+
+
+00:58:38.040 --> 00:58:42.060
+and the Direct RSS feed at /rss on talkpython.fm.
+
+
+00:58:42.060 --> 00:58:45.580
+We're live streaming most of our recordings these days.
+
+
+00:58:45.580 --> 00:58:46.720
+If you want to be part of the show
+
+
+00:58:46.720 --> 00:58:48.980
+and have your comments featured on the air,
+
+
+00:58:48.980 --> 00:58:50.860
+be sure to subscribe to our YouTube channel
+
+
+00:58:50.860 --> 00:58:53.860
+at talkpython.fm/youtube.
+
+
+00:58:53.860 --> 00:58:55.260
+This is your host, Michael Kennedy.
+
+
+00:58:55.260 --> 00:58:56.420
+Thanks so much for listening.
+
+
+00:58:56.420 --> 00:58:59.420
+I really appreciate it. Now get out there and write some Python code.
+
+
+00:58:59.420 --> 00:59:21.420
+[MUSIC]
+
