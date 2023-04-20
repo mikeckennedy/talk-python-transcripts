@@ -1,0 +1,1268 @@
+00:00:00 What if we distributed CPython, the runtime, in the same way we distribute Python packages, as pre-built binary wheels that only need to be downloaded and unzipped to run? For starters, that'd mean we could ship and deploy Python apps without worrying whether Python itself is available or up-to-date on the platform. Nathaniel Smith has just proposed a PEP to do just that, PEP 7.11, We'll dive into it with him next. This is Talk Python Me, episode 412, recorded April 18th, 2023.
+
+00:00:31 Welcome to Talk Python Me, a weekly podcast on Python. This is your host, Michael Kennedy.
+
+00:00:49 Follow me on Mastodon, where I'm @mkennedy and follow the podcast using @talkpython, both on fosstodon.org. Be careful with impersonating accounts on other instances, there are many. Keep up with the show and listen to over seven years of past episodes at talkpython.fm.
+
+00:01:05 We've started streaming most of our episodes live on YouTube. Subscribe to our YouTube channel over at talkpython.fm/youtube to get notified about upcoming shows and be part of that episode.
+
+00:01:17 This episode is brought to you by Sentry and us over at Talk Python Training. Please check out what we're both offering during our segments. It really helps support the show. Nathaniel, welcome back to Talk Python to me. How's it going? It's going real well. It's going real well. We're on the eve of the eve of PyCon. How about that? Eve square. Okay. Yeah. I don't know how many eve maybe it's a third that eve to the third, but we're very near PyCon. I'm pretty excited.
+
+00:01:46 Yeah.
+
+00:01:46 Anti-penulti-pe-eve?
+
+00:01:48 I don't know.
+
+00:01:49 Penultimate eve, perhaps?
+
+00:01:50 Yeah, exactly.
+
+00:01:51 I suspect a lot of people will be listening to this show on their way to PyCon.
+
+00:01:54 So if you are, awesome.
+
+00:01:56 Come say hello to me.
+
+00:01:57 I'm going to be doing some live shows, some Ask Me Anything, some various other things.
+
+00:02:00 Are you going to be at PyCon this year?
+
+00:02:02 I'm not.
+
+00:02:03 I'm not, unfortunately.
+
+00:02:04 So they're going to have to just shoot you a message on Twitter or on Macedon or something like that, right?
+
+00:02:09 Yeah.
+
+00:02:10 I'm easy to find.
+
+00:02:11 GitHub, email, whatever.
+
+00:02:13 Yeah.
+
+00:02:13 Cool.
+
+00:02:14 Well, everyone going to PyCon, hope you have a great time and do come say hi.
+
+00:02:19 And with that, we're going to be talking about this project, this new pep about distributing Python itself, kind of like you distribute Python packages, but a little bit more.
+
+00:02:32 Why not?
+
+00:02:33 I mean, it seems pretty reasonable to me and I'm super, super excited to see work in this area because Python is so strong in so many areas And there's just a couple of really big gaps that other technologies have nailed so well.
+
+00:02:49 Two of them that I see that are super significant is like, hey, Michael, I want to build a mobile app.
+
+00:02:54 How do I do that in Python?
+
+00:02:55 Or I want to build a desktop app.
+
+00:02:57 How do I do that in Python?
+
+00:02:58 I'm not sure.
+
+00:02:59 I'm not sure you should even think about doing--
+
+00:03:02 desktop, maybe.
+
+00:03:03 Mobile.
+
+00:03:04 I mean, Kibbe is great, but it's not a general purpose UI toolkit.
+
+00:03:08 And so that's the one.
+
+00:03:10 The other is, hey, I have an application.
+
+00:03:12 I want to give it to someone who is not a developer and have them run it.
+
+00:03:16 And there are some tools that address that.
+
+00:03:20 But one of them is just like, how do they get Python at all?
+
+00:03:23 And your project, your pep, and some of the ideas relate specifically to how do we make it easier to get a pre-built non-admin, not installed for the whole system, Python for somebody so they can run an app or even for developers, right?
+
+00:03:39 Yeah, I mean, in fact, I mean, I'm a developer.
+
+00:03:42 So that's kind of in some ways the original use case, you know, scratch your head.
+
+00:03:46 Of course. Right. Yeah.
+
+00:03:48 But yeah, I mean, it's just it's a very general capability, I think, once you have it.
+
+00:03:52 So, yeah, I mean, the motivation there is basically like, you know, there are lots and lots of ways to get Python right.
+
+00:03:58 You can get it from the Windows store.
+
+00:04:01 It comes with preinstalled on your Mac, but not a very good one.
+
+00:04:05 Yeah, not quite. Sort of.
+
+00:04:07 you know, but there's also homebrew or Pyenv or your Linux distro has it.
+
+00:04:11 And you can, you know, get it through Conda.
+
+00:04:14 And if you download Blender, oh, there's secretly a Python inside.
+
+00:04:18 You know, like it's just, you know, there's just so many different ways to do it.
+
+00:04:22 And that's great. You know, like it's good to have all these options.
+
+00:04:26 They also are different use cases.
+
+00:04:27 But it's sort of silly that, you know, it's obviously it's, you know, it's flexible.
+
+00:04:32 There's lots of ways to do it.
+
+00:04:34 But there's no way to just be like, OK, I just want a zip file that has Python in it.
+
+00:04:39 And it's like a standard way that's supported and we all use so we can all share benefits and improvements and all of that.
+
+00:04:47 So that's kind of the key.
+
+00:04:49 The PEP is not that innovative in terms of what it's actually doing.
+
+00:04:53 It's a zip file with Python in it.
+
+00:04:55 But it's just trying to do the logistics of, OK, but let's all agree on how we're going to put it on PyPI.
+
+00:05:01 Let's have tags and stuff so tools can figure out what they're looking at and do stuff automatically.
+
+00:05:06 And I think that unlocks a lot of use cases, just that one simple change.
+
+00:05:10 - I think it does as well.
+
+00:05:11 I mean, your abstract is one of the more concise ones, I would say.
+
+00:05:15 - Sure, yeah.
+
+00:05:16 - Tell people about the abstract here.
+
+00:05:20 - Yeah, the abstract on the PEP is, it's quote, "Like wheels, but instead of a prebuilt Python package, it's a prebuilt Python interpreter." That is the full abstract.
+
+00:05:29 I figured that basically, you know, tells people what they need to know.
+
+00:05:33 - Yeah, so the idea is kind of like you would say pip install request, you might say pip install Python 3.11.
+
+00:05:42 Except for that you can't use the word pip because pip is built on Python and so you need Python to run.
+
+00:05:48 I mean, it's a little bit circular there.
+
+00:05:50 So you kind of need something outside of Python.
+
+00:05:53 But conceptually, it's I have these things I need to run my app.
+
+00:05:57 I need requests, SQLAlchemy, and Beautiful Soup.
+
+00:06:01 I also need Python 3.11.
+
+00:06:02 So those are my dependencies.
+
+00:06:03 Give me that, right?
+
+00:06:04 - And I mean, you could even imagine potentially pip install Python 3.11 working, I suppose.
+
+00:06:09 Like you would need a Python, some Python to run pip, but once you have that, then it's probably still convenient to be able to say, okay, actually, shoot.
+
+00:06:16 So I got this bug report saying in 3.11.2 specifically, there's some issue and I'm not sure if I can reproduce it.
+
+00:06:22 Like being able to just grab that in one command, pretty useful.
+
+00:06:26 But that said, you know, yeah, it's not necessarily, pip isn't necessarily the target.
+
+00:06:33 I've been working on some stuff there as well.
+
+00:06:35 I don't know if you want to get into that.
+
+00:06:38 - Yeah, we'll definitely get into it.
+
+00:06:41 I think, you know, you need something a little bit on the outside, and I think ideally doesn't depend on Python being on the system, because that, it would be perfectly useful for it to depend on Python.
+
+00:06:52 And this gives you a different version.
+
+00:06:53 This gives you a way to quickly toggle between these versions and these different setups.
+
+00:06:57 But if you could omit that dependency on Python, then all of a sudden you give away to, give it to people who are not developers and use cases where it's not just I already have Python and I need to do it. Maybe you're a developer, but you're not a Python developer. Should you have to manage your own Python installation so that you can use some thing that needs Python to run against your source code? Right? That is not Python. So there's a lot of scenarios where I think it gets unlocked if you use a different foundation.
+
+00:07:24 Yeah, some of the one of the audiences definitely have in mind here is like, you know, people with like taking their very first ever programming course on the first day of class. Like right now, it's pretty awkward that you're like, Okay, well, first, you have to go to python.org and then click through here and click there and download that. Oh, wait, no, not that version.
+
+00:07:41 Did you forget to check to put in your path? Oh, dear. Hold on.
+
+00:07:44 Yeah. And oh, no, do you use the pi launcher? You on Windows? Are you like, it was just it's this extra fiddliness. And it's funny, we've spent all this effort in the last few years kind of getting wheels to the point where they can just work, right? You can just pip install Dumpy and it works everywhere, stuff like that. But Python itself isn't there yet.
+
+00:08:02 Another use case, sort of maybe my primary use case, sort of audience I have in mind is, right, I develop Python packages and as open source and distributed on PyPI, stuff like Trio.
+
+00:08:18 And so I have the problem of I want to be welcoming to new contributors. I want to bring them in, get them started first, quickly. They're volunteers, so I don't want them faffing around and struggling and getting stuck trying to just run the tests or anything like that.
+
+00:08:33 Both that's just a waste of their time. It's kind of rude and inconsiderate. And it's also, you know, there's likely they'll just give up if it's just a casual, like, they aren't really invested yet. It's just something they're doing for fun or out of interest.
+
+00:08:47 I really want to make that easy for them.
+
+00:08:51 And so part of the vision here is like being able to say, oh, yeah, so you check out Trio.
+
+00:08:57 You type this git clone command.
+
+00:08:59 And then you have some kind of Python management tool installed.
+
+00:09:04 You type that tool, run tests, and it makes sure you get the right version of Python and set up the environment correctly.
+
+00:09:10 And then it executes it for you.
+
+00:09:12 And it knows what tests are, how to run the tests in this project, because it looks at, pyproject.toml or whatever.
+
+00:09:17 Right.
+
+00:09:17 And so just sort of capturing all, you know, we have all those pieces.
+
+00:09:22 We don't really have anything that kind of brings them all together into that, like, just type one thing.
+
+00:09:27 That's it.
+
+00:09:28 It's going, you know, and it just works.
+
+00:09:30 We honestly don't have many tools that are outside looking in in Python.
+
+00:09:34 So much of our tooling and our infrastructure is you have Python, now, now you have the tools, now you install it, now you install Black or Rough or other, Yeah, there's just this kind of very old assumption, which I mean, it made sense, like 10, 15, 20 years ago, where sort of everything was sort of installed manually. And of course, you have, you're going to go through some work to like get set up with Python, it's the foundation of your whole environment. And then you to kind of we add stuff to make it easier on top of that, but kind of, I think it's time to kind of go back and re reevaluate that sort of foundational assumption.
+
+00:10:07 Yeah, absolutely. So you mentioned trio, I know, before we dive too much further, and I'm gonna give you a chance to kind of Let the folks know what you're up to.
+
+00:10:18 We'll talk about Trio at the end if we got time.
+
+00:10:20 But what have you been up to since June 29th, 2018?
+
+00:10:26 Five years ago, roughly.
+
+00:10:27 Right, last time I was on the podcast.
+
+00:10:28 Yeah, last time you were on the show.
+
+00:10:30 Yeah.
+
+00:10:32 Wow, that was really early in Trio's life, I guess, actually.
+
+00:10:36 So, I mean, I've had a lot of just real life has happened.
+
+00:10:40 been, I was, you know, sick for a while and trying to kind of get back on my feet, did some consulting, just started a new job. So it's kind of, you know, a lot of distractions. But also, you know, yeah, I think Trio is still, you know, I still like it a lot. It's definitely had more influence. Actually, had I even published the Structured Concurrency blog post then? I don't remember.
+
+00:11:06 I feel like it sounds familiar to me, even though it's been five years, it does sound familiar. So I do think so. But what has happened since then certainly is Python has seen some of these ideas and adopted them, right? Like 311s, concurrency stuff. Yeah. So there's been a, like sort of the influence has gone a lot further than I ever expected, both actually in other languages. So Yeah, like Swift and Kotlin and, you know, have all kind of adopted ideas from here.
+
+00:11:36 Java apparently is making some big changes coming up soon with a whole new concurrency setup. And they're like saying, like, yeah, we're basing it on that Nathaniel Smith's random blog post.
+
+00:11:46 Okay. Yeah. Okay. You know, it's very flattering. But yeah. And yes, also, In the Python itself, it's sort of complicated because it's sort of this awkward situation where there's async.io that's in the standard library, and then there's my sort of competing thing, Trio, which, yeah, I guess we should say Trio is an async library for Python that's portable. It's sort of an alternative to async.io. There are some tools to kind of let you use both at once, but it's not a library for async.io. It's its own thing. And so, obviously, we all wish there was just one obvious choice. I kind of looked, you know, but async/a was also in this very difficult position being in the standard library and being sort of built up over time, and a lot of it was designed before we even had stuff like async/await. So there's just a lot of machinery in there that's kind of already committed to other ways of doing things, and it's very hard to change. And Trio was sort of like, well, look, we have all these modern things and some new ideas coming in like structured concurrency as a better way to kind of write your concurrent programs. And it was able to set up a clean slate to like, really, you know, do that all from the start and be much simpler. So that was important, you know, to have it be its own thing, just so we could, you know, work that stuff out. Then there's a question of, okay, now what do we all switch to Trio? Do we move it back into async I/O? Do they both continue?
+
+00:13:12 That's been a debate for some really popular things, I think that is interesting. A lot of people say, well, why is library X, which everyone uses? Why is that not built into Python? Why do I need to pip install it? And a lot of times the answer is because making a part of Python will harm its ability to innovate and change, right? It'll slow it way down.
+
+00:13:33 Yeah. Like there was a whole debate some years ago about like, you know, like we all know the HTTP client and Python, you're a lib or whatever. It's just really bad. You should just never use it. And it's broken a lot of ways. Like it's just, you just don't use it.
+
+00:13:46 But we still ship it because it would be too disruptive to take it out.
+
+00:13:51 That's also why we can't change it.
+
+00:13:52 There's just too much code out there depending on all the weird quirks.
+
+00:13:56 And we don't want to ship something else because then it'll end up being like URLlib five years later.
+
+00:14:02 So it was a question, like, should we put requests in the standard library or URLlib 3 or one of these?
+
+00:14:08 And it's just, you know, then you can't ship security fixes, you can't improve your API, you can't, you know.
+
+00:14:14 So as we've gotten better at packaging also, it's taken some of the pressure off the standard library to be all things to all people.
+
+00:14:24 This portion of talk Python me is brought to you by CodeCov from Sentry.
+
+00:14:28 Have you heard about CodeCov?
+
+00:14:29 They are the leading code coverage tool on the market.
+
+00:14:32 And they just joined Sentry the error tracking and performance monitoring company that you know and love.
+
+00:14:38 CodeCov is the all in one code coverage reporting solution for any test suite, giving developers actionable insights to deploy reliable code with confidence.
+
+00:14:48 CodeCov is easy to set up.
+
+00:14:49 If you are already both a CodeCov and Sentry user, GitHub integration is even enabled automatically for you.
+
+00:14:56 You'll get coverage insights directly in your workflows.
+
+00:14:59 Code coverage pull request comments allow you to quickly analyze your PR's coverage and risk without leaving your workflow.
+
+00:15:06 It'll reduce the guesswork.
+
+00:15:08 You set up customizable quality gates and let your continuous integration do the rest.
+
+00:15:13 CodeCov identifies where tests can help you avoid errors in production through their Sentry integration.
+
+00:15:19 If an error does occur, you'll even see code coverage details directly in your stack traces.
+
+00:15:25 So you can see the untested, partially or fully covered code that may be causing errors to help you fix your tests to avoid similar errors happening in the future.
+
+00:15:35 Get started for free or take advantage of Sentry's promo pricing where with a Sentry team or business plan, you can get your first five pro CodeCov seats for just $29 a month.
+
+00:15:47 That's a 40% savings. Visit talkpython.fm/sentry to get started. Remember to use the code talkpython to let them know you came from us. It really does help support the show. That's talkpython.fm/sentry and the code talkpython. Thank you to Sentry and CodeCov for supporting the show.
+
+00:16:10 when the standard library first came into existence, there was no PyPI and there was no package. It had to come with it because how else are you going to get it? Hunt it down on Usenet and on base64 and code it, but what are you going to do?
+
+00:16:26 Yeah. Or I mean, maybe you find it, you download, I don't know, Twisted or something like from an FTP site.
+
+00:16:31 Yeah. Yeah. Or an FTP site or something.
+
+00:16:32 You'd have to unpack it and have to put it in your pipe. It was all totally, yeah, knocking rocks together.
+
+00:16:39 (laughing)
+
+00:16:41 - Sharpen sticks.
+
+00:16:41 - You hope it's Flint and it creates a spark.
+
+00:16:43 - Yeah, yeah.
+
+00:16:44 - So I think the motivations and the decisions, the way you might lean in making the decisions are really different now.
+
+00:16:52 Like I would, even though we're already far down the road and making changes is breaking and doesn't make sense, it might make sense to ship less in the standard library, quite a bit less, and just say, oh, you're going to pip install some meta package that explodes out some section.
+
+00:17:07 to pip install the collections area. Boom. And now I got a bunch more potentially.
+
+00:17:12 One thing I'd really like to see as a possible sort of future there is moving some of the standard library into wheels that are installed by default.
+
+00:17:21 Exactly.
+
+00:17:22 So you get, so, you know, that's sort of, it's sort of this halfway house, right? Where, you know, it's still the case you download Python, install it, they're there. So we don't just like break everyone in the world who just assumes they're there. But then it kind of gives us that both in the long term, if it's like we want to get rid of it, it kind of gives us or push it out to PyPI or just remove it entirely, then it gives us kind of a way to do that more gradually. But also for libraries like AsyncIO that are big and complex and really would benefit from being able to have their own release cadence and bug fixes and deprecation cycles and all of that, then it's like, yeah, it still ships with Python, but then you can pip upgrade it. You're you're not stuck with that exact version that could only change when a whole new Python release comes out.
+
+00:18:08 And you have to take all those changes together at once.
+
+00:18:10 Yeah, I've absolutely had this thought.
+
+00:18:13 I think it's a really elegant solution.
+
+00:18:16 Because on one hand, it lets the core developers focus more on the true essence of Python.
+
+00:18:22 And it lets it be used in more locations, right?
+
+00:18:25 Think PyScript, for example, or MicroPython, right?
+
+00:18:28 It might be that you should create a central core that is exactly the same on all of these.
+
+00:18:34 You don't have to consider, of course, this is what runs, it runs everywhere.
+
+00:18:37 But you still get that backwards compatibility and you get the ability to say, actually, I want the newest version of AsyncIO because I want this more high-performance background worker or something.
+
+00:18:48 Yeah, or even just, I mean, for smaller, like, you know, I don't want the newest version of AsyncIO because, like, I don't know if it works, but I want to install in a scratch environment this, like, development version so I can try it out and give them feedback before they, you know, make the release and set the API in stone.
+
+00:19:05 And again, like right now, like, you'd have to go build your own Python. And it's like, it's just kind of a whole thing, right? You can't just do install dash dash pre.
+
+00:19:14 Right, exactly. It's definitely a more of a barrier for people who are just casually wanting to test stuff out. You got to be pretty committed to getting Python 312, alpha six or whatever we're at. Right? I don't know. Yeah, yeah, yeah, indeed. Okay. Very cool. Maybe we'll come back and dive into Tree a little bit more. But yeah, and what are you doing these days? You talked about doing a little consulting and... Well, yeah, so I just started at a new job, just like last week, week before, I guess. Yeah, it's been less than two weeks. Exciting. Yeah, I'm working at Anthropic, which I don't know if anyone's heard of. It's still somewhat stealthy, but it's sort of...
+
+00:19:52 Yeah, I mean, quickly changing. I don't know the exact status currently. But yeah, so my My understanding of the background here is that there's actually the team at OpenAI who trained GPT-3, just sort of sat down together and decided they really wanted to do more of a pure focus on interpretability and safety.
+
+00:20:16 How do you know what these models are actually going to do?
+
+00:20:20 And how do you get them to do what you want instead of stuff like making things up?
+
+00:20:26 all kind of got the scene now how these large language models can go just all over the place, do all kinds of strange things. And so, and they decided to-
+
+00:20:34 There's even one of them being sued for slander, I believe.
+
+00:20:36 Yes. Yeah.
+
+00:20:38 Somebody in the UK, I think.
+
+00:20:41 Yeah. Well, yeah, there's definitely, there's one that just like, if you ask the model, like, you know, can you give me some advantages of like, you know, problems with sexual harassment in law schools? And it just picks like five real law professors and makes up stuff like it's really, really bad. Yeah. And it like site sources that are all made up like it's, you know, like that, you know, they're just, they're very powerful, but also not well understood or how to like kind of make them useful and safe.
+
+00:21:07 Just a little bit of devil's advocate, though, they are incredibly powerful, and they are incredibly capable. And that's, I think, part of the dangers, you're like, Oh, my God, it knows this, oh my gosh, it understood all of that.
+
+00:21:19 And I ask it, so the fifth thing it says, you're like, well, at this point I'm convinced that it really is on.
+
+00:21:26 And then maybe that's the made up one.
+
+00:21:27 And I think that's the dangers, 'cause it's actually, it's almost an uncanny valley.
+
+00:21:31 It's close enough to right that you're like, okay, this thing's right, it knows.
+
+00:21:35 - Yeah, so yeah, so personally, like I'm still kind of up in the air on how impactful it'll be, where the impact will be.
+
+00:21:42 Like I think it's just a lot of open questions.
+
+00:21:45 You haven't bought a farm, like a goat farm in the woods, because you just give them technologies like blow rod now?
+
+00:21:51 OK, all right, super good.
+
+00:21:54 But I guess I do have stock options now, apparently.
+
+00:21:57 Or I will at some point if they vest.
+
+00:21:59 So I guess that's the other route.
+
+00:22:01 But no, but anyway, so I was just saying, so yeah, so Anthropics, just interesting company where you actually get to play with some of those big models internally, they're kind of working on releasing products now.
+
+00:22:13 But it's also been kind of just a really interesting to kind of get the sense internally of like, it's really kind of this like research culture, which is appealing to me. I'm sort of coming out of academia, have a lot of like numerics background. And what's also interesting is that part of the reason we kind of connected is that apparently it turns out a ton of their internal infrastructure runs on Trio. So they're, you know, partly hired me to support that, and are actually giving me time to work on open source paid time. So actually, they are funding this PEP 711, you know, Python binary stuff, though they don't know it yet.
+
+00:22:54 Now they do.
+
+00:22:55 Yeah, yeah.
+
+00:22:56 If they listen to the podcast, they'll learn.
+
+00:22:57 That's great. That's really, that's really cool. It looks like an interesting area to be working. I agree that the research oriented places, they are fun area to work, right?
+
+00:23:06 Yeah, and there's just a lot of flexibility kind of, you know, like, it's clear this stuff is gonna have effects.
+
+00:23:12 Which effects and how big and all that, I don't know, but, you know, being at ground zero is, you know, - It's exciting. - It's really exciting, yeah.
+
+00:23:19 - And a lot of chance to maybe have some impact, so. - Cool.
+
+00:23:22 Alright, let's dive into the pip. The pip, the pep.
+
+00:23:25 - The pep, okay. - It's not quite pip, but it's kind of like pip, okay.
+
+00:23:28 Yeah, okay.
+
+00:23:29 So, we talked a little bit about the motivation.
+
+00:23:32 We talked a little bit about what it is.
+
+00:23:36 Maybe tell us a bit about the spec.
+
+00:23:39 Like, what does the pep actually say?
+
+00:23:42 What is it actually trying to deliver?
+
+00:23:43 And we can talk about the use cases and some of the tools for it and so on later.
+
+00:23:49 I mean, so, like I said, the abstract deal is like wheels, but it's an interpreter instead of a package.
+
+00:23:55 That's partly just sort of a tagline of how you use it, but it's actually also a lot about how the actual spec is written.
+
+00:24:02 It's just sort of like, well, we've done a ton of work over the last five, ten years.
+
+00:24:09 A lot of people have put a lot of work into making wheels work, right?
+
+00:24:12 In terms of like, figure out, okay, how do we have metadata that's usable to keep track of which packages are installed and their versions and which ones are compatible?
+
+00:24:21 And for a binary build, which systems can you put this on?
+
+00:24:25 And all the many Linux work and just all of that stuff.
+
+00:24:29 And it's just like, well, you know, so we have wheels, we don't need to reinvent the wheel again. So I'm just sort of taking all of that. So it's just like, okay, it's mostly it's just a delta against the wheel spec. It's like, okay, and the wheel spec, you have, you know, this directory for metadata, I have, you know, that same directory, but I call this calling these Python binaries, PyBys, just to have sort of a short name, you can stick in a prefix, or sorry, Sorry, in a file extension.
+
+00:24:58 - Yeah, pybi.pybi.
+
+00:25:02 I like it.
+
+00:25:03 - Yeah, the PyPy, the interpreter, and PyPI, the package repository, we're confusing it up.
+
+00:25:09 So I thought I'd add another near homonym to the--
+
+00:25:12 (laughing)
+
+00:25:13 - PyPy, it's PyBuy.
+
+00:25:15 - Yeah, yeah, you know.
+
+00:25:16 Anyway, but so yeah, so like, but they look like, you know, the file names look like wheels.
+
+00:25:22 Like, you know, something like, you know, cpython-version-manylinux217.pybi.
+
+00:25:29 The context looks like Wheels.
+
+00:25:31 They're basically just zip files.
+
+00:25:33 There's some, you know, instead of a .distinfo directory, you have a pybinfo directory, and it has a metadata file that's in the same format as Wheel metadata files for the name and version and, you know, description, all that stuff.
+
+00:25:45 There are a few tweaks, basically just what, you know, you need specifically for interpreters.
+
+00:25:53 So, okay, so like one thing that makes it a lot simpler is that there's only one interpreter in a Python environment, right? Whereas wheels are kind of designed to be flexible and be installed into different kinds of Python environments with different layouts. A PyBy is just like, it's just a raw set of files. You unzip it, that's it, you're done. Where wheels, there's like, well, okay, if you want to put this in site packages, so you have to go find that. Whereas this goes in the bin directory. So you have to go find that and do the special, you know, so that part's just, you know, not relevant. Leave that out. There's some slight, you know, we have to support symlinks, which wheels don't, mostly just because there's never been a big compelling reason.
+
+00:26:37 What's that?
+
+00:26:37 The Windows folks out there, maybe, and others who are just like, what the heck are symlinks?
+
+00:26:42 Yeah, okay. Well, so yeah, symlink is a classic Unix concept. Though Windows does have them too I guess, where it's like a special magic file that instead of having like its actual contents, it just lists says, go look at this other location on the file system for my content.
+
+00:26:57 - Right. It's like an app shortcut, but for programs, not for UI.
+
+00:27:02 - Yeah, well, like built into the file system.
+
+00:27:04 - Yes, exactly. So you try to open it, it goes to the other one.
+
+00:27:07 - Yeah, the operating system automatically opens that other file for you. But you could also look at, you know, if you can like say, like, can you show me the same link and like, it'll tell you about it, if you ask, but if you don't, then it just, you know, magically works. And it's mostly, it's just it turns out that traditionally, Unix Pythons tend to use these, both for things like you'll, you know, in the your bin directory, you'll have the Python executable. And then you'll also have Python three as a similar to Python and Python 3.11 is a similar to Python three. And so you know, one to preserve that. And also, it turns out on on Mac OS, they have this very specific kind of layout they want with like framework.
+
+00:27:47 Like, I don't really understand it in detail, but like there's sort of like a how a Mac OS app is supposed to be structured and that it turns out to involve symlinks.
+
+00:27:54 So we just, you know, we just have to support that said, I mean, the way we support them is like, it turns out there's a standard way to put them in zips.
+
+00:28:01 So I say, let's do that.
+
+00:28:02 You know, like, again, really trying to keep this as boring as possible.
+
+00:28:06 You know, I did know.
+
+00:28:07 And then the last thing, that's crazy.
+
+00:28:10 Yeah, it's an extension from the InfoZip folks, but then it's become... I don't know.
+
+00:28:15 Zip's a strange format. It's kind of like an oral tradition as much as an actual specified format.
+
+00:28:21 There's an entire documentary on Zip.
+
+00:28:24 And I believe the guy who came up with it.
+
+00:28:27 It's even controversial in its early days. It's nuts.
+
+00:28:30 But yes, it's even won the compression de facto standard these days for the most part.
+
+00:28:36 Yeah, it's definitely got trade-offs, but it's just in terms of, it's just really useful just to think that everything could understand.
+
+00:28:42 It's just so compatible.
+
+00:28:44 And it's also convenient that you can do random access, unlike some of the alternatives.
+
+00:28:49 You can pull out one file from the middle if you want to.
+
+00:28:52 The fact that anyone can open it is so much better than it might save one more percent. Yeah, for sure.
+
+00:28:58 - Yeah. - Cool.
+
+00:28:59 Okay, so we've got these...
+
+00:29:02 Basically, the pyby file is the zip file. Is that basically the entire interpreter just kind of bundled into a zip file? Like, what's the deal there?
+
+00:29:13 Yeah. I mean, it's just literally like, you know, you install Python into a certain directory, and then you take that directory, you put it in a zip file.
+
+00:29:20 There's a little bit of tweaking to like, make sure it's self contained, and you can move it in a portable, portable relocatable, I guess is a better word.
+
+00:29:27 Yeah. So sometimes if you just install Python regularly, it's kind of, well, I've hard-coded, I know that I'm at this particular position on the file system. And so I need to make sure we don't do that. And also to make it self-contained, it's like, same thing we do with wheels. Like, you have to vendor some libraries, right? If it wants to use readline as a library to, for like in the REPL to be able to like edit your line as you're typing it, then, you know, we can't just assume it's on the system. We have to include that inside the PyBuy.
+
+00:29:56 So and but again, like this is stuff we've all already dealt with with wheels, there's tools for doing it, we understand how to do it. And I'm just reusing those tools.
+
+00:30:04 So if I were to run a Python application delivered by one of these PyBys, does it have to unzip the contents into a location and then run it there? Or can it just run it straight out of memory? Or what?
+
+00:30:19 How does that work?
+
+00:30:20 Well, so by itself, the format, I mean, it's just a zip file, right?
+
+00:30:25 So you can do with it what you can do with a zip file, which, I mean, is not much on its own.
+
+00:30:30 You need some software to work with it, right?
+
+00:30:32 Now, that said, I think--
+
+00:30:34 so yeah, so like if you just were starting with nothing and you're like, I just I have a URL to some PyBuy and I want to use it, then you'd have to download it, run a numzip tool, and then you'd have a-- you could go into that directory.
+
+00:30:45 It's a Python environment.
+
+00:30:46 You could run pip in there or whatever.
+
+00:30:49 That said, I think this is a really useful building block for tools that want to go beyond that.
+
+00:30:53 So things like delivering a pre-built application that you can just run without unpacking.
+
+00:30:59 Like there are various tools to do that, like PyOxidizer, Py2App.
+
+00:31:03 I don't know, there's a ton of them, actually.
+
+00:31:05 I'm probably forgetting like 10 more.
+
+00:31:07 Yeah, the ones that come to mind for me are Py2Amp, PyInstaller, and PyOxidizer for sure.
+
+00:31:12 PyOxidizer being the newest of them.
+
+00:31:15 Yes. Oxidizer because it involves Rust somehow.
+
+00:31:19 - All the new things involve Rust. - Yes.
+
+00:31:22 So, but yeah, so those tools that it's really useful to be able to say, "Okay, like, I'm going to do some clever thing to like set up, I don't know, a self-extracting executable or whatever it is they do for their distribution mechanism.
+
+00:31:37 I'm going to create an installer program, I'm going to..." whatever it is, but you still need an actual Python to put into that, right?
+
+00:31:44 And so having a straightforward way where it's like, that's not their problem anymore to figure out how to find a Python and get it built and working for the target system. They can just say, okay, I can just like grab, you know, okay, yeah, you want to target, you know, many Linux, cool. I'll just go grab the right Python. It's already there. I know it works. And now I can take the files out of this PyBI and do whatever I want with them. I can pack them into my installer or do clever things to make them usable out of memory or whatever. And they can focus on that part instead of just the like, how do you even get a a Python.
+
+00:32:17 Yeah. Or how do you once find yourself in the wrong Python, get the right Python?
+
+00:32:23 Yeah.
+
+00:32:24 Yeah. That's a, I don't know if that's trickier or less tricky, right? It's one thing to say, dear user, go get Python. You need that. It's another thing to say, go upgrade your Python and hope you don't break something. You know, I think.
+
+00:32:36 Yeah. Well, but also that's part of the point of these being self-contained is, so I mean, this is one of the more trivial use cases, right? But right now we all use virtual ends And mostly that's fine. But also sometimes, you know, they can get, you know, janking stuff could happen. Like, you know, you're on Linux, you do an app to upgrade, and now your system pythons change and all the virtual ends that were based on are broken now. Because it like had some kind of dependence on that exact binary. Now, I won't say you would always want to do this, but at least it's nice to have the option, you could say, okay, instead of making virtual ends, I'm just going to make real ends. They're all just going to be I'm just going to drop a new copy of Python in each environment. And that way, I just just totally self contained, I know exactly what I have it upgrades when I decide to upgrade And it's just, you know, it's a nice option, right, sometimes to have that.
+
+00:33:18 And also, you know, it gives you that total isolation, right?
+
+00:33:22 So you're then, we were just saying about that issue of like, "Oh, I wanted to use this, so I went and installed, upgraded my Python, but now that other thing I was already using broke because they're using the same Python." It's like very easy to say, "No, just give them different Pythons." You know.
+
+00:33:33 There's not that much that changes over time.
+
+00:33:35 That's a backwards breaking sort of thing.
+
+00:33:37 I mean, two to three, but I think that's kind of...
+
+00:33:39 Yeah.
+
+00:33:39 Let's put that in the past.
+
+00:33:40 But I did...
+
+00:33:42 Well, but I did recently, I was working with MongoDB using Beanie, which was using Motor, which was using the @async or @coroutine decorator, which was just moved in 3.11 or 3.10, one of those recent upgrades.
+
+00:33:58 And it had been deprecated forever.
+
+00:34:01 The people at MongoDB said, "We don't care, we're just going to leave it.
+
+00:34:03 Who wants to put the word async in front of my method? That's tricky." I mean, they just probably weren't paying attention.
+
+00:34:09 And my code wouldn't work. I'm like, "Why doesn't this work? Oh, the thing I depend on, which the thing it depends on, that thing needed less than 310 or whatever, 310 or 311, whatever." - Yeah, and now we're back to the ICKO struggles to adapt without breaking it.
+
+00:34:25 - Yeah, stuff like this would...
+
+00:34:26 - Stuff that does happen, you know.
+
+00:34:27 - And this kind of isolation gives you 100% confidence to say, "I'm going to make this new app. We're going to try running this app on this in production, and it's not going to hurt anything, and I don't need Docker." And you can say, or you could use, say, I'm going to, you know, use this exact point version in development. And then I'm going to take that and build it, create my, use that to create my Docker image. Like, I don't need the like prebuilt Docker stuff. I could just grab Python from PyPI. And I know it's the exact same version everyone else is using, built by the Python.org folks. Hopefully, you know, we're not there yet. But like, that's kind of the way we're trying to get a pep and not something on GitHub, right?
+
+00:35:05 - Yeah, sure.
+
+00:35:07 Well, it has been on GitHub for a while, but I have time to kind of move it more.
+
+00:35:10 - Yeah, yeah, so maybe it's worth jumping over that, but before we do, two questions, maybe.
+
+00:35:14 - Yeah, sure.
+
+00:35:15 - Two top-level questions anyway.
+
+00:35:18 So this is about the concept of kind of like pip install Python 3.11, or 10 beta 2, or whatever.
+
+00:35:25 - Whatever it is, yeah.
+
+00:35:26 - Yeah, does that, is there a way to say, and these three packages off of PyPI?
+
+00:35:32 Can I take and kind of bring a virtual environment effectively along with me with what you're doing so far?
+
+00:35:38 So PyBI is, again, by themselves, I mean, it's just an archive format, right, a package format. It doesn't do anything.
+
+00:35:44 That said, obviously, yeah, part of what we want is for these to be useful for things like, you know, building environments that have other packages in them and stuff.
+
+00:35:53 So that's the one other thing I didn't, I forgot to mention about defining the format.
+
+00:35:59 Probably the most interesting part, actually, is that we do add some new static metadata that we put into the package. And kind of the motivation there is that I try to figure out, okay, what do I need to know in order to install wheels into this Python without running it? Right? Because right now, right, like pip assumes that it's running on the Python it's installing into. So anytime it wonders, like, you know, okay, like, what ABI's does this Python support? And what version is it? What platform am I on? It can just ask the interpreter it's running on, right? And it's like, okay, well, it would be really nice if you didn't have to do that both for like efficiency, like you want to be able to, you know, figure out which, you know, have your like installer, your resolver, figure out which versions of everything it wants, without having to like download and run multiple versions of Python and stuff like, you really like to avoid that. It's also things like I want to build a cross, I want to build, release distributions for Mac OS, but I'm on Windows or vice versa.
+
+00:37:00 Or I just want to, you know, I'm developing my package like Trio on Linux personally, but I would like it that when I lock my version, so I know all my collaborators are using the same versions, that we figure out locks that also work on Windows and Mac OS.
+
+00:37:16 And I can't just trivial run all those Pythons from one resolver because it's not running on all three at once. And Python packaging does have the ability to have different dependencies on different OSs. It can get very complicated to figure out which packages do I need where. And so, I wanted to put a bunch of metadata into the PyBI, all the stuff you need to solve those problems. So, yeah. So, the PyBI itself, I think normally they won't ship with any packages. Maybe, again, callback. Maybe in the future we'll start moving some of the standard library into wheels that are pre-installed, you can do that. But I'm guessing like, you know, for now, it'll mostly just be, you know, a plain vanilla Python install. But then you could take that, you could take some wheels, bundle them all together into a new archive if you want. Or, again, whatever you want to do with it, stick it in a Docker image, whatever. It's a step towards but not necessarily trying to propose an entire solution of here is the interpreter and all the dependencies and the code and just run it as if it was, it had no dependency on your system. Just treat it as like a .exe or a .app. I can just double click.
+
+00:38:30 I mean, it makes that a lot easier than it is right now. First step is just to figure out, like, how do I even build a Python that'll work like that? And that is like some arcane, dark knowledge written on a tome in black ink on black paper and a black tomb. You have to go find or something like, you know, it's just, yeah, it's not easy. And so just having the ability to say like, yeah, just grab this file, unzip it, drop some wheels in it, zip it up again. Now that's a package you can drop, you can hand to someone and it'll work on their system. You know, like that's, that makes it a lot more accessible. It's not the thing I most personally like, I'm not immediately going to go build that one last extra tool, but I bet someone will.
+
+00:39:11 Yeah, I can imagine someone will for sure.
+
+00:39:17 This portion of Talk Python Me is brought to you by us over at Talk Python Training with our courses.
+
+00:39:22 And I want to tell you about a brand new one that I'm super excited about.
+
+00:39:26 Python web apps that fly with CDNs.
+
+00:39:30 If you have a Python web app, you want it to go super fast.
+
+00:39:33 Static resources turn out to be a huge portion of that equation.
+
+00:39:37 Leveraging a CDN could save you up to 75% of your server load and make your app way faster for users.
+
+00:39:44 And this course is a step-by-step guide on how to do it.
+
+00:39:48 And using the CDN to make your Python apps faster is way easier than you think.
+
+00:39:53 So if you've got a Python web app and you would like to have it scaled out globally, if you'd like to have your users have a much better experience, and maybe even save some money on server hosting and bandwidth, check out this course over at talkpython.fm/courses.
+
+00:40:08 It'll be right up there at the top.
+
+00:40:10 And of course, the link will be in your show notes.
+
+00:40:13 Thank you to everyone who's taken one of our courses. It really helps support the podcast.
+
+00:40:17 And back to the show.
+
+00:40:20 Our next question is not what our shared screen here but is what impact do you think this would have on PyPI? First of all, do you see PyPI the way the CDN that delivers packages like trio and wheels like trio? Do you see that as the same channel through which CPython 3.11 is delivered?
+
+00:40:40 Yeah, I mean, so I would like these to literally be like you go to PyPI slash project slash CPython. It says like, here's the latest release and you click on downloads and it shows you the, yeah, I'd like it to just literally be stuff you upload to PyPI.
+
+00:40:54 Right. And when you pip and solve from there, it figures out the platform to pick from and it downloads that wheel and off it goes. Right. Do you think that that would add like a huge burden to the amount of traffic or do you think?
+
+00:41:06 - No. I mean, largely we'll have to see and adapt, but Python itself, it's like, shoot, it's tens of megabytes.
+
+00:41:15 - Okay, cool.
+
+00:41:17 So plenty of other packages.
+
+00:41:18 - There are a lot of much bigger, like go look at TensorFlow or something.
+
+00:41:22 There are hundreds of megabyte packages on Python that are very popular.
+
+00:41:27 Also, I mean, Python.org downloads go through the same CDN anyway.
+
+00:41:30 It's just sort of different infrastructure on the backend, but it's still fastly serving it and donating the bandwidth.
+
+00:41:36 So in that regard, I wouldn't expect much change.
+
+00:41:40 And also just people tend to install wheels more often than they install Python.
+
+00:41:45 Again, it's hard to know the second order effects.
+
+00:41:48 Maybe virtual ends will be less popular in favor of full ends if this takes off.
+
+00:41:53 And then people will start installing Python more than they do now.
+
+00:41:56 But nonetheless, I don't think it's a huge--
+
+00:42:00 I wouldn't anticipate it being a huge change.
+
+00:42:04 And if it turns out to be a problem, then we can kind of address it then.
+
+00:42:09 Well, you could also do, to a large degree, you could do things like pip does already that caches.
+
+00:42:16 You could just cache the CPython wheel, the PyBI, into the user profile, and the second, third, fourth time you get it, it's really the CI systems and all the dockers and all that stuff that don't understand what a cache is or any of those things.
+
+00:42:29 Yeah, but then, you know, so like if it becomes a real problem, then you go to GitHub and you're like, "Hey, can we work something out so that you stick a cache in front of PyPI?" Stuff like that. It's not trivial, but you could talk to people and solve problems. Certainly, I don't think we should hold back the entire design of how we distribute Python and make it available because, "Oh, maybe it'll be too easy and people will use it too much." That's a good problem to have, right?
+
+00:42:58 - Yes, exactly. Look, they're using it. This is terrible.
+
+00:43:00 - Yeah, like first, you know, make it easy and then figure out how to solve any problems that cause it.
+
+00:43:05 - Yeah, I think we've more than once solved the problem of, "Oh my gosh, they're using it." Like Google, Netflix, you name it, you know.
+
+00:43:12 Think of the benefit that you'll be doing for all the developers, especially those who have Python skills and are looking for a job.
+
+00:43:18 I mean, if the popularity of Python by downloads is one thing, if you could like 4X that, we'd all be more demand.
+
+00:43:25 and like, really, really downloaded now.
+
+00:43:28 - Right, yeah, just go out there and just download it five times in every CI job.
+
+00:43:32 Just, you know.
+
+00:43:33 - Exactly.
+
+00:43:34 - Just throw a form away, but you know.
+
+00:43:36 - Just do it a couple of times, just show.
+
+00:43:38 - Right, yeah.
+
+00:43:40 - Awesome.
+
+00:43:41 The question that you put into the PEP here on the screen though, is why not just Conda?
+
+00:43:45 And I, not being a particularly data focused person, I definitely prefer using pip over Conda because especially it seems like a lot of the web packages are not as close to update up to date.
+
+00:43:57 You know, there's a latency before it hits conda and it's like immediately on pip.
+
+00:44:01 That said, there's a bunch of people who are like, I kind of use conda for this.
+
+00:44:04 Yeah, and right. If you're just like, look, I don't really care about all this.
+
+00:44:10 Like, I just, you know, want to run my Jupyter notebooks and I, you know, just need a Python that can do that.
+
+00:44:16 And maybe, you know, some NumPy or whatever.
+
+00:44:18 Conda solves that really well.
+
+00:44:20 And this thing could, you know, I'm working on could also potentially solve that really well. And so it feels duplicative to those people.
+
+00:44:28 And to them it is. You know, it doesn't really -- they're both two solutions that work, but there isn't necessarily a reason for them to choose one or the other.
+
+00:44:36 >> But this could also be a foundation for the way that Conda provides Python to itself.
+
+00:44:44 >> Maybe. I don't know. Like, there's a whole other question about how, like, we could bring Conda and PyPI, PIP, that kind of world closer together and interoperate better. But that's a whole can of worms, lots of complicated stuff. I don't think this PEP itself is going to be the thing that makes a big difference there.
+
+00:45:05 Okay. But it's not an anti-Conda type of thing.
+
+00:45:08 No. No. Yeah. Well, and so, right. And so, I mean, you can also get to see a version of this in the PEP. But basically, the way I think about it is that the key reason why we just like why PyPI is a critical piece of infrastructure that, you know, cannot be replaced by anything else is not because it's of its use for end users. I mean, it's great that end users use it and find it helpful and all that, but like that isn't the people who absolutely need it and could not have any replacement. The reason why we just absolutely need it is for package developers because the way, again, you're talking about all those different ways you can get Python, And there's all these different ways Python packages get distributed.
+
+00:45:49 You can brew install Python packages.
+
+00:45:51 There's versions, you know, NumPy, a patched version of NumPy used to be part of the standard Mac OS install.
+
+00:45:57 Maybe it still is, I don't know.
+
+00:45:59 You know, like when you install Blender, there are Python packages in there.
+
+00:46:03 Install some game using, was it RenPy?
+
+00:46:07 It's going to have Python packages in there.
+
+00:46:09 Or just, you know, there's just like, there's so many different ways that Python code goes out in the world and gets used in all these different contexts.
+
+00:46:17 And if you're developing some upstream library, like, you know, Trio again, or, but, you know, or requests or NumPy or anything, then what you absolutely don't want to do is have to maintain a separate distribution for all of those different things. You don't want to have to upload your package to CondaForge and also to Debian and also to Fedora and also to BlenderForge, like, you just, like, that's not, that doesn't make any sense. And then having every different package maintainer do that, like that just would be terrible. It just would be unworkable. So the critical role that PyPI serves that just nothing else can, is it's this intermediation point between package uploaders and package users, including package redistributors. And so I make a release of my package, I upload to PyPI. And then that's where Conda forward gets, that's where Debian gets it, that's where the end users get it if they're pulling straight from PyPI. It fans out from there.
+
+00:47:19 And the key difference in terms of design between pip and Conda is that PIP's metadata formats and wheels and the metadata and sourced disks and all that are designed around this abstraction of you have some kind of Python environment, but it could be any of those. It could be on different OSs, it could be different, you know, ways of building it, different layout, different pieces could be missing, like, whatever, you could be laid out in all kinds of different ways. I just know that there is some kind of Python environment. And I have the metadata to like figure out how to adapt to how this particular Python environment is put together. And conda, on the other hand, is one of these sort of downstream systems. It's it can the reason people like love it and like data science, right, is because it's a full-fledged, like, arbitrary application distribution thing, right?
+
+00:48:07 You can install random, you know, C libraries and, you know, you can install R and R packages, like, it's just, it's got, you know, compilers that are all there in the one thing. But because of that, it doesn't have this abstraction of, "Oh, I can handle any Python environment." A conda package of a Python package is set up to install in a conda Python that's laid out in a, the way a conda environment is laid out in the way of using the libraries a conda library has, right? And so it doesn't have that flexibility. If you just release something for conda, then it's great for conda, but it's not usable to Debian and Homebrew and all of those other folks.
+
+00:48:43 And so that's the key thing that PyPI does, right? It has that abstraction that lets you have the Python packaging ecosystem of all those packages and they're dependent on each other.
+
+00:48:55 and then you kind of project it down into each of these more specific, specialized packaging systems.
+
+00:49:00 And then also, because, you know, as a...
+
+00:49:04 That's the other thing as a package maintainer, I don't just write my package and upload it.
+
+00:49:08 Like I'm also using all the other open source maintainers work as I do it.
+
+00:49:13 We're all working together, right?
+
+00:49:14 And I'm depending on their work and they're depending on mine.
+
+00:49:17 And so I need to be able to say, like, okay, you know, my package needs those three other packages, and here are the versions.
+
+00:49:22 and I need to be able to create an environment with those versions and test it before I upload my package to PyPI. And so, again, all that work has to happen at that higher abstraction level. You can't just say, "I'm going to take the latest version from Conda and test against it," because that's not necessarily the version that other people will get. Where you take the versions from PyPI, those are like the original ones. I can get exactly...
+
+00:49:46 I have access to anything anyone has ever uploaded as soon as they upload it, and I can test them all together. And then, you know, if condo wants to take some curated subset of those or whatever, that's great. That's a really valuable service. But you know, they kind of need that underlying set of packages to curate. And that's why. Yeah.
+
+00:50:04 PyPI is kind of the definitive source of truth as the package creator intended it to be.
+
+00:50:12 Yeah. And then so right. And then of course, yeah, for a lot of end users, it turns out they're just going straight to that without any intermediary.
+
+00:50:19 works great for them. And that's really cool. But also, you know, it's not like I don't have anything against people who prefer to go through Debian or Conda or whatever. I think that's also great, you know, if that works better for you. But for the folks who are, you know, developing, you know, packages to upload, or who just, you know, would rather just, you know, get stuff straight from the source, the PyBI's, I think, can solve a lot of problems that Conda, you know, just, it just doesn't address those. It has a different focus.
+
+00:50:46 Trying to make it a swap over to do that might kill a little bit of what it's good for, you know?
+
+00:50:54 Yeah. All right. Let's see. So let's move on to your announcement here. I think...
+
+00:50:59 Okay. Right. Yeah.
+
+00:51:01 So over on discuss.python.org, when was this? This was January 21st.
+
+00:51:06 That's a few months ago.
+
+00:51:07 Yeah. A few months ago, you announced PyBI and Posi.
+
+00:51:12 Yes.
+
+00:51:13 And Posey is, we talked about this mythical pip that could pip install C Python 3.11.
+
+00:51:18 Posey is that mythical pip, right?
+
+00:51:20 Yeah. So yeah, the pip 7.11, the PyBI stuff is just the one brick in my master plan.
+
+00:51:27 So, right. Because yeah, because sort of this vision I had in mind, I kind of alluded to earlier talking about like, you know, okay, if somebody does, you know, Git clone my project, I want them to, you'll just run the tests and know that they have the right version of Python and the right version of the dependencies and just kind of, you know, and they know how to run the, you know, just do it, right? Encode all that information somewhere. And Posey is sort of my experimental, it's not ready to use, but it does have a lot of stuff working, is my attempt to solve that part of the problem. So the vision is Posey is a, it is a full reimplementation of PIP, you know, the metadata parsers and dependency resolvers and archive installers and all of that, except I rewrote it all in Rust, as is the style. But it's all built around PyBIs. So it doesn't...
+
+00:52:25 Maybe at some point we'll also start supporting VNs or user-installed Pythons. But for now, sort of for the MVP, it just says, like, okay, yeah, you have a PyBuy, I will grab that, I will grab packages that are compatible with it, I will arrange them all to run together based on, you know, you just say what you need, I turn that into, like, a lock file, I fetch those packages, I run, you know, your test script or whatever. And yeah, I mean, that is the core idea.
+
+00:52:53 And one advantage of being in Rust is that it's, you know, just because just so obviously, you know, if you want to hack on it, then you need like a Rust compiler and stuff. But if you just want to use it, then we can just take a button, we can compile it down to a single binary that you just, you know, upload to wherever, install it from wherever, and you just you drop it on your system, you run it, and it's self-contained, it can handle everything from there. So again, thinking of that target audience of like beginners, right, you say, okay, install this one program, And now you type, you know, Posey run. And oh, look, you're in a rebel. And it's like, and I would totally, of course, I had to go find the latest version of Python and grab it and figure out which build is right for your system and do that. But like, but you know, you don't have to think about that. You just hit enter and it happens. And there's your rebel. Or they say, you know, Posey add requests and then Posey add Jupyter and then Posey run notebook, you know, like, and it kind of is handling the environments behind the scenes.
+
+00:53:55 Yeah, we did a panel discussion with a bunch of core developers around packaging recently.
+
+00:54:03 And a lot of them were saying things like, I don't really want to put words in mouth, but kind of getting the sense that like, okay, so we have a bunch of tools that are really neat, that live within Python, you know, I'm thinking Hatch, Poetry, those that category of tools, pip itself even. And some of the challenges or problems that they would like to solve, they could unlock a simpler API if it was turned inside out, right?
+
+00:54:29 If the tool itself controlled Python, it didn't depend on Python to get started.
+
+00:54:34 They mentioned RustUp as a way to get started, which is a way to kind of install a version of Rust and get started, right? And it feels to me like this is pretty close to that.
+
+00:54:45 Yeah, there's a lot of overlap, for sure, in terms of sort of goals and approach and all of that.
+
+00:54:52 - One challenge I see is, so like for example, to run the application for the, with the Python that's bundled up inside of one of these PyBIs is you would say, Posey run or Posey some kind of file or something like that, right?
+
+00:55:08 - Sure, yeah, whatever.
+
+00:55:09 - Could, could, yeah, yeah, yeah.
+
+00:55:11 Whatever the CLI that's yet to be fully spec'd out comes out to be.
+
+00:55:15 But, you know, could you do things like, could you create, you know, speaking of symlinks and other types of stuff, Could you create just in the same folder where that app lives, a Python that actually just calls Posey, the Python inside instead of Python itself, and pip that says, you know, Posey run pip inside this Python to kind of bridge, to unify the API from where people are coming from, to kind of expose the same tools that are inside a little bit?
+
+00:55:43 You know what I mean?
+
+00:55:44 Well, so, yes. I mean, so, the way I am currently sort of in my current prototype, basically. It doesn't work like that just because it felt sort of more complicated to then like try to expose those things. So, sort of the sense is like, you know, let's see how far we can get with treating sort of the UI paradigm of like Posi is just your front end to Python. Like you don't, you just, you start your command with Posi and that's, that's the only command you need to know, kind of. And so, and that also allows some interesting things. So like the way Posey does environments right now is it doesn't, you can have multiple environments within a project. Like if you need to test against multiple Python versions or you need different installs for, I don't know, tests and for building your docs and whatever. But it doesn't actually materialize all those as separate independent virtual environments. Instead what it does is it, for like each unique wheel or PyBi that it needs, it unpacks that into its own directory. And then on the fly, it assembles environments by setting up environment variables so that it can launch a Python in such a way that it picks the right Python and launches in such a way that it sees the right packages it's supposed to see. But there's only one copy of those packages on disk, if you have multiple environments.
+
+00:57:02 If you want to try out different versions or whatever, it can just do that without having to go rearrange everything on disk.
+
+00:57:12 And that's just, you know, it's convenient.
+
+00:57:14 It's just a really nice way to work with sort of having declarative Python environments.
+
+00:57:18 So you never update an environment in place.
+
+00:57:20 There is no environment in place. It's just on each command you run, it sort of knows declaratively, "Okay, these are which packages are supposed to be there.
+
+00:57:26 I'll give you those packages." So there isn't even a concept exactly of like pip upgrade or pip install.
+
+00:57:32 You can just say that next time I invoke environment, I'm going to give you a different specification for which versions I want.
+
+00:57:38 and it'll make sure that happens.
+
+00:57:40 It feels a little like Docker, right?
+
+00:57:42 Like, if you create a Docker image and you run a container, you want to make changes to it, you don't log into the container typically and mess with it.
+
+00:57:50 I see what that says, right.
+
+00:57:52 You would just say, "Okay, well, we changed the Dockerfile, we shut it down and we start it back up with the new, better version of itself, right?" That's like Docker.
+
+00:58:00 Yeah, a big difference would be that in Docker, when you build it, like, the actual Dockerfile is this big old imperative, imperative, go scribble here and then delete that and then put something else, you know, that kind of thing. It's not just like, here's the list of things you need.
+
+00:58:13 Well, it feels to me like maybe a better solution than what Docker is giving you. If what you really just want to do is run a Python and isolated Python thing repeatedly, because with Docker, the idea is like, well, you want it, you want it isolated. So let's do this. Let me give you an entire separate copy of Linux.
+
+00:58:32 I know what you're running in like not a full VM way, and it's not as heavy as a VM, but it's still, you're configuring a Linux computer inside of this container in the way that, whereas this is just like, I just want Python configured, not everything.
+
+00:58:46 Well, and even more like in Docker, if you want to make sure that you run Docker build twice and get the same package versions, like you have to do that yourself.
+
+00:58:54 You have to come up, you have to use, I don't know, pip compile or something like create a lock file and then install from that instead of your original requirements.
+
+00:59:01 It's a whole thing. There's lots of ways to get it wrong.
+
+00:59:04 Whereas in Posi, the way I've written it currently, it's just like there is, you know, there's one operation, one internal function that takes a set of like, "Okay, these are the packages I want." And it like renders that down into a block file of like, "Here's the exact set of packages you need, including all the dependencies and all their versions." And then that's the thing that you hand to the run-me-in environment.
+
+00:59:23 So like you have to go through that step.
+
+00:59:25 It's just built in. And so we can like, you know, so and of course, you know, as we build up the, you know, CLI and stuff, ideally that that will be then, you know, written to disk, similar to a cargo dot lock or poetry dot lock or whatever.
+
+00:59:36 And so you just automatically get that reproducibility, which, you know, you don't get that automatically from Docker, right?
+
+00:59:43 This is a thing that people could go get.
+
+00:59:46 On your GitHub profile, they could check this out and they could try it, right?
+
+00:59:51 So, yeah. Let's see. So, yeah, so obviously, there's a lot of moving parts here.
+
+00:59:58 Folks want to help with the PyBI part, that PEP 7.11.
+
+01:00:02 There's lots of stuff you could use help with.
+
+01:00:05 But it is also, there's a draft pop-up, and I have built lots of PyBI packages for lots of different versions of Python.
+
+01:00:12 For Mac, Windows, Linux, they're up on a CDN.
+
+01:00:15 So, you know, that uses the same API as PyPI, so you could pip install from there if you had a pip that did it.
+
+01:00:21 So it is stuff you could try out right now, experiment with at least.
+
+01:00:25 And then, yeah, as for the POSI part, Again, like I said, it's mostly the backend stuff, but it is a pretty complete implementation of all the packaging stuff.
+
+01:00:33 It can actually do that demo I was just saying of like, I need these three packages in this version of Python, and it can do the dependency resolution for a named specific operating system, which may not be the one you're running on, and then generate that environment and actually invoke it.
+
+01:00:48 Well, you can only invoke it if it's for the operating system you're running on, of course.
+
+01:00:52 But it can do all that stuff. There isn't really a UI in front of it yet.
+
+01:00:56 But so it's not like something I'm suggesting you go start, you know, rolling out to your company.
+
+01:01:01 I really want to adopt it. Yeah, it's a good story.
+
+01:01:04 If this is like an exciting project for you, then you could check it out, see where it's at, join in, whatever.
+
+01:01:12 There's definitely tons and tons of stuff to do, but it's, you know, there's a good solid start.
+
+01:01:17 And I think it's at this point, I'm pretty confident like everything could work, right, you know, kind of the proving it out part.
+
+01:01:24 is pretty much there, done.
+
+01:01:26 Question from Marwan in the audience.
+
+01:01:29 Hypothetically speaking, does a posy.lock work as is on different platforms?
+
+01:01:34 Right, yes. So cross-platform support is a huge issue with locking.
+
+01:01:39 I don't know if anyone's ever tried to do this with pip compile.
+
+01:01:43 It just doesn't work.
+
+01:01:45 If you have anything complicated, like multiple Python versions, it just doesn't work.
+
+01:01:50 They tried hard, but yeah.
+
+01:01:52 So what I'm doing right now in Posi is I've tried to kind of keep it simple.
+
+01:01:59 I just say, like, you know, tell me which platforms you care about.
+
+01:02:03 You know, like, you know, ResaDish Linux and Windows 64 and Mac OS ARM and Intel or something. You'll give me like a list.
+
+01:02:12 And then it will, it can go through just like loop through that.
+
+01:02:17 And for each one, find the right PyBI, look up the metadata to figure out which kinds of packages are appropriate to install there and generate a lock file for each of those.
+
+01:02:26 And then, you know, you can somehow like merge the common parts and write them to a file.
+
+01:02:30 So the individual things that like, you know, resolve this set of versions, or set of package requests into an exact set of versions, that only runs for one specific platform at a time.
+
+01:02:45 But, you know, you can run it multiple times.
+
+01:02:48 There are-- it might be possible to do something smarter.
+
+01:02:52 So I know Poetry has some algorithm that I don't really understand very well, where they try to simultaneously resolve all the platforms into their lock file.
+
+01:03:00 And then the way the lock file works is then you actually--
+
+01:03:04 it's only mostly resolved.
+
+01:03:06 And then when you actually go to install, it does that last step to try to narrow it down to the exact platform you're on.
+
+01:03:13 And I just-- I don't quite--
+
+01:03:15 no one's been able to explain to me how exactly that algorithm works or even like I'm not 100% sure it's even like if it's fully correct or if it's heuristics based or what. So I don't know but like you know we can change you know there's lots of options right you know we can change the code if there's a better way to do it just that's where I'm at so far. So there's something people can play with but it's early days and you wouldn't mind having help if people wanted to jump in. No for sure if you want if if you've been looking for an excuse to learn Rust, if you want to play around with cool--
+
+01:03:48 I mean, there's interesting problems in terms of things like how you efficiently resolve do package resolution.
+
+01:03:55 It's like this whole messy logic programming problem.
+
+01:04:00 It's NP-complete.
+
+01:04:03 There's just interesting system engineering problems of, OK, if we're going to really make this a really nice to use, Like, how do you unpack 20 wheels as fast as possible?
+
+01:04:12 You get to use threads and concurrency and all kinds of stuff.
+
+01:04:16 Yeah, there's lots of cool technical bits, too.
+
+01:04:18 And of course, just making something that's a joy to use, fits nicely in your hand.
+
+01:04:23 Lots of fun user interface problems.
+
+01:04:25 Yeah, I'm excited about it, as you can probably tell.
+
+01:04:27 Like, I just love these kinds of problems.
+
+01:04:30 - Yeah, absolutely.
+
+01:04:32 So this announcement was on discuss.python.org, And I thought, okay, well, it says there's 72 responses.
+
+01:04:39 Let me flip down and see how this landed with people, right?
+
+01:04:42 - Okay, yeah.
+
+01:04:42 - Okay?
+
+01:04:43 - You know, a wide variety of responses, yeah.
+
+01:04:47 - Yeah, well, but I mean, I would say that at least the top batch, the first bunch of people, Paul Moore, deeply involved with Pip, jumps in and says, "This is beyond awesome.
+
+01:04:54 "I had realized you were working actively on this.
+
+01:04:57 "I'll take a look.
+
+01:04:58 "I'd love to help out too." Talks about Rust a little.
+
+01:05:01 Frederick says, "Really nice to see this.
+
+01:05:03 This is a great direction.
+
+01:05:05 Janice says, well, certainly blew my mind.
+
+01:05:08 Count me in on how we could explore how this might work for Conda and so on.
+
+01:05:12 And just, I thought it was really, really quite positive.
+
+01:05:16 How many, you know, next person this checks many of the boxes, what I have in mind.
+
+01:05:19 So I, it seems like it's landing well with the community.
+
+01:05:23 I hope that I hope that it continues to make good progress.
+
+01:05:26 Yeah.
+
+01:05:27 I think the biggest thing is like, there were definitely some folks going like, okay, but why are you writing everything at rust?
+
+01:05:33 Like, especially it's like, you know, we've spent a lot of effort not just making standards for Python packaging, but also like implementing those.
+
+01:05:40 So like you can pip install packaging and like right now and that is a library that could do things like unpack wheels and access the PyPI.
+
+01:05:49 Or I forget exactly which set, but like a lot of the tricky stuff, you know, parse Python metadata formats and you know, just all these different tricky things.
+
+01:05:59 And it's like, why are you re-implementing this?
+
+01:06:00 And also, does it like send the wrong message that like, you know, when we wanted to do something complicated, we thought Python wasn't good enough, we needed to switch to Rust.
+
+01:06:10 And I get where they're coming from.
+
+01:06:13 But, well, I mean, there's a few things.
+
+01:06:16 So one is just that I thought writing in Rust would be fun, you know, I'm not telling you you can't use Python for anything.
+
+01:06:22 Sure, I mean, let's take a step back and say, how would you propose writing that in Python?
+
+01:06:26 Well, so, exactly.
+
+01:06:28 No, it's possible, right? So like, so conda is written in Python, right? But, and the way, so it makes the distribution a little complicated because like when you, you get your conda.sh or mini conda, you know, like the installer, it has a Python package inside it, which it unpacks. So that uses it to run conda to install like another, another Python or whatever it is that you want to install with conda. But it sort of has one built in and you could do the same thing for something like Posey.
+
+01:06:53 use something like PyInstaller to build an executable.
+
+01:06:57 Exactly, yeah. But then up for PyInstaller effectively, right?
+
+01:07:00 Just kind of recursively do that. It's totally something one could do.
+
+01:07:08 So yeah, but the main reasons I'm not to go that way is one is, like I said, it just was more interesting to me. It's one thing. There's also, like, you know, every language has trade-offs, right? And the exact set of things you want from a package installer are kind of right in Rust's sweet spot and not Python's. So there's sort of four things that are really important for a tool like Posey. So there's the initial install. There's how quickly it starts up, because this is in between you and invoking Python or whatever it is you actually want to do. There's how quickly you can resolve packages and how quickly can it unpack packages. Those are the things that you care about. Those are the big load-bearing pieces.
+
+01:07:57 And those are kind of four of Python's weakest spots, honestly. So we just talked about the deployment part. You can make it work, but it's not as straightforward as some things. There'd be more possible moving parts, things that could go wrong. It's not the strongest argument, but it is there. For startup speed, just notoriously one of Python's weak spots because it has to do all those imports from scratch every time. Something tools like Mercurial have struggled with a lot.
+
+01:08:20 Lots of Python applications, doesn't matter. But for this particular one, that would be a challenge.
+
+01:08:26 And then resolving is big, heavy, like that MP complete, like just really gnarly, burning as as many CPUs as you can on complicated logical operations.
+
+01:08:38 Again, not Python's strongest point.
+
+01:08:41 It's not something you could use NumPy for, and it's not I/O bound or anything.
+
+01:08:45 >> Yeah. You could use something like Cython potentially, using no-gill operation.
+
+01:08:50 >> Yeah.
+
+01:08:51 >> But at the same time, then you're pretty far.
+
+01:08:52 >> You'd basically be writing it in C at that point.
+
+01:08:53 >> Yeah. You're pretty far from core Python.
+
+01:08:56 >> Yeah. Then finally, they just unpacking files is totally I/O bound and so simple, that it's actually a big advantage to be able to like, like, like, I always so fast these days, with like SSDs and everything, and VME drives, that like almost any overhead in the unpacking path actually is pretty substantial as a relative proportion. So like you add like one Python operation per, you know, you know, 100 kilobytes written, and that might suddenly be like a 2x slowdown, just because everything else is so fast that even that small amount of Python overhead could be large. And you know, in a tool like this, like people are really sensitive, like they really care if it takes 10 seconds versus one second to unpack those, the environment, like that's just a huge difference in usability. So I think it's just it's kind of really, like it just happens to be an exact combination of things that makes Rust pretty compelling, but you could do it the other way too. You know, I'm not making a, it isn't meant as a political point. Yeah, okay, got it.
+
+01:09:57 Yeah, Python is written in C. Yeah, sure. So it's a pipeline. But I mean, the core, you know, the core bit of it is written in C, right?
+
+01:10:07 No, but yeah, Pi Pi is written in Python, right? Hence the name.
+
+01:10:10 Yeah, that's true.
+
+01:10:12 Yeah, yeah. C, Python written in C. It says it right there.
+
+01:10:15 Yeah, exactly. Okay, interesting.
+
+01:10:18 I think we're probably out of time to dive much further in this, but...
+
+01:10:25 Sure. Yeah, I think we covered a lot.
+
+01:10:26 - I think we covered a lot. - I think we covered a lot.
+
+01:10:28 - I guess... - Anything else you want to add?
+
+01:10:30 Give me your thoughts on the future. Like, what do you think?
+
+01:10:32 Is the PEP gaining traction? Right?
+
+01:10:34 This is in draft mode. I don't know how much I emphasized at the beginning, but it is not an accepted thing yet, right?
+
+01:10:39 Yes, that is important to be clear on, though. Yeah.
+
+01:10:41 - Yeah? Where is it? - I wrote it.
+
+01:10:43 I posted it for feedback. That's as far as it's gotten.
+
+01:10:45 You know, there's no commitment on anyone's part to, like, that this is what's actually going to happen.
+
+01:10:51 That said, I'm pretty optimistic.
+
+01:10:54 Like I said, I got a little bit of pushback on the Posi part because of the rust and whatever.
+
+01:11:00 But I don't think I've gotten -- I can't think of really any pushback on the PEP 7.11, the actual PyBI part.
+
+01:11:07 Except people are like, well, why aren't you using Conda or something?
+
+01:11:10 Which fair question, but there's an answer.
+
+01:11:12 I don't think anyone -- it's not something that the people that you need -- whose agreement you need to get this accepted are the PyPI maintainers and Python packaging maintainers.
+
+01:11:23 And they are totally okay with like, "Conda's not the solution to everything," obviously.
+
+01:11:26 Right, sure.
+
+01:11:27 Well, how complicated would it be to fit Conda into this particular use case, right?
+
+01:11:32 Yeah, I mean, there's definitely room to collaborate better there.
+
+01:11:35 And I would love to see that in the future.
+
+01:11:37 But yeah, but my sense is that there's just really hasn't been a lot of like, people just seem pretty much like, "Yeah, this is cool." I guess actually, the biggest thing is that there's been some feedback from folks like the PyOxidizer folks saying, "Hey, we would like a bit more metadata so we can fully dissolve some of our other things we want to do." We want to be able to cross-compile for a given Python and we need to know a bit more about the target Python in order to do that. So that's just a very technical, it's like, "Yeah, okay, more stuff we should add and tweak." It's not against the idea.
+
+01:12:07 But the core idea...
+
+01:12:08 Evolving it, yeah.
+
+01:12:09 Yeah, I think the basic idea, generally people seem to be on board. I'm not going to make a commitment to what like Python.org and PyPI and all they're actually going to do. But I'm pretty hopeful. I think that there are definitely some of the folks involved in building the Python.org downloads right now are like, "Oh yeah, I'd build one of these if that was standard, sure." Sure.
+
+01:12:31 So it isn't all signed off on, but there seems to be a pretty reasonable consensus that this is a good direction that we're interested in moving in.
+
+01:12:39 Well, it sure caught my attention when I saw it. So I'm excited to see what it looks like.
+
+01:12:43 - Thank you for having me on to talk about it.
+
+01:12:46 - Yeah, you bet.
+
+01:12:47 No, let me just ask you real quick the final two questions.
+
+01:12:49 Since it has been five years since I asked them of you.
+
+01:12:52 - Okay.
+
+01:12:53 - Do you write some Python code?
+
+01:12:53 Do you work on this?
+
+01:12:55 What editor are you using these days?
+
+01:12:57 - I am using Emacs, same as I've been since I was 13.
+
+01:13:00 So that's not a political position.
+
+01:13:03 That's just, I'm stuck.
+
+01:13:05 - Like all your commands are coming in chords, right?
+
+01:13:08 Okay, got it.
+
+01:13:09 - You know, like that's it.
+
+01:13:11 - Excellent.
+
+01:13:12 And then notable PyPI package?
+
+01:13:14 Just some random PyPI package?
+
+01:13:16 Yeah, something you ran across, that's awesome.
+
+01:13:18 People should know about this.
+
+01:13:20 Could be very popular or not popular at all.
+
+01:13:22 Oh, man, shoot, I did not prepare for this.
+
+01:13:24 Should have.
+
+01:13:26 I mean, I don't-- like, there's some obvious--
+
+01:13:28 like, obviously, I like-- you know, Trio's been thinking about it a lot, but that's not an interesting answer for this.
+
+01:13:34 You mentioned Ruff earlier.
+
+01:13:36 I think you mentioned Ruff, but Ruff is pretty cool.
+
+01:13:38 Maybe I didn't mention Ruff, yeah, okay.
+
+01:13:40 Ruff is very awesome. If anyone doesn't know, Ruff is sort of, you know, Flake 8 and such re-implemented in Rust. So it's like a hundred times faster. Like you just like instantaneously lint all your code, which is very sweet.
+
+01:13:52 Is a selling point for Rust integrated with Python, right? Like another use case that looks pretty neat.
+
+01:13:58 Yeah. And I, you know, sort of as I'm digging into it, I'm really impressed at how they, those two, how well they fit together. People put a lot of work into like making that really smooth and having them collaborate well. Actually, something I've just been working on at work is we've been having trouble with -- so in an async library like Trio, you have lots of tasks running concurrently, but the scheduler only gets to switch from one task to another when one task explicitly lets go, like says, okay, I can stop here. We're using an await statement. So it's possible to write code where you accidentally don't do that for a long time and that task will just like hog all the runtime and block other tasks from running.
+
+01:14:38 And it'd be nice, it's hard to kind of tell when that's happening. And a similar thing could happen with the gill. So if you have like an extension library like, you know, PyTorch or something, and they forget to drop the gill before doing some big heavyweight operation, then it could just block any other threads from running. That's really awkward. We've been having trouble with that. And, but well, you know, like PySpy, that's another really cool package if anyone's seen it, is a Rust profiler for Python that can just sit outside your process and can tell you what it's doing. But also, it being in Rust and it's up on crates.io, I could just write a little program that imports PySpy and uses it as a library and tweak it so that instead of looking for where's code spending time, it detects, "Okay, is something hogging the gill or the run loop?" And give me the trace back, show me which code is doing that.
+
+01:15:31 And it's, again, really neat to be able to get that really deep insight into this Python stuff that we're still using it. It's still Python, but the Rust really is a great flavor that goes with it. Cool. PySpy. All right, people can check that out. That's sampling profiler for Python programs.
+
+01:15:49 Yes. Yeah. PySpy is really cool. Indeed. All right. Well...
+
+01:15:52 Okay, cool. Thanks for being here. If people are interested in the PEP, What should they do? I mean, I guess the post on discuss.python.org is the best place for feedback.
+
+01:16:05 It's also where I posted about Posey. So if you want to see the discussion or join in, that's a good place. If you want to help, then github.com/njsmith/posey is the repository.
+
+01:16:19 jump in, send PRs, file issues, whatever. Or just send me a, I don't know, what's the toot at me, I guess? The Mastodon version. I'm not really on Twitter these days, but yeah, njs@mastodon.social. And I'll see you. Cool. All right. Well, Nathaniel, thanks for being here.
+
+01:16:38 Thanks for this pep. It looks interesting. Yeah, thanks. It's great being here.
+
+01:16:42 Yeah, you bet. This has been another episode of Talk Python to Me.
+
+01:16:48 Thank you to our sponsors. Be sure to check out what they're offering. It really helps support the show. Take some stress out of your life. Get notified immediately about errors and performance issues in your web or mobile applications with Sentry. Just visit talkpython.fm/sentry and get started for free. And be sure to use the promo code talkpython, all one word.
+
+01:17:09 Want to level up your Python? We have one of the largest catalogs of Python video courses over at at Talk Python. Our content ranges from true beginners to deeply advanced topics like memory and async. And best of all, there's not a subscription in sight. Check it out for yourself at training.talkpython.fm. Be sure to subscribe to the show, open your favorite podcast app, and search for Python. We should be right at the top. You can also find the iTunes feed at /iTunes, the Google Play feed at /play, and the Direct RSS feed at /rss on talkpython.fm.
+
+01:17:42 We're live streaming most of our recordings these days.
+
+01:17:44 If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+01:17:52 This is your host, Michael Kennedy.
+
+01:17:54 Thanks so much for listening.
+
+01:17:55 I really appreciate it.
+
+01:17:56 Now get out there and write some Python code.
+
+01:17:58 [MUSIC]
+
