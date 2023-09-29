@@ -1,0 +1,5113 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:04.560
+Every year Python has a new major release. This year it's Python 3.12 and it'll come out on
+
+
+00:00:04.560 --> 00:00:11.280
+October 2nd, 2023. That's four days from when this episode was published. There is quite a process
+
+
+00:00:11.280 --> 00:00:16.640
+involved to test build and ship Python across the many platforms and channels. We have Seth Michael
+
+
+00:00:16.640 --> 00:00:21.760
+Larson here to give us a detailed rundown on exactly what is involved in releasing CPython.
+
+
+00:00:22.400 --> 00:00:27.360
+This is Talk Python to Me, episode 431, recorded September 28th, 2023.
+
+
+00:00:27.360 --> 00:00:44.400
+Welcome to Talk Python to Me, a weekly podcast on Python. This is your host, Michael Kennedy.
+
+
+00:00:44.400 --> 00:00:49.600
+Follow me on Mastodon, where I'm @mkennedy, and follow the podcast using @talkpython,
+
+
+00:00:49.600 --> 00:00:55.600
+both on fosstodon.org. Be careful with impersonating accounts on other instances, there are many.
+
+
+00:00:55.600 --> 00:01:00.320
+Keep up with the show and listen to over seven years of past episodes at talkpython.fm.
+
+
+00:01:00.320 --> 00:01:06.160
+We've started streaming most of our episodes live on YouTube. Subscribe to our YouTube channel over
+
+
+00:01:06.160 --> 00:01:11.920
+at talkpython.fm/youtube to get notified about upcoming shows and be part of that episode.
+
+
+00:01:11.920 --> 00:01:19.040
+This episode is brought to you by JetBrains, who encourage you to get work done with PyCharm.
+
+
+00:01:19.040 --> 00:01:25.520
+Download your free trial of PyCharm professional at talkbython.fm/done-with-pycharm.
+
+
+00:01:25.520 --> 00:01:31.280
+Hey there, before we jump into talking about building CPython, I have a new course to tell
+
+
+00:01:31.280 --> 00:01:37.600
+you about HTML plus Django full web apps hold the JavaScript. This is an excellent new Django
+
+
+00:01:37.600 --> 00:01:42.240
+course written by Christopher Trudeau. In just a few hours, you'll learn how to make your app
+
+
+00:01:42.240 --> 00:01:46.320
+much more interactive in the code even a little cleaner than pure Django.
+
+
+00:01:47.360 --> 00:01:52.880
+You may be familiar with our HTMX plus Flask course I released a while ago, and this one is
+
+
+00:01:52.880 --> 00:02:00.560
+its Django sister course. And it is out now at talkpython.fm/htmx-django. The link is in your
+
+
+00:02:00.560 --> 00:02:05.440
+show notes. If you Django and have been wanting to adopt HTMX, you should definitely give this
+
+
+00:02:05.440 --> 00:02:10.480
+course a look. And a heartfelt thank you to everyone who has purchased one of our courses
+
+
+00:02:10.480 --> 00:02:15.360
+or library bundles. It truly makes this show possible. Now on to that interview.
+
+
+00:02:16.400 --> 00:02:16.900
+Hey all.
+
+
+00:02:16.900 --> 00:02:17.400
+Hey Seth.
+
+
+00:02:17.400 --> 00:02:18.300
+Hello.
+
+
+00:02:18.300 --> 00:02:20.740
+Awesome to have you here on the show.
+
+
+00:02:20.740 --> 00:02:21.140
+Yeah.
+
+
+00:02:21.140 --> 00:02:21.940
+Thanks for having me.
+
+
+00:02:21.940 --> 00:02:22.700
+Absolutely.
+
+
+00:02:22.700 --> 00:02:28.460
+I'm looking forward to talking about the details, the steps of releasing CPython.
+
+
+00:02:28.460 --> 00:02:33.320
+And for those of you who have not been watching and paying attention by the
+
+
+00:02:33.320 --> 00:02:35.380
+time this comes out, it'll probably have already happened.
+
+
+00:02:35.380 --> 00:02:38.720
+I'm sure it's already happened by the time this video is up,
+
+
+00:02:38.720 --> 00:02:40.520
+though, it's not quite happening.
+
+
+00:02:40.520 --> 00:02:44.660
+So as of the recording next Monday, this whole process that we're going to
+
+
+00:02:44.660 --> 00:02:46.620
+going to talk about goes into action, right?
+
+
+00:02:46.620 --> 00:02:48.340
+Releasing Python 3.11.
+
+
+00:02:48.340 --> 00:02:48.820
+Yeah.
+
+
+00:02:48.820 --> 00:02:50.340
+This, or not 3.12.
+
+
+00:02:50.340 --> 00:02:51.460
+This will have happened.
+
+
+00:02:51.460 --> 00:02:52.460
+3.12.
+
+
+00:02:52.460 --> 00:02:53.940
+I got to get used to it.
+
+
+00:02:53.940 --> 00:02:58.020
+It's like the, you know, in January, all you always write the, the, the year
+
+
+00:02:58.020 --> 00:03:04.340
+wrong out, so 3.12, the new version, the still faster, faster C Python 3.12
+
+
+00:03:04.340 --> 00:03:07.980
+with lots of cool features is going to be out and how does that happen?
+
+
+00:03:07.980 --> 00:03:08.300
+Right?
+
+
+00:03:08.300 --> 00:03:12.140
+There's, there's a lot going on behind the scenes and you wrote a really cool
+
+
+00:03:12.140 --> 00:03:16.900
+blog post called visualizing the CPython release process or something like that.
+
+
+00:03:16.900 --> 00:03:20.780
+I'm getting off memory and has a great diagram with a whole bunch of boxes.
+
+
+00:03:20.780 --> 00:03:22.860
+And so we're going to go through and kind of just talk about how
+
+
+00:03:22.860 --> 00:03:26.360
+that happens and so on, but before we get into it, maybe a quick intro
+
+
+00:03:26.360 --> 00:03:27.860
+for folks who don't know you yet.
+
+
+00:03:27.860 --> 00:03:28.420
+Yeah.
+
+
+00:03:28.420 --> 00:03:32.700
+So I'm, I'm Seth Larson, online everywhere.
+
+
+00:03:32.700 --> 00:03:34.020
+I am Seth M Larson.
+
+
+00:03:34.020 --> 00:03:34.740
+That's my handle.
+
+
+00:03:34.740 --> 00:03:38.860
+And I am the security developer in residence at the Python software
+
+
+00:03:38.860 --> 00:03:41.180
+foundation, the inaugural security developer in residence.
+
+
+00:03:41.180 --> 00:03:43.380
+but hopeful for more, obviously.
+
+
+00:03:43.380 --> 00:03:47.580
+But yeah, this whole role is funded through
+
+
+00:03:47.580 --> 00:03:51.300
+the OpenSSF Alpha Omega project specifically,
+
+
+00:03:51.300 --> 00:03:53.840
+and it's kind of a project that's focusing on
+
+
+00:03:53.840 --> 00:03:56.340
+Alpha being really, really important projects
+
+
+00:03:56.340 --> 00:03:57.780
+that everyone agrees, yep,
+
+
+00:03:57.780 --> 00:03:59.460
+that's a really important project to secure.
+
+
+00:03:59.460 --> 00:04:01.840
+So among them is Python and PyPI.
+
+
+00:04:01.840 --> 00:04:04.440
+And then Omega is kind of like the long tail, right?
+
+
+00:04:04.440 --> 00:04:05.980
+Like all the other projects,
+
+
+00:04:05.980 --> 00:04:07.540
+'cause there's open source is huge,
+
+
+00:04:07.540 --> 00:04:09.300
+there's millions of different projects.
+
+
+00:04:09.300 --> 00:04:11.040
+How can we secure those?
+
+
+00:04:11.040 --> 00:04:13.400
+And so, yeah, this role exists because of them.
+
+
+00:04:13.400 --> 00:04:14.480
+So I'm very thankful.
+
+
+00:04:14.480 --> 00:04:16.760
+And it's mostly-- - As are we all, right?
+
+
+00:04:16.760 --> 00:04:17.980
+Speaking for the community.
+
+
+00:04:17.980 --> 00:04:19.420
+This has been something-- - Yeah.
+
+
+00:04:19.420 --> 00:04:21.160
+- There's been a lot of places where it's like,
+
+
+00:04:21.160 --> 00:04:22.760
+well, why doesn't someone take care of this?
+
+
+00:04:22.760 --> 00:04:25.440
+Like, well, there's nobody's whose sole job it is.
+
+
+00:04:25.440 --> 00:04:28.240
+But like Python has been slowly rolling in these new roles,
+
+
+00:04:28.240 --> 00:04:29.080
+which is fantastic.
+
+
+00:04:29.080 --> 00:04:31.740
+Like Lukas Lange at the developer in residence,
+
+
+00:04:31.740 --> 00:04:33.560
+you're the security developer in residence.
+
+
+00:04:33.560 --> 00:04:37.280
+We have Mike Fiedler, who I spoke to about on PyPI security.
+
+
+00:04:37.280 --> 00:04:40.360
+Like there's people, there's developers working on stuff.
+
+
+00:04:40.360 --> 00:04:40.860
+awesome.
+
+
+00:04:40.860 --> 00:04:44.480
+There's something to be said, like having having someone working on stuff full
+
+
+00:04:44.480 --> 00:04:46.980
+time, like you can, you can get a lot done.
+
+
+00:04:46.980 --> 00:04:48.560
+It's, it's, it's quite nice.
+
+
+00:04:48.560 --> 00:04:52.760
+Like, cause we're so used to, you know, how, how the speed of open source, right.
+
+
+00:04:52.760 --> 00:04:55.640
+Which is not, I guess when someone says the speed of open source, they don't
+
+
+00:04:55.640 --> 00:04:58.560
+immediately think, oh yeah, that's going to be, that's going to be fast and snappy
+
+
+00:04:58.560 --> 00:04:59.960
+because people have lives.
+
+
+00:04:59.960 --> 00:05:00.320
+Yeah.
+
+
+00:05:00.320 --> 00:05:04.160
+Well, sometimes it is when, when things are brand new, they, they, they can have a
+
+
+00:05:04.160 --> 00:05:05.120
+lot of momentum.
+
+
+00:05:05.120 --> 00:05:09.440
+But I know my personal view is like on all these software projects, there's these
+
+
+00:05:09.440 --> 00:05:12.660
+little gnarly edges that is just as fun for no one.
+
+
+00:05:12.660 --> 00:05:13.160
+Right.
+
+
+00:05:13.160 --> 00:05:16.380
+And like, I want to add this new feature or I want to add async to this
+
+
+00:05:16.380 --> 00:05:20.060
+thing so people can do this and like, you can get so inspired, even if it's
+
+
+00:05:20.060 --> 00:05:22.880
+not your job and it's just your project and really go on it, but like, you
+
+
+00:05:22.880 --> 00:05:28.120
+know, really polishing out that little bit of documentation or, or updating
+
+
+00:05:28.120 --> 00:05:31.880
+that detour, like it's, it's all the, the fine polish, I guess, that I think
+
+
+00:05:31.880 --> 00:05:34.920
+you all are bringing to Python, which is awesome.
+
+
+00:05:34.920 --> 00:05:35.320
+Yeah.
+
+
+00:05:35.320 --> 00:05:39.960
+there's tons of work that's like, it really does need that amount of time
+
+
+00:05:39.960 --> 00:05:42.520
+investment and like a sustained time investment.
+
+
+00:05:42.520 --> 00:05:46.120
+So like when you're working with external groups or like, you know,
+
+
+00:05:46.120 --> 00:05:49.840
+developing processes and stuff like that, like you just need, you just need to be
+
+
+00:05:49.840 --> 00:05:52.000
+there a lot more than, you know, weekends.
+
+
+00:05:52.000 --> 00:05:55.560
+So it's good to have that full time presence.
+
+
+00:05:55.560 --> 00:05:56.120
+Yeah.
+
+
+00:05:56.120 --> 00:05:56.800
+Yeah.
+
+
+00:05:56.800 --> 00:06:00.800
+I think it is too, although it's absolutely mind blowing how much stuff gets
+
+
+00:06:00.800 --> 00:06:02.800
+done in traditional pure open source.
+
+
+00:06:02.800 --> 00:06:03.880
+It really is.
+
+
+00:06:03.920 --> 00:06:06.360
+Honestly, it gives a whole new perspective to it, right?
+
+
+00:06:06.360 --> 00:06:09.480
+-It's like, okay, you know, all of this is happening, -Yeah.
+
+
+00:06:09.480 --> 00:06:14.600
+but, you know, almost all of the people that I interact with on a day-to-day basis
+
+
+00:06:14.600 --> 00:06:15.880
+are volunteers.
+
+
+00:06:15.880 --> 00:06:19.880
+And so, like, I kind of wrote about this a little bit in my opening
+
+
+00:06:19.880 --> 00:06:22.960
+when I announced myself as a security developer in Resonance, but
+
+
+00:06:22.960 --> 00:06:25.760
+it's like, you need to, you can't have
+
+
+00:06:25.760 --> 00:06:28.960
+expectations and, like, assign people work, you know what I mean?
+
+
+00:06:28.960 --> 00:06:30.960
+Like, this is not a traditional work environment
+
+
+00:06:30.960 --> 00:06:32.960
+where you can just tell people what to do
+
+
+00:06:32.960 --> 00:06:36.560
+And, you know, it's a certain way of working.
+
+
+00:06:36.560 --> 00:06:40.060
+And I'm used to it because I am an open source maintainer myself.
+
+
+00:06:40.060 --> 00:06:43.360
+So it makes a lot of sense to me and I feel very comfortable with it.
+
+
+00:06:43.360 --> 00:06:46.760
+But it's very different than a regular security developer job would be.
+
+
+00:06:46.760 --> 00:06:48.760
+Would you say fewer TPS reports?
+
+
+00:06:48.760 --> 00:06:51.960
+Yeah, a few fewer. Yeah, yeah.
+
+
+00:06:51.960 --> 00:06:53.260
+Just a couple fewer.
+
+
+00:06:53.260 --> 00:06:57.360
+Hey, since you brought it up, maybe we'll come back to this if we have time at the end.
+
+
+00:06:57.360 --> 00:07:01.160
+But, you know, you've got some pretty notable projects that you're working on here.
+
+
+00:07:01.160 --> 00:07:03.960
+Like give a quick shout out to some of your open source work that predates.
+
+
+00:07:03.960 --> 00:07:04.600
+Yeah.
+
+
+00:07:04.600 --> 00:07:09.240
+So I am the lead maintainer of your lib three, which is one of the most downloaded
+
+
+00:07:09.240 --> 00:07:11.000
+Python packages on PyPI.
+
+
+00:07:11.000 --> 00:07:13.080
+I also help maintain requests.
+
+
+00:07:13.080 --> 00:07:15.720
+It's a user of your lib three.
+
+
+00:07:15.720 --> 00:07:19.720
+And then in addition to that, I have a library, which I quite love, which is called trustor,
+
+
+00:07:19.720 --> 00:07:24.600
+which is being adopted by a lot of package managers right now, like pip and conda and
+
+
+00:07:24.600 --> 00:07:32.660
+and PDM, which allows those packages to use system certificates as opposed to something
+
+
+00:07:32.660 --> 00:07:37.200
+like certify, so that you can take advantage of all of the benefits that you get for using
+
+
+00:07:37.200 --> 00:07:42.700
+a system trust store for HTTPS, as opposed to like a static bundle of certificates, because
+
+
+00:07:42.700 --> 00:07:47.180
+operating systems are actually constantly checking, updating all of these things.
+
+
+00:07:47.180 --> 00:07:48.180
+It's just a little bit better.
+
+
+00:07:48.180 --> 00:07:52.840
+>> Some certificate store or some certificate authority turns out to be shady and they get
+
+
+00:07:52.840 --> 00:07:53.840
+revoked and...
+
+
+00:07:53.840 --> 00:07:58.400
+Yeah, or just not have the best practices.
+
+
+00:07:58.400 --> 00:08:01.200
+And so, yeah, just like, okay, we're going to pull that one.
+
+
+00:08:01.200 --> 00:08:03.200
+But pulling a certain...
+
+
+00:08:03.200 --> 00:08:05.000
+Yeah, they even get stolen, right?
+
+
+00:08:05.000 --> 00:08:07.000
+Sometimes these certificates get stolen.
+
+
+00:08:07.000 --> 00:08:10.840
+They get stolen, you know, there's all sorts of things that can go wrong.
+
+
+00:08:10.840 --> 00:08:12.840
+Thankfully, it doesn't go wrong very often.
+
+
+00:08:12.840 --> 00:08:14.920
+Otherwise, it would be a lot bigger of a problem.
+
+
+00:08:14.920 --> 00:08:17.120
+But yeah, it does happen every once in a while.
+
+
+00:08:17.120 --> 00:08:17.920
+Yeah, that's cool.
+
+
+00:08:17.920 --> 00:08:19.920
+Yeah, and you were on Python Bytes,
+
+
+00:08:19.920 --> 00:08:23.440
+my other podcast I do with Brian, to talk about Trust Store, which is cool.
+
+
+00:08:23.440 --> 00:08:24.440
+All right, but back to this.
+
+
+00:08:24.440 --> 00:08:29.000
+So tell us a bit about this developer, security developer in residence role.
+
+
+00:08:29.000 --> 00:08:33.120
+Like people were like, Oh, this maybe they've heard of it or is maybe even new to them.
+
+
+00:08:33.120 --> 00:08:37.320
+But like, what is your, what is your job here in the PSF space?
+
+
+00:08:37.320 --> 00:08:44.880
+Yeah, it's, it's, it's kind of funny talking about my role too, because people see security through so many different lenses.
+
+
+00:08:44.880 --> 00:08:48.920
+And this is even like outside of talking to people online that are in the open source space.
+
+
+00:08:49.120 --> 00:08:54.640
+So whenever I talk about this job, people will say, Oh, so you do it security for the PSF? I'm
+
+
+00:08:54.640 --> 00:09:00.160
+like, Well, no, I don't do that. And then they'll say, Oh, so you secure? Yeah, right? I'm in.
+
+
+00:09:00.160 --> 00:09:05.200
+Right? No, no, no. So I don't do that. I don't do it security for the PSF. And then they the
+
+
+00:09:05.200 --> 00:09:12.080
+next question they usually ask is like, Oh, so you make it so that Python is more secure, like the
+
+
+00:09:12.080 --> 00:09:17.680
+code of Python is more secure. And I'm like, not really, honestly, I don't do that either.
+
+
+00:09:17.680 --> 00:09:25.040
+And what I really do is try my best to make it so that bad stuff doesn't happen to Python users.
+
+
+00:09:25.040 --> 00:09:30.400
+And so, you know, obviously those things are important, like securing Python, the actual code
+
+
+00:09:30.400 --> 00:09:36.160
+itself. But on, like, the scale factor, maybe those are a little bit less important than some
+
+
+00:09:36.160 --> 00:09:41.920
+things like making sure that when you download something from Python.org, it is the correct
+
+
+00:09:41.920 --> 00:09:48.080
+thing. Making sure that when a release is happening for Python, nothing can subvert
+
+
+00:09:48.080 --> 00:09:52.160
+that release and get injected in and then distributed to everyone. And then it goes
+
+
+00:09:52.160 --> 00:09:57.120
+beyond Python when you start thinking about the packaging space. So making sure that hip
+
+
+00:09:57.120 --> 00:10:04.240
+release process is good. Making sure that all of these tools and stuff that are using all of these
+
+
+00:10:04.240 --> 00:10:11.040
+binary libraries, how can you be sure that those libraries that are bundled along with them don't
+
+
+00:10:11.040 --> 00:10:14.900
+don't have vulnerabilities. And then a lot of things around process. So vulnerability
+
+
+00:10:14.900 --> 00:10:19.880
+management and making sure that vulnerabilities that are discovered in Python and reported
+
+
+00:10:19.880 --> 00:10:24.600
+to us, they actually get to the end of the process where they're fixed and released.
+
+
+00:10:24.600 --> 00:10:28.440
+There's just a whole bunch of things like that where it's more of a scale and safety
+
+
+00:10:28.440 --> 00:10:33.980
+and making sure that my effort goes towards things that are going to keep on churning
+
+
+00:10:33.980 --> 00:10:39.920
+as opposed to things that are like spot fixes. Because spot fixes, they're important, but
+
+
+00:10:39.920 --> 00:10:45.320
+they don't have the scale and they don't have that, like, keep on giving you the value aspect
+
+
+00:10:45.320 --> 00:10:46.320
+of them.
+
+
+00:10:46.320 --> 00:10:47.320
+Yeah.
+
+
+00:10:47.320 --> 00:10:51.740
+And the consequence of a lot of what you described sounds like supply chain type issues.
+
+
+00:10:51.740 --> 00:10:54.180
+The consequence of that is so bad.
+
+
+00:10:54.180 --> 00:10:59.140
+It doesn't matter how patched your computer is or how good your firewall is.
+
+
+00:10:59.140 --> 00:11:02.380
+If CPython itself ships with a virus, right?
+
+
+00:11:02.380 --> 00:11:03.380
+Right.
+
+
+00:11:03.380 --> 00:11:04.380
+Yeah.
+
+
+00:11:04.380 --> 00:11:05.380
+Or somebody snuck it in right at the builds.
+
+
+00:11:05.380 --> 00:11:06.380
+Yeah.
+
+
+00:11:06.380 --> 00:11:07.380
+Yeah.
+
+
+00:11:07.380 --> 00:11:08.380
+Right.
+
+
+00:11:08.380 --> 00:11:09.380
+Right.
+
+
+00:11:09.380 --> 00:11:10.220
+Nobody wants that.
+
+
+00:11:10.220 --> 00:11:11.940
+Well, almost nobody wants that.
+
+
+00:11:11.940 --> 00:11:13.920
+- Very few people want this, so.
+
+
+00:11:13.920 --> 00:11:14.760
+- Those are not good people.
+
+
+00:11:14.760 --> 00:11:15.600
+We don't want them to want this.
+
+
+00:11:15.600 --> 00:11:18.620
+- Yeah, we don't take them into consideration
+
+
+00:11:18.620 --> 00:11:20.460
+for their use cases.
+
+
+00:11:20.460 --> 00:11:21.380
+- We sure don't.
+
+
+00:11:21.380 --> 00:11:22.220
+Awesome.
+
+
+00:11:22.220 --> 00:11:24.400
+And let's see, I believe you're on,
+
+
+00:11:24.400 --> 00:11:26.120
+well, when I read the article, you're on week nine.
+
+
+00:11:26.120 --> 00:11:27.340
+So you're on week 10.
+
+
+00:11:27.340 --> 00:11:28.820
+Is that where we are?
+
+
+00:11:28.820 --> 00:11:30.500
+- I think I'm on week 12 at this point.
+
+
+00:11:30.500 --> 00:11:31.660
+- Oh man, time flies.
+
+
+00:11:31.660 --> 00:11:32.500
+- Yeah, I know.
+
+
+00:11:32.500 --> 00:11:35.280
+I'm actually drafting up like a quarterly review
+
+
+00:11:35.280 --> 00:11:37.780
+and it's a big thing, so yeah.
+
+
+00:11:37.780 --> 00:11:38.620
+- Okay.
+
+
+00:11:38.620 --> 00:11:41.560
+A quick question from the audience here on the live stream, you know,
+
+
+00:11:41.560 --> 00:11:45.720
+Louis asks, is there a visibility or will there be a public visibility
+
+
+00:11:45.720 --> 00:11:47.620
+for CVEs in packages?
+
+
+00:11:47.620 --> 00:11:49.420
+That is an excellent question.
+
+
+00:11:49.420 --> 00:11:50.380
+It is a good question.
+
+
+00:11:50.380 --> 00:11:54.860
+And I bring this up because didn't the PSF just get certified as like a CVE
+
+
+00:11:54.860 --> 00:11:57.460
+authority or whatever that is like ability to create CVEs.
+
+
+00:11:57.460 --> 00:11:58.100
+I don't know.
+
+
+00:11:58.100 --> 00:12:00.300
+Yeah, I can, I can talk so much about this, right?
+
+
+00:12:00.300 --> 00:12:03.520
+So there, there's a whole bunch of stuff happening in that space.
+
+
+00:12:03.520 --> 00:12:07.360
+So the, the, I'll start off with stuff that I did not personally do, but
+
+
+00:12:07.360 --> 00:12:08.560
+I'm helping maintain now.
+
+
+00:12:08.560 --> 00:12:13.260
+which is there is an advisory database called,
+
+
+00:12:13.260 --> 00:12:18.260
+if you go on GitHub, it's github.com/pypa/advisorydatabase
+
+
+00:12:18.260 --> 00:12:22.380
+with a dash in between advisory and database.
+
+
+00:12:22.380 --> 00:12:27.260
+And that database is essentially trying to categorize
+
+
+00:12:27.260 --> 00:12:30.700
+all of the CVEs and what versions they affect
+
+
+00:12:30.700 --> 00:12:33.980
+for every single package on the Python package index,
+
+
+00:12:33.980 --> 00:12:35.720
+which is an impossible task,
+
+
+00:12:35.720 --> 00:12:38.220
+but so we're trying our best there.
+
+
+00:12:38.220 --> 00:12:40.620
+But yeah, so one of the packages, no problem.
+
+
+00:12:40.620 --> 00:12:43.580
+No problem, right? Like that's a manual task right there.
+
+
+00:12:43.580 --> 00:12:46.380
+Yeah, no. So what this actually does is for the bulk of it,
+
+
+00:12:46.380 --> 00:12:52.140
+what it will do is it'll go out and it'll pull the CVE feed from NBD and Miter,
+
+
+00:12:52.140 --> 00:12:59.900
+and it will parse it and try to find references to Python packages and versions inside of CVEs.
+
+
+00:12:59.900 --> 00:13:02.140
+So obviously that's sometimes there's false positives,
+
+
+00:13:02.140 --> 00:13:05.020
+but a lot of the times there's just, it just works out okay.
+
+
+00:13:05.020 --> 00:13:07.020
+And there's a little bit of triage involved.
+
+
+00:13:07.020 --> 00:13:09.660
+There's a little bit of manual submission of this too.
+
+
+00:13:09.660 --> 00:13:12.860
+But yeah, so tools like pip audit,
+
+
+00:13:12.860 --> 00:13:16.060
+which is a tool that I love so much,
+
+
+00:13:16.060 --> 00:13:19.340
+uses this database in addition to other scanning tools.
+
+
+00:13:19.340 --> 00:13:22.140
+Like any scanning tool can use this database.
+
+
+00:13:22.140 --> 00:13:27.180
+But yeah, this is the canonical location for vulnerabilities affecting Python packages.
+
+
+00:13:27.180 --> 00:13:29.180
+So for Python itself,
+
+
+00:13:29.180 --> 00:13:32.380
+the Python Software Foundation just recently, like
+
+
+00:13:32.380 --> 00:13:40.060
+a few weeks ago announced that we are now a CVE numbering authority, which means that we are,
+
+
+00:13:40.060 --> 00:13:44.940
+we kind of have like a scope of just Python and pip right now. So those are the only two projects
+
+
+00:13:44.940 --> 00:13:50.620
+that we're emitting CVEs for. And what that means we can do is it means that people have to submit
+
+
+00:13:50.620 --> 00:13:55.420
+reports to us, which is good, because then they can't submit them to other places and get CVS
+
+
+00:13:55.420 --> 00:13:59.260
+that way can be kind of frustrating, because in the past, sometimes that would happen. And then
+
+
+00:13:59.260 --> 00:14:02.260
+And we wouldn't know about the vulnerability until it got published as a CVE.
+
+
+00:14:02.260 --> 00:14:03.260
+And we'd be like, what just happened?
+
+
+00:14:03.260 --> 00:14:04.260
+>> We have a CVE?
+
+
+00:14:04.260 --> 00:14:05.260
+Like, what?
+
+
+00:14:05.260 --> 00:14:06.260
+>> Yeah, right.
+
+
+00:14:06.260 --> 00:14:09.460
+>> Like, one of the big deals is you're supposed to be told, in an ideal world, you're supposed
+
+
+00:14:09.460 --> 00:14:13.860
+to be given like a, come knock on the back door, like, that WebP code.
+
+
+00:14:13.860 --> 00:14:16.020
+We need to talk about the WebP code before.
+
+
+00:14:16.020 --> 00:14:17.020
+>> Yeah.
+
+
+00:14:17.020 --> 00:14:18.020
+Oh, gosh.
+
+
+00:14:18.020 --> 00:14:19.020
+Don't get me started on WebP.
+
+
+00:14:19.020 --> 00:14:22.100
+Don't get me started on WebP.
+
+
+00:14:22.100 --> 00:14:26.460
+>> This portion of Talk Python to Me is brought to you by JetBrains and PyCharm.
+
+
+00:14:26.460 --> 00:14:30.460
+Are you a data scientist or a web developer looking to take your projects to the next
+
+
+00:14:30.460 --> 00:14:31.460
+level?
+
+
+00:14:31.460 --> 00:14:33.060
+Well, I have the perfect tool for you.
+
+
+00:14:33.060 --> 00:14:34.060
+PyCharm.
+
+
+00:14:34.060 --> 00:14:38.340
+PyCharm is a powerful integrated development environment that empowers developers and data
+
+
+00:14:38.340 --> 00:14:42.860
+scientists like us to write clean and efficient code with ease.
+
+
+00:14:42.860 --> 00:14:48.140
+Whether you're analyzing complex data sets or building dynamic web applications, PyCharm
+
+
+00:14:48.140 --> 00:14:49.520
+has got you covered.
+
+
+00:14:49.520 --> 00:14:53.780
+With its intuitive interface and robust features, you can boost your productivity and bring
+
+
+00:14:53.780 --> 00:14:56.580
+your ideas to life faster than ever before.
+
+
+00:14:56.580 --> 00:15:01.020
+For data scientists, PyCharm offers seamless integration with popular libraries like NumPy,
+
+
+00:15:01.020 --> 00:15:02.900
+Pandas, and Matplotlib.
+
+
+00:15:02.900 --> 00:15:07.940
+You can explore, visualize, and manipulate data effortlessly, unlocking valuable insights
+
+
+00:15:07.940 --> 00:15:10.080
+with just a few lines of code.
+
+
+00:15:10.080 --> 00:15:14.660
+And for us web developers, PyCharm provides a rich set of tools to streamline your workflow.
+
+
+00:15:14.660 --> 00:15:18.700
+From intelligent code completion to advanced debugging capabilities, PyCharm helps you
+
+
+00:15:18.700 --> 00:15:23.820
+you write clean, scalable code that powers stunning web applications.
+
+
+00:15:23.820 --> 00:15:28.020
+Plus, PyCharm's support for popular frameworks like Django, FastAPI, and
+
+
+00:15:28.020 --> 00:15:32.060
+React make it a breeze to build and deploy your web projects.
+
+
+00:15:32.060 --> 00:15:34.780
+It's time to say goodbye to tedious configuration and
+
+
+00:15:34.780 --> 00:15:36.860
+hello to rapid development.
+
+
+00:15:36.860 --> 00:15:38.300
+But wait, there's more.
+
+
+00:15:38.300 --> 00:15:42.060
+With PyCharm, you get even more advanced features like remote development,
+
+
+00:15:42.060 --> 00:15:44.140
+database integration, and version control,
+
+
+00:15:44.140 --> 00:15:47.100
+ensuring your projects stay organized and secure.
+
+
+00:15:47.100 --> 00:15:48.820
+So whether you're diving into data science
+
+
+00:15:48.820 --> 00:15:50.460
+or shaping the future of the web,
+
+
+00:15:50.460 --> 00:15:52.360
+PyCharm is your go-to tool.
+
+
+00:15:52.360 --> 00:15:54.240
+Join me and try PyCharm today.
+
+
+00:15:54.240 --> 00:15:59.240
+Just visit talkpython.fm/done-with-pycharm,
+
+
+00:15:59.240 --> 00:16:00.900
+links in your show notes,
+
+
+00:16:00.900 --> 00:16:03.340
+and experience the power of PyCharm firsthand
+
+
+00:16:03.340 --> 00:16:05.500
+for three months free.
+
+
+00:16:05.500 --> 00:16:07.960
+PyCharm, it's how I get work done.
+
+
+00:16:07.960 --> 00:16:12.700
+- The real, like the ideal process
+
+
+00:16:12.700 --> 00:16:16.660
+is someone would Google like Python and security
+
+
+00:16:16.660 --> 00:16:18.700
+or like Python and report a vulnerability.
+
+
+00:16:18.700 --> 00:16:20.860
+And then they would find these like really lovely
+
+
+00:16:20.860 --> 00:16:23.740
+instructions that someone else wrote up to say,
+
+
+00:16:23.740 --> 00:16:26.100
+just send an email to security@python.org
+
+
+00:16:26.100 --> 00:16:27.340
+with whatever information you have.
+
+
+00:16:27.340 --> 00:16:28.900
+And then we triage that.
+
+
+00:16:28.900 --> 00:16:30.680
+And if we decided it's a vulnerability,
+
+
+00:16:30.680 --> 00:16:32.940
+we would ask for a CVE on your behalf
+
+
+00:16:32.940 --> 00:16:36.100
+and like credit you and all this stuff and then fix it.
+
+
+00:16:36.100 --> 00:16:39.260
+And then the release and publication of the CVE
+
+
+00:16:39.260 --> 00:16:40.540
+would happen at the same time.
+
+
+00:16:40.540 --> 00:16:43.560
+So that's what we call coordinated vulnerability disclosure.
+
+
+00:16:43.560 --> 00:16:45.580
+And so instead of like, oh, there's a vulnerability,
+
+
+00:16:45.580 --> 00:16:47.500
+but there's no fix available for that vulnerability.
+
+
+00:16:47.500 --> 00:16:49.460
+Like that's what you want to avoid
+
+
+00:16:49.460 --> 00:16:52.380
+because it causes panic.
+
+
+00:16:52.380 --> 00:16:55.140
+And in theory, it could cause exposure, right?
+
+
+00:16:55.140 --> 00:16:58.700
+Where there's some dwell time in between when people,
+
+
+00:16:58.700 --> 00:17:01.140
+or it doesn't minimize the dwell time
+
+
+00:17:01.140 --> 00:17:02.920
+between when people are able to patch
+
+
+00:17:02.920 --> 00:17:05.940
+and when the vulnerability is known to potential attackers.
+
+
+00:17:05.940 --> 00:17:07.500
+- Right, there's already a latency
+
+
+00:17:07.500 --> 00:17:10.420
+from when it's announced to somebody actually fixing it.
+
+
+00:17:10.420 --> 00:17:11.580
+But if when you hear it,
+
+
+00:17:11.580 --> 00:17:13.460
+you can't actually fix it for two more weeks
+
+
+00:17:13.460 --> 00:17:14.280
+'cause it's not released.
+
+
+00:17:14.280 --> 00:17:20.120
+That just gives people two weeks to try to dissect like what exactly do they mean by there's this image problem?
+
+
+00:17:20.120 --> 00:17:22.760
+Exactly. Yeah. Oh, yeah. Yeah
+
+
+00:17:22.760 --> 00:17:30.280
+We're gonna start talking about libwebp actually. Yeah, the no, i'm just using it like it's the most recent example because last night there was a
+
+
+00:17:30.280 --> 00:17:35.160
+And really relevant to cvs because there was some drama that apple patched
+
+
+00:17:35.160 --> 00:17:37.560
+Some of their code when google announced it
+
+
+00:17:37.560 --> 00:17:39.480
+It looked like it was only applied to chrome
+
+
+00:17:39.480 --> 00:17:44.120
+but it actually applied to anything that used WebP, which looking at the updates is like everything
+
+
+00:17:44.120 --> 00:17:49.560
+on my computer needs to be updated because of it. You know, like that, that mismatch was like
+
+
+00:17:49.560 --> 00:17:56.280
+caused a lot of drama. I definitely agree. Yeah. There was like a week of time in between,
+
+
+00:17:56.280 --> 00:18:01.560
+when that CVE just mentioned Chrome and Apple. And then when it actually ended up mentioning
+
+
+00:18:01.560 --> 00:18:06.120
+LibWebP and then right when it mentioned LibWebP, I'm like, Oh, I know a lot of Python packages use
+
+
+00:18:06.120 --> 00:18:08.760
+And so I then went out and go and talk to those people.
+
+
+00:18:08.760 --> 00:18:09.060
+Okay.
+
+
+00:18:09.060 --> 00:18:10.400
+And they fixed those things now.
+
+
+00:18:10.400 --> 00:18:11.600
+So, yeah, that's great.
+
+
+00:18:11.600 --> 00:18:16.400
+Another good reason to stay on top of dependency management and stuff, right?
+
+
+00:18:16.400 --> 00:18:17.180
+Like tools.
+
+
+00:18:17.180 --> 00:18:22.440
+One of the things I think we're coming to sort of understand and manage better in
+
+
+00:18:22.440 --> 00:18:26.180
+the Python space is not your dependencies, but the transitive
+
+
+00:18:26.180 --> 00:18:27.680
+closure of your dependencies.
+
+
+00:18:27.680 --> 00:18:28.200
+Right.
+
+
+00:18:28.200 --> 00:18:32.620
+So I might use, let me just say, I guess, what if I use pillow to work with images,
+
+
+00:18:32.620 --> 00:18:37.060
+images, but Pillow itself uses some other library that it pip installs that
+
+
+00:18:37.060 --> 00:18:39.320
+itself might have some kind of image code.
+
+
+00:18:39.320 --> 00:18:41.680
+If I say I use Pillow, oh, I need to update it.
+
+
+00:18:41.680 --> 00:18:47.340
+PIP install dash dash upgrade Pillow doesn't upgrade its, its dependencies
+
+
+00:18:47.340 --> 00:18:49.220
+and those dependencies of the right.
+
+
+00:18:49.220 --> 00:18:53.180
+So like, but that could be where a lot of silence issues live.
+
+
+00:18:53.180 --> 00:18:57.020
+And so things like Poetry, Flit, pip-tools, there's a lot of tools coming
+
+
+00:18:57.020 --> 00:19:01.140
+on that I think are gaining popularity that treat not just what you directly
+
+
+00:19:01.140 --> 00:19:04.420
+wanted a pip install, but it's friends and it's dependencies.
+
+
+00:19:04.420 --> 00:19:05.260
+- Yeah, definitely.
+
+
+00:19:05.260 --> 00:19:06.100
+- What's your thought about that
+
+
+00:19:06.100 --> 00:19:07.620
+from a security perspective?
+
+
+00:19:07.620 --> 00:19:10.300
+- Yes, so having the most important thing
+
+
+00:19:10.300 --> 00:19:13.820
+from like a kind of dependency management side of things
+
+
+00:19:13.820 --> 00:19:18.420
+is having those lock files and having them have hashes.
+
+
+00:19:18.420 --> 00:19:21.220
+Like it's less of a problem now.
+
+
+00:19:21.220 --> 00:19:24.020
+Like it likely won't come to fruition
+
+
+00:19:24.020 --> 00:19:25.620
+that those hashes end up being important,
+
+
+00:19:25.620 --> 00:19:27.540
+but luckily lots of lock file formats
+
+
+00:19:27.540 --> 00:19:29.500
+do generate hashes anyways, which is great.
+
+
+00:19:29.500 --> 00:19:32.980
+So that subverts attacks against PyPI partially.
+
+
+00:19:32.980 --> 00:19:36.120
+- Right in the middle, DNS madness.
+
+
+00:19:36.120 --> 00:19:36.960
+- Right, yeah.
+
+
+00:19:36.960 --> 00:19:39.120
+Like if somehow you've been tricked
+
+
+00:19:39.120 --> 00:19:42.480
+into using a bad certificate or something, right?
+
+
+00:19:42.480 --> 00:19:44.860
+Like it saves you from a lot of stuff like that.
+
+
+00:19:44.860 --> 00:19:47.100
+So having hashes, they're basically free.
+
+
+00:19:47.100 --> 00:19:49.200
+They're great, just use those.
+
+
+00:19:49.200 --> 00:19:52.540
+The other side of it is running a vulnerability checker
+
+
+00:19:52.540 --> 00:19:54.080
+against those dependencies.
+
+
+00:19:54.080 --> 00:19:55.800
+'Cause then you'll, or either that
+
+
+00:19:55.800 --> 00:19:57.680
+or having a tool that's doing that for you.
+
+
+00:19:57.680 --> 00:20:00.080
+So like Dependabot is a tool that does that for you.
+
+
+00:20:00.080 --> 00:20:01.880
+It will check vulnerability databases
+
+
+00:20:01.880 --> 00:20:04.380
+and then give you like a security notification
+
+
+00:20:04.380 --> 00:20:06.860
+or a PR to say, hey, this is affected
+
+
+00:20:06.860 --> 00:20:10.220
+by a medium severity vulnerability
+
+
+00:20:10.220 --> 00:20:12.840
+or you can run them your own via pip audit
+
+
+00:20:12.840 --> 00:20:16.180
+with it can either check an already installed environment
+
+
+00:20:16.180 --> 00:20:18.380
+or it can check like a requirements file.
+
+
+00:20:18.380 --> 00:20:19.900
+I don't know the full extent
+
+
+00:20:19.900 --> 00:20:21.860
+of all the different file types that it can check.
+
+
+00:20:21.860 --> 00:20:24.000
+I know that it works on requirements.txt,
+
+
+00:20:24.000 --> 00:20:27.320
+but yeah, it'll check those files for known vulnerabilities
+
+
+00:20:27.320 --> 00:20:32.040
+all of the transitive dependencies, just everything that's available. And then from there, it'll tell
+
+
+00:20:32.040 --> 00:20:36.840
+you, hey, these are the things that you need to fix here, the fixed versions, like try upgrading
+
+
+00:20:36.840 --> 00:20:41.400
+to at least this doesn't mean that it's easy. It does go back to that advisory database you
+
+
+00:20:41.400 --> 00:20:47.800
+talked about? It does go back to that advisory database. Yeah. And it also can hook into osv.dev,
+
+
+00:20:47.800 --> 00:20:54.120
+which is kind of like this global aggregation of tons of different vulnerability databases.
+
+
+00:20:54.120 --> 00:20:59.240
+So for example, we have one for Python that I pointed out, but then like Rust has one,
+
+
+00:20:59.240 --> 00:21:01.560
+Debian has one, what is it?
+
+
+00:21:01.560 --> 00:21:05.160
+Rocky Linux, I think has one, like there's just a whole bunch of them.
+
+
+00:21:05.160 --> 00:21:08.440
+And you can kind of interface with this database using the same API.
+
+
+00:21:08.440 --> 00:21:09.560
+And it's kind of nice.
+
+
+00:21:09.560 --> 00:21:10.600
+- Yeah.
+
+
+00:21:10.600 --> 00:21:15.800
+So making this the security show, we just talked to Mike Fiedler a little while ago
+
+
+00:21:15.800 --> 00:21:17.880
+about that as well, diving into it.
+
+
+00:21:17.880 --> 00:21:20.840
+I mean, we'll come back to the release process, but I do want to ask you about this is
+
+
+00:21:20.840 --> 00:21:24.840
+One of the challenges I see is like, I got to depend about a warning.
+
+
+00:21:24.840 --> 00:21:29.640
+Luckily, it was for basically the requirements-dev side,
+
+
+00:21:29.640 --> 00:21:31.040
+not the true requirement.
+
+
+00:21:31.040 --> 00:21:35.540
+You know, like I'm going to use a bunch more tools to do like Jupyter stuff on my data,
+
+
+00:21:35.540 --> 00:21:38.140
+but I'm really just running a website and there's like a much smaller,
+
+
+00:21:38.140 --> 00:21:40.540
+well, a smaller set of things on there.
+
+
+00:21:40.540 --> 00:21:43.240
+But there was a vulnerability report for something,
+
+
+00:21:43.240 --> 00:21:49.140
+some package that was in my requirements for the dev verge, the dev setup.
+
+
+00:21:49.140 --> 00:21:53.720
+However, when I tried to go update it, one other package that is the reason that was
+
+
+00:21:53.720 --> 00:21:57.180
+there said, no, it has to be less than something.
+
+
+00:21:57.180 --> 00:22:00.200
+And that something was less than the fix.
+
+
+00:22:00.200 --> 00:22:02.980
+And I'm like, how do I square these two things?
+
+
+00:22:02.980 --> 00:22:07.020
+Like I can pip install it, but then it keeps complaining that you're, you're
+
+
+00:22:07.020 --> 00:22:07.920
+running the wrong version.
+
+
+00:22:07.920 --> 00:22:08.700
+Like, no, I'm not.
+
+
+00:22:08.700 --> 00:22:12.700
+The other one has our remote CVE in it, you know, a remote code execution in it.
+
+
+00:22:12.700 --> 00:22:14.300
+And I'm like, I really don't want that.
+
+
+00:22:14.300 --> 00:22:15.180
+I mean, not a server.
+
+
+00:22:15.180 --> 00:22:17.220
+So it's probably fine, but I really don't want that.
+
+
+00:22:17.420 --> 00:22:22.140
+No, I'm I don't care if it's slightly more unstable. I want the new one. Give it to me.
+
+
+00:22:22.140 --> 00:22:28.460
+Right. And that's that's a bit of a challenge. I think when you say like, I've got 50 dependencies
+
+
+00:22:28.460 --> 00:22:32.460
+and I've got to somehow square, I need to get a brand new one right away. What are your thoughts
+
+
+00:22:32.460 --> 00:22:38.300
+on that? Yeah, this this is a super tough problem. And I think it's one that open source will be
+
+
+00:22:38.300 --> 00:22:42.380
+coming to reckon with even more now. Right. Because we're kind of in a place now where
+
+
+00:22:42.380 --> 00:22:48.940
+there's a few really important libraries which are kind of moving something that is very extensively
+
+
+00:22:48.940 --> 00:22:56.540
+and widely used to be not maintained anymore. For example, OpenSSL. OpenSSL 1, or 1.1.1,
+
+
+00:22:56.540 --> 00:23:02.300
+which is extremely widely used, is no longer maintained. There's going to be no more security
+
+
+00:23:02.300 --> 00:23:07.900
+patches for that. And it's going to be tough, because my guess is that there's also just a lot
+
+
+00:23:07.900 --> 00:23:14.380
+of software that's not built for OpenSSL 3 being the OpenSSL of choice, right? Luckily, Python is
+
+
+00:23:14.380 --> 00:23:20.140
+not in that situation, but it's certainly a thing that other pieces of software might have to deal
+
+
+00:23:20.140 --> 00:23:27.500
+with. In terms of Python packaging, this is kind of why the guidance on don't specify an upper
+
+
+00:23:27.500 --> 00:23:34.540
+bound unless you know that that upper bound makes sense. And so, backwards incompatibility,
+
+
+00:23:35.260 --> 00:23:41.100
+Yeah, maybe you want to say, okay, if this is version 2.1.whatever, and it's semper,
+
+
+00:23:41.100 --> 00:23:44.740
+you can say, okay, anything less than three is probably fine.
+
+
+00:23:44.740 --> 00:23:47.020
+But even that, right, if that package goes unmaintained.
+
+
+00:23:47.020 --> 00:23:50.020
+>> Yeah, this went from two to three in its main version, right?
+
+
+00:23:50.020 --> 00:23:51.420
+It's major version, so.
+
+
+00:23:51.420 --> 00:23:52.420
+>> Right.
+
+
+00:23:52.420 --> 00:23:53.420
+Yeah, so this is a difficulty.
+
+
+00:23:53.420 --> 00:23:54.420
+>> There's a lot of packages.
+
+
+00:23:54.420 --> 00:23:57.340
+Yeah, there's a lot of packages that set hard upper bounds.
+
+
+00:23:57.340 --> 00:24:04.140
+And I just, I don't know why, because maybe it's going to break it, but I feel like it's
+
+
+00:24:04.140 --> 00:24:05.140
+speculative.
+
+
+00:24:05.140 --> 00:24:09.940
+we should probably not let a major version run. But you know that that leads into trouble, right?
+
+
+00:24:09.940 --> 00:24:13.380
+Like, even if you just want to use some other library that says greater than or equal to three,
+
+
+00:24:13.380 --> 00:24:15.940
+and this one says less than three, like, great. Now, what do I do?
+
+
+00:24:15.940 --> 00:24:19.300
+Yeah, I think that the toughest thing is that you can't go back and then like amend it.
+
+
+00:24:19.300 --> 00:24:27.300
+Yeah, that's the hardest part is because so I will speak very, very highly of all of these,
+
+
+00:24:27.300 --> 00:24:34.820
+anything that can make pip automatically get the right thing is just magical is so good. And so
+
+
+00:24:34.820 --> 00:24:38.820
+People like that and I totally get why people are doing these upper bound
+
+
+00:24:38.820 --> 00:24:44.260
+sorts of things but yeah it does have the issues that you that you talked about but yeah there's
+
+
+00:24:44.260 --> 00:24:49.460
+something to say about how great the uh those bound checks are I wish there was a way that
+
+
+00:24:49.460 --> 00:24:55.380
+you could add something like some sort of guidance to pip to say after the fact like okay I said this
+
+
+00:24:55.380 --> 00:24:59.780
+was open but now I'm gonna go ahead and tell you that like this definitely doesn't work with this
+
+
+00:24:59.780 --> 00:25:04.100
+version maybe that's something that can get recommended but yeah it's just so nice when
+
+
+00:25:04.100 --> 00:25:04.940
+when it does work out.
+
+
+00:25:04.940 --> 00:25:05.600
+Yeah.
+
+
+00:25:05.600 --> 00:25:11.060
+I, I can relate to Frank here who writes with 1.3 thousand or
+
+
+00:25:11.060 --> 00:25:15.880
+1,300 dependencies in our project because of this dependencies are at all times.
+
+
+00:25:15.880 --> 00:25:16.380
+Yeah.
+
+
+00:25:16.380 --> 00:25:19.860
+I have on Talk Python Training, the courses website, I think there's
+
+
+00:25:19.860 --> 00:25:24.020
+248 packages if you look at what's installed and then the dependencies.
+
+
+00:25:24.020 --> 00:25:26.380
+And then you try to throw in the data science-y stuff.
+
+
+00:25:26.380 --> 00:25:30.180
+And it's just like, there's a 50, 50 chance that I can actually install
+
+
+00:25:30.180 --> 00:25:33.020
+everything because like half the time, something has got a less than
+
+
+00:25:33.020 --> 00:25:34.700
+something's got a greater than, and I'm like, Oh my God.
+
+
+00:25:34.700 --> 00:25:36.160
+You add, as you upgrade, right?
+
+
+00:25:36.160 --> 00:25:39.680
+Like at any point in time, it's deterministic, but you know, over
+
+
+00:25:39.680 --> 00:25:41.000
+at, over the evolution of it.
+
+
+00:25:41.000 --> 00:25:41.260
+Right.
+
+
+00:25:41.260 --> 00:25:42.820
+Yeah, no, it's, it's tough.
+
+
+00:25:42.820 --> 00:25:45.320
+It's tough when you start getting to that number, like there's just
+
+
+00:25:45.320 --> 00:25:47.080
+so many intertangled things.
+
+
+00:25:47.080 --> 00:25:47.680
+There are.
+
+
+00:25:47.680 --> 00:25:51.620
+And like, the reason I bring this up now is it's, it's a hassle when like, I want
+
+
+00:25:51.620 --> 00:25:54.720
+to use this library and that library and somehow I've got to like juggle things.
+
+
+00:25:54.720 --> 00:25:59.080
+So they work, but it's concerning when you get a dependable alert that says
+
+
+00:25:59.080 --> 00:26:02.420
+there's a remote code execution, you're going to need to deal with it and your
+
+
+00:26:02.420 --> 00:26:04.300
+dependencies won't let you upgrade.
+
+
+00:26:04.300 --> 00:26:05.180
+You know what I mean?
+
+
+00:26:05.180 --> 00:26:06.820
+Like that's, that's why I bring this up.
+
+
+00:26:06.820 --> 00:26:08.380
+It's definitely concerning.
+
+
+00:26:08.380 --> 00:26:08.720
+Yeah.
+
+
+00:26:08.720 --> 00:26:12.120
+Another thing that you can do, and this is, I feel like they don't talk about
+
+
+00:26:12.120 --> 00:26:16.100
+this as much with Dependabot is that there are ways to mitigate vulnerabilities.
+
+
+00:26:16.100 --> 00:26:19.060
+That doesn't necessarily have to come from upgrading.
+
+
+00:26:19.060 --> 00:26:22.540
+Like I'm always going to say upgrading your dependency is the best way to go
+
+
+00:26:22.540 --> 00:26:27.140
+forward because then you know that there's no chance of at least that vulnerability
+
+
+00:26:27.140 --> 00:26:28.860
+in particular being exploited.
+
+
+00:26:29.060 --> 00:26:32.660
+But if it's something like remote code execution, but it's this one component.
+
+
+00:26:32.660 --> 00:26:33.180
+Right.
+
+
+00:26:33.180 --> 00:26:35.260
+As long as you're not using that component, then you're fine.
+
+
+00:26:35.260 --> 00:26:40.660
+Or if it's remote code execution, when you get some sort of input, whatever,
+
+
+00:26:40.660 --> 00:26:42.780
+right, that's, that's malformed or whatever.
+
+
+00:26:42.780 --> 00:26:46.620
+And you're like, okay, well that component's not exposed to the network.
+
+
+00:26:46.620 --> 00:26:48.100
+It's I only use it internally.
+
+
+00:26:48.100 --> 00:26:50.220
+So there is something to say.
+
+
+00:26:50.220 --> 00:26:51.440
+Not even a server.
+
+
+00:26:51.440 --> 00:26:52.660
+It doesn't open a port.
+
+
+00:26:52.660 --> 00:26:52.860
+Right.
+
+
+00:26:52.860 --> 00:26:54.520
+It's just a thing I run on my computer.
+
+
+00:26:54.520 --> 00:26:56.180
+It's like, it probably doesn't matter.
+
+
+00:26:56.180 --> 00:26:56.900
+Exactly.
+
+
+00:26:56.900 --> 00:26:57.140
+Yeah.
+
+
+00:26:57.140 --> 00:26:59.180
+And that's, that's kind of the one typing into it.
+
+
+00:26:59.180 --> 00:27:02.340
+And it's like, but if it's in your website, then all of a sudden
+
+
+00:27:02.340 --> 00:27:03.220
+it gets a little trickier.
+
+
+00:27:03.220 --> 00:27:03.540
+Right.
+
+
+00:27:03.540 --> 00:27:04.540
+Then it gets dicier.
+
+
+00:27:04.540 --> 00:27:05.220
+Yeah, definitely.
+
+
+00:27:05.220 --> 00:27:05.380
+Yeah.
+
+
+00:27:05.380 --> 00:27:08.500
+The stakes are higher when you attach the internet to anything, but when it's like
+
+
+00:27:08.500 --> 00:27:14.660
+a local script, it's just tail your log file and his request, request, hack, hack,
+
+
+00:27:14.660 --> 00:27:16.300
+request, attempted hack requests.
+
+
+00:27:16.300 --> 00:27:17.620
+It's just WP log in.
+
+
+00:27:17.620 --> 00:27:17.860
+Yes.
+
+
+00:27:17.860 --> 00:27:18.220
+Yeah.
+
+
+00:27:18.220 --> 00:27:20.340
+WP admin, all them things.
+
+
+00:27:20.340 --> 00:27:20.740
+Yeah.
+
+
+00:27:20.740 --> 00:27:24.220
+It's usually, luckily it's WP something or something most of the time.
+
+
+00:27:25.420 --> 00:27:27.620
+If you're safe against 90%, we're all good.
+
+
+00:27:27.620 --> 00:27:29.720
+As long as you don't return a 200 to any of those,
+
+
+00:27:29.720 --> 00:27:31.660
+like your traffic will remain low.
+
+
+00:27:31.660 --> 00:27:32.860
+- Yeah, absolutely.
+
+
+00:27:32.860 --> 00:27:34.060
+(laughing)
+
+
+00:27:34.060 --> 00:27:36.100
+All right, so that's what you're doing,
+
+
+00:27:36.100 --> 00:27:37.580
+focusing on these kinds of things.
+
+
+00:27:37.580 --> 00:27:38.780
+That's really, really awesome.
+
+
+00:27:38.780 --> 00:27:41.380
+And thanks for giving us an even more detailed look
+
+
+00:27:41.380 --> 00:27:43.060
+than I expected into it.
+
+
+00:27:43.060 --> 00:27:44.400
+(laughing)
+
+
+00:27:44.400 --> 00:27:46.020
+Yeah, let's talk about your,
+
+
+00:27:46.020 --> 00:27:49.140
+let's talk about, you know, the timely thing.
+
+
+00:27:49.140 --> 00:27:51.740
+I mean, security's always timely, but the CPython,
+
+
+00:27:51.740 --> 00:27:52.660
+let me see if I get this right,
+
+
+00:27:52.660 --> 00:27:55.300
+3.12 release coming up here on Monday.
+
+
+00:27:55.300 --> 00:27:56.340
+- Dang, he's got it.
+
+
+00:27:56.340 --> 00:27:57.180
+- Amazing.
+
+
+00:27:57.180 --> 00:27:58.000
+I got it, man.
+
+
+00:27:58.000 --> 00:27:58.840
+I'm ready.
+
+
+00:27:58.840 --> 00:28:00.140
+I'm ready for this new world.
+
+
+00:28:00.140 --> 00:28:03.980
+So there is a pep and let's see who put this together.
+
+
+00:28:03.980 --> 00:28:07.940
+This is Barry Warsaw and Guido and it is pep 101.
+
+
+00:28:07.940 --> 00:28:08.780
+I love it.
+
+
+00:28:08.780 --> 00:28:09.600
+(laughs)
+
+
+00:28:09.600 --> 00:28:10.440
+Pep 101.
+
+
+00:28:10.440 --> 00:28:11.280
+- The one you need, right?
+
+
+00:28:11.280 --> 00:28:12.700
+- Yeah, what a perfect number.
+
+
+00:28:12.700 --> 00:28:17.300
+But it's the title is doing Python releases 101.
+
+
+00:28:17.300 --> 00:28:19.500
+That's kind of a circular, I love it.
+
+
+00:28:19.500 --> 00:28:21.860
+And it just talks about all the steps
+
+
+00:28:21.860 --> 00:28:25.140
+and it's kind of a manual of now you do this,
+
+
+00:28:25.140 --> 00:28:28.840
+Now you do that, but it's just a really long doc.
+
+
+00:28:28.840 --> 00:28:29.580
+I love that.
+
+
+00:28:29.580 --> 00:28:31.720
+Stop, stop, stop, stop.
+
+
+00:28:31.720 --> 00:28:35.040
+There's like, there's like a all caps all across.
+
+
+00:28:35.040 --> 00:28:35.960
+Stop, stop, stop, stop, stop.
+
+
+00:28:35.960 --> 00:28:37.140
+Did you do this right?
+
+
+00:28:37.140 --> 00:28:37.620
+Right.
+
+
+00:28:37.620 --> 00:28:38.120
+Yep.
+
+
+00:28:38.120 --> 00:28:41.920
+That you can tell, you can always tell when there were problems
+
+
+00:28:41.920 --> 00:28:43.600
+in the past in a checklist, right?
+
+
+00:28:43.600 --> 00:28:47.820
+Like if there ever was something that happened incorrectly, it's, it's very obvious.
+
+
+00:28:47.820 --> 00:28:49.520
+And so yeah, the stop, stop, stop.
+
+
+00:28:49.520 --> 00:28:54.820
+I feel that that I, I don't personally know why that's there, but I do
+
+
+00:28:54.820 --> 00:28:55.880
+laugh every time I see it.
+
+
+00:28:55.880 --> 00:28:56.760
+So, yeah.
+
+
+00:28:56.760 --> 00:28:58.120
+Uh, let's see.
+
+
+00:28:58.120 --> 00:29:01.560
+Please note how pep one Oh one replaces pep one or two time
+
+
+00:29:01.560 --> 00:29:03.040
+traveling was invented there.
+
+
+00:29:03.040 --> 00:29:03.800
+What is it?
+
+
+00:29:03.800 --> 00:29:04.300
+Yeah.
+
+
+00:29:04.300 --> 00:29:04.920
+At the very top.
+
+
+00:29:04.920 --> 00:29:06.720
+It's I wanted to comment on that too.
+
+
+00:29:06.720 --> 00:29:08.520
+It said replaces pep one Oh two.
+
+
+00:29:08.520 --> 00:29:12.800
+And I wonder if it was more like a, Oh, we should just use one
+
+
+00:29:12.800 --> 00:29:14.600
+Oh one sort of situation.
+
+
+00:29:14.600 --> 00:29:17.440
+Well, I think this is doing micro releases, right?
+
+
+00:29:17.440 --> 00:29:20.800
+So this one, maybe more like full, like the full deal.
+
+
+00:29:20.800 --> 00:29:21.400
+I don't know.
+
+
+00:29:21.400 --> 00:29:21.640
+Yeah.
+
+
+00:29:21.640 --> 00:29:24.480
+I think security releases are, they're slightly different.
+
+
+00:29:24.480 --> 00:29:27.240
+We don't actually build binary installers
+
+
+00:29:27.240 --> 00:29:28.680
+for security releases.
+
+
+00:29:28.680 --> 00:29:31.320
+We only build source builds,
+
+
+00:29:31.320 --> 00:29:33.440
+like source tarballs for micro releases.
+
+
+00:29:33.440 --> 00:29:36.440
+And so maybe that was the distinction in 102.
+
+
+00:29:36.440 --> 00:29:37.280
+- Sure.
+
+
+00:29:37.280 --> 00:29:40.960
+Okay, so this has existed since 2001,
+
+
+00:29:40.960 --> 00:29:43.540
+but you got to really dig into it.
+
+
+00:29:43.540 --> 00:29:45.720
+And you know, there's some interesting stuff there,
+
+
+00:29:45.720 --> 00:29:48.000
+but picture a thousand words, all these things,
+
+
+00:29:48.000 --> 00:29:50.520
+you put together a really nice graphic here.
+
+
+00:29:50.520 --> 00:29:54.120
+And somehow you got this in like HTML, I'm impressed.
+
+
+00:29:54.120 --> 00:29:55.640
+Yeah, that's embedded SVG.
+
+
+00:29:55.640 --> 00:30:00.320
+I, I always use draw.io for my, my diagrams.
+
+
+00:30:00.320 --> 00:30:02.100
+I take pride in my diagrams.
+
+
+00:30:02.100 --> 00:30:03.040
+So yeah, it looks good.
+
+
+00:30:03.040 --> 00:30:04.080
+All right.
+
+
+00:30:04.080 --> 00:30:06.800
+So there are 10 steps.
+
+
+00:30:06.800 --> 00:30:08.800
+Some of the steps have ABCs in them.
+
+
+00:30:08.800 --> 00:30:14.760
+So, and you know, just for people who pull up this picture and obviously being
+
+
+00:30:14.760 --> 00:30:16.600
+a podcast, it's hard to see the picture.
+
+
+00:30:16.600 --> 00:30:21.360
+If you're not watching the live stream, I will put a link to the article, which
+
+
+00:30:21.360 --> 00:30:24.180
+has the picture in there and by remember, right.
+
+
+00:30:24.180 --> 00:30:25.740
+I'll even put it as the chapter art.
+
+
+00:30:25.740 --> 00:30:26.500
+We'll see about that.
+
+
+00:30:26.500 --> 00:30:28.200
+Uh, but there's a legend in here.
+
+
+00:30:28.200 --> 00:30:30.460
+So you've got like different types of things.
+
+
+00:30:30.460 --> 00:30:35.400
+You've got human actors, which are golden release artifact, which is blue,
+
+
+00:30:35.400 --> 00:30:39.120
+a source of risk, which is where you're paying extra attention
+
+
+00:30:39.120 --> 00:30:40.740
+and the start and end state.
+
+
+00:30:40.740 --> 00:30:44.560
+And so, the colors mean stuff here and the legends at the bottom, but yeah,
+
+
+00:30:44.560 --> 00:30:46.520
+let's, you know, start with number one.
+
+
+00:30:46.520 --> 00:30:47.440
+Now what happens here?
+
+
+00:30:47.440 --> 00:30:47.960
+Yeah.
+
+
+00:30:47.960 --> 00:30:51.760
+So starting with number one, and I'm actually going to increase the size of my
+
+
+00:30:51.760 --> 00:30:54.960
+screen as well, because I'm going to pull it up separately myself.
+
+
+00:30:54.960 --> 00:30:57.820
+Going on here.
+
+
+00:30:57.820 --> 00:30:58.320
+Yeah.
+
+
+00:30:58.320 --> 00:30:59.300
+A lot going on here.
+
+
+00:30:59.300 --> 00:31:01.880
+You need some, you need some mandor control plus on it.
+
+
+00:31:01.880 --> 00:31:02.620
+Yep.
+
+
+00:31:02.620 --> 00:31:03.120
+Okay.
+
+
+00:31:03.120 --> 00:31:03.620
+All right.
+
+
+00:31:03.620 --> 00:31:08.020
+So in the very beginning, what happens is essentially the release manager
+
+
+00:31:08.020 --> 00:31:10.480
+decides it's time to make a release.
+
+
+00:31:10.480 --> 00:31:12.240
+It'll be right now.
+
+
+00:31:12.240 --> 00:31:15.220
+So we're, we're deciding, okay, we're going to make a release.
+
+
+00:31:15.220 --> 00:31:21.220
+And so something that happens even before this is we kind of talk amongst all of the other.
+
+
+00:31:21.220 --> 00:31:24.940
+It says release managers in there, like windows release manager, macOS release manager.
+
+
+00:31:24.940 --> 00:31:27.940
+They kind of flip between that language and experts.
+
+
+00:31:27.940 --> 00:31:30.380
+So like windows expert, macOS expert.
+
+
+00:31:30.380 --> 00:31:34.140
+Some people understand this weird windows things that can make a MSI installer.
+
+
+00:31:34.140 --> 00:31:36.020
+The people, what do you do on Mac?
+
+
+00:31:36.020 --> 00:31:37.500
+I don't even know how to build that right.
+
+
+00:31:37.500 --> 00:31:38.180
+That person.
+
+
+00:31:38.180 --> 00:31:38.620
+Yeah.
+
+
+00:31:38.620 --> 00:31:39.100
+Yeah.
+
+
+00:31:39.100 --> 00:31:45.060
+Talk to, talk to them, get, get their, get their buy-in that indeed they're going to be around when you decide to do
+
+
+00:31:45.060 --> 00:31:49.980
+this because this is kind of like a big coordinated thing. Everyone has to be around to do their
+
+
+00:31:49.980 --> 00:31:55.300
+part. And then if that is the case, then the release branch gets frozen. So in this case,
+
+
+00:31:55.300 --> 00:32:01.380
+that release branch would be 312. And so that's done by essentially putting a block on all
+
+
+00:32:01.380 --> 00:32:07.740
+future like pushes to the branch like in GitHub, use like branch protection. And that's basically
+
+
+00:32:07.740 --> 00:32:12.340
+to make it so that no one can merge pull requests anymore so that you have something that's
+
+
+00:32:12.340 --> 00:32:14.020
+stable that you can kind of work off of.
+
+
+00:32:14.020 --> 00:32:17.660
+And then after that, you'd move on to step two, which is the
+
+
+00:32:17.660 --> 00:32:21.300
+actual release manager will update their fork of the repo
+
+
+00:32:21.300 --> 00:32:23.140
+with whatever is on that branch.
+
+
+00:32:23.140 --> 00:32:27.380
+So like the three 12 branch will get updated and then you'll pull
+
+
+00:32:27.380 --> 00:32:30.140
+that branch locally now on step three.
+
+
+00:32:30.140 --> 00:32:33.100
+So now you're on the actual release managers machine.
+
+
+00:32:33.100 --> 00:32:37.440
+And so like, I kind of have like gray boxes drawn kind of throughout.
+
+
+00:32:37.440 --> 00:32:39.940
+So those are kind of like security boundaries a little bit.
+
+
+00:32:40.240 --> 00:32:45.760
+The top most one is the GitHub organization of Python.
+
+
+00:32:45.760 --> 00:32:51.120
+And then the middle, the tiny one that has the fork repo, that's the GitHub user for
+
+
+00:32:51.120 --> 00:32:52.800
+the release manager in particular.
+
+
+00:32:52.800 --> 00:32:58.160
+And then the furthest left, the gigantic one, is the release manager's actual computer.
+
+
+00:32:58.160 --> 00:32:59.280
+It's not documented anywhere.
+
+
+00:32:59.280 --> 00:33:01.720
+It's just how I was thinking about it.
+
+
+00:33:01.720 --> 00:33:04.160
+But yeah, so then there's this thing called release tool.
+
+
+00:33:04.160 --> 00:33:06.600
+And so release tool is basically just a Python script.
+
+
+00:33:06.600 --> 00:33:15.000
+on GitHub, if you go to github.com/python/release-tool, it's basically just a script that runs and
+
+
+00:33:15.000 --> 00:33:20.960
+then does all of the stuff that's needed to build the source distribution and documentation
+
+
+00:33:20.960 --> 00:33:27.480
+of a new Python release. And so you run that, and as a result, you kind of get like a huge
+
+
+00:33:27.480 --> 00:33:31.120
+amount of code that needs to be committed. And so there's a whole bunch of different
+
+
+00:33:31.120 --> 00:33:36.360
+little tools that kind of get run in addition to that. So things like Blurb, Sphinx gets
+
+
+00:33:36.360 --> 00:33:37.840
+as a part of that.
+
+
+00:33:37.840 --> 00:33:41.440
+Yeah, you need a whole lot of dependencies installed.
+
+
+00:33:41.440 --> 00:33:44.760
+So you like you need like late tech, you need a whole bunch of stuff installed for this
+
+
+00:33:44.760 --> 00:33:45.760
+to actually work.
+
+
+00:33:45.760 --> 00:33:50.400
+Do you make sure you've got like the right right compiler?
+
+
+00:33:50.400 --> 00:33:52.600
+Is there a lot of concern about that?
+
+
+00:33:52.600 --> 00:33:58.320
+Like is it clang or LLVM or GCC or, you know, I believe it's GCC.
+
+
+00:33:58.320 --> 00:33:59.320
+I believe it's GCC.
+
+
+00:33:59.320 --> 00:34:01.800
+You know, I didn't dig into that exact point.
+
+
+00:34:01.800 --> 00:34:02.800
+I'm pretty sure it is.
+
+
+00:34:02.800 --> 00:34:06.320
+I feel like that's another part that you like that choice matters, right?
+
+
+00:34:06.320 --> 00:34:09.120
+Like you might get different outputs, you might discover bugs that weren't there.
+
+
+00:34:09.120 --> 00:34:09.620
+If you can.
+
+
+00:34:09.620 --> 00:34:12.760
+So you gotta kind of get that gray box all set up as well.
+
+
+00:34:12.760 --> 00:34:13.260
+Right?
+
+
+00:34:13.260 --> 00:34:14.000
+Yeah, definitely.
+
+
+00:34:14.000 --> 00:34:19.560
+And so the fact that it's on someone's machine, I would say reproducibility is,
+
+
+00:34:19.560 --> 00:34:22.160
+is quite tough in those sorts of situations, right?
+
+
+00:34:22.160 --> 00:34:27.080
+Like if, if, if someone were to build a release of Python and then a day goes by,
+
+
+00:34:27.080 --> 00:34:31.720
+like I guarantee you that the, if you tried to do it again with the exact same
+
+
+00:34:31.940 --> 00:34:34.660
+starting input, it would be potentially different.
+
+
+00:34:34.660 --> 00:34:35.660
+Right.
+
+
+00:34:35.660 --> 00:34:39.420
+And so that that's actually a problem from a security perspective for reproducibility,
+
+
+00:34:39.420 --> 00:34:45.380
+because it means that someone else can't verify that what you did is correct.
+
+
+00:34:45.380 --> 00:34:46.380
+Right.
+
+
+00:34:46.380 --> 00:34:48.300
+Like the hash might change or something like that.
+
+
+00:34:48.300 --> 00:34:49.300
+Right.
+
+
+00:34:49.300 --> 00:34:54.260
+Hashes might change or if there's like somehow the time is getting embedded into a binary
+
+
+00:34:54.260 --> 00:34:55.260
+somewhere.
+
+
+00:34:55.260 --> 00:34:59.460
+Like there's just a whole bunch of different ways that reproducibility could be different
+
+
+00:34:59.460 --> 00:35:01.020
+between two different runs.
+
+
+00:35:01.020 --> 00:35:07.060
+Yeah, and so that after the release tool happens, you basically get handed a couple of source
+
+
+00:35:07.060 --> 00:35:09.660
+tarballs that just have everything in them.
+
+
+00:35:09.660 --> 00:35:13.620
+And then you also get a bunch of Git changes to the repository.
+
+
+00:35:13.620 --> 00:35:19.520
+So these are things like the change log has been generated from all of the blurb notes.
+
+
+00:35:19.520 --> 00:35:23.420
+And so what you do is then you take all of those changes, and you create a big commit
+
+
+00:35:23.420 --> 00:35:28.980
+that says this is the release of CPython 3.12.0.
+
+
+00:35:28.980 --> 00:35:32.600
+And then you tag it and you push that to the fork.
+
+
+00:35:32.600 --> 00:35:34.480
+You don't push that to the main repository yet.
+
+
+00:35:34.480 --> 00:35:37.740
+And so the reason you don't push that to the main repository, and this is actually something
+
+
+00:35:37.740 --> 00:35:44.440
+that this phenomena is an interesting one, especially because a lot of security build
+
+
+00:35:44.440 --> 00:35:52.280
+tooling doesn't take this work workflow into account, which is you don't push the tag to
+
+
+00:35:52.280 --> 00:35:55.240
+the origin until the very end.
+
+
+00:35:55.240 --> 00:36:01.120
+A lot of security tooling like Salsa and all of these things will kind of, like, they won't
+
+
+00:36:01.120 --> 00:36:03.840
+assume because you can do it without tags.
+
+
+00:36:03.840 --> 00:36:09.800
+But, like, they'll have features that are, oh, we'll capture the git tag in the output
+
+
+00:36:09.800 --> 00:36:14.680
+of, like, this, like, document that says that your build is, came from this repository,
+
+
+00:36:14.680 --> 00:36:16.620
+this setup tooling, whatever, right?
+
+
+00:36:16.620 --> 00:36:21.800
+But a lot of projects actually wait on the tag until the very end because they want things
+
+
+00:36:21.800 --> 00:36:25.120
+to be repeatable without causing confusion.
+
+
+00:36:25.120 --> 00:36:29.180
+So if something went wrong throughout this whole release process, you wouldn't want there
+
+
+00:36:29.180 --> 00:36:33.120
+to be a tag on the main repo that is now confusing people, right?
+
+
+00:36:33.120 --> 00:36:34.120
+Because those tags cause notifications.
+
+
+00:36:34.120 --> 00:36:35.120
+>> I'm going to get the code.
+
+
+00:36:35.120 --> 00:36:38.080
+You're like, actually, no, the Mac build wouldn't build.
+
+
+00:36:38.080 --> 00:36:40.480
+We're going to fix that or whatever, right?
+
+
+00:36:40.480 --> 00:36:41.480
+>> Right, exactly.
+
+
+00:36:41.480 --> 00:36:45.520
+And so this whole thing is like very, it's a common thing.
+
+
+00:36:45.520 --> 00:36:50.320
+So pip actually has this exact same workflow where they do everything in the release until
+
+
+00:36:50.320 --> 00:36:54.240
+the very end, and then they push the tag to the repo because they know that if they push
+
+
+00:36:54.240 --> 00:36:59.300
+that tag, and it needs to change, it's going to cause confusion. So, yeah, that kind of
+
+
+00:36:59.300 --> 00:37:05.540
+is like step five in there. It pushes that tag. So that tag is highlighted red as a source
+
+
+00:37:05.540 --> 00:37:14.900
+of risk because that is a fork of CPython. And tags, tags are not in themselves verifiable.
+
+
+00:37:14.900 --> 00:37:20.500
+Because anyone can push a tag. If you're just looking at just the name of the tag, anyone
+
+
+00:37:20.500 --> 00:37:26.120
+can write a tag if you have write access to a Git repository or a GitHub repository.
+
+
+00:37:26.120 --> 00:37:30.880
+And so if you push a tag and say someone has access to your account, someone could move
+
+
+00:37:30.880 --> 00:37:33.860
+that tag to a different commit, completely different commit.
+
+
+00:37:33.860 --> 00:37:38.520
+And if it were pulled in that time, and no one decided to like check something else,
+
+
+00:37:38.520 --> 00:37:43.160
+so like the commit hash, for example, you would be circumvented, like it would be able
+
+
+00:37:43.160 --> 00:37:44.800
+to inject code into the process, right?
+
+
+00:37:44.800 --> 00:37:46.760
+That's as far as we know, that has not happened.
+
+
+00:37:46.760 --> 00:37:47.760
+Yeah, that is bad.
+
+
+00:37:47.760 --> 00:37:53.440
+bad to inject someone else's arbitrary code into Python directly.
+
+
+00:37:53.440 --> 00:37:59.580
+It's actually doubly bad because there's different degrees of bad in supply chain security.
+
+
+00:37:59.580 --> 00:38:05.260
+One degree of bad is if you're able to do bad stuff, but then people notice.
+
+
+00:38:05.260 --> 00:38:07.400
+Or people can see what happened.
+
+
+00:38:07.400 --> 00:38:11.940
+And so this is kind of like degrees of bad of you can inject code and then you can clean
+
+
+00:38:11.940 --> 00:38:13.420
+up after yourself afterwards.
+
+
+00:38:13.420 --> 00:38:15.340
+Put the tag back.
+
+
+00:38:15.340 --> 00:38:16.340
+Put the tag back.
+
+
+00:38:16.340 --> 00:38:20.880
+you have write access, right? And so that that sort of like put the tag back or being
+
+
+00:38:20.880 --> 00:38:29.260
+able to circumvent it in that way is is not good. Yeah, don't give people. These are not
+
+
+00:38:29.260 --> 00:38:33.580
+new ideas. So I feel less bad talking about these. Yeah, another thing in this article
+
+
+00:38:33.580 --> 00:38:41.180
+is actually like tying every step of the release process back to a known attack that has succeeded
+
+
+00:38:41.180 --> 00:38:48.060
+against another project. So like SolarWinds was about build, like release artifact poisoning,
+
+
+00:38:48.060 --> 00:38:52.940
+essentially, right? You're like taking advantage of the fact that these release artifacts are being
+
+
+00:38:52.940 --> 00:38:58.540
+distributed. And the you know, they're signed, everything looks good, but you've gotten code
+
+
+00:38:58.540 --> 00:39:03.180
+injected into the actual artifact itself, and it didn't get noticed. Right. And so like that sort
+
+
+00:39:03.180 --> 00:39:09.100
+of attack could happen against Python if if there's not mitigations against it, right. And so
+
+
+00:39:09.100 --> 00:39:11.000
+And so yeah, then the next step is six.
+
+
+00:39:11.000 --> 00:39:15.900
+And so at this point, the release manager has source tarballs from the result of just
+
+
+00:39:15.900 --> 00:39:17.160
+running the release tool.
+
+
+00:39:17.160 --> 00:39:18.700
+And so they're kind of just waiting.
+
+
+00:39:18.700 --> 00:39:22.940
+They're sitting around waiting for the other experts to do their thing now.
+
+
+00:39:22.940 --> 00:39:28.260
+And this is where Windows and Mac OS installers are actually built.
+
+
+00:39:28.260 --> 00:39:33.900
+And so these aren't built for security releases, but for 3.12.0, these will be built.
+
+
+00:39:33.900 --> 00:39:38.900
+They're two completely different sets of build processes.
+
+
+00:39:38.900 --> 00:39:40.900
+One of them happens in Azure Pipelines.
+
+
+00:39:40.900 --> 00:39:43.660
+So if you go to that release tool,
+
+
+00:39:43.660 --> 00:39:45.900
+there's actually a Windows folder
+
+
+00:39:45.900 --> 00:39:48.200
+that just has 100 YAML files in it
+
+
+00:39:48.200 --> 00:39:50.900
+for all of the different Azure Pipeline configurations.
+
+
+00:39:50.900 --> 00:39:54.200
+- Yeah, Azure Pipelines, a little bit like GitHub Actions.
+
+
+00:39:54.200 --> 00:39:57.120
+People who are familiar with that, but not Azure, right?
+
+
+00:39:57.120 --> 00:39:58.040
+Something roughly?
+
+
+00:39:58.040 --> 00:39:58.880
+- Yeah, yeah.
+
+
+00:39:58.880 --> 00:40:01.000
+And I think there was a time where Azure Pipelines
+
+
+00:40:01.000 --> 00:40:03.040
+and GitHub Actions were basically the same thing.
+
+
+00:40:03.040 --> 00:40:05.040
+Yeah, like in the very beginning.
+
+
+00:40:05.040 --> 00:40:10.560
+Um, yeah, so Azure pipelines, there's a whole bunch of stuff that happens there.
+
+
+00:40:10.560 --> 00:40:15.760
+Because there's Windows embeddable packages is something that gets uploaded to python.org.
+
+
+00:40:15.760 --> 00:40:18.800
+Windows installers also get uploaded to python.org.
+
+
+00:40:18.800 --> 00:40:23.360
+But that also there's like NuGet gets updated, the Windows Store gets updated there.
+
+
+00:40:23.360 --> 00:40:25.200
+So like, there's a lot happening there.
+
+
+00:40:25.200 --> 00:40:30.560
+And there's actually a lot of things that happen that require the actual release manager,
+
+
+00:40:30.560 --> 00:40:33.360
+or the Windows release manager to approve them.
+
+
+00:40:33.360 --> 00:40:34.760
+So they're gated.
+
+
+00:40:34.760 --> 00:40:37.160
+These are things like signing keys
+
+
+00:40:37.160 --> 00:40:39.080
+that are as a part of the process,
+
+
+00:40:39.080 --> 00:40:40.400
+you have to sign off to say,
+
+
+00:40:40.400 --> 00:40:43.480
+"Yep, we want to give this job access to the signing key."
+
+
+00:40:43.480 --> 00:40:44.440
+So that's great.
+
+
+00:40:44.440 --> 00:40:47.200
+- Do you know if WinGet is kind of like
+
+
+00:40:47.200 --> 00:40:49.640
+the newer package manager for Windows?
+
+
+00:40:49.640 --> 00:40:52.440
+Do you know if Python goes there as well these days?
+
+
+00:40:52.440 --> 00:40:53.280
+Let's see.
+
+
+00:40:53.280 --> 00:40:55.320
+- I haven't used Windows in a really long time,
+
+
+00:40:55.320 --> 00:40:56.480
+so I don't know.
+
+
+00:40:56.480 --> 00:40:58.440
+- I do, but I only use it for playing games
+
+
+00:40:58.440 --> 00:41:01.600
+and simple Windows tests, so I don't know it.
+
+
+00:41:01.600 --> 00:41:03.360
+All right, but yeah, so NuGet is like
+
+
+00:41:03.360 --> 00:41:05.840
+one of these kind of package managers for Windows,
+
+
+00:41:05.840 --> 00:41:06.720
+maybe Winget.
+
+
+00:41:06.720 --> 00:41:08.040
+People in the audience, if anyone knows,
+
+
+00:41:08.040 --> 00:41:08.920
+they can let us know.
+
+
+00:41:08.920 --> 00:41:10.120
+- Yeah, definitely.
+
+
+00:41:10.120 --> 00:41:11.560
+I've not even heard of Winget,
+
+
+00:41:11.560 --> 00:41:14.000
+so I feel really out of the loop right now.
+
+
+00:41:14.000 --> 00:41:16.360
+- It's only a couple of years old, I believe.
+
+
+00:41:16.360 --> 00:41:17.640
+- Gotcha, gotcha.
+
+
+00:41:17.640 --> 00:41:19.200
+- And following on with that,
+
+
+00:41:19.200 --> 00:41:20.120
+this probably won't help you
+
+
+00:41:20.120 --> 00:41:21.280
+if you don't do a lot of Windows.
+
+
+00:41:21.280 --> 00:41:24.600
+Louis asks, "Does Python maintain Chocolaty?"
+
+
+00:41:24.600 --> 00:41:26.560
+Which is similar to Winget,
+
+
+00:41:26.560 --> 00:41:30.360
+but more independent than Winget.
+
+
+00:41:30.360 --> 00:41:32.360
+They tried Winget and it was buggy and wasn't great.
+
+
+00:41:32.360 --> 00:41:33.720
+Chocolatey is maybe a little older.
+
+
+00:41:33.720 --> 00:41:34.560
+I don't know.
+
+
+00:41:34.560 --> 00:41:35.660
+Same story probably, right?
+
+
+00:41:35.660 --> 00:41:37.760
+- Yeah, I also don't know, unfortunately.
+
+
+00:41:37.760 --> 00:41:39.320
+Windows is not my strong suit.
+
+
+00:41:39.320 --> 00:41:40.160
+(laughing)
+
+
+00:41:40.160 --> 00:41:41.060
+- Chocolatey.
+
+
+00:41:41.060 --> 00:41:42.360
+- Yeah.
+
+
+00:41:42.360 --> 00:41:43.200
+- Yeah, it's all good.
+
+
+00:41:43.200 --> 00:41:44.200
+- Definitely a tastier name.
+
+
+00:41:44.200 --> 00:41:45.520
+That's how I choose all my tooling,
+
+
+00:41:45.520 --> 00:41:47.020
+is how tasty is the name.
+
+
+00:41:47.020 --> 00:41:51.340
+Yeah, and so then the, like the counterpart to that
+
+
+00:41:51.340 --> 00:41:54.400
+is the macOS binary installers.
+
+
+00:41:54.400 --> 00:41:56.000
+And so those are,
+
+
+00:41:56.000 --> 00:42:01.440
+There's basically just another set of scripts that get run on the Mac OS release manager,
+
+
+00:42:01.440 --> 00:42:06.160
+like their machine, and it builds just everything having to do with Mac OS.
+
+
+00:42:06.160 --> 00:42:07.560
+It does notarization.
+
+
+00:42:07.560 --> 00:42:13.160
+It does, you know, making I know not as much about Mac OS either, but I know that notarization
+
+
+00:42:13.160 --> 00:42:18.640
+happens and actually I've talked to a few folks about this one too, because this one,
+
+
+00:42:18.640 --> 00:42:23.800
+if you notice is just one square and it's just red and it's like, yeah, there's there's
+
+
+00:42:23.800 --> 00:42:25.140
+a lot more to dig into there.
+
+
+00:42:25.140 --> 00:42:26.180
+Um, yeah.
+
+
+00:42:26.180 --> 00:42:26.640
+But yeah,
+
+
+00:42:26.640 --> 00:42:29.880
+the MacOS notarization stuff is a serious pain as well.
+
+
+00:42:29.880 --> 00:42:34.060
+Like it's a little bit like submitting something to the iPhone app store where
+
+
+00:42:34.060 --> 00:42:36.120
+it, you know, it gets reviewed and yeah.
+
+
+00:42:36.120 --> 00:42:36.640
+Yeah.
+
+
+00:42:36.640 --> 00:42:39.660
+No, I think once you have it already notified, you can publish updates.
+
+
+00:42:39.660 --> 00:42:43.580
+Cause I was thinking as you were talking about that, like how do you design or
+
+
+00:42:43.580 --> 00:42:47.900
+deal with the latency, you know, of like I've submitted it and how long does
+
+
+00:42:47.900 --> 00:42:49.100
+someone picks it up and reviews it?
+
+
+00:42:49.100 --> 00:42:49.600
+I don't know.
+
+
+00:42:49.600 --> 00:42:53.300
+But I guess once it's kind of approved for notarization, then it, it just
+
+
+00:42:53.440 --> 00:42:54.400
+It goes through pretty quickly.
+
+
+00:42:54.400 --> 00:42:58.120
+You just set a really long time out on your CI job.
+
+
+00:42:58.120 --> 00:43:00.720
+Like exactly time out seven weeks.
+
+
+00:43:00.720 --> 00:43:01.080
+Yeah.
+
+
+00:43:01.080 --> 00:43:02.360
+Give it a week at least.
+
+
+00:43:02.360 --> 00:43:04.480
+Yeah, no.
+
+
+00:43:04.480 --> 00:43:09.600
+And so then after all of those things kind of happen, there's this stage in,
+
+
+00:43:09.600 --> 00:43:13.480
+you know, there's a stop, stop, stop line in the, pep one-on-one that just
+
+
+00:43:13.480 --> 00:43:17.320
+basically says for the release manager to wait for everyone to be done with their
+
+
+00:43:17.320 --> 00:43:17.680
+thing.
+
+
+00:43:17.680 --> 00:43:20.720
+And then once everyone's done with their thing and has uploaded everything to
+
+
+00:43:20.720 --> 00:43:23.360
+to python.org, there's basically this phase
+
+
+00:43:23.360 --> 00:43:24.400
+of testing everything.
+
+
+00:43:24.400 --> 00:43:27.400
+So you download everything, you make sure everything works
+
+
+00:43:27.400 --> 00:43:29.720
+on all the operating systems the way that's expected to.
+
+
+00:43:29.720 --> 00:43:32.120
+You don't wanna blow the horn and then realize
+
+
+00:43:32.120 --> 00:43:35.360
+the very last mile that there's something wrong.
+
+
+00:43:35.360 --> 00:43:36.800
+And so lots of testing happens,
+
+
+00:43:36.800 --> 00:43:39.400
+and then after the testing happens, at that point,
+
+
+00:43:39.400 --> 00:43:42.640
+then everything that will get uploaded to python.org,
+
+
+00:43:42.640 --> 00:43:44.200
+or that has been uploaded to python.org,
+
+
+00:43:44.200 --> 00:43:47.520
+gets signed by the release manager in particular
+
+
+00:43:47.520 --> 00:43:49.620
+with SIGSTORE and GPG.
+
+
+00:43:49.620 --> 00:43:52.260
+And then from there, all of those signatures get published.
+
+
+00:43:52.260 --> 00:43:55.060
+And that is the end of python.org.
+
+
+00:43:55.060 --> 00:43:56.860
+All of the artifacts are published.
+
+
+00:43:56.860 --> 00:44:00.260
+And only then does the release manager, this is step 10,
+
+
+00:44:00.260 --> 00:44:04.320
+do a git push to the actual upstream CPython repo.
+
+
+00:44:04.320 --> 00:44:07.260
+And at that point, then the branch can be unblocked,
+
+
+00:44:07.260 --> 00:44:08.980
+all of these things, the release is done,
+
+
+00:44:08.980 --> 00:44:11.700
+everyone's happy, we can celebrate.
+
+
+00:44:11.700 --> 00:44:15.060
+Yeah, that's kind of the very high level view
+
+
+00:44:15.060 --> 00:44:16.460
+of what happens.
+
+
+00:44:16.460 --> 00:44:17.300
+- Amazing.
+
+
+00:44:17.300 --> 00:44:18.660
+A couple of thoughts here.
+
+
+00:44:18.660 --> 00:44:25.160
+First of all, the Windows Square is like tangibly different than the Mac OS Square.
+
+
+00:44:25.160 --> 00:44:33.680
+The Windows Square says, send off some source code to Azure pipelines, a external repeatable CI build system.
+
+
+00:44:33.680 --> 00:44:35.740
+Whereas the Mac line is like, build it.
+
+
+00:44:35.740 --> 00:44:36.540
+You know what I mean?
+
+
+00:44:36.540 --> 00:44:38.940
+That's actually pretty interesting.
+
+
+00:44:38.940 --> 00:44:42.380
+And I don't know that there's an Azure pipeline for Mac OS, right?
+
+
+00:44:42.380 --> 00:44:45.980
+Like that's just the sort of the story of Mac and servers and.
+
+
+00:44:45.980 --> 00:44:48.020
+But just highlighting those differences, right?
+
+
+00:44:48.020 --> 00:44:51.340
+Like it's, it's a different thing to say I build on my machine with whatever I
+
+
+00:44:51.340 --> 00:44:56.240
+got versus I pushed to something like Azure pipeline CI CD and get some results.
+
+
+00:44:56.240 --> 00:44:56.940
+Yeah.
+
+
+00:44:56.940 --> 00:45:02.100
+Both the source tarball builds and the Mac OS builds are all local.
+
+
+00:45:02.100 --> 00:45:02.560
+Right.
+
+
+00:45:02.560 --> 00:45:06.900
+And they're not done with a repeatable like CI provider.
+
+
+00:45:06.900 --> 00:45:10.860
+Um, I was actually able to get like the actual source tarballs
+
+
+00:45:10.860 --> 00:45:12.460
+to work on GitHub actions.
+
+
+00:45:12.460 --> 00:45:17.340
+And, and so that, that's something that I've worked on and have provided
+
+
+00:45:17.340 --> 00:45:19.820
+that to release managers and we're talking about it right now.
+
+
+00:45:19.820 --> 00:45:25.260
+And macOS is actually, to my knowledge, is actually going to be revamped a little bit
+
+
+00:45:25.260 --> 00:45:28.180
+because that tooling has been around for so long.
+
+
+00:45:28.180 --> 00:45:30.700
+I think that there's going to be some work done on it.
+
+
+00:45:30.700 --> 00:45:32.700
+And so I haven't dug into it as deeply.
+
+
+00:45:32.700 --> 00:45:37.780
+I've kind of more just provided a bunch of context to the release managers about things that I want to see.
+
+
+00:45:37.780 --> 00:45:41.260
+Like if I were to do this myself, this is the other things I'm interested in.
+
+
+00:45:41.260 --> 00:45:41.660
+Right.
+
+
+00:45:41.660 --> 00:45:46.220
+Provided that you actually had access to a macOS system,
+
+
+00:45:46.220 --> 00:45:49.420
+I'm sure you could do it all from the CLI because for example, for the
+
+
+00:45:49.420 --> 00:45:53.020
+talk, Python and courses apps, we use Flutter and you just say, what a run.
+
+
+00:45:53.020 --> 00:45:58.860
+And it compiles that, that iOS or Mac OS version somehow through the command
+
+
+00:45:58.860 --> 00:46:03.420
+line and then like outcomes a, a thing that is already deployed onto, you
+
+
+00:46:03.420 --> 00:46:04.500
+know, a simulator or something.
+
+
+00:46:04.500 --> 00:46:04.780
+Right.
+
+
+00:46:04.780 --> 00:46:06.660
+So it could happen.
+
+
+00:46:06.660 --> 00:46:11.300
+I mean, there is, there is some hosting, but it's kind of like, here's
+
+
+00:46:11.300 --> 00:46:12.500
+your Mac mini in the cloud.
+
+
+00:46:12.500 --> 00:46:13.260
+Go, go.
+
+
+00:46:13.260 --> 00:46:15.060
+I mean, there is a, what is it?
+
+
+00:46:15.060 --> 00:46:16.780
+GitHub action supports Mac OS.
+
+
+00:46:16.780 --> 00:46:17.460
+So does it?
+
+
+00:46:17.460 --> 00:46:17.820
+Okay.
+
+
+00:46:17.820 --> 00:46:19.380
+So yeah, so possibly, possibly.
+
+
+00:46:19.380 --> 00:46:19.620
+Yeah.
+
+
+00:46:19.620 --> 00:46:20.700
+Maybe, maybe it could happen.
+
+
+00:46:20.700 --> 00:46:23.980
+I'm not saying it has to, I'm just, it was a kind of a striking difference that
+
+
+00:46:23.980 --> 00:46:26.820
+one is like a CI/CD process and one is local and manual.
+
+
+00:46:26.820 --> 00:46:27.260
+Yeah.
+
+
+00:46:27.260 --> 00:46:33.580
+Actually windows is the most repeatable, most like actually isolated from, from
+
+
+00:46:33.580 --> 00:46:36.220
+any, from the, just the machine itself, right.
+
+
+00:46:36.220 --> 00:46:37.580
+The release manager themselves.
+
+
+00:46:37.580 --> 00:46:38.300
+So yeah.
+
+
+00:46:38.300 --> 00:46:38.740
+Yeah.
+
+
+00:46:38.740 --> 00:46:39.460
+That's pretty interesting.
+
+
+00:46:39.460 --> 00:46:43.180
+And then we have binaries and they get published and everybody is happy.
+
+
+00:46:43.180 --> 00:46:47.180
+We all go and install it and it's been in testing for quite a while, right?
+
+
+00:46:47.180 --> 00:46:48.780
+Like we've had a bunch of betas.
+
+
+00:46:48.780 --> 00:46:49.420
+We had alphas.
+
+
+00:46:49.420 --> 00:46:54.280
+We have had three release candidates and on Monday we'll have a dot zero.
+
+
+00:46:54.280 --> 00:46:55.080
+It's exciting.
+
+
+00:46:55.080 --> 00:46:56.080
+It's really exciting.
+
+
+00:46:56.080 --> 00:46:56.940
+It is exciting.
+
+
+00:46:56.940 --> 00:47:02.840
+The other question I would ask you is like, what is the time from like step one to step 10?
+
+
+00:47:02.840 --> 00:47:05.680
+How much clock time has passed wall time?
+
+
+00:47:05.680 --> 00:47:10.840
+I would say that it is on, it's on the scale of hours.
+
+
+00:47:10.840 --> 00:47:12.320
+It's not like a day.
+
+
+00:47:12.540 --> 00:47:15.100
+which is kind of incredible, right?
+
+
+00:47:15.100 --> 00:47:18.940
+The fact that you get three volunteers together
+
+
+00:47:18.940 --> 00:47:21.180
+to do a bunch, all of this stuff,
+
+
+00:47:21.180 --> 00:47:22.940
+and it only takes a couple hours.
+
+
+00:47:22.940 --> 00:47:26.140
+It obviously depends on how many problems you run into
+
+
+00:47:26.140 --> 00:47:28.300
+on the way, because if you get to the very end
+
+
+00:47:28.300 --> 00:47:30.300
+and then there's a problem that you find in testing,
+
+
+00:47:30.300 --> 00:47:31.900
+you have to kind of start over.
+
+
+00:47:31.900 --> 00:47:34.620
+But yeah, if everything goes to plan,
+
+
+00:47:34.620 --> 00:47:38.300
+which has happened, I've coordinated security,
+
+
+00:47:38.300 --> 00:47:39.900
+like there was a couple of security fixes
+
+
+00:47:39.900 --> 00:47:43.260
+that were in 3.11.5 that I coordinated.
+
+
+00:47:43.260 --> 00:47:46.220
+And yeah, I got to kind of witness the,
+
+
+00:47:46.220 --> 00:47:49.260
+okay, we've decided we're making a security release to the actual,
+
+
+00:47:49.260 --> 00:47:52.140
+it's out there, we can now talk about the vulnerabilities.
+
+
+00:47:52.140 --> 00:47:53.420
+Yeah, it's on the scale of ours.
+
+
+00:47:53.420 --> 00:47:54.540
+Is that the int parsing thing?
+
+
+00:47:54.540 --> 00:47:56.780
+It was the, what was it?
+
+
+00:47:56.780 --> 00:48:00.380
+There was an int part or was it int parsing?
+
+
+00:48:00.380 --> 00:48:01.020
+No, it wasn't.
+
+
+00:48:01.020 --> 00:48:02.860
+Really long ints, I don't know.
+
+
+00:48:02.860 --> 00:48:03.740
+No, that's a different one.
+
+
+00:48:03.740 --> 00:48:09.660
+No, it was, there was a TLS and this one sounds really scary.
+
+
+00:48:09.660 --> 00:48:19.580
+It's not as scary. It's a TLS bypass on the server side. So like if the client is supposed
+
+
+00:48:19.580 --> 00:48:25.580
+to be authenticated, for example, if you're using MTLS, you can if you like send a handshake and
+
+
+00:48:25.580 --> 00:48:32.140
+then immediately close your socket, you can get lucky during like a brief period of time where
+
+
+00:48:32.140 --> 00:48:37.740
+the socket on the other side, like the server socket will say like, oh, it's closed. So it's
+
+
+00:48:37.740 --> 00:48:43.580
+it's fine, right? And the data that whatever you sent over the wire won't will still be
+
+
+00:48:43.580 --> 00:48:49.300
+readable. But then the handshake hasn't actually like completed. And so that sounds like scary,
+
+
+00:48:49.300 --> 00:48:55.860
+right? But it's it's actually not as bad because so many protocols, well, for one, so many
+
+
+00:48:55.860 --> 00:49:01.220
+protocols don't even use client authentication at all. So that's one huge point. The other
+
+
+00:49:01.220 --> 00:49:08.340
+side of it is that all protocols that people do end up using mutual TLS with are protocols
+
+
+00:49:08.340 --> 00:49:14.860
+that you have to send something back to... So like HTTP, for example. You have to send
+
+
+00:49:14.860 --> 00:49:21.040
+something back, and at that point, the socket is closed. And so it can't send the data back.
+
+
+00:49:21.040 --> 00:49:26.980
+So there's no data exfiltration. It's a pretty narrow scope of what's actually vulnerable.
+
+
+00:49:26.980 --> 00:49:31.540
+Yes, the fix for that vulnerability is in 3.11.5.
+
+
+00:49:31.540 --> 00:49:34.180
+And there's another one too, but it's a little bit more minor.
+
+
+00:49:34.180 --> 00:49:36.340
+Well, we'll start fresh with 3.12.
+
+
+00:49:36.340 --> 00:49:39.220
+And hopefully you will not have to witness one of these releases.
+
+
+00:49:39.220 --> 00:49:45.540
+Honestly, given how large CPython is and how wide ranging its standard library attempts to be,
+
+
+00:49:45.540 --> 00:49:48.260
+it does not have many vulnerabilities.
+
+
+00:49:48.260 --> 00:49:50.660
+I mean, you go look at like a web browser upgrade.
+
+
+00:49:50.660 --> 00:49:55.460
+It's like, here's the 27 remote code execution vulnerability.
+
+
+00:49:55.460 --> 00:49:56.340
+Maybe not quite that many.
+
+
+00:49:56.340 --> 00:49:59.540
+But here's the 27 security fixes this month, you know?
+
+
+00:49:59.540 --> 00:50:02.980
+- Yeah, we've maybe, maybe it's a little more front of mind right now,
+
+
+00:50:02.980 --> 00:50:05.860
+now that like Chrome is on their fifth zero day of the week.
+
+
+00:50:05.860 --> 00:50:08.820
+But yeah, it's, it's pretty tough week for Chrome right now.
+
+
+00:50:08.820 --> 00:50:09.140
+- Yeah.
+
+
+00:50:09.140 --> 00:50:10.900
+- And Firefox and the rest of us.
+
+
+00:50:10.900 --> 00:50:12.740
+- Yeah. Yeah, for sure.
+
+
+00:50:12.740 --> 00:50:16.740
+Let's see another comment from Frank says,
+
+
+00:50:16.740 --> 00:50:20.260
+"SIGstore and GPG seem a bit at the end of the process,
+
+
+00:50:20.260 --> 00:50:23.220
+considering these are built locally in some cases.
+
+
+00:50:23.220 --> 00:50:26.180
+How does one guarantee that the sign sources are still right?"
+
+
+00:50:26.180 --> 00:50:32.580
+Yeah, so this is kind of getting to the, like, I agree with you, how does one track that
+
+
+00:50:32.580 --> 00:50:34.860
+they're still right?
+
+
+00:50:34.860 --> 00:50:37.300
+So they get uploaded to Python.org.
+
+
+00:50:37.300 --> 00:50:41.420
+And at that point, they're kind of like in a holding pattern for testing.
+
+
+00:50:41.420 --> 00:50:45.480
+And so those binaries are there, they're on Python.org, they've got, you know, the hashes
+
+
+00:50:45.480 --> 00:50:47.740
+have already been taken.
+
+
+00:50:47.740 --> 00:50:49.260
+Then the testing happens.
+
+
+00:50:49.260 --> 00:50:53.500
+So like, anything that happens between that and the Sixer styling, like, yeah, at that
+
+
+00:50:53.500 --> 00:50:54.500
+point, it's kind of protected.
+
+
+00:50:54.500 --> 00:51:00.100
+But yeah, there is this really big dwell time where you just have artifacts sitting on someone's
+
+
+00:51:00.100 --> 00:51:04.660
+machine, and they're going to get signed and sent out the door. And that's kind of like
+
+
+00:51:04.660 --> 00:51:08.580
+the due diligence of release managers, they need to make sure that those are the right
+
+
+00:51:08.580 --> 00:51:12.260
+artifacts that they've been tested properly, that the ones that you tested locally are
+
+
+00:51:12.260 --> 00:51:17.060
+the ones that are going to get ended up being signed. Yeah. And so this is something this
+
+
+00:51:17.060 --> 00:51:23.020
+is like a, a piece of the whole puzzle that gets mitigated by having those builds happen
+
+
+00:51:23.020 --> 00:51:27.500
+on external services as opposed to on someone's local machine. Because at that point, you're
+
+
+00:51:27.500 --> 00:51:28.500
+just giving --
+
+
+00:51:28.500 --> 00:51:33.140
+>> Yeah, you're just giving this, like, set of scripts, like, very, very narrow set of
+
+
+00:51:33.140 --> 00:51:38.660
+input. Like, I want this exact git commit and this version number to get built. And
+
+
+00:51:38.660 --> 00:51:43.380
+then out pops, like, a tarball that's already been signed and verified and everything. And
+
+
+00:51:43.380 --> 00:51:45.860
+then from there, you just put that on Python.org, right?
+
+
+00:51:45.860 --> 00:51:46.860
+>> Awesome.
+
+
+00:51:46.860 --> 00:51:51.460
+>> Like, that is a lot less -- there's a lot less of that risk where it's just on someone's
+
+
+00:51:51.460 --> 00:51:56.100
+machine and how, how do, how does one know that that is the exact thing that they built?
+
+
+00:51:56.100 --> 00:51:57.100
+It's not provable.
+
+
+00:51:57.100 --> 00:51:58.100
+Yeah.
+
+
+00:51:58.100 --> 00:51:59.580
+What about virtual machines for these gray boxes?
+
+
+00:51:59.580 --> 00:52:03.180
+I mean, obviously the Azure one, that's, that's its own thing, but have you considered
+
+
+00:52:03.180 --> 00:52:11.300
+like a, a Docker or an official just RLs VM go like here, take this, run that, you know
+
+
+00:52:11.300 --> 00:52:12.300
+what I mean?
+
+
+00:52:12.300 --> 00:52:13.300
+Um, yeah.
+
+
+00:52:13.300 --> 00:52:17.780
+To, to make it a little less dependent on the person whose role it is that year.
+
+
+00:52:17.780 --> 00:52:22.020
+It definitely would help with the reproducibility side of things, because as we know, Docker
+
+
+00:52:22.020 --> 00:52:25.960
+is just the whole machine shipped in a box, right?
+
+
+00:52:25.960 --> 00:52:29.580
+So yeah, in theory, if you build the same thing again in that exact same image, you
+
+
+00:52:29.580 --> 00:52:31.760
+would end up getting a pretty similar result.
+
+
+00:52:31.760 --> 00:52:34.580
+So it helps on that front, which is good.
+
+
+00:52:34.580 --> 00:52:39.460
+I think the tough thing is that you still don't have control of the inputs, and the
+
+
+00:52:39.460 --> 00:52:42.940
+output you also still don't have.
+
+
+00:52:42.940 --> 00:52:45.660
+It comes out of the Docker container, you get a tarball.
+
+
+00:52:45.660 --> 00:52:49.420
+There's still that time in between when the tarball is out of the container and when it's
+
+
+00:52:49.420 --> 00:52:55.580
+actually on python.org, where it's on someone's machine that is not in a container.
+
+
+00:52:55.580 --> 00:53:00.380
+And containers also aren't the best in terms of like, you did mention virtual machines
+
+
+00:53:00.380 --> 00:53:08.180
+as well, but even that, like on a machine that is a high value target, you know, maybe
+
+
+00:53:08.180 --> 00:53:09.180
+it's worth it.
+
+
+00:53:09.180 --> 00:53:10.180
+Who knows?
+
+
+00:53:10.180 --> 00:53:11.180
+Yeah.
+
+
+00:53:11.180 --> 00:53:12.180
+Yeah.
+
+
+00:53:12.180 --> 00:53:13.180
+Who knows?
+
+
+00:53:13.180 --> 00:53:14.180
+All right.
+
+
+00:53:14.180 --> 00:53:15.860
+It's happening Monday.
+
+
+00:53:15.860 --> 00:53:17.620
+So very exciting.
+
+
+00:53:17.620 --> 00:53:20.020
+And I'm looking forward to all the new work.
+
+
+00:53:20.020 --> 00:53:25.220
+I mean, are there new features in 3.12 that are you particularly excited about?
+
+
+00:53:25.220 --> 00:53:30.420
+You know, since being in this role, I actually haven't been paying attention to Python releases
+
+
+00:53:30.420 --> 00:53:32.700
+as much, Python features as much.
+
+
+00:53:32.700 --> 00:53:34.620
+I'm mostly excited about it getting faster.
+
+
+00:53:34.620 --> 00:53:37.380
+I mean, the generic, it's just straight up faster.
+
+
+00:53:37.380 --> 00:53:41.300
+Like there's no one on the planet that's not happy about that.
+
+
+00:53:41.300 --> 00:53:43.060
+What are the major features this release?
+
+
+00:53:43.060 --> 00:53:46.380
+So there's like a some more broad F string thing.
+
+
+00:53:46.380 --> 00:53:49.660
+So you should be able to have a subset of the language in the F string.
+
+
+00:53:49.660 --> 00:53:52.380
+And now you can kind of like program in the F string, I believe.
+
+
+00:53:52.380 --> 00:53:56.020
+Um, type statement, better generic types.
+
+
+00:53:56.020 --> 00:53:56.260
+Yeah.
+
+
+00:53:56.260 --> 00:54:00.860
+There's like a, a simpler way to express generics in the type system.
+
+
+00:54:00.860 --> 00:54:05.580
+And then I'm with you, you know, honestly, like F strings being nicer.
+
+
+00:54:05.580 --> 00:54:06.380
+That's awesome.
+
+
+00:54:06.380 --> 00:54:07.100
+Thanks for that.
+
+
+00:54:07.100 --> 00:54:09.980
+But faster, faster, faster is good.
+
+
+00:54:09.980 --> 00:54:12.500
+Uh, this per interpreter, Gil's kind of part of that.
+
+
+00:54:12.500 --> 00:54:14.080
+faster CPython thing, right?
+
+
+00:54:14.080 --> 00:54:17.640
+Like it's hard to leverage, but if you could just say in your threads, new
+
+
+00:54:17.640 --> 00:54:19.760
+interpreter for this bit, right?
+
+
+00:54:19.760 --> 00:54:23.540
+All of a sudden you escape the gill for computational stuff.
+
+
+00:54:23.540 --> 00:54:24.580
+That'd be pretty interesting.
+
+
+00:54:24.580 --> 00:54:27.840
+Um, but you know, also this, this is another interesting thing.
+
+
+00:54:27.840 --> 00:54:31.420
+If you pull up this list, like the size of the scroll bar, I don't know.
+
+
+00:54:31.420 --> 00:54:33.580
+We were talking about scary scroll bars earlier.
+
+
+00:54:33.580 --> 00:54:35.440
+Like this is next level.
+
+
+00:54:35.440 --> 00:54:36.140
+Let me see.
+
+
+00:54:36.140 --> 00:54:38.260
+I'm going to, I'll throw this into Omnivore.
+
+
+00:54:38.260 --> 00:54:39.540
+Are you a fan of Omnivore?
+
+
+00:54:39.540 --> 00:54:40.140
+This app?
+
+
+00:54:40.140 --> 00:54:40.940
+Omnivore.
+
+
+00:54:40.940 --> 00:54:41.820
+Never heard of it.
+
+
+00:54:42.020 --> 00:54:42.520
+What is it?
+
+
+00:54:42.520 --> 00:54:44.040
+Omnivore.app.
+
+
+00:54:44.040 --> 00:54:46.180
+Kind of a Instapaper pocket replacement.
+
+
+00:54:46.180 --> 00:54:47.120
+Oh, I'm already logged into it.
+
+
+00:54:47.120 --> 00:54:47.520
+Look at that.
+
+
+00:54:47.520 --> 00:54:49.700
+Oh, super, super cool.
+
+
+00:54:49.700 --> 00:54:52.260
+So I go here and you say, add a link.
+
+
+00:54:52.260 --> 00:54:54.100
+Actually, it just, I think it just went in there.
+
+
+00:54:54.100 --> 00:54:54.540
+Let's see.
+
+
+00:54:54.540 --> 00:54:56.140
+40 minutes just to read that.
+
+
+00:54:56.140 --> 00:54:56.660
+What's new.
+
+
+00:54:56.660 --> 00:54:58.540
+That's what I was trying to pull.
+
+
+00:54:58.540 --> 00:55:00.820
+It just, yeah.
+
+
+00:55:00.820 --> 00:55:02.020
+It calculates that for you.
+
+
+00:55:02.020 --> 00:55:03.820
+It's like, it's going to take a while.
+
+
+00:55:03.820 --> 00:55:07.820
+So just the, a sense of like, what is new in Python 3.12.
+
+
+00:55:07.820 --> 00:55:08.780
+That's a ton, right?
+
+
+00:55:08.780 --> 00:55:09.180
+Yeah.
+
+
+00:55:09.180 --> 00:55:11.540
+A ton of stuff, like tons of fixes.
+
+
+00:55:11.700 --> 00:55:13.840
+Tons of fixes and improvements.
+
+
+00:55:13.840 --> 00:55:17.840
+Mike Feeler out in the audience says Python dash M, SQLite 3 is nifty.
+
+
+00:55:17.840 --> 00:55:19.800
+Mike, you're going to have to tell me more about this.
+
+
+00:55:19.800 --> 00:55:22.860
+Does that, does that open up a database now?
+
+
+00:55:22.860 --> 00:55:23.820
+That would be lovely.
+
+
+00:55:23.820 --> 00:55:24.400
+Yeah.
+
+
+00:55:24.400 --> 00:55:25.260
+That would be cool.
+
+
+00:55:25.260 --> 00:55:26.800
+Kind of like the HTTP server.
+
+
+00:55:26.800 --> 00:55:27.560
+Yes.
+
+
+00:55:27.560 --> 00:55:28.140
+Yeah.
+
+
+00:55:28.140 --> 00:55:29.340
+Or the JSON tool.
+
+
+00:55:29.340 --> 00:55:31.180
+The JSON tool is the one I use the most.
+
+
+00:55:31.180 --> 00:55:32.020
+What's that one do?
+
+
+00:55:32.020 --> 00:55:35.160
+Uh, so you can like pipe JSON into it and it'll just make it pretty.
+
+
+00:55:35.160 --> 00:55:40.180
+It's pretty, it's questionable how useful it is, but it sure does make pretty JSON.
+
+
+00:55:40.180 --> 00:55:40.700
+Yeah.
+
+
+00:55:40.740 --> 00:55:42.740
+which I really appreciate.
+
+
+00:55:42.740 --> 00:55:45.300
+Like two space indented JSON.
+
+
+00:55:45.300 --> 00:55:46.660
+That's perfect.
+
+
+00:55:46.660 --> 00:55:47.860
+- Indeed. All right.
+
+
+00:55:47.860 --> 00:55:49.540
+One more comment from the audience
+
+
+00:55:49.540 --> 00:55:50.540
+and then we'll maybe wrap it up.
+
+
+00:55:50.540 --> 00:55:53.060
+Karen, hey Karen, says,
+
+
+00:55:53.060 --> 00:55:56.500
+let me, she's clarifying above,
+
+
+00:55:56.500 --> 00:56:00.580
+like VM Docker for less changes
+
+
+00:56:00.580 --> 00:56:02.620
+and better reproducibility.
+
+
+00:56:02.620 --> 00:56:06.340
+"VM Docker for less heterogeneity reproducibility
+
+
+00:56:06.340 --> 00:56:07.660
+than the current situation,
+
+
+00:56:07.660 --> 00:56:10.060
+which is affected by a given user's environment."
+
+
+00:56:10.060 --> 00:56:10.300
+Yeah.
+
+
+00:56:10.300 --> 00:56:14.780
+Like what web browser did you install today or something completely unrelated
+
+
+00:56:14.780 --> 00:56:18.080
+or, you know, or like you upgrade, if it's your personal machine and you're
+
+
+00:56:18.080 --> 00:56:22.960
+using tools, like if you upgrade those tools, it could pull some other system
+
+
+00:56:22.960 --> 00:56:23.680
+dependency, right.
+
+
+00:56:23.680 --> 00:56:26.640
+That ends up being relevant to the build of CPython.
+
+
+00:56:26.640 --> 00:56:30.300
+And yeah, it's just, there's just so much that could be different over
+
+
+00:56:30.300 --> 00:56:31.620
+the course of even a few days.
+
+
+00:56:31.620 --> 00:56:32.140
+Yeah.
+
+
+00:56:32.140 --> 00:56:32.640
+Yeah.
+
+
+00:56:32.640 --> 00:56:37.000
+Which is why it's interesting that the windows one goes to Azure pipelines.
+
+
+00:56:37.000 --> 00:56:39.300
+Cause it kind of pulls, puts that to the side.
+
+
+00:56:39.300 --> 00:56:39.500
+Right.
+
+
+00:56:39.500 --> 00:56:39.940
+Yeah.
+
+
+00:56:39.940 --> 00:56:40.940
+All right, Seth.
+
+
+00:56:40.940 --> 00:56:43.940
+Well, this has been super, super interesting.
+
+
+00:56:43.940 --> 00:56:46.940
+And thanks for giving us a look into this world.
+
+
+00:56:46.940 --> 00:56:48.940
+So, yeah, very, very excellent.
+
+
+00:56:48.940 --> 00:56:50.940
+And I guess, you know, final two questions.
+
+
+00:56:50.940 --> 00:56:52.940
+Can you write some Python code?
+
+
+00:56:52.940 --> 00:56:54.940
+What editor are you using these days?
+
+
+00:56:54.940 --> 00:56:56.940
+Yeah, I'm using PyCharm.
+
+
+00:56:56.940 --> 00:56:57.940
+I love PyCharm.
+
+
+00:56:57.940 --> 00:57:01.940
+Specifically, you know, I have the--what is it?
+
+
+00:57:01.940 --> 00:57:03.940
+I had the Professional Edition for a good long while,
+
+
+00:57:03.940 --> 00:57:05.940
+and then I let that subscription lapse,
+
+
+00:57:05.940 --> 00:57:07.940
+and I need to just renew it.
+
+
+00:57:07.940 --> 00:57:11.940
+So I'm using the community edition right now, but yeah, I love PyCharm so much.
+
+
+00:57:11.940 --> 00:57:13.260
+So really good editor.
+
+
+00:57:13.260 --> 00:57:14.260
+Awesome.
+
+
+00:57:14.260 --> 00:57:15.260
+I'm there with you.
+
+
+00:57:15.260 --> 00:57:18.980
+And then notable PyPI package, something that is interesting to you.
+
+
+00:57:18.980 --> 00:57:20.860
+I already talked about these.
+
+
+00:57:20.860 --> 00:57:22.760
+So pip audit, just use pip audit.
+
+
+00:57:22.760 --> 00:57:27.620
+There's so much work happening somewhere with pip audit that it just makes sense for you
+
+
+00:57:27.620 --> 00:57:30.420
+to use it because there's just a ton of work happening.
+
+
+00:57:30.420 --> 00:57:34.340
+And if you just add it to your workflow, you'll just know that things are vulnerable or like
+
+
+00:57:34.340 --> 00:57:36.660
+what's vulnerable and like what versions you should update to.
+
+
+00:57:36.660 --> 00:57:40.120
+>> Yeah, I already have some tooling that,
+
+
+00:57:40.120 --> 00:57:42.700
+like some aliases that do three or four steps to
+
+
+00:57:42.700 --> 00:57:45.460
+actually update my dependencies and install them.
+
+
+00:57:45.460 --> 00:57:49.180
+Like I might as well just throw this as like another and and pip audit.
+
+
+00:57:49.180 --> 00:57:50.260
+>> Yeah, and you can actually,
+
+
+00:57:50.260 --> 00:57:55.900
+so I think there's a way you can tell pip audit to install packages,
+
+
+00:57:55.900 --> 00:57:58.500
+but then it will say something if
+
+
+00:57:58.500 --> 00:58:01.260
+there is a vulnerability in whatever you're installing.
+
+
+00:58:01.260 --> 00:58:04.020
+So you can even replace pip install with that, I believe.
+
+
+00:58:04.020 --> 00:58:05.220
+>> Use pip audit.
+
+
+00:58:05.220 --> 00:58:06.560
+I think that that is a feature.
+
+
+00:58:06.560 --> 00:58:07.200
+All right.
+
+
+00:58:07.200 --> 00:58:07.820
+I think so.
+
+
+00:58:07.820 --> 00:58:09.000
+It has a features thing.
+
+
+00:58:09.000 --> 00:58:09.540
+Let me look at it.
+
+
+00:58:09.540 --> 00:58:10.540
+Oh, let's see it.
+
+
+00:58:10.540 --> 00:58:11.700
+Oh, it's not going to work.
+
+
+00:58:11.700 --> 00:58:12.460
+Cause it's not the read me.
+
+
+00:58:12.460 --> 00:58:14.340
+It's true.
+
+
+00:58:14.340 --> 00:58:17.140
+I got to go to the homepage, which will take me here.
+
+
+00:58:17.140 --> 00:58:17.980
+So I gotta go to the source.
+
+
+00:58:17.980 --> 00:58:21.220
+Uh, no, where's the GitHub.
+
+
+00:58:21.220 --> 00:58:22.380
+I only go to the stars.
+
+
+00:58:22.380 --> 00:58:22.860
+All right.
+
+
+00:58:22.860 --> 00:58:23.160
+You know what?
+
+
+00:58:23.160 --> 00:58:24.660
+Maybe I don't want to click this thing.
+
+
+00:58:24.660 --> 00:58:25.260
+Features.
+
+
+00:58:25.260 --> 00:58:25.900
+There we go.
+
+
+00:58:25.900 --> 00:58:27.500
+Multi-villain admitting.
+
+
+00:58:27.500 --> 00:58:31.940
+We haven't talked about S bombs, but seamlessly reuse here.
+
+
+00:58:32.700 --> 00:58:37.020
+listening. Yeah. If it reuses the pip caches, maybe, maybe, maybe. All right.
+
+
+00:58:37.020 --> 00:58:37.820
+What is it?
+
+
+00:58:37.820 --> 00:58:39.740
+I'll play with it. We'll see. People can check it out.
+
+
+00:58:39.740 --> 00:58:41.980
+Citation needed. Citation needed.
+
+
+00:58:41.980 --> 00:58:46.940
+Exactly. Citation needed. That's right. All right. Well, yeah. People check out pip audit.
+
+
+00:58:46.940 --> 00:58:52.220
+That looks excellent. And yeah. Final call to action. People are interested in this. I mean,
+
+
+00:58:52.220 --> 00:58:56.300
+give a thought to it on Monday, theoretically, at least in the past,
+
+
+00:58:56.300 --> 00:58:59.420
+if you listen too far in the future, but you know, the next release.
+
+
+00:58:59.420 --> 00:59:04.940
+Yeah, no, I think the biggest so in terms of like, what can you personally do? Because like,
+
+
+00:59:04.940 --> 00:59:08.860
+there's just I just talked about so much stuff that is just kind of happening in the background.
+
+
+00:59:08.860 --> 00:59:14.780
+But there's also stuff that like individual people can do. And the most impactful URL that you can
+
+
+00:59:14.780 --> 00:59:19.900
+visit for security, if you're an open source consumer or like a maintainer, like it doesn't
+
+
+00:59:19.900 --> 00:59:26.860
+matter, this is just gonna be impactful if you work in software is best dot open ssf.org. So
+
+
+00:59:26.860 --> 00:59:31.980
+So that is basically just like a web page and it just has a few URLs and you click into
+
+
+00:59:31.980 --> 00:59:36.780
+any of those URLs and it just gives you like a checklist of your things to think about
+
+
+00:59:36.780 --> 00:59:40.340
+here's and then if you click into those checklist items, it gives you it's kind of like this
+
+
+00:59:40.340 --> 00:59:46.940
+recursive nice, like guiding force of like, here's the things you could be doing, right?
+
+
+00:59:46.940 --> 00:59:50.820
+And if you want to dig in more size guide for developing more secure software, in other
+
+
+00:59:50.820 --> 00:59:54.420
+words, NPM best practices, and so on.
+
+
+00:59:54.420 --> 00:59:55.420
+Yeah, excellent.
+
+
+00:59:55.420 --> 01:00:02.140
+I'm hoping to put a Python best practices guide there by the end of the year that I'm here.
+
+
+01:00:02.140 --> 01:00:03.900
+So don't you worry. Look forward to that.
+
+
+01:00:03.900 --> 01:00:08.460
+Excellent. I'll be right there. We'll get it above on the list.
+
+
+01:00:08.460 --> 01:00:12.300
+Yeah, it'll somehow not sort alphabetically and it'll be okay.
+
+
+01:00:12.300 --> 01:00:15.900
+Tip the scales a little bit.
+
+
+01:00:15.900 --> 01:00:19.180
+Exactly. Cool. Well, thank you for being here, Seth.
+
+
+01:00:19.180 --> 01:00:22.460
+And thank you for all this hard work that you're doing. It's good to know that you're out there
+
+
+01:00:22.460 --> 01:00:24.940
+keeping an eye on all these things.
+
+
+01:00:24.940 --> 01:00:27.660
+Thank you so much for having me on the show. This has been lovely.
+
+
+01:00:27.660 --> 01:00:29.340
+Yeah, you bet. Catch you next time.
+
+
+01:00:29.340 --> 01:00:29.660
+Bye.
+
+
+01:00:29.660 --> 01:00:33.980
+>> This has been another episode of Talk Python to Me.
+
+
+01:00:33.980 --> 01:00:35.660
+Thank you to our sponsors.
+
+
+01:00:35.660 --> 01:00:37.100
+Be sure to check out what they're offering.
+
+
+01:00:37.100 --> 01:00:38.980
+It really helps support the show.
+
+
+01:00:38.980 --> 01:00:43.860
+The folks over at JetBrains encourage you to get work done with PyCharm.
+
+
+01:00:43.860 --> 01:00:46.660
+PyCharm professional understands complex projects
+
+
+01:00:46.660 --> 01:00:49.540
+across multiple languages and technologies,
+
+
+01:00:49.540 --> 01:00:51.340
+so you can stay productive while you're writing
+
+
+01:00:51.340 --> 01:00:55.140
+Python code and other code like HTML or SQL.
+
+
+01:00:55.140 --> 01:00:59.940
+Download your free trial at talkpython.fm/donewithpycharm.
+
+
+01:00:59.940 --> 01:01:05.300
+Want to level up your Python? We have one of the largest catalogs of Python video courses
+
+
+01:01:05.300 --> 01:01:10.140
+over at Talk Python. Our content ranges from true beginners to deeply advanced topics like
+
+
+01:01:10.140 --> 01:01:14.660
+memory and async. And best of all, there's not a subscription in sight. Check it out
+
+
+01:01:14.660 --> 01:01:19.620
+for yourself at training.talkpython.fm. Be sure to subscribe to the show, open your favorite
+
+
+01:01:19.620 --> 01:01:24.260
+podcast app, and search for Python. We should be right at the top. You can also find the
+
+
+01:01:24.260 --> 01:01:31.140
+iTunes feed at /iTunes, the Google Play feed at /play, and the Direct RSS feed at /rss
+
+
+01:01:31.140 --> 01:01:33.460
+on talkpython.fm.
+
+
+01:01:33.460 --> 01:01:35.980
+We're live streaming most of our recordings these days.
+
+
+01:01:35.980 --> 01:01:39.560
+If you want to be part of the show and have your comments featured on the air, be sure
+
+
+01:01:39.560 --> 01:01:44.300
+to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+
+01:01:44.300 --> 01:01:45.580
+This is your host, Michael Kennedy.
+
+
+01:01:45.580 --> 01:01:46.740
+Thanks so much for listening.
+
+
+01:01:46.740 --> 01:01:48.060
+I really appreciate it.
+
+
+01:01:48.060 --> 01:01:49.700
+Now get out there and write some Python code.
+
+
+01:01:49.700 --> 01:02:11.700
+[MUSIC]
+
