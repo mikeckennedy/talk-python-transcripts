@@ -254,9 +254,9 @@
 
 00:23:28 One of the problems with coverage.py, which is my main side project, is because it's 18 years old, there are bits of it that are using the latest, greatest technology as of 15 years ago. And because it's just kept working until it breaks, I'm not going to go and fiddle with it or until I'm interested in fiddling with it. I might fiddle with it, but there's a lot of stuff that's just old and weird and just keeps rattling along.
 
-00:23:51 For such a highly used project, I can see the danger here, but have you considered, or have you run it through things like Flint to convert all the strings to F strings? Or some of these, like, upgrades to the latest Idioms, where you can say, I want it to be 37 and above, and anything that's older than that, you know, kind of rework it.
+00:23:51 For such a highly used project, I can see the danger here, but have you considered, or have you run it through things like Flint to convert all the strings to f-strings? Or some of these, like, upgrades to the latest Idioms, where you can say, I want it to be 37 and above, and anything that's older than that, you know, kind of rework it.
 
-00:24:08 I have used Py upgrade on it when I dropped 2.7, which was a couple of years back, and there are now F strings all through it. But for instance, I don't use black. There is a pull request to add type annotations to it, but it's a big project that not gaining the momentum it needs to get done. So I tend to let sleeping dogs lie where it's working, or if I don't, I don't know what I'm going to get out of it. For instance, I use Opt Parse to parse the command line arguments, and that wasn't even the right thing to use in 2.7. That was the old thing that Arg Parse replaced. But it still works. It's still in there. Parse, it's fine.
+00:24:08 I have used Py upgrade on it when I dropped 2.7, which was a couple of years back, and there are now f-strings all through it. But for instance, I don't use black. There is a pull request to add type annotations to it, but it's a big project that not gaining the momentum it needs to get done. So I tend to let sleeping dogs lie where it's working, or if I don't, I don't know what I'm going to get out of it. For instance, I use Opt Parse to parse the command line arguments, and that wasn't even the right thing to use in 2.7. That was the old thing that Arg Parse replaced. But it still works. It's still in there. Parse, it's fine.
 
 00:24:48 Sometimes there's no value and possibly adding bugs to something that you don't intend to touch at all.
 
@@ -416,15 +416,15 @@
 
 00:43:22 Okay, that makes a lot of sense. Let's see, out of the audience we got in the question last change, all I read was for Python 311. Did you read that? Have you read it's? A bit of a novel to see.
 
-00:43:32 Python developers have taken to heart the idea, and I make it sound like this is a recent development. They've always done this. You know, there's a Python 311 has a What's New in 311. And they tend to be very detailed about putting stuff in the What's New document. And like I said, they've got their own custom tool called Blurb, which is how C Python core developers, they write what are called news entries, which get created as small files in a dedicated directory, and then those get aggregated into the What's New doc.
+00:43:32 Python developers have taken to heart the idea, and I make it sound like this is a recent development. They've always done this. You know, there's a Python 311 has a What's New in 311. And they tend to be very detailed about putting stuff in the What's New document. And like I said, they've got their own custom tool called Blurb, which is how CPython core developers, they write what are called news entries, which get created as small files in a dedicated directory, and then those get aggregated into the What's New doc.
 
 00:44:02 In that change log, there's 180,000 words. A typical novel is like 80,000. So that's a proper change log right there.
 
 00:44:10 There's more information there than any one person needs, but everything that's there, someone.
 
-00:44:15 Does need that's, right. And each one of those links to like, a GitHub issue or a Pip or something like that.
+00:44:15 Does need that's, right. And each one of those links to like, a GitHub issue or a pip or something like that.
 
-00:44:22 And there's a lot of those. I just noticed, I think it was today that they got GitHub issued number 100,000 in the C Python read. Wow.
+00:44:22 And there's a lot of those. I just noticed, I think it was today that they got GitHub issued number 100,000 in the CPython read. Wow.
 
 00:44:29 Okay, that's major. It's been chugging along for a while. All right, so this looks like a great idea. What do we got up next? I just also wanted to just give credit, speaking of GitHub credit, from Colin Sullivan, who sent this in, amongst some other things as well, over on Mastodon. So thanks for sharing that. This is another one. I'm going to go quick because it's not a Python tool and it's actually in a technology I've never heard of. Maybe you've heard of it, Ned.
 
