@@ -1,0 +1,1761 @@
+00:00:00 Here's the situation. You have a Python app that is locked up or even completely crashed, and all you're left with is a core dump on the server. Now what? It's time for PyStack. You can capture a view of your app as if you've set a breakpoint and even view the call stack and locals across language calls, for example, from Python to C++ and back. We have the maintainers, Pablo Galindo Salgado and Matt Wozniski, here to dive into PyStack. You'll definitely want to to have this tool in your toolbox. This is Talk Python to Me, episode 419, recorded Tuesday, January 6th, 2023.
+
+00:00:35 Welcome to Talk Python to Me, a weekly podcast on Python. This is your host, Michael Kennedy.
+
+00:00:55 Follow me on Mastodon where I'm @mkennedy and follow the podcast using @talkpython, both on fosstodon.org.
+
+00:01:02 Be careful with impersonating accounts on other instances, there are many.
+
+00:01:06 Keep up with the show and listen to over seven years of past episodes at talkpython.fm.
+
+00:01:12 We've started streaming most of our episodes live on YouTube.
+
+00:01:15 Subscribe to our YouTube channel over at talkpython.fm/youtube to get notified about upcoming shows and be part of that episode.
+
+00:01:24 This episode is brought to you by Sentry and their awesome error monitoring product.
+
+00:01:29 And it's brought to you by Compiler from Red Hat.
+
+00:01:31 Listen to an episode of their podcast as they demystify the tech industry over at talkpython.fm/compiler.
+
+00:01:36 Hey, Pablo.
+
+00:01:37 Hey, Matt.
+
+00:01:38 Great to have you both here.
+
+00:01:41 I'm very excited to talk about some cool tools that give us a nice internal look inside of our Python apps.
+
+00:01:50 Yeah, I'm really excited to talk about these tools as well.
+
+00:01:53 - Yeah, it sounds like you've been working on them for a couple of years, you two, and especially Pablo, and it's gonna be great.
+
+00:01:58 So that's looking at sort of debugging Python apps and even Python apps that have crashed, which is really, really fantastic.
+
+00:02:08 Maybe some profiling as well.
+
+00:02:09 We'll see what we get to.
+
+00:02:10 - Crashing apps is not that fantastic, but...
+
+00:02:12 (laughing)
+
+00:02:13 But debugging them, maybe.
+
+00:02:15 - Right.
+
+00:02:16 - Exactly, I'm so excited my app crashed 'cause I get to use this PyStack tool that you all worked on.
+
+00:02:20 - For a while, I actually was, because that means that I could use it.
+
+00:02:24 But let's keep that secret.
+
+00:02:26 Well, you need test cases, right?
+
+00:02:28 And you need examples.
+
+00:02:29 Right.
+
+00:02:29 I forgot to say exactly that.
+
+00:02:30 It's a great way to see if we have any bugs.
+
+00:02:32 It's a great chance to try things out.
+
+00:02:34 Meta debugging.
+
+00:02:35 If you're trying to debug the debugger.
+
+00:02:36 Oh, we have done that, for sure.
+
+00:02:38 Yeah.
+
+00:02:38 [LAUGHTER]
+
+00:02:40 How funny.
+
+00:02:41 Awesome.
+
+00:02:42 Well, let's just have a quick round of introductions from you guys before we can jump into it.
+
+00:02:48 Absolutely.
+
+00:02:49 Matt, do you want to go first?
+
+00:02:50 Sure.
+
+00:02:51 I am Matt Wozniski.
+
+00:02:52 I'm a senior software engineer at Bloomberg.
+
+00:02:55 I originally joined in 2009, I think.
+
+00:02:59 So I've been around for quite a while.
+
+00:03:01 I work on the Python infrastructure team at Bloomberg.
+
+00:03:04 So our job is building tools and libraries and maintaining the interpreters for use by other teams at Bloomberg.
+
+00:03:11 - Right on, sounds very fun.
+
+00:03:13 Pablo?
+
+00:03:13 - I'm Pablo Alino, apart from working at Bloomberg in exactly the same things as Matt, because he's my co-worker.
+
+00:03:19 I do a bunch of things in the Python community.
+
+00:03:22 So let me see if I don't miss anything.
+
+00:03:25 So I'm in the Python Extreme Council.
+
+00:03:27 I think this is my third year.
+
+00:03:28 I'm also the release manager of 3.10 and 3.11.
+
+00:03:31 3.10 is going to security fixes, and today I actually need to do the last one.
+
+00:03:34 So that's kind of exciting, I suppose.
+
+00:03:37 - You have a 3.10 release coming today?
+
+00:03:39 - Yes, the 3.12 beta one, I think.
+
+00:03:42 We are also releasing 3.11 and 3.10.
+
+00:03:44 Like 3.11 is a bug fix, 3.10 is a first security release, which means it's source only.
+
+00:03:49 And it's my first security release as well.
+
+00:03:50 But I think that makes it easier, hopefully.
+
+00:03:52 - Yeah, and you were on the podcast before talking about the actual release of 3.11 and that whole process.
+
+00:03:59 So if people want to go back and see that in more detail, that was really fun.
+
+00:04:03 - All right, we broke GitHub.
+
+00:04:04 That's an exciting time when we released 3.11.
+
+00:04:07 So yeah, I'm also in the Python core team, mainly working on the parser and the garbage collector.
+
+00:04:13 Therefore breaking black autoformatters a lot with new syntax.
+
+00:04:18 - Yeah, excellent.
+
+00:04:19 - Faster CPython, you can't forget it. - Right, right.
+
+00:04:21 And I'm collaborating with the Faster CPython team as well.
+
+00:04:24 Sorry, I just see you, I always forget something.
+
+00:04:27 As far as community stuff goes, I'd be remiss if I didn't mention that I am a moderator on the Python Discord too.
+
+00:04:32 So if anyone is not a member of Python Discord, they should join.
+
+00:04:36 - It's a cool place to hang out. - Awesome.
+
+00:04:37 Yeah, we'll put a link to that in the show notes as well, so people can check that out.
+
+00:04:42 So you all are busy, is what I hear you saying.
+
+00:04:45 - Yes. - Yes.
+
+00:04:47 - Absolutely.
+
+00:04:48 All right, excellent.
+
+00:04:49 Well, let's maybe set the stage for talking about PyStack here.
+
+00:04:54 And the first thing I want to talk about is just, hold on, I do want to point out, like you said you both work on the infrastructure team at Bloomberg.
+
+00:05:01 I'm not sure people fully appreciate how much Python is happening at Bloomberg.
+
+00:05:06 So maybe we should just give like a big picture because it's germane to this conversation, like PyStack and other tools like Memory, which we may get a chance to talk about if we have time.
+
+00:05:16 those are coming out of supporting this large community.
+
+00:05:19 And I got a sense of how big Python is at Bloomberg when there were 60 engineers from Bloomberg at PyCon and everybody's booth duty was measured in minutes.
+
+00:05:32 - Right, right, and they didn't copy paste the same engineer 60 times.
+
+00:05:35 (laughs)
+
+00:05:36 Yeah, it's quite wild.
+
+00:05:37 I can start if you want to.
+
+00:05:40 It's very interesting, actually, that you point this out because Bloomberg, being a very old company, You know, when people talk about legacy, and it's like, oh, we have legacy because we have this Python 2.7 script.
+
+00:05:50 Well, just you should see what a company that started in the 70s can do about that.
+
+00:05:56 But it used to be a C++ house.
+
+00:05:58 And when I started, actually, the main language were C++ and JavaScript for the front end, Bloomberg terminal.
+
+00:06:05 And now we are actually, I think I'm, if I'm not mistaken, Matt can correct me, but I think we can say probably that now we are a Python house, because I think we just surpassed for the first time the amount of lines of Python compared with C++.
+
+00:06:18 And if that is not true, it's mostly there, which is quite exciting.
+
+00:06:22 At the point where I joined the company, we had onboarding training for juniors that included a Fortran for C programmers section.
+
+00:06:30 And at this point, we have a C++ for Python programmers section instead.
+
+00:06:34 So that's how much it's changed over the last decade or so.
+
+00:06:38 Wow, that's incredible.
+
+00:06:39 - That means that C++ is now legacy.
+
+00:06:40 (laughs)
+
+00:06:41 We'll see.
+
+00:06:42 - Ooh.
+
+00:06:43 - Who said that?
+
+00:06:44 Certainly not me.
+
+00:06:45 The steering council member says that.
+
+00:06:46 (laughs)
+
+00:06:49 Okay, so yeah.
+
+00:06:50 But this is an interesting, and this kind of goes into tool itself.
+
+00:06:53 I think this is an interesting scenario because that C++ didn't went away.
+
+00:06:58 Among other things, it's because it's not legacy.
+
+00:07:00 You know, like Python is not the fastest language on the planet, although we are trying to make it fast, but certainly not, we are not trying to make it compete with C++.
+
+00:07:07 So that C++ is both there and needed, because you know that you cannot just do everything in Python, for sure.
+
+00:07:13 So the situation that we have at Bloomberg, which is served by many other big companies, and finance companies as well, is that we have a lot of C++ under that Python.
+
+00:07:20 So, well, C++ by itself, but let's talk about the actual part that is interesting for Python.
+
+00:07:25 So you can write a lot of pure Python scripts, right?
+
+00:07:28 What most people, or companies, do is write some Python, and 99% of the time, it ends up reaching some C++ underneath.
+
+00:07:37 And this is not just because they are using NumPy or Pandas or any of these compiled, very common scenarios as well, but also because they are using Bloomberg code underneath, which just happens to be written in C++.
+
+00:07:49 And this means that, you know, now we have a huge community of people that need to be aware of both languages at the same time.
+
+00:07:55 So you have Python programmers that need to be aware of C++, as well as C++ programmers that need to be aware of Python, either because they just happen to switch to Python or because they use Python to run tests or things like that.
+
+00:08:07 So it's a very interesting scenario.
+
+00:08:08 - Yeah, and I imagine, leading up to this conversation, if something goes wrong, you might not be entirely sure, is it the Python code?
+
+00:08:16 Is it the C++ code?
+
+00:08:18 Is it the interaction of these things, right?
+
+00:08:21 That can make it tricky.
+
+00:08:22 - This is quite, what you point out is basically, among all the things, one of the things that make us work on this in the first place, because what happened normally is that when an application, One of these applications is hybrid crash and bloomer.
+
+00:08:35 We used to have this, many companies does this.
+
+00:08:38 I mean, I would assume all of them.
+
+00:08:40 But what happened is that when an application crashes, we either get a core file, right?
+
+00:08:44 Which is this kind of like file that is dumped by the kernel with all the memory dump of the process and a bunch of information and you can analyze it later.
+
+00:08:52 Or a debugger basically attaches to the process and shows you the back trees.
+
+00:08:57 But the problem is that this debugger was DDB, which means that the back trees that you get is a C backtrace, it's not a Python backtrace, right?
+
+00:09:04 And the backtrace is useless for everyone.
+
+00:09:06 So it's like, it doesn't matter if you're a C++ programmer or you're a Python programmer, it's always useless.
+
+00:09:11 It's useless for Python programmers because you see C functions.
+
+00:09:14 And like a Python programmer normally is like, "What is this?
+
+00:09:17 What is that register?" On the other hand, it's also useless for C++ programmers because the function that evaluates Python code, which is called pyEvalEvalFrameDefault, is repeated 600 times, and it doesn't make any sense.
+
+00:09:30 not only they also expect to see their Python code, but now their C++ code is just buried among this mysterious code.
+
+00:09:37 So nobody could make sense of what's going on, which means that for a long time, when a Python application crashed at Bloomberg, I mean, we're talking crash here as like hard crash, like segfault, which is common in C++ segfaults, or sometimes even Python can segfault, right?
+
+00:09:51 In some situations.
+
+00:09:53 So obviously, a Python exception is reported as a Python exception.
+
+00:09:56 We are not talking that our system picked GDB.
+
+00:09:58 if a Python exception is raised, obviously that is fine.
+
+00:10:00 It's when this kind of hybrid setup crashes very deeply, either because Python crashes or because NumPy crashes or because the Bloomberg code crashes.
+
+00:10:09 So in those cases, nobody could make sense of what's going on because the backtracing is useless by itself.
+
+00:10:15 And not just crashes, that it's also a problem for deadlocks as well.
+
+00:10:20 One of the big differences between Python and C++, they've got very different models for how they represent the lifetimes of objects and things like that, you can very easily get into a situation where a C++ object that is owned by a Python object in our hybrid work environment is trying to communicate with a background thread to, I don't know, tell it to stop or something like that. But that background thread winds up needing to pick up the GIL for some reason. And if you have the foreground thread still holding the GIL, you've just introduced a deadlock. And it's very difficult to track that down if the only tool at that your disposal is GDB and you can't easily see what Python stuff is being called.
+
+00:10:59 Right, sorry.
+
+00:11:00 Yeah, and Python, sorry, C++ multi-threading is like critical sections and locks and like it's really explicit.
+
+00:11:08 You enter a lock, you exit a lock and Python has that as well, but in addition, it just has this implicit Gil that you're talking about, right?
+
+00:11:16 And that there was a whole nother layer of potential deadlocks in there that I imagine is pretty tricky.
+
+00:11:21 And some of them are not only difficult to spot, but it's very difficult to reason about just because most of these things are so difficult, actually, that even if you go to some popular tools in the wild, they don't handle all the edge cases because it's quite hardcore.
+
+00:11:35 Like the fact that you can just request the Gil in the middle of...
+
+00:11:39 Like, for instance, we are not going... I don't know if we will end talking about memory profilers here, but most memory profilers that are measuring, like, native allocations in Python and C++, they need to see the Python stack somehow.
+
+00:11:52 Like when an allocation is made, you say, "Oh, give me some memory." You need to say, "Who called this function?" And then you need to see both the C sometimes.
+
+00:11:59 So you only care about Python, you just need to say, "Okay, what is the Python stack trace?" Right? Like an exception, but like, "Who called this function?" And for that, you need the GIL.
+
+00:12:06 So you need to say, "Give me the GIL," and then I will print the stack.
+
+00:12:09 But like sometimes, one of the situations that Matt is describing will introduce a deadlock.
+
+00:12:13 It's very, very rare situations, but it's the kind of situations that will involve threads and like, you know, specific things.
+
+00:12:20 But which means that it will happen very, very rarely, but it will happen or it can happen.
+
+00:12:26 So it's both going to be rare to debug because this person who's going to appear when the moon is high and Wednesday is going to say, well, only in this case is the deck locks.
+
+00:12:39 And it's going to be very difficult to fix as well because now you cannot just have the yield.
+
+00:12:42 So you need a complete redesign sometimes.
+
+00:12:45 So it can be very challenging to fix, to find to debug as well.
+
+00:12:49 Those situations are so tricky.
+
+00:12:51 You know that they often get the term Heisenbugs to indicate kind of the quantum mechanical uncertainty, right?
+
+00:12:59 Like it could be in some state, but if you measure it, then it's in a different state, right?
+
+00:13:03 It's kind of how do you actually track these down?
+
+00:13:06 And they happen in a lot of times in production, but only under heavy load after like 12 hours.
+
+00:13:11 So how do you use normal debugging techniques to step through that?
+
+00:13:15 All these things are really, really tricky.
+
+00:13:17 - But it's a high stack. - But also...
+
+00:13:19 They are very interesting as well.
+
+00:13:21 We can certainly discuss exactly what you just said because it's just spot on.
+
+00:13:24 And one of the reasons here is that, as you mentioned, the moment you touch a debugger, because the debugging process normally slows down the code, means that reproducing the dialogue may be harder.
+
+00:13:35 So sometimes the only way to properly debug this thing is letting it crash without the debugger, producing a core file and then analyzing the core file.
+
+00:13:43 But because the core file is dead, I mean, it's just basically a dump, you cannot call functions now.
+
+00:13:48 Then GDB can be useless if you don't know how to use certain tools.
+
+00:13:53 So PyStack actually is very useful here as well, because you can reproduce the deadlock at full speed, generating a call or letting it crash, and then use PyStack.
+
+00:14:02 But we can talk about that later.
+
+00:14:03 Or maybe you don't know that you're trying to reproduce a deadlock.
+
+00:14:06 -Right, right. -That just happens.
+
+00:14:07 Right, and you're like, you know, it won't respond, but the CPU load on the server is zero.
+
+00:14:13 That sort of is it waiting for something or is it ever going to respond or you just don't know what it's doing yet.
+
+00:14:21 Yeah, yeah, exactly.
+
+00:14:23 And you know, logging will help a little bit but not you got to have some pretty intense logging to get that level of what's going on.
+
+00:14:30 And usually that you don't want that in production either.
+
+00:14:33 This portion of Talk Python to Me is brought to you by Sentry.
+
+00:14:38 You know that Sentry captures the errors that would otherwise go unnoticed.
+
+00:14:42 Of course, they have incredible support for basically any Python framework.
+
+00:14:46 They have direct integrations with Flask, Django, FastAPI, and even things like AWS Lambda and Celery.
+
+00:14:54 But did you know they also have native integrations with mobile app frameworks?
+
+00:14:58 Whether you're building an Android or iOS app or both, you can gain complete visibility into your application's correctness both on the mobile side and server side.
+
+00:15:08 We just completely rewrote Talk Python's mobile apps for taking our courses.
+
+00:15:13 And we massively benefited from having Sentry integration right from the start.
+
+00:15:18 We used Flutter for our native mobile framework, and with Sentry, it was literally just two lines of code to start capturing errors as soon as they happen.
+
+00:15:26 Of course, we don't love errors, but we do love making our users happy.
+
+00:15:31 Solving problems as soon as possible with Sentry on the mobile Flutter code and the Python server side code together made understanding error reports a breeze. So whether you're building Python server side apps, or mobile apps, or both, give Sentry a try to get a complete view of your apps correctness. Thank you to Sentry for sponsoring the show and helping us ship more reliable mobile apps to all of you.
+
+00:15:57 So let's start our conversation about just the spectrum of what the options are out there.
+
+00:16:04 Hello. Now, you mentioned GDB, but I guess on one side of the spectrum, we have PyCharm and VS Code and friends where you press F5, or you press the little debug thing and you step through your code.
+
+00:16:17 And that's helpful when you're actually developing your application.
+
+00:16:21 But you're talking about running a production or running applications or applications that have crashed and here's a core file.
+
+00:16:28 Those are not exactly the same situation, are they?
+
+00:16:30 We are talking about the specific case.
+
+00:16:32 We are sending ourselves into many scenarios, although you can certainly use it in others.
+
+00:16:37 But just to have a good mental model over what these tools are going to be useful for and what are they different from PDB or VS Code, right?
+
+00:16:45 You're talking about things that crash, crash like hard crash, like, you know, or things that are frozen.
+
+00:16:51 It could be a deadlock, but it could be also that your application is waiting for something and it never arrives and you want to know what is going on.
+
+00:16:57 And specifically when these tools are going to become even more useful is when this code involves C++ or C code or Pascal for that matter.
+
+00:17:06 So some native code, right?
+
+00:17:08 And the reason this is going to be more useful is because PDB or VS Code, the barrier or PyCharm normally attach Python to the barriers, which means that these barriers only know about the Python world.
+
+00:17:18 And that normally is insufficient because you want to see both worlds at the same time.
+
+00:17:22 And this is going to become very critical.
+
+00:17:24 You don't want to be one world and the other separately.
+
+00:17:26 possibly, you want some tool that understands both worlds at the same time, and can show you what really is happening and how these worlds are, like, you're entering one world, leaving it, but then you're entering it again, or something like that.
+
+00:17:37 Right. So if you've got this mixed code, a Python profiler won't, they won't see the steps happening below that, right?
+
+00:17:43 Right. So, for instance, at Bloomberg, a Python profiler will tell you that the application, if it's, let's say, it's frozen, and then you say, you use VS Code, it's going to tell you that it's frozen on run, a function called run, and then there's 600 layers of C++ underneath, which ones you don't know.
+
+00:17:58 Or like, for instance, you just say, let's say for mysterious reasons, NumPy has a bug or something, right?
+
+00:18:04 And then you're adding two NumPy arrays, and it's telling you that the addition of the NumPy arrays is what is being frozen, but you don't know what is happening underneath.
+
+00:18:13 And then you want to see what's happening on the NumPy C++ code, or the SciPy code, or the TensorFlow code.
+
+00:18:20 You know, there is countless examples of heavy C++ or compile code underneath.
+
+00:18:26 For instance, PyDantic these days is running on Rust, which means that if something goes wrong there, or it just crashes or is freezing or whatever, you're going to not see it either.
+
+00:18:36 So we're talking about those cases.
+
+00:18:38 We've seen deadlocks on the GCDEL of an object that's defined in an extension module.
+
+00:18:45 And when that happens, all the Python debugger is going to tell you is absolutely nothing.
+
+00:18:48 It doesn't see the call into the tpdel method.
+
+00:18:51 it doesn't see. All it shows you is that there is a variable that's going out of scope or being reassigned or something like that on the last Python line that was run, and anything happening under that is just totally opaque to it.
+
+00:19:02 Right. On the other hand, just talking about the other tools. So on the other hand, things like GDB have the same problem that we're talking about. GDB only understands C code. So what it's going to show you is that your interpreter is going to show you the kind of NumPy code underneath or the C++ code underneath or the RAS code underneath.
+
+00:19:19 but it's not going to show you the Python code, so you don't know what we'll call that.
+
+00:19:23 So this is the other side of the coin.
+
+00:19:24 You're going to see like...
+
+00:19:25 I see a lot of C action happening.
+
+00:19:27 But how I reach this C, we don't know.
+
+00:19:29 And the situation when this is really bad is when you kind of enter and exit the C realm multiple times, right?
+
+00:19:36 So you have some Python code that calls some C code, and in turn it calls some Python code again, and some C code again.
+
+00:19:42 So that is kind of really hard because you're going to not see anything.
+
+00:19:46 Like it's impossible because you don't know how you reach this situation.
+
+00:19:49 And that's quite hard. So like the classic debuggers won't be able to do so.
+
+00:19:55 Interestingly, though, because we are going to see that there is some other tools that have some functionality close to what PyStack does.
+
+00:20:01 So in Python, in CPython, we provide some like plugins, let's call it, it's basically an extension files that you can kind of add to GDB that allows you to do some similar things.
+
+00:20:13 So for instance, the Python files that you can put in GDB allows you to pretty print Python objects.
+
+00:20:20 So even if you're in the C world, you can kind of print some objects.
+
+00:20:23 And you can also print like some kind of like Python stack tree.
+
+00:20:26 So you can ask like, hey, can you kind of show me what I'm in Python, but it's not a hybrid one.
+
+00:20:31 So it will only tell you where you are in Python, which means that you're going to miss the C version.
+
+00:20:36 Because this GDB, you can also ask for the C version, but you're not going to see them together.
+
+00:20:40 You're going to see either one or the other.
+
+00:20:42 And then it's up to you how to kind of like, like merge them, which sometimes is very hard because there's very hard rules to know how to do that, especially for instance in Python 3.11 and some of the optimizations we did in the Python 3, in the faster CPython project, means that the same evaluator loop can be reused for multiple Python functions. So you, in 3.11, you are not even able to do it without extra metadata.
+
+00:21:07 So it's quite hard. And even if this, let's say, plugins are actually useful and can get you closer and for a lot of time that was useful and the only way to do that is specifically for core files because if you have a core file, your only option is using GDB or Wasp before Biostats.
+
+00:21:23 You could somehow do it. The problem is that GDB relies on to do this relies on debugging information inside the core, which means that if you have Python interpreters that don't have the right information, which by the way is most Python interpreters that are shipping distributions or most Python interpreters that are used normally, because you don't want to ship gigantic debugging information to production most of the time, because this can get really big.
+
+00:21:47 It means that GDB is not going to work, because it relies on the fact that it can inspect local C variables inside the frames.
+
+00:21:55 And as many C programmers will tell you, the most common thing that GDB will tell you is optimized expression, which means that I cannot tell you anything here, which means that it's not going to work.
+
+00:22:07 There's ways to make it work, but we are entering the expert realm here.
+
+00:22:11 Making GDB work here is the kind of like, you need two staff engineers or a CPython core that knows what is going on.
+
+00:22:19 So that's certainly not for your average Python program.
+
+00:22:23 Let's remember, we are trying to debug something, which probably we are under pressure.
+
+00:22:27 We don't want to read the main page of GDB and Python and how to debug Python with GDB and debugging.
+
+00:22:35 What is the right information?
+
+00:22:36 So if you're a Python programmer and just want to paste a stack trace in a back report, for instance, because someone asked you to do that, or you just want to see what's going on, or you just want to tell someone where it's crashing, you don't want to learn all of these things.
+
+00:22:49 You don't even have time.
+
+00:22:50 Maybe you need to fix it, it's crashing on production.
+
+00:22:53 You cannot just tell your boss, oh yes, wait here until I read the main page of GDB.
+
+00:22:58 It's not going to help.
+
+00:22:59 - Yeah, I don't know how many people, I imagine a good number, but not all of the people listening have had an application or an API or something crashing in production when people are trying to get to it, it's very stressful.
+
+00:23:11 Right.
+
+00:23:12 I should add that distributions do generally give you a way to get at the debug data for an interpreter.
+
+00:23:19 It's not as though they strip it off entirely and it's gone forever.
+
+00:23:22 It's just that the way that you get at it after the fact is different per distribution, and it's not something that necessarily everyone who's firing up GDB knows how to do.
+
+00:23:31 So it's not that it's gone forever, it's just that it's not easily accessible to everyone, I'd say.
+
+00:23:36 Sure. Can you add it afterwards?
+
+00:23:39 Like if my app crashes and I'm like, "Oh no, I didn't have the debug information." You can, actually. It'll either be like on Ubuntu, it'll be a Python 3-debug package that you install, or there's also a thing called DebugInfoD that can download the debug information from servers managed by your distribution as needed when a debugger requests it, which is pretty cool.
+
+00:24:02 But the problem is that this still doesn't assure you that it is going to work.
+
+00:24:05 It's just that it gives you more chances.
+
+00:24:07 But still, if your Python interpreter is heavily optimized, this may be not enough.
+
+00:24:12 And actually, for the sake of giving data, in most distributions, it's actually not enough.
+
+00:24:17 Because these variables, particularly the frame variable in the Python evaluator loop, is extremely heavily optimized, among other things, because it has to be.
+
+00:24:25 Because the Python evaluator loop is very hotbar.
+
+00:24:27 So most of the time, these tools are, let's say, unreliable.
+
+00:24:31 Let's introduce kind of like what PyStack does then and let's talk about also like what other tools you can use that are not PyStack maybe.
+
+00:24:37 - I think that's probably a good setup for PyStack.
+
+00:24:40 Like why does it exist?
+
+00:24:42 Why do people really, why is it such a game changer, right?
+
+00:24:45 It understands both of these worlds in a really nice way.
+
+00:24:49 Tell us about it.
+
+00:24:50 - Exactly, so the short version, because this is quite funny because like when we were at PyCon, we were presenting both projects that we maintain here, PyStack and Memory.
+
+00:24:57 And Memory, everybody knew, PyStack was the new one.
+
+00:25:00 A lot of people didn't kind of catch exactly what it does.
+
+00:25:03 And it's actually easier to explain than the profiler, which I think is quite funny that that was the other way.
+
+00:25:09 So the PyStack, what it does is very simple.
+
+00:25:11 So PyStack is a tool when you give it a Python program that is running or frozen, right?
+
+00:25:17 But let's say it's alive or a core file, and it will tell you what it's doing.
+
+00:25:22 So it will give you the stack trace, basically.
+
+00:25:24 So it's going to tell you, okay, so this Python program has this many threads, and for every thread, it's going to show you the stack trace, right?
+
+00:25:30 So this function is calling this function is calling this function and is running currently.
+
+00:25:34 Like a snapshot in time, right?
+
+00:25:36 When you asked it, it's like, boom, what are all the threads doing?
+
+00:25:39 Here you go.
+
+00:25:39 Exactly.
+
+00:25:40 So if the program is running, which you can absolutely run PyStack on a healthy running program, it's going to tell you what it was doing at that time.
+
+00:25:46 So by default, it's going to stop the program for a super small amount of time.
+
+00:25:51 It's going to take a photo of what the program is doing, and it's going to tell you what every thread was doing.
+
+00:25:55 So who calls who and what the program was actually running at that time.
+
+00:25:59 The program is frozen because you have another log or something like that.
+
+00:26:02 It's going to show you what is blocked, basically.
+
+00:26:05 And if you have a core file because your program crashed or because you generate one on demand, because by the way, you can absolutely generate one core on demand, just take a snapshot and it's there.
+
+00:26:14 It will tell you what the program was doing, what the core was generated.
+
+00:26:17 That's something you can do in Linux just in the terminal.
+
+00:26:21 You can just say, take a core dump of some running process.
+
+00:26:24 Yeah. For instance, you can do it with GDB or with a utility that sells out to GDB called gcore.
+
+00:26:29 which is installed by default when you install GDB.
+
+00:26:31 And the cherry on the top here is that it will tell you both the Python code and the C code.
+
+00:26:36 So it will tell you like, "Okay, so we are calling these Python functions, you know, main and main calls, you know, createDictionary and createDictionary calls addNumpyArray.
+
+00:26:46 But then when it enters C code, the C Realm, it's going to show you also the C calls.
+
+00:26:50 And then if it enters Python again, it's going to show you Python again and C again, and it's going to tell you if it's Python or C.
+
+00:26:56 and also it's going to show you code that is running.
+
+00:26:58 So if the source code is available, which most time it is, it's going to show you exactly what line--
+
+00:27:04 like the same thing as a traceback.
+
+00:27:05 Basically, it's going to show you what line was running.
+
+00:27:08 And very cool as well, since Python 3.11, it's going to show you what sub-expression is running.
+
+00:27:13 Because in Python 3.11, we have this vector error project that I started, and now we have line--
+
+00:27:20 sorry, column information, so we know you have a very complicated expression and something crashes, we can point you exactly to what part of the expression was generating the crash.
+
+00:27:29 But now we can use the same information in this tool to show you what part of the expression was running.
+
+00:27:34 So for instance, you were adding four NumPy arrays, and the application crashes adding the second and the third one, we can show you, okay, it's crashing, adding the second and the third one.
+
+00:27:43 So you can know exactly that was that operation and not the other one, which is quite cool.
+
+00:27:48 And the same for C.
+
+00:27:49 It sounds awesome.
+
+00:27:49 I also like the description here.
+
+00:27:51 PyStack is a tool that uses forbidden magic to let you inspect the stack frames.
+
+00:27:56 I have a process.
+
+00:27:57 - That's a funny trivia.
+
+00:27:58 I got a funny conversation with Mark Shannon.
+
+00:28:01 We work together on the 5.30 Python project because we say here nasty CPython internals.
+
+00:28:07 (laughs)
+
+00:28:08 Which mostly, you know, like, so we were into what is a nasty CPython internal because we both do those nasty CPython internals.
+
+00:28:14 But you know, I think it's, nobody really enjoys internal CPython, not even Core Devs, so there you go.
+
+00:28:20 Well, and I imagine that you're making your life harder with 3.11, all of you.
+
+00:28:23 This is kind of weird because I'm making my own job harder every single time.
+
+00:28:26 So I work on Python, I'm happy, and then I'm sad because I just make my own life harder on the other side of the pool, right?
+
+00:28:33 This is a project that would be much, much harder to maintain if Pablo wasn't around to help on it.
+
+00:28:37 Because, yeah, in order to keep this forbidden magic working, we do need to keep up with changes to the interpreter.
+
+00:28:43 And it's a place where if we didn't have core devs telling us what changed in the interpreter, it would be very hard to keep up with those changes and figure out just what has changed.
+
+00:28:51 - Especially since the faster CPython stuff has kicked into gear.
+
+00:28:55 - One thing here, which is also quite interesting, is that we are not the only people to enjoy this forbidden magic.
+
+00:29:01 We have a coen, let's say.
+
+00:29:03 This forbidden magic is shared in one way or the other with performance profilers.
+
+00:29:07 So, for instance, some of the ones that use similar techniques are Austin, the Austin profiler, and also PySpy.
+
+00:29:14 And it's quite interesting because there is a difference.
+
+00:29:16 both tools can actually do something similar.
+
+00:29:19 So both PyStack and Austin kind of take a snapshot and show you what the application is doing.
+
+00:29:24 At the time of this podcast, they can do it for a live process, they cannot do it for a core file.
+
+00:29:29 So if you have a core file, you are out of luck, you can only use PyStack.
+
+00:29:32 If you have a live process, you can use PyStack, but you can also use PySpy or Austin, both can do that.
+
+00:29:39 The main difference here, even if we share functionality, is that we are not a profiler, we are a debugger, which means that we try really, really hard to find that information, even in the most weird situation.
+
+00:29:53 So for instance, even if you have corrupted memory or your file or your core file is corrupted or your process is really, really in a bad state, we can still give you the information, even if you don't have the back symbols or we are slower than both profilers because both PySpy and Austin need to basically take photos at a very high speed because that's what the profiler does.
+
+00:30:14 It basically takes a lot of photos very fast.
+
+00:30:16 And then it's going to show you, okay, I took like 1 million photos in a second.
+
+00:30:20 And most of the time, the photos show that you were in this function called various low function.
+
+00:30:25 So that is going to tell you, well, you're spending most of the time in this function, you should optimize that function.
+
+00:30:30 So for them, it's really, really important to take those photos really fast, right?
+
+00:30:34 Sometimes even sacrificing correctness in some cases.
+
+00:30:36 - Yeah, the same thing with profilers especially, yeah.
+
+00:30:39 - Right, they have some option to control the correctness because they need to kind of sometimes guess and sometimes these photos they take with the process running.
+
+00:30:47 So, you know, it can be like half of the photo in one place and half of the other in the other and both have like options to control if you want that or not.
+
+00:30:54 - It's like a friendly pair in a video game.
+
+00:30:56 - Yeah, pretty much.
+
+00:30:58 I always think about that particular metaphor when I explain this, but most people don't know what that is.
+
+00:31:04 So I'm very happy to know that you're a connoisseur as well.
+
+00:31:08 The main difference is that for them, they do a very good work just to be clear here.
+
+00:31:12 But for them, the main concern is the speed, right?
+
+00:31:14 And the whole thing is surrounded by this idea of doing this operation very fast.
+
+00:31:19 And because they do it very fast, they can do it once.
+
+00:31:21 So you just ask for one photo, they can give you that photo.
+
+00:31:24 In our case, our concern is not the speed because we are not a profiler.
+
+00:31:28 Our concern is correctness and the photo.
+
+00:31:30 So we really, really, really hard try to get the correct photo and the photo if it is possible.
+
+00:31:36 So that's kind of the main difference.
+
+00:31:38 This portion of Talk Python to Me is sponsored by the Compiler Podcast from Red Hat.
+
+00:31:44 Just like you, I'm a big fan of podcasts, and I'm happy to share a new one from a highly respected open source company, Compiler, an original podcast from Red Hat.
+
+00:31:52 Do you want to stay on top of tech without dedicating tons of time to it?
+
+00:31:56 Compiler presents perspectives, topics, and insights from the tech industry, free from jargon and judgment.
+
+00:32:02 They want to discover where technology is headed beyond the headlines and create a place for new IT professionals to learn, grow, and thrive.
+
+00:32:09 Compiler helps people break through the barriers and challenges turning code into community at all levels of the enterprise.
+
+00:32:16 One recent and interesting episode is there, the Great Stack Debate.
+
+00:32:19 I love love love talking to people about how they architect their code, the trade-offs and conventions they chose, and the costs, challenges, and smiles that result.
+
+00:32:28 This Great Stack Debate episode is like that.
+
+00:32:31 Check it out and see if software is more like an onion, or more like lasagna, or maybe even more complicated than that.
+
+00:32:37 It's the first episode in Compiler's series on software stacks.
+
+00:32:41 Learn more about Compiler at talkpython.fm/compiler.
+
+00:32:45 The link is in your podcast player show notes.
+
+00:32:47 And yes, you could just go search for Compiler and subscribe to it, but follow that link and click on your player's icon to add it, that way they know you came from us.
+
+00:32:57 Our thanks to the compiler podcast for keeping this podcast going strong.
+
+00:33:01 This means that if you are already using a lot of people are using PySpy for instance for this kind of my Python application is frozen.
+
+00:33:11 So in that case, you don't care if the photo is fast or slow because it's already frozen. Like who cares, right? But on the other hand, if you have a crashing application, especially a core file, then you're kind of over the luck because this process, these projects don't work at the time that we're speaking for core Yeah, PyStack really seems to have a unique feature set, a special place in the ecosystem.
+
+00:33:29 And most of the extra features that PyStack has, which are not the main functionality, are basically around this idea of we are the buyer.
+
+00:33:38 So for instance, we can give you extra metadata.
+
+00:33:40 Like, you know, some of this metadata actually also is shared with these tools, but some others is not.
+
+00:33:45 So we give you things like, which thread has the gil at the time, or like if the GC is running on the thread or not.
+
+00:33:51 we also tell you like the column offsets and things like that.
+
+00:33:54 So there is a lot of like extra stuff that we can provide to you so you can back easily, more easily your applications.
+
+00:34:03 For instance, for the SQL, if it's available, which means that we can give you the column offsets as well of the source code that generated the binaries.
+
+00:34:12 You need a modern compiler to do that.
+
+00:34:14 Like only DWARF 4, I think, has this information.
+
+00:34:18 DWARF is the debugging format for C, which is kind of funny because the binary format is ELF.
+
+00:34:22 So, you know, it's ELF and DWARF.
+
+00:34:23 ELF stands for Ex-Final-Unlinkable Format.
+
+00:34:27 But DWARF doesn't have an acronym.
+
+00:34:30 It's just funny.
+
+00:34:32 They come with this weird backronym, I think they call it, when you come with acronym after the fact.
+
+00:34:37 So you just say, "Oh, DWARF is very funny.
+
+00:34:38 "Let's try to put it." And I think now it stands on debugging with arbitrary format something.
+
+00:34:45 Like, it's just really bad.
+
+00:34:46 - Yeah, yeah, yeah, you try to fit the acronym into the thing, yeah, yeah.
+
+00:34:51 Then we call it the TREC service, and we'll see where it goes from there.
+
+00:34:54 - Exactly, yeah, literally.
+
+00:34:56 So the idea is that we give you this extra kind of metadata around it.
+
+00:34:59 Every time we do this, we try to do more.
+
+00:35:02 For instance, we are now talking about with 3.12, we are going to release in Python subinterpreters.
+
+00:35:07 So we are discussing the possibility of showing subinterpreters also in PyStack or maybe async.io task.
+
+00:35:13 I mean, these are not actual features that we are running right now, but the idea is that we are considering these things and that for a profiler, maybe it's just too hard because it means that you need to inspect a lot more memory and your photo is going to be prohibited as low.
+
+00:35:26 For us, it's not because we just take one photo and it just needs to be a very good one.
+
+00:35:30 - Yeah, excellent.
+
+00:35:31 Yeah, see, you are making your life harder over and over.
+
+00:35:33 Quick question from the audience in the live stream.
+
+00:35:36 Tony says, "Could this be utilized in something like AWS Lambda as error handling?
+
+00:35:41 Grab the core dump if it bombs, since you wouldn't have access to the runtime after the lambda executed?
+
+00:35:47 I wouldn't. It's not the...
+
+00:35:49 As a compiler engineer, I would say I don't know anything about AWS.
+
+00:35:53 So I don't know if it's the best way to do it.
+
+00:35:56 But yeah, absolutely, this is something that you can do.
+
+00:35:58 If you generate a core file, then PyStack can absolutely handle your core file.
+
+00:36:01 No problem.
+
+00:36:02 I think the only question I have there is if you can get the core file out after it has crashed.
+
+00:36:06 But as long as there's some way to get the core file out, you definitely could inspect it with PyStack.
+
+00:36:10 Oh, interesting.
+
+00:36:11 Is there a Python code level API for working with PyStack or is it an outside only thing?
+
+00:36:17 No, at the time it's just a command line application.
+
+00:36:19 Gotcha. Okay.
+
+00:36:20 We could expose it like PyStack is mainly a library with a lot of like functionality.
+
+00:36:25 So if there is people that want to use it for other things, we are quite happy to expose it.
+
+00:36:29 Yeah, I'm thinking things like for CProfile, you can, you know, turn off the profiling at startup and then turn it back on with Python code or where you could set like an at exit callback potentially to like those kinds of things.
+
+00:36:43 We don't have these, but we do have some other cool thing that, let's say, intersects 20% with what you said, just to be clear.
+
+00:36:50 I'm not trying to answer your question fully, but I think it's right.
+
+00:36:53 We have this pytest plugin, which basically you can install.
+
+00:36:56 And if some of your tests crashes, it's going to just run PyStack.
+
+00:37:00 It crashes or freezes.
+
+00:37:01 It's going to run PyStack on that.
+
+00:37:02 And it's going to show you what happened.
+
+00:37:04 We are talking also to have something similar to FoldHandler, which is a standard library module that you can activate.
+
+00:37:10 And if your process crashes, it shows you the Python stack, but again, you're missing the C stack.
+
+00:37:14 So we are going to allow you to also have this idea of like, oh, I want to just run my Python application.
+
+00:37:20 And if it crashes, then I want PyStack to be run on the process so I can see what was happening there.
+
+00:37:26 By the way, this literally is something that was used, for instance, URLib3, the project URLib3, I think is the most downloaded package on PyPI, or it's close to be.
+
+00:37:36 So they use Memroy, which is our memory profiler.
+
+00:37:39 And sometimes, you know, again, when the mall was full on Wednesdays, it was crashing on some weird test.
+
+00:37:46 And, you know, at the time we asked them, "Well, you know, memory uses C++ code underneath, no surprise there.
+
+00:37:53 And you're using Python code that uses memory, so the crash is happening in some combination of both." And we needed both stacks to debug what was going on.
+
+00:38:01 And I thought, "Man, if only we have PyStack open source, we could just tell them, like, 'Run this thing on your test suite.'" but at the time we didn't have it.
+
+00:38:09 So we had to ask them for a core file.
+
+00:38:12 They tried, but at the end we ended up having to try to reproduce it on our side, which was really hard because this was a race condition, basically.
+
+00:38:20 And the race... So I did all the weird techniques, like running a Docker container with 0.001 CPU quota, like running hundreds of test suites at the same time.
+
+00:38:30 It was not a fun afternoon, let's say.
+
+00:38:32 If I recall correctly, that took us a full 24 hours to reproduce, just running the tests in a loop until we managed to catch it the first time.
+
+00:38:39 Wow.
+
+00:38:40 You're running to my room at the time, you see this meme when there's this guy with the blackboard without the threads, like, moving their hands like super crazy.
+
+00:38:48 Like, so that was me at the time, running like six, like six DMX splits with the test suite.
+
+00:38:54 So yeah, this tool is when you need it, it's really useful.
+
+00:38:58 It's the kind of thing that a lot of times you don't need.
+
+00:39:00 That's interesting. And then when you do need it, amazing.
+
+00:39:03 And this is key because what happens normally with the bargaining tools, like GDB is a very good example of this, is that they are very hard to use.
+
+00:39:10 Like the amount of knowledge that you need is quite high.
+
+00:39:13 They are not very ergonomic, which means that it's not the easiest thing.
+
+00:39:17 You need to get used to them and their language and what they can do and what they cannot do.
+
+00:39:21 And it's the kind of thing that normally people learn when they need to, which is the worst time to learn it because you need to solve the problem, not learn how to use it.
+
+00:39:29 You're already in a bad mental state.
+
+00:39:30 It's very annoying.
+
+00:39:32 We are trying to do quite a lot, both on PyStack, but also on our memory profiler membrane, is to offer a really good UX around these tools.
+
+00:39:41 So that's why we are offering this pytest plugin and thinking about doing this full handler thing.
+
+00:39:47 Because it's not just like the tool itself that you can execute, but also like we want you to not have to think about it.
+
+00:39:52 So it's not the tool to reach, it's the tool that is backing you up.
+
+00:39:56 So you set it once, you forget about the fact that it exists.
+
+00:40:00 When something happens, you are really happy that you set that thing up.
+
+00:40:03 And that's the experience that we want people.
+
+00:40:05 This is the other kind of extra thing that we are trying to put into Biostack.
+
+00:40:10 That the UX is really good.
+
+00:40:12 - So, you know, like Matt, I think you want to... - Yeah.
+
+00:40:14 And as far as the UX goes, I think it's helpful to keep in mind that when people are using these tools, it's almost certainly not because they want to.
+
+00:40:20 Like, no one is having a good time when they're using these tools.
+
+00:40:23 They're using these tools because something has already gone wrong and stopped them from doing what they wanted to be doing in the first place.
+
+00:40:28 and now they need to backtrack and figure out why.
+
+00:40:31 You're kind of like an emergency room doctor.
+
+00:40:33 People don't ever want to meet the emergency room doctor, but they're happy they're there.
+
+00:40:36 Exactly. Yeah, that's the key.
+
+00:40:38 Yeah.
+
+00:40:38 Matt, I noticed looking at the GitHub repo for PyStack that there's a lot of languages involved here.
+
+00:40:44 We got a good chunk of Python, C++, Cython, C, only a little bit of C, I guess.
+
+00:40:50 But you both have to keep a lot of technology interplay in mind just working on this, right?
+
+00:40:55 Yeah, definitely.
+
+00:40:56 My career has been as a C++ developer mostly.
+
+00:40:59 So it tends to surprise people when we tell them that on the Python infrastructure team, we spend most of our time working on C++ and relatively little time writing Python, comparatively little.
+
+00:41:10 If you actually looked at the way this code breaks down in the PyStack repo, you would see that even though it's predominantly Python code, the Python code is predominantly in the test suite.
+
+00:41:19 most of the actual code for PyStack is in C++ or in Cython, not in Python.
+
+00:41:26 I was going to guess that Python might be in there, like, reporting, CLI parsing.
+
+00:41:31 - Later is when it is, yes. - You're exactly right.
+
+00:41:34 And then it is in some parts when really C++ will be overkill or too verbose or too annoying.
+
+00:41:40 Like, I think parsing some stuff, I think, is preparing the input to the C++ code, let's say.
+
+00:41:46 Yeah, parsing proc maps and things like that.
+
+00:41:49 But that's the thing, like one of the reasons there is so much C++ up, actually, it's not only because of performance, but because these tools need to play quite heavily on systems programming techniques.
+
+00:41:59 So PyStack plays a lot of, let's say, quote-unquote, "dark magic." It's not as dark as our other tool, the Profiler, because the Profiler is just in another level of darkness that has like gone through many dark rituals already.
+
+00:42:13 But here as well, because like at the end of the day, what these tools do, what PyStack does is that it's reading memory from a different program.
+
+00:42:20 That is quite complicated because when you read memory from a different program, there is nothing, it's just bytes. Here's some bytes.
+
+00:42:26 And then you need to figure out what they are.
+
+00:42:28 And most of the time, the bytes that you're reading are not backed by anything that you can use to make sense of. Because, you know, for instance, GDB, when it reads those bytes, it has the debugging information.
+
+00:42:38 So it knows that, oh, I'm reading bytes at this address, but these bytes means like, oh, a Pyinterpreter state extract.
+
+00:42:45 So I know that, you know, the first eight bytes are this and that, and I know where to locate things.
+
+00:42:49 We do that if it's available because we don't want to make our lives harder just for no reason, but because we have to support the cases when that information is not there, we employ these extra techniques trying to make sense of those bytes without knowing what they are. So there is like a bunch of heuristics and checks the heuristics, and this can get like quite hardcore because like, I think I think at some point we had like four levels of checks, just because of one heuristic.
+
+00:43:14 You know, the kind of thing when you say, "Well, there is no way in the world if these things are true is not what I'm searching for." Well, I will tell you, yes, it will happen.
+
+00:43:23 We have seen those.
+
+00:43:25 I remember that we were having this discussion.
+
+00:43:27 We have four checks for something.
+
+00:43:29 Basically, we are reading some bytes, and we are making some pointers, and if a bunch of conditions are true, we are sure that we have located some important piece of information, state, I think, or a thread state, whatever it is.
+
+00:43:41 And Matt was saying, "Well, but you know, there is this case when these things can be true and it's still not it because, you know, it just happens to have these properties." And I said, "Okay, let me calculate mathematically the probability of that happening." And it was 0.001%, right?
+
+00:43:55 And then we said, "Cool, never happening." I think it was three months until it happened.
+
+00:43:59 So it's like, yes, we need to take care of a lot of these things to ensure that.
+
+00:44:04 A lot of edge cases.
+
+00:44:05 I'm starting to understand the black magic.
+
+00:44:07 That's part of it. The other part is just like all the synonyms with like, you know, stopping the process making sense of CPython, trying to extract information from CPython in ways that CPython is not prepared to. So you need to know a lot about everything, a lot about systems programming, how to read memory from processes, how to stop processes. And also these tools, this is quite important to mention as well, these tools are supposed to GDB because when you attach GDB to a project, you can do whatever you want. You can either inject code into the process, you can call from the process, you can call from the memory, you can do whatever you want.
+
+00:44:36 It can call things in the process.
+
+00:44:38 So many teams have GDB forbidden in production because GDB, attaching GDB can do arbitrary things, right?
+
+00:44:44 So you don't want that a lot of the time, especially if you are under compliance or you have like secrets or whatever.
+
+00:44:49 - Right, right. If you're in a banking industry, say, or something like that, and you try to catch a problem and it changes, now it makes decisions, that might not be awesome.
+
+00:44:58 - And GDB can make your application crash.
+
+00:45:00 Like, you can absolutely do that because it can inject code.
+
+00:45:03 You see, like I invite everyone interested on, try to learn how GDB calls functions in your process.
+
+00:45:10 So you attach GDB, you can call a function in the process, just learn how that is done, and you're going to cry.
+
+00:45:16 And if you want to cry even more, because you say, "Well, man, I still have some tears "in my eyes, and it's not enough," just learn how LLDB does it.
+
+00:45:23 Like this is the other debugger from LLVM, because that is just bananas.
+
+00:45:27 That is just another level of craziness.
+
+00:45:29 So these tools are very powerful, but they are also a bit dangerous.
+
+00:45:32 So the other thing that we really, really put a lot of effort in is that these tools just read memory.
+
+00:45:37 That didn't modify the process at all.
+
+00:45:39 The only thing they do is stop it, which is always a safe operation.
+
+00:45:42 Then they restart the process, that's all.
+
+00:45:44 And you can also choose not to stop it if you don't want to.
+
+00:45:47 Because, for instance, you have some super performance applications, so Biostack can still take snapshots with the process running if you really need to, sacrificing, obviously, that the photo may be a little blurry, let's say.
+
+00:45:58 Most of the time it will be, but it can be.
+
+00:46:00 But you can also ask for that.
+
+00:46:01 But the idea is that these are safe to use on running processes because we don't touch the memory at all, we just read it.
+
+00:46:06 I will say, you say that stopping a process is always safe.
+
+00:46:09 That's not necessarily true.
+
+00:46:11 It does change the behavior of syscalls that are in the middle of happening.
+
+00:46:14 – They get an e-enter. – E-enter.
+
+00:46:16 Yeah, they'll get an e-enter, and that can change the behavior of the program.
+
+00:46:19 What's supposed to happen is that the program detects that the syscall has been interrupted and retries it.
+
+00:46:24 But not all of them do that all the time, because it's C and your error handling is all manual.
+
+00:46:29 it's very easy to miss a place where you needed to retry something.
+
+00:46:32 - Especially Python does it. So it's kind of, unless you have your custom code, most of the time it's safe to do.
+
+00:46:37 - That's true.
+
+00:46:37 - But this can happen also, you send signals to your process.
+
+00:46:40 So for instance, you have a new process, and then it just happens to send a signal or someone interrupts the process, like for instance, because you have it under a scheduler, or you're using some very old kernel, for instance, that sends six stops, or you're running it in a cluster, when it can put you in the phrase C group, you will get the same situation.
+
+00:46:59 And you will see, for instance, you CPython all the time, this loop that just checks either, for instance, you're reading bytes, and then your read call finishes.
+
+00:47:06 And then you normally assume, well, it has finished because I have read all the bytes that I wanted.
+
+00:47:10 Well, it may be not true, because you may have been interrupted.
+
+00:47:14 So you need to try again.
+
+00:47:15 Sure. And at a higher level, it could be, I was calling an API, and it paused, and that actually caused it to time out.
+
+00:47:22 Or something like that, right?
+
+00:47:23 Or a database connection reset, or something weird at that level.
+
+00:47:28 But I think a big difference here is these are a single call went crazy while you paused it, whereas when you talk about injecting code, you could have messed it up for the rest of the life of the process.
+
+00:47:41 In unknown ways.
+
+00:47:42 Yeah, absolutely.
+
+00:47:43 Technically, attaching GDB is undefined behavior because you can modify a retry memory in ways that you don't know what's going on.
+
+00:47:49 Obviously, it's not going to be the case because GDB doesn't do that by default.
+
+00:47:53 But just calling functions can alter...
+
+00:47:56 Like, especially if you're calling to a C API.
+
+00:47:58 If you just happen to have a pointer and then you want to print the pointer and you call PyDumpObject, now you are like, "Who knows what happened?" You are just calling... You need the GIL, for instance, to do that.
+
+00:48:08 So it's very unclear what's going on.
+
+00:48:10 So we don't do any of that.
+
+00:48:11 Even in cases where you're able to successfully call a function with GDB, it manages to get its stub injected and do everything that it needs to do to set up the call, You can wind up in a situation where you don't satisfy some of the invariants for that call, and that call winds up segfaulting in code injected by GDB.
+
+00:48:27 And it tries to recover from that, but it can't always.
+
+00:48:30 So you can very easily get yourself in a situation where you thought you were doing something read-only and managed to crash the process that you were trying to inspect.
+
+00:48:36 You can see that we learned this the hard way from our other tool.
+
+00:48:40 Because one thing our memory profiler does, this is memory.
+
+00:48:44 So not PyStack, this is the other tool.
+
+00:48:46 So the other tool allows you to attach to a process, right?
+
+00:48:49 You have a process that is happily running, and then you say, "Now I want to profile this process that is already running." So I just want to know, every time it makes allocations, I just want to know that it's happening, or you just want to see it live.
+
+00:49:00 And so what we do is that in that case, we inject memory into the process to just prepare the profiler and I'll do all the stuff, which then we learn the hard way all the cases when you cannot do that.
+
+00:49:11 Like calling malloc under malloc, Because if your setup process requires memory, and your process is already allocated memory, then you're calling malloc under malloc, and that is undefined behavior.
+
+00:49:22 Well, most of the times that crash.
+
+00:49:24 >> Yeah, I can't imagine how tricky that stuff is, the memory stuff.
+
+00:49:27 All right. Let's talk through some of the features.
+
+00:49:29 We've touched on a lot of these, but I just got a great long list of amazing things that PyStack can do.
+
+00:49:35 I'll just breeze over the ones we've talked about already, but then potentially dive into the others.
+
+00:49:40 So it works on both running processes and it's one of the really unique aspects is on the core dump files.
+
+00:49:47 That's very cool.
+
+00:49:48 - Just to complete this part, it works on all core dump files, which is a huge, like if you are in the world of like how these things work, it's really hard because core dumps don't have a specification.
+
+00:50:00 So this is very important.
+
+00:50:01 Like there is no document that will tell you how core dumps work.
+
+00:50:05 This is the first surprise that you will have if you try to search for it.
+
+00:50:08 You will see how they normally work, but the amount of weird stuff that can happen is just countless.
+
+00:50:15 This is whatever the kernel is doing, and whatever the version of the kernel is doing.
+
+00:50:19 So you can see super weird stuff.
+
+00:50:22 >> Not just the kernel either.
+
+00:50:23 What Gcore does doesn't go through the kernel.
+
+00:50:26 So if you're using GDB to generate a core file, you might get something that's in an entirely different format than what the kernel would have dumped.
+
+00:50:31 >> The core files can miss data.
+
+00:50:33 So it's not really always a memory dump of the process, like a complete one.
+
+00:50:37 Because for instance, imagine that you're in a system and you have like five Python applications, and then you generate the whole dump of the process.
+
+00:50:44 Well, those five Python applications are going to have loaded a lot of libraries that are common, like lispC, OpenSSL, so a bunch of these libraries.
+
+00:50:52 So are you going to just include all of them?
+
+00:50:54 Well, technically you should, because that's what was loaded in the memory, but that's going to generate huge core files, like gigabytes in size.
+
+00:51:01 So a lot of the optimizations that are done is that, well, if it's a certain library, just go and read the certain library.
+
+00:51:07 I'm not going to include it, which means that tools need to know that this is happening.
+
+00:51:11 And then when they see a pointer, and they try to search in the core, they are going to find that there's nothing there.
+
+00:51:16 So they need to go to the library.
+
+00:51:17 So there's a lot of layers that you need to go.
+
+00:51:20 So the second part when it says works on core and files, it works on all of them, which is quite a huge statement.
+
+00:51:26 I guess we should touch on what platforms PyStack can run on.
+
+00:51:30 Just Linux.
+
+00:51:31 Linux, all right.
+
+00:51:32 Because I mean, it could work.
+
+00:51:35 And this is an important fact.
+
+00:51:36 For instance, if you're running on Windows or macOS, you probably want to use the other tools that we mentioned, like PySpy or Austin.
+
+00:51:43 I think both run on all platforms.
+
+00:51:46 But yes, this is because we want to ensure that we do this very well, and we cover all the cases, and we have enough with one operative system.
+
+00:51:55 Our other tools work on macOS as well.
+
+00:51:57 So the profiler memory works on macOS.
+
+00:51:59 So we don't only do tools that work on Linux, but this one only works on Linux.
+
+00:52:03 And to be fair, it does also work on Windows in WSL.
+
+00:52:07 That is my main development environment.
+
+00:52:09 So if not natively on Windows, but at least if you're in a virtual machine on Windows, you're fine.
+
+00:52:14 PyStack will work on WSL?
+
+00:52:16 - Yep. - Yeah, absolutely.
+
+00:52:17 Yeah. Okay, cool.
+
+00:52:18 And I suppose it works on Docker, running Linux on a bunch of machines, like on, you know, Parallels on Mac.
+
+00:52:25 And there's a lot of ways on the different platforms.
+
+00:52:28 Yeah, I develop on Docker on Mac.
+
+00:52:29 So for instance, I run PyStack on Docker on Mac, no problem.
+
+00:52:32 and even in the new ones, the M1 ones works nicely.
+
+00:52:35 - Cool. Includes calls to inlined functions in the native stack.
+
+00:52:39 - Ah, that's a funny one.
+
+00:52:41 So one of the things we do is that, one thing that can happen is that the C compilers, they really like to do this because it's very efficient.
+
+00:52:48 Sometimes following some heuristics, they can say, "Well, you're calling this function, "but this function is kind of small." So generating all the assembly code to prepare the call and finalize the call, plus all the locals and the stack and whatnot is kind of very expensive.
+
+00:53:02 So what they do basically is copy paste the code in the caller.
+
+00:53:05 So, and they set up everything so, you know, it works nicely.
+
+00:53:08 The locals are not overwritten just because you use the name foo in both, right?
+
+00:53:12 So it kind of works, but it is that instead of calling a function, you just copy paste the code.
+
+00:53:17 But the basically the effect that this has on the backtrace is that there is no function called.
+
+00:53:22 So there is no function.
+
+00:53:23 So when you are calling that function, it disappears.
+
+00:53:25 So it's like you never call it.
+
+00:53:27 And this can be quite confusing when you're looking stack trace because if you have function B that call the function C and C calls D and the middle one is in line, you're not going to see it and then you're going to say A calling C.
+
+00:53:37 And you say, well, there's no way that happens because I'm not going to see here. This can make this kind of like backtrace is very confusing. This is in C, not in Python, right? Because Python doesn't have inlining. Exactly. Python doesn't have inlining. That's true. We have something that we call inlining, but it's not the same thing. So I'm not going to explain that. Compiler optimization type of thing. Yeah. There is no inlining in Python. That's correct. Let's just let's leave it like that.
+
+00:53:58 And that is in C and C++ and Rust and whatnot.
+
+00:54:01 So if there is debugging information, we can recover these inline calls.
+
+00:54:05 So which is something that by the way, GDB can also do, but we can do it as well.
+
+00:54:10 So there is another debugging information.
+
+00:54:12 We actually work in some cases when GDB doesn't, just because GDB tries to be very correct in some of these cases, but for whatever reason is over correct, we can actually do it most of the time.
+
+00:54:23 But yes, this is a feature that, so you have one of these inline calls, And we do more than that. So for instance, if you have like extreme debug information that you can activate by passing, for instance, you compile something with GCC, you can pass -g3 as debug information level three.
+
+00:54:38 So put everything there. We can even show you macros.
+
+00:54:40 So you're using macros, and the macro expands to source basically, and then that source is passed to the compiler.
+
+00:54:46 So there is no macro at the compiler level, the compiler is going to see the source itself because the processor kind of expand the macro.
+
+00:54:53 But there is a technique in the debugging information that can include the fact that there was a macro there.
+
+00:54:58 So we can show you the macro.
+
+00:54:59 We can say this was a macro.
+
+00:55:00 So we can pretend that that was a function call.
+
+00:55:03 That's quite cool.
+
+00:55:03 - That's crazy, I didn't see that coming, yeah.
+
+00:55:05 So when are we getting inlining of functions as an optimization in Python, huh?
+
+00:55:09 - To be honest, there is some interesting thing that are close.
+
+00:55:12 There is this pep that was approved to inline at least comprehensions in function calls.
+
+00:55:17 - I was about to say.
+
+00:55:19 - As you can see, what I said, the consequences is that you basically copy paste calls.
+
+00:55:22 so the function call disappears.
+
+00:55:24 This will happen in Python, by the way.
+
+00:55:26 So when the PEP is implemented, which by the way, it is implemented, if I recall correctly, what happens is that you see a backtrace with PyStack, for instance, you're now going to see the least comprehension frame, which is fine because most of the time doesn't tell you anything because you're going to tell you here's a least comprehension and then you're calling a function call least comprehension.
+
+00:55:44 So it's kind of like weird.
+
+00:55:45 But the interesting parts of least comprehensions being function calls, basically.
+
+00:55:49 I mean, it's not really functions call, they have their own frame.
+
+00:55:52 But the interesting part here, which was one big change from Python 2 to Python 3, is that variables inside the comprehensions are local to the comprehension, which means that you have a variable called x outside, and then you use a variable called x inside, and you assign to that by using the comprehension name.
+
+00:56:08 The one outside is not modified, right?
+
+00:56:10 This is maintained here, even if it's in line, because even if it's in line, that is maintained.
+
+00:56:15 But there is some cases when that behavior is very, very tricky, particularly class scopes.
+
+00:56:20 So you have a comprehension in a class scope, which already is something weird to do, but you can absolutely do it.
+
+00:56:25 Like class scopes are quite wild.
+
+00:56:27 They don't behave like function scopes.
+
+00:56:30 There was a bunch of edge cases that we saw.
+
+00:56:33 This comprehension inlining is deactivated on class scopes, for instance, just because there was some consequences of the inlining.
+
+00:56:39 There is some in the discussion of the PEP that is the case if you want to see it.
+
+00:56:43 He explained this here, it will be a bit weird, but it's quite important because inlining always has consequences.
+
+00:56:49 One of them is the frame is missing, but this frame is not going to be missed by anyone because it doesn't really add anything.
+
+00:56:53 We sort of have them.
+
+00:56:54 One of the things I think is really cool about asking for information here, and it's just really helpful, maybe beyond even a good log message and stuff, is not only do you see the stack trace, the call stack here, when you this line and this file called this function and so on, but you can see optionally the local variables, right?
+
+00:57:14 Yes.
+
+00:57:14 What's extremely interesting is that you would normally need to call like dunder repper method of an object in order to figure out how to print it out in a user-friendly way.
+
+00:57:24 But we can't do that, right? We're working on crash processes. We're reading one byte of memory at a time to try to interpret it. So in order to give you these locals, PyStack needs to be able to understand the CPython representation of a list and know how to iterate over a list manually to figure out what elements it contains and recursively get the repper for each of those method for each of those objects that are in the collection as well.
+
+00:57:46 It can't just rely on being able to call Python code to get you this string.
+
+00:57:50 Right, and manually here means that it needs to know that at least in Python, really, it's a bunch of pointers that points to a buffer, and the buffer is a bunch of PyObjects, and then every object can be different. So obviously, this means that we cannot print all objects. So if you have a custom object, we cannot print that. We will print something.
+
+00:58:07 We will tell you, for instance, the name of the class. We will say, We will almost act like if there is no wrapper, so we will say custom object instance at location blah blah blah.
+
+00:58:15 So the full REPL report that you will get if you create a class.
+
+00:58:18 But for most of the common types, dictionary sets, integer floats, etc., functions, all these things, we actually are able to print it.
+
+00:58:28 Again, here the idea is adding debugging, help you debug these things.
+
+00:58:32 So obviously it's not going to be the same as, you know, having a debugger attached to something that you can inspect.
+
+00:58:37 but most of the time you don't really need it because most of the time you need to know the locals is because you have a function call and the function call has a specific argument that are passed to the function and it modifies how the function behaves.
+
+00:58:50 For instance, imagine that it has a keyword argument and the keyword argument is strict or replaced by the unique code in code.
+
+00:58:56 You really want to know if you pass one or the other because otherwise it's going to trigger different call paths.
+
+00:59:00 So if you use this local option in PyStack, you will see what arguments were passed to the functions and also the local variables in the functions.
+
+00:59:09 And if most of the time it's just these built-in types, like lists or things like that, then it's going to be very useful.
+
+00:59:16 And it's going to be mostly enough.
+
+00:59:18 I think, I mean, it's kind of weird being the authors we say this because obviously we're going to say nice things, but I swear it's true.
+
+00:59:25 Every time I particularly myself needed this option, the things that we were printing were the things that I needed to know.
+
+00:59:31 So I didn't really need to know.
+
+00:59:33 "Well, if I have a NumPy array, I won't see the array, right?
+
+00:59:37 You will show me NumPy array.
+
+00:59:39 Well, sure, but that won't help you debug a crashing code because it doesn't really matter what is in the NumPy array." It's also fair to point out that if someone ever finds a built-in type that they needed to know the value of in order to debug a problem, they can bring it to us and we can see if we can implement it.
+
+00:59:53 Benefits of open source.
+
+00:59:54 Yeah, two thoughts sort of came up for me when I was listening to you all describe that.
+
+00:59:59 And this is just such a cool feature.
+
+01:00:00 One, if it's a class, custom object that does not have slots, you could grab just the dunderdict and kind of print it as a dict.
+
+01:00:10 -It'd be one, like if you... -Yes, but no.
+
+01:00:13 This is a very interesting question, actually, you ask.
+
+01:00:16 For instance, in Python 3.12, there is an optimization in which there is no dunderdict.
+
+01:00:21 So this is quite funny, actually.
+
+01:00:24 It's quite funny because what happens is that this is one of the optimizations of the Fastest CPython project.
+
+01:00:29 This I think was done by Inada Sun and Mark Shannon.
+
+01:00:32 So the idea here is that if you think about it, if you have a object that has a DunderDict, right?
+
+01:00:37 And it has a hash table.
+
+01:00:39 Unless you want the dictionary itself and wants to just say, "Here is a dictionary.
+
+01:00:43 "I can just take a photo and put it in a poster in my room "because I like it." Unless you want the dictionary as itself--
+
+01:00:49 - Should we maybe take a second to explain what DunderDict is?
+
+01:00:53 - All right, so most objects in Python, like you have my class Animal, An animal has a bunch of attributes like name and age and like, you know, kind of animal or whatever.
+
+01:01:03 So in Python, those attributes are internally represented with a hash table, which in Python we call a dictionary.
+
+01:01:09 And you can ask the Python interpreter to show you that internal dictionary.
+
+01:01:13 So normally you will say my animal.name, that will print bimo, which is the name of my cat.
+
+01:01:19 But you can actually ask for that hash table that is internally, and for that you will need to know my animal.dunder_dict, so underscore, underscore, dict, underscore, underscore.
+
+01:01:27 that will give you the internal hash table with the name of all the attributes that you have.
+
+01:01:30 So it will show name, kind, age as a strings, and they will show you the actual values.
+
+01:01:35 So that's normally how Python is represented internally.
+
+01:01:39 When you do attribute access internally it goes to this hash table in different ways and fetches this out, right?
+
+01:01:44 But in Python 3.12, we said, well, among other things, because this optimization touches many things, really having a hash table represented with a full dictionary is a bit expensive, because if you think about it, you access an attribute, having the full hash table is not really needed.
+
+01:02:01 Among other things, because the hash table has a bunch of things that allow it to work as a Python object, but you don't really enjoy those things.
+
+01:02:08 Like for instance, it has a pointer to the class and it tells you, I'm a dictionary, but you already know that it's a dictionary because that's what we put there.
+
+01:02:14 So having the whole full dictionary with reference counts and all that stuff as a normal Python object is expensive memory-wise, but also forces you to have a bunch of indirections.
+
+01:02:24 And we already have a bunch of optimizations here.
+
+01:02:27 For instance, one of the optimizations that we had is that if you have a class, let's say animal again, most of the instances of the class, if not all, are going to have the same attributes, because normally all animals, all cats have name, age, and whatever, right?
+
+01:02:40 You absolutely can add new attributes, so this is something that you can, but normally you don't.
+
+01:02:44 So what we do is that instead of storing the same names in the dictionary of every instance, we put those names in the class because they are going to be common.
+
+01:02:53 And then if you add kind of like extra attributes, we kind of add it to the dictionary after the fact.
+
+01:02:58 But there is already the diction, that dictionary is already weird.
+
+01:03:02 Like in the sense that sometimes the keys are outside the dictionary just because they're shared.
+
+01:03:06 This is the shared key dictionary optimization.
+
+01:03:08 So we went a step ahead and we just eliminated the dictionary.
+
+01:03:12 So now what we have is the internals of the hash table, like let's say row.
+
+01:03:16 So there is no Python object kind of wrap it around it.
+
+01:03:19 It's kind of like just row pointers.
+
+01:03:22 And if only if you ask for that DunderDict, and you want, you say, well, I don't care about your optimization, just give me the hashtag, because code that does that still needs to see the hashtag, we cannot break that.
+
+01:03:32 So only when you ask for the dictionary, we instantiate that dictionary, and then we give it to you.
+
+01:03:37 So before calling DunderDict was just getting a pointer, and that's it, here's the dictionary.
+
+01:03:42 Now calling DunderDict computes stuff, like it just creates a dictionary on the fly and give it to you.
+
+01:03:47 Which means, by the way, this is a nice piece of trivia.
+
+01:03:50 Before, if you want to calculate the approximate, because this is always approximate, there is no full way to say how big is my Python object and everything it contains, because Python objects are a graph, and that question, most of the time, doesn't make sense.
+
+01:04:04 For instance, Python objects point to their module, and you don't want to also include the module in the size, right, among other things.
+
+01:04:11 But if you want to know the size of custom object, you normally say size of the instance plus size of the dict.
+
+01:04:17 But now in Python 3.12, just by asking for the size of the dict, by doing my instance dot other dict, you just make it bigger.
+
+01:04:24 So the real size of the object was actually smaller than what you will get.
+
+01:04:28 - I think that sounds like a great optimization, but it does make your life harder here.
+
+01:04:32 The other thought that I had is--
+
+01:04:34 - Well, I mean, it's nothing really harder, among other things, because we know already how to print dictionaries, so that's fine.
+
+01:04:40 If it's a dictionary, we print dictionaries, and if it's not a dictionary, we are already in the business of inspecting internal structures.
+
+01:04:47 And we know absolutely how to interpret parts of hash tables.
+
+01:04:50 And at the end of the day, what we have here is parts of hash tables for now.
+
+01:04:54 The problem here is more about like, what happens if it changes in the future?
+
+01:04:58 Because right now, for instance, it's easy, but like, you know, as we optimize more and more in the next release, it's not going to be easy.
+
+01:05:04 And right now we can say, well, we support this, this, that, and this other thing.
+
+01:05:08 Which means that every time a new Python version is published, we need to just go to all those things and check if they were changed, and then change our code, which is quite a lot of work. But if we support more types, it means that we need to do things for more things.
+
+01:05:21 And sometimes it's harder, right? Especially custom objects, who knows what we find there.
+
+01:05:25 So we kind of like stay away from that because, you know, it's maybe a lot of work.
+
+01:05:30 You're already busy, like we established. All right. Let me just flip through here and see if there's anything else that we want to cover. I feel like that's pretty much it.
+
+01:05:39 Maybe just one more shout out to the pytest plugin and whatever else you'll think we should mention because we're running out of time.
+
+01:05:45 One last thing I think is interesting here, just to highlight, which is kind of cool, is that we, in both our tools, so PyStack and the debugger, and this kind of links into the conversation that we had before around the UX and how we put a lot of emphasis on UX and making these tools super easy.
+
+01:05:59 So for instance, as we mentioned before, we were talking about some of these features and then I say, for instance, the inline, right?
+
+01:06:04 We said, well, if you have the right information, we do this.
+
+01:06:07 But as I said before at the beginning of the podcast, I said, most of the things don't have the right information.
+
+01:06:12 So most people will say, well, what is this point of this, right?
+
+01:06:15 So, but then we said, okay, so we really want to make this thing easy.
+
+01:06:19 So we don't want to tell people, well, if you want to use this feature, then you need to install this thing and just find your distribution, how to, yada, yada, yada, it's kind of annoying, right?
+
+01:06:27 So one of the things we leverage in both our tools, in PyStack and Membrane, is this thing that Matt mentioned before, this debugging for the server.
+
+01:06:34 So this means that in most distributions, the modern distributions, so this means that the latest versions of Ubuntu, Debian, Fedora, Arc, Linux, it works on most of the new ones, there is a way that debugging tools can say, okay, I have here a binary, like let's say Python, and this binary doesn't have the right information, but I really need it.
+
+01:06:52 So can you give me the debugging information?
+
+01:06:54 And it will download it automatically for you, so you don't need to do anything.
+
+01:06:57 The tool will do it for you.
+
+01:06:59 So it will figure out what the right information it needs from the processes analyzing.
+
+01:07:03 It will go to the distribution.
+
+01:07:05 It will say, hey, can you give me the right information for this, this, this, and this?
+
+01:07:09 It will download it for you.
+
+01:07:10 It will automatically merge it to the binary, and it will use it for showing the inlines or the C code or whatever it is.
+
+01:07:17 This means that most of the time, what you will see is that the first time you analyze a Python process, it will take a bit more time just because you're downloading these files and these files can be a bit big.
+
+01:07:26 It will tell you that it's doing it, right?
+
+01:07:28 And then it will, these files then are cached for subsequent calls, so you don't download it every single time.
+
+01:07:33 But then it just works by magic.
+
+01:07:35 So you have this kind of process, and you have the information, and voila, it just works.
+
+01:07:39 You don't need to do anything.
+
+01:07:40 You don't need to know about the fact that you needed the right information or the fact that your Python is optimized and doesn't have anything, you just work, it just works.
+
+01:07:48 So you just need a new enough distribution.
+
+01:07:50 And even if you don't have a new enough distribution, there's a way to set up in the old ones.
+
+01:07:53 But anyway, if you're using one of the latest support to the Ubuntu, Debian, Arc, Fedora, Red Hat, all of these have it, then magically it will just work, which is something that we really, really are happy about because it means that you don't need to know about all of these things, you will just get it.
+
+01:08:09 - That's really fantastic and go out and grab it and just get it for you without you worrying about it.
+
+01:08:13 - It feels magical.
+
+01:08:14 Like the first time I saw it, I said, I need this.
+
+01:08:16 Like this is the future.
+
+01:08:18 Like this is the future.
+
+01:08:19 Because if you have to do this manually, it just makes you miserable.
+
+01:08:22 And I know how to do it.
+
+01:08:23 I know how you need to do it.
+
+01:08:24 And it still makes me miserable.
+
+01:08:26 So I don't want to do it.
+
+01:08:28 I just want the tool to figure it out.
+
+01:08:29 And this both tools do it.
+
+01:08:31 So that's kind of cool.
+
+01:08:32 - Yeah, that's fantastic.
+
+01:08:33 All right, you guys, I think we're out of time here, but you know, final thoughts.
+
+01:08:37 People are excited about PyStack.
+
+01:08:39 Matt, what would you tell them?
+
+01:08:41 – Try it out. – Check it out. How would they use it?
+
+01:08:42 Yeah, try it out, download it.
+
+01:08:44 It's as easy as pip install PyStack.
+
+01:08:46 Find something that isn't working the way you expect it to, point PyStack at it and see if you can figure it out.
+
+01:08:50 And of course, we're open to contributions.
+
+01:08:52 So if you find especially issues, if you find something that's broken, let us know.
+
+01:08:56 If you find some platform it doesn't work on, let us know.
+
+01:08:59 But yeah, it is my single go-to debugging tool whenever something gets stuck or doesn't do what I'm expecting it to do.
+
+01:09:06 When I run a Python command at a command prompt and it just doesn't return.
+
+01:09:10 I reach for this all the time.
+
+01:09:11 I'm convinced it's a very useful tool for people.
+
+01:09:13 - Yeah, it looks amazing.
+
+01:09:14 Pablo, final thoughts.
+
+01:09:15 - Yeah, the only thing I will add to what Matt said is that one of the things, and yeah, don't do only this thing for PyStack and our tools, do it for every tool that you use.
+
+01:09:24 Is that giving success a story, so when you use the tool in that particular challenging situation and it really worked, you just say, "Wow, it just works." Just go to the repo, again, not only us, but any tool that you see that actually does this, and tell the maintainers what you were trying to do and that you were really happy.
+
+01:09:41 Among other things, this really helps maintainers because at the end of the day, you think about it, we are putting all this work and then we just get the case that it doesn't work, so it's a bit discouraging.
+
+01:09:50 So it will keep us happy and that's kind of important in open source since these things are free.
+
+01:09:55 And the other thing is that it allows us to know how people are using the tool.
+
+01:09:58 So when we discuss new features and like how we evolve the tool, how to do that.
+
+01:10:03 So for instance, for memory, we have the success stories page where you have-- we are going to have the same as in Biostack.
+
+01:10:08 So if you just happen to use it and you like it or you use it successfully to fix something, just tell us. We are super happy to learn from you and to know why it was useful to you and what kind of features you used from the tool so we can keep improving.
+
+01:10:22 - Excellent. Yeah, I think that's a really great idea.
+
+01:10:24 I encourage people to do that as well.
+
+01:10:27 Pablo, Matt, thanks for being on the show.
+
+01:10:28 - Always a pleasure, Michael.
+
+01:10:29 - Thanks for having us. - Yeah.
+
+01:10:30 - All right. - Bye, guys.
+
+01:10:32 This has been another episode of Talk Python to Me.
+
+01:10:35 Thank you to our sponsors.
+
+01:10:36 Be sure to check out what they're offering.
+
+01:10:38 It really helps support the show.
+
+01:10:40 Take some stress out of your life.
+
+01:10:41 Get notified immediately about errors and performance issues in your web or mobile applications with Sentry.
+
+01:10:48 Just visit talkpython.fm/sentry and get started for free.
+
+01:10:52 And be sure to use the promo code, talkpython, all one word.
+
+01:10:56 Listen to an episode of Compiler, an original podcast from Red Hat.
+
+01:11:00 Compiler unravels industry topics, trends, and things you've always wanted to know about tech through interviews with the people who know it best.
+
+01:11:08 Subscribe today by following talkpython.fm/compiler.
+
+01:11:12 Want to level up your Python?
+
+01:11:14 We have one of the largest catalogs of Python video courses over at Talk Python.
+
+01:11:18 Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+01:11:23 And best of all, there's not a subscription in sight.
+
+01:11:25 Check it out for yourself at training.talkpython.fm.
+
+01:11:28 Be sure to subscribe to the show, Open your favorite podcast app and search for Python.
+
+01:11:33 We should be right at the top.
+
+01:11:34 You can also find the iTunes feed at /iTunes, the Google Play feed at /play, and the Direct RSS feed at /rss on talkpython.fm.
+
+01:11:44 We're live streaming most of our recordings these days.
+
+01:11:47 If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+01:11:55 This is your host, Michael Kennedy.
+
+01:11:57 Thanks so much for listening.
+
+01:11:58 I really appreciate it.
+
+01:11:59 Now get out there and write some Python code.
+
+01:12:01 [MUSIC PLAYING]
+
+01:12:05 [Music]
+
+01:12:19 (upbeat music)
+
+01:12:21 [BLANK_AUDIO]

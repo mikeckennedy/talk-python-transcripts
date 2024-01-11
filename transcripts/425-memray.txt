@@ -1,0 +1,1411 @@
+00:00:00 Understanding how your Python application is using memory can be tough.
+
+00:00:03 First, Python has its own layer of reused memory, arenas, pools, and blocks to help it be more efficient.
+
+00:00:10 And many important Python packages are built in native compiled languages like C and Rust, oftentimes making that section of your memory usage opaque.
+
+00:00:19 But with memory, you can get way deeper insight into your memory usage.
+
+00:00:23 We have Pablo Galindo Salgado and Matt Wozniski back on the show to dive into Memray.
+
+00:00:29 the sister project to their PyStack one we recently covered. This is Talk Python to Me, Episode 425 recorded June 20th, 2023.
+
+00:00:41 Welcome to Talk Python to Me, a weekly podcast on Python.
+
+00:00:55 This is your host, Michael Kennedy.
+
+00:00:56 Follow me on Mastodon, where I'm @mkennedy, and follow the podcast using @talkpython, both on fosstodon.org.
+
+00:01:04 Be careful with impersonating accounts on other instances, there are many.
+
+00:01:07 Keep up with the show and listen to over 7 years of past episodes at talkpython.fm.
+
+00:01:13 We've started streaming most of our episodes live on YouTube.
+
+00:01:16 Subscribe to our YouTube channel over at talkpython.fm/youtube to get notified about upcoming shows and be part of that episode.
+
+00:01:24 This episode is brought to you by JetBrains, who encourage you to get work done with PyCharm.
+
+00:01:31 Download your free trial of PyCharm professional at talkpython.fm/done-with-pycharm.
+
+00:01:37 And it's brought to you by InfluxDB. InfluxDB is the database purpose built for handling time series data at a massive scale for real-time analytics. Try them for free at talkpython.fm/influxdb.
+
+00:01:50 Hey all, before we dive into the interview, I want to take just a moment and tell you about our latest course over at talk Python, MongoDB with async Python. This course is a comprehensive and modernized approach to MongoDB for Python developers. We use beanie, Pydantic, async and await, as well as fast API to explore how you write apps for MongoDB and even test them with locusts for load testing. In just today, yes, exactly today, the last of these frameworks were upgraded to use the newer, much faster Pydantic 2.0. I think it's a great course that that you'll enjoy. So visit talkpython.fm/async-MongoDB to learn more. And if you have a recent full course bundle, this one's already available in your library of courses. Thanks for supporting this podcast by taking and recommending our courses.
+
+00:02:39 Hey, guys. Hey, Pablo, Matt, welcome back to Talk Python to me. It hasn't been that long since you've been here. Has it?
+
+00:02:47 With the magic oviation maybe even minutes since the person listening to us listens to - The previous one.
+
+00:02:53 - Exactly, we don't know.
+
+00:02:54 We don't know when they're gonna listen and they don't know when we recorded it necessarily.
+
+00:02:58 It could be magic.
+
+00:02:59 It's a little bit apart, but we got together to talk about all these cool programs that give insight into how your app runs in Python.
+
+00:03:07 So we talked about PyStack previously, about figuring out what your app is doing, if it's locked up or at any given moment, if it crashes, grab a core dump.
+
+00:03:15 And maybe we thought about combining that with memray and just talking to those, but they're both such great projects that in the end, we decided, nope, they each get their own attention.
+
+00:03:25 They each get their own episode.
+
+00:03:27 So we're back together to talk about Memray and memory profiling in Python.
+
+00:03:33 An incredible, incredible profiler we're gonna talk about in a minute.
+
+00:03:37 Pablo, you were just talking about how you were releasing some of the new versions of Python, some of the point updates and some of the betas.
+
+00:03:44 You wanna give us just a quick update on that before we jump into talking about Memray?
+
+00:03:48 - Yeah, absolutely.
+
+00:03:49 I mean-- - Where are we with that?
+
+00:03:50 Just to clarify also, the ones I released myself are 3.10 and 3.11, which are the best versions of Python you will ever find.
+
+00:03:57 But the ones we are releasing right now is 3.12.
+
+00:04:01 We got the beta three today.
+
+00:04:03 You should absolutely test beta three.
+
+00:04:05 Maybe they are not as exciting as 3.11, but there is a bunch of interesting things there.
+
+00:04:10 And you know, there is the work of the Faster CPython team.
+
+00:04:14 We have a huge change in the parser, tokenizer because we are getting f strings even better and that has a huge amount of changes everywhere even if you don't think a lot about that but having this tested is quite important as you can think so so far we really really want everyone to test this this release so everyone that is listening to the live version of the podcast can go to python.org for the latest pre-release that is python 3.12 beta 3 and tell us what's broken hopefully it's It's not my fault.
+
+00:04:46 (laughing)
+
+00:04:47 But yeah.
+
+00:04:48 - No, that's excellent.
+
+00:04:49 Thanks for keeping those coming.
+
+00:04:50 Do you know how many betas are planned?
+
+00:04:53 We're on three now.
+
+00:04:54 - This is going to be a bit embarrassing because I should know being a release manager.
+
+00:04:56 I think there is two more.
+
+00:04:58 It's a bit tricky though, because I think we release beta two week after beta one because we shift the schedule.
+
+00:05:03 So a bit difficult to know, but there is a pep that we can certainly find.
+
+00:05:07 You search for Python releases schedule, Python 3.12.
+
+00:05:11 They will tell you exactly how many betas there are.
+
+00:05:13 I think there is two more betas.
+
+00:05:15 And then we will have one release candidate, if I recall correctly, we do things the way I did them, and then the final version in October.
+
+00:05:22 - I'm looking forward to it.
+
+00:05:23 And, you know, the release of 3.12, actually, it's going to have some relevance to our conversation.
+
+00:05:29 - Yes, indeed.
+
+00:05:30 - Yeah.
+
+00:05:30 I assume people probably listened to the last episode, but maybe just, you know, a real quick introduction to yourself, you know, Pablo, you go first, just so people know who you are.
+
+00:05:38 - Yeah, absolutely.
+
+00:05:39 So I'm Pablo Galindo.
+
+00:05:39 I have many things in the Python community.
+
+00:05:41 I have been practicing to say them very fast, so it don't take a lot of time.
+
+00:05:45 So I'm a CPython core developer, Python release manager, a steering council, and I work at Bloomberg and the Python infrastructure team doing a lot of cool tools.
+
+00:05:55 I think I don't, I'm not forgetting about anything, but yeah, I'm around.
+
+00:05:58 I break things so you can, I like to break tools, like Black with many changes in CPython.
+
+00:06:04 That's what I do.
+
+00:06:05 Excellent.
+
+00:06:06 Sorry, Lukasz.
+
+00:06:07 And I am Matt Wozniski.
+
+00:06:09 I am Pablo's coworker on the Python infrastructure team at Bloomberg.
+
+00:06:13 I am the co-maintainer of Memray and PyStack.
+
+00:06:16 I'm also a moderator on Python Discord, and that is the extent of my very short list of community involvement compared to Pablo's.
+
+00:06:24 - Excellent.
+
+00:06:25 Well, yeah, you both are doing really cool stuff.
+
+00:06:27 And as we're going to see, let's start this conversation off about profilers at a little bit higher level, and then we'll work our way into what is Memray and how does it work and where does it work, all those things.
+
+00:06:38 So let's just talk about what comes with Python, right?
+
+00:06:43 We have, interestingly, we have two options inside the standard library.
+
+00:06:47 We have C profile and profile.
+
+00:06:49 Do I use C profile to profile CPython and profile for other things or what's going on here guys?
+
+00:06:55 - That's already.
+
+00:06:56 - You use C profile whenever you can is the answer.
+
+00:06:59 - Yes, indeed.
+
+00:07:00 - There is a lot of caveats here.
+
+00:07:02 I already see like two podcast episodes yet with this question.
+
+00:07:06 So let's keep this short.
+
+00:07:08 The Cprofile and Profiler are the profilers that come with the standard library.
+
+00:07:11 I'm looking at the, I mean, probably you are not looking at this in the podcast version, but here we are looking at the Python documentation in the Cprofile version.
+
+00:07:21 And there is this lovely sentence that says, "Cprofile and Profiler provide deterministic profiling of Python programs." And I'm going to say, "Wow, that's an interesting take on them." I wouldn't say deterministic, although I think the modern terminology is tracing.
+
+00:07:36 And this is quite important because like, it's not really deterministic in the sense that if you executed the profile 10 times, you're going to get the same results.
+
+00:07:44 You probably are not because programs in general are not deterministic due to several things.
+
+00:07:48 We can go into detail, why not?
+
+00:07:50 - Even when else is running on your computer, right?
+
+00:07:52 - Exactly.
+
+00:07:53 What this is referring to is actually a very important thing for everyone to understand because everyone gets this wrong.
+
+00:07:58 And like, you know, there is so many discussions around this fact and comparing apples to oranges that is just very annoying.
+
+00:08:04 So what this is referring to is a Cprofile is what is called a tracing profiler.
+
+00:08:08 The other kind of profiler that we will talk about is a sampling profiler, also called a statistical profiler.
+
+00:08:15 So this one, so a sampling profiler basically is a profiler that every time, assuming that it's a performance one, because Cprofile checks time, so how much time does your functions take or why your code is slow, in other words.
+
+00:08:28 So this profiler basically checks every single Python call that happens, all of them.
+
+00:08:32 So it sees all of the calls that are made, and every time a function returns, it goes and sees them.
+
+00:08:37 Unfortunately, this has a disadvantage that is very slow.
+
+00:08:41 So running the profiler will make your code slower.
+
+00:08:45 So your code takes one hour to run, it's not unsurprising that running it under CProfile makes it two hours.
+
+00:08:51 And then you will say, "Well, how can I profile anything?" Well, because it's going to report a percentage.
+
+00:08:55 So hopefully it's the same percentage, right?
+
+00:08:57 - Not just that it makes it slow.
+
+00:08:59 The other problem with it is that it makes it slow by different amounts, depending on the type of code that's running. If what's executing is I/O and you're waiting for a network service or something like that to respond, CProfile isn't making that any slower. It takes the amount of time it takes and it's able to accurately report when that call finishes. But if what's running is CPU bound code, where you're doing a bunch of enters and exits into Python functions and executing a bunch of Python bytecode, the tracing profiler is tracing and all of that, and it's got overhead added to that.
+
+00:09:28 So the fact that it isn't adding overhead to network calls or to disk IO or things like that, but is adding overhead to CPU bound stuff means that it can be tough to get a full picture of where your program is spending its time.
+
+00:09:41 It's very good at telling you where it's spending its CPU, but not as good at telling you where it's spending its time.
+
+00:09:46 >>Right, right, because it has this, it's one of these Heisenberg, quantum mechanics sort of things, where by observing it, you make a change.
+
+00:09:53 And it's really, Matt, that's a great point.
+
+00:09:55 I think also you could throw into there, specifically in the Python world, that it's really common that we're working with computation involving C or Rust, right?
+
+00:10:06 And so if I call a function where the algorithm is written in Python, every little step of that through the loops of that algorithm are being modified and slowed down by the profiler.
+
+00:10:16 Whereas once it hits a C or a Rust layer, it just says, well, we're just gonna wait till that comes back and so it doesn't interfere, right?
+
+00:10:24 So it, even across things like where you're using something like say pandas or NumPy, potentially it could misrepresent how much time you're spending there.
+
+00:10:33 On the other hand, it was never going to interfere with a raster or C, but it's also not going to report inside that.
+
+00:10:38 So, so you are going to see a very high level view of what's going on.
+
+00:10:43 So it's going to tell you algorithm running, but like you're not going to see what's going on, right?
+
+00:10:48 Well, the advantage here is that it comes with a standard library, which is, and it's a very simple profiler.
+
+00:10:52 So you know what you're doing.
+
+00:10:53 which is maybe a lot to ask.
+
+00:10:56 Because you know, it's not, no, I mean it, like in the sense that it's not that you are a professional, it's that sometimes it's very hard to know when it's a good choice of a tool.
+
+00:11:06 Because as Matt was saying, you know, you have a lot of CPU on call and you don't have a lot of I/O, then you're safe.
+
+00:11:11 But like sometimes it's very difficult to know that that's true, or like how much do you have.
+
+00:11:14 So you have a very simple situation, like a script maybe, or a simple algorithm.
+
+00:11:18 It may work and you don't need to reach for something more sophisticated, right?
+
+00:11:21 - Yeah, knowing what type of problem you're falling into and whether this is the right tool already requires you to know something about where your program is spending most of its time.
+
+00:11:29 If you are using this tool to find out where your program is spending its time, you might not even be able to accurately judge if this is the right tool to use.
+
+00:11:37 - That's true, but also it can give you some good information, right?
+
+00:11:40 It's not completely, but it certainly, as long as you are aware of those limitations that you've laid out, Matt, you can look at it and say, okay, I understand that these things that seem to be equal time, they might not be equal, but it still gives you a sense of like, within my Python code, I'm doing more of this.
+
+00:11:56 - Right, yep.
+
+00:11:57 - Or here's how much time I'm waiting.
+
+00:11:59 - Also another thing to mention here, which is going to become relevant when we talk about memory as well, is an advantage of this is that because it's in the standard library, what this tool produces is a file with the information of the profile run.
+
+00:12:10 And because it's in the standard library, and it's so popular, there's a lot of tools that can consume that file, and so the information in different ways.
+
+00:12:18 So you have a lot of ways to choose how you want to look at the information.
+
+00:12:21 Some people, for instance, like to look at the information into kind of a graph that will tell you the percentage of the call, something like that.
+
+00:12:29 Some other people like to see it in a graphical view.
+
+00:12:32 So it's like this box with boxes inside that will tell you the percentage and things like that, who called what.
+
+00:12:38 And some people like to see it in terminal or in the GUI or in PyCharm or whatever it is.
+
+00:12:43 So there is a lot of ways to consume it, which is very good because, you know, different people have different ways to consume the information.
+
+00:12:49 And that is a fact.
+
+00:12:50 Depends on who you are and how, what are you looking at, some visualizations may be better than others.
+
+00:12:55 And there is a lot to choose here, and that is an advantage compared to something that, you know, just offers you one and that's all.
+
+00:13:00 - Indeed.
+
+00:13:01 So I mentioned that 3.12 might have some interesting things coming around this profiling story.
+
+00:13:09 We have PEP 6.6.9, low impact monitoring for CPython.
+
+00:13:14 This is part of the faster CPython initiative, I'm guessing, because Mark Shannon is the author of it.
+
+00:13:19 >> It's kind of related.
+
+00:13:20 I don't think it's immediately there.
+
+00:13:22 I mean, it's related to the fact that it's trying to make profiling itself better to the point I know he has to spend time from the faster CPython project into implementing this.
+
+00:13:29 I need to double check if this is in 3.12.
+
+00:13:32 I think it is, but it may be accepted for 3.12 by going to 3.13.
+
+00:13:37 I assume we should double check.
+
+00:13:39 So, so the 100% say that it's in 3.12 because I don't know if he had the the time to fully implement it.
+
+00:13:45 - Yeah, I don't know if it's in there, but from a pep perspective, it says accepted and for Python 3.12.
+
+00:13:50 - I do believe it's in there.
+
+00:13:51 I'm pretty sure that, I've been talking with Ned Batchelder a bit about coverage, and I'm pretty sure he said he's been testing with this in the coverage, testing coverage against this with the 3.12 betas.
+
+00:14:02 - So the idea here is to add additional events to the execution in Python, I'm guessing.
+
+00:14:09 Says it's going to have the following events, PyStart, PyResume, PyThrow, PyYield, PyUnwind, Call.
+
+00:14:15 How much do you guys know about this?
+
+00:14:17 - Yeah, I'm quite, I mean, I was the, I was involved in judging this, so I know quite a lot since I was in consulting, accepting this.
+
+00:14:26 So the idea here is that, just as a high-level view, because we're going into detail, we can again make two more podcast episodes, and maybe we should invite Mike Shannon in that case.
+
+00:14:35 But the idea here is that the tools that the interpreter exposes for the profiler and debugging, because debugging is also involved here, they impose quite a lot of overhead over the program.
+
+00:14:45 What this means that running the program under a debugger or a profiler will make it slow.
+
+00:14:51 We are talking about tracing profilers, yes, because the other kind of profilers, sampling profilers, they work differently and they will not use these APIs.
+
+00:15:00 - They trade accuracy for a lower impact, yeah.
+
+00:15:02 - Yes, I mean, just to be clear, because I don't think we are going to talk that much about them, but just to be clear is the difference. The difference here is a sampling profiler instead of like tracing the program as it runs and sees everything that the program does, it just takes photos of the program at regular intervals. So it's like, you know, imagine that you're working on a project and then I enter your room every five minutes and tell you what file are you working on? And then you tell me, oh it's program.cpp, right? And then I enter again, it's a program.cpp and I enter again it's like other things of CBP.
+
+00:15:34 So if I enter 100 times and 99 of them, you were in this particular file, then I can tell you that the file is quite important.
+
+00:15:41 So that's the idea.
+
+00:15:43 But maybe when I was not there, you were doing something completely different and I miss it.
+
+00:15:47 It just happens that every five minutes you were checking the file because you really like how it's written, but you were not doing anything there.
+
+00:15:52 So there is a lot of cases when that can misrepresent what actually happened.
+
+00:15:57 And the advantage here is that nobody's annoying you while I'm not entering the room, right?
+
+00:16:03 So you can do actual work at actual speed, right?
+
+00:16:06 And therefore these profiles are faster, but as you say, they trade kind of like accuracy for speed.
+
+00:16:13 But this PEP tries to make tracing profiles faster.
+
+00:16:15 So the other ones.
+
+00:16:17 And the idea here is that the kind of APIs that CPython offers are quite slow because they are super generic in the sense that what they give you is that every time a function call in the case of the profiler APIs is made or returns, it will hold you, but it will basically pre-compute a huge amount of, well, not a huge amount, but it's quite a lot of amount of information for you so you can use it.
+
+00:16:39 A lot of the time you don't care about that information, but it's just there and it was just pre-computed for you, so it's very annoying.
+
+00:16:45 And in the case of the tracing, the sys.setTrace, so this is for debuggers and for instance, Coverage use that as well, which is the same idea, but instead of every function call is every bytecode instruction.
+
+00:16:56 So every time the bytecode execution loop execute the instruction it calls you or you can have different events like every time it changes lines and things like that but the idea is that the overhead is even bigger and again you may not get a lot of all these things so the idea here is that instead of like calling you every single time you could maybe do something you can tell the interpreter what things are you interested in so you say well look I'm a profiler and I am just interested on you know when a function starts and when a function ends I don't care about the rest so please don't pre-compute line numbers, don't give me any of these other things, just call me.
+
+00:17:31 Just don't do anything. So the idea is that then you only pay for these particular cases and the idea is that it's as fast as possible because also the fact that this is event-based makes the implementation a bit easier in the sense that it doesn't need to slow down the normal execution loop by a lot.
+
+00:17:47 Obviously you register a lot of events then it will be quite slow but as you can see here for the list of events there is a bunch of things that you may not care about, for instance race exceptions or change lines and things But the idea here is that, you know, this event-based, then if you are not interested in many of these things, then you don't register events for that.
+
+00:18:05 So you are never called for them and you don't pay the cost, which in theory will make some cases faster.
+
+00:18:11 Some others not.
+
+00:18:12 Sure.
+
+00:18:13 It depends on how many of these events the profiler subscribes to, right?
+
+00:18:18 This portion of Talk Python to Me is brought to you by JetBrains and PyCharm.
+
+00:18:23 Are you a data scientist or a web developer looking to take your projects to the next level?
+
+00:18:28 Well, I have the perfect tool for you.
+
+00:18:30 PyCharm.
+
+00:18:31 PyCharm is a powerful integrated development environment that empowers developers and data scientists like us to write clean and efficient code with ease.
+
+00:18:39 Whether you're analyzing complex data sets or building dynamic web applications, PyCharm has got you covered.
+
+00:18:46 With its intuitive interface and robust features, you can boost your productivity and bring your ideas to life faster than ever before.
+
+00:18:53 For data scientists, PyCharm offers seamless integration with popular libraries like NumPy, Pandas, and Matplotlib.
+
+00:18:59 You can explore, visualize, and manipulate data effortlessly, unlocking valuable insights with just a few lines of code.
+
+00:19:06 And for us web developers, PyCharm provides a rich set of tools to streamline your workflow.
+
+00:19:11 From intelligent code completion to advanced debugging capabilities, PyCharm helps you write clean, scalable code that powers stunning web applications.
+
+00:19:20 Plus, PyCharm's support for popular frameworks like Django, FastAPI, and React make it a breeze to build and deploy your web projects.
+
+00:19:28 It's time to say goodbye to tedious configuration and hello to rapid development.
+
+00:19:33 But wait, there's more! With PyCharm, you get even more advanced features like remote development, database integration, and version control, ensuring your projects stay organized and secure.
+
+00:19:43 So whether you're diving into data science or shaping the future of the web, PyCharm is your go-to tool.
+
+00:19:49 Join me and try PyCharm today.
+
+00:19:51 Just visit talkpython.fm/done-with-pycharm, links in your show notes, and experience the power of PyCharm firsthand for three months free.
+
+00:20:02 PyCharm, it's how I get work done.
+
+00:20:07 For example, so one of the events is PyUnwind.
+
+00:20:11 So exit from a program function during an exception unwinding.
+
+00:20:15 You probably don't really care about recording that and showing that to somebody in a report, but the line event, like an instruction is about to be executed that has a different line number from the preceding instruction.
+
+00:20:26 There we go. All right, something like that.
+
+00:20:28 This is an interesting one. Sorry, Matt, do you want to mention something?
+
+00:20:31 I think you do need to care about unwind, actually.
+
+00:20:33 You need to know what function is being executed, and in order to keep track of what function is being executed at any given point in time, you have to know when a function has exited.
+
+00:20:42 There's two different ways of knowing when the function has exited, either a return or an unwind, depending on whether it returned due to a return statement or due to falling off the end of the function, or because an exception was thrown and not caught.
+
+00:20:54 Okay, give us an example of one that you might not care about from a memory-style perspective.
+
+00:21:00 Instruction is one that we wouldn't care about.
+
+00:21:02 In fact, even line is one that we wouldn't care about.
+
+00:21:04 Memory cares about profilers in general, for the most part.
+
+00:21:07 will care not about what particular instruction is being executed in a program. They care about what function is being executed in a program, because that's what's going to show up in all the reports they give you, rather than line oriented stuff.
+
+00:21:19 Right. So maybe coverage and that batch elder might care about line.
+
+00:21:23 Yeah, he very much cares about line. That's the slow one. That's the slow one. Because and it's important to understand why is it slow. It's slow because the problem doesn't really understand what a line of code is, right?
+
+00:21:37 A line of code is a construct that only makes sense like for you, the programmer.
+
+00:21:41 Like the parser doesn't even care about the line because it sees code in a different way.
+
+00:21:45 It's a stream of bytes.
+
+00:21:47 And lines don't have semantic meaning for most of the program compilation and execution.
+
+00:21:52 The fact that you want to do something when a line changes, then it forces the interpreter to not only keep around the information, which mostly is somehow there, compressed, but also reconstruct it.
+
+00:22:02 So basically every single time, I mean it's made in a obviously better way, but the idea is that every single time it executed an instruction, it needs to check, "Oh, did I change the line?" And then if the answer is yes, then it calls you. That is basically the old way, sort of, because instead of doing that, it has kind of a way to know when that happens so it's not constantly checking.
+
+00:22:20 But this is very expensive because it needs to reconstruct that information.
+
+00:22:24 that slowness is going to happen every single time you're asking for something that doesn't have kind of meaning in the execution of the program.
+
+00:22:31 But an exception has it.
+
+00:22:33 Like the interpreter needs to know when an exception is raised and what that means because it needs to do something special.
+
+00:22:37 But the interpreter doesn't care about what a line is, so that is very expensive.
+
+00:22:41 - Right, you could go and write statement one, semi-colon statement two, semi-colon statement three, and that would generate a bunch of byte codes, but it still would just be one line, sure.
+
+00:22:49 Hey Pablo, sidebar, it sounds like there's some clipping or some popping from your mic, So maybe just check the settings just a little bit.
+
+00:22:56 - Oh, absolutely.
+
+00:22:57 - Yeah, and hopefully we can clean that up just a bit.
+
+00:22:59 But it's not terrible either way.
+
+00:23:01 All right, so you think this is gonna make a difference?
+
+00:23:03 This seems like it's gonna be a positive impact here?
+
+00:23:06 - One particular way that it'll make a difference is that for the coverage case that we just talked about, coverage needs to know when a line is hit or when a branch is hit, but it only needs to know that once.
+
+00:23:15 And once it has found that out, it can stop tracking that.
+
+00:23:19 So the advantage that this new API gives is the ability for coverage to uninstall itself from watching for line instructions or watching for function call instructions from a particular frame.
+
+00:23:31 Once it knows that it's already seen everything that there is to see there, then it can speed up the program as it goes by just disabling what it's watching for as the program executes.
+
+00:23:40 - Okay, that's an interesting idea.
+
+00:23:41 It's like, it's decided it's observed that section enough in detail and it can just kind of step back a little bit higher.
+
+00:23:47 - Yep. - All right, okay.
+
+00:23:48 Excellent. So this is coming, I guess, in October.
+
+00:23:52 Pablo will release it to the world.
+
+00:23:54 Thanks, Pablo.
+
+00:23:55 - No, this time is Thomas Wooders, which is the release manager of 312th Thomas.
+
+00:24:00 - Oh, this is Thomas.
+
+00:24:01 Oh, this is 312th, that's right.
+
+00:24:03 That's right.
+
+00:24:04 - So you want to blame someone, don't blame me for this.
+
+00:24:07 - Exactly, exactly.
+
+00:24:09 All right, so that brings us to your project, Memray, which is actually a little bit of a different focus than at least C-Profile, right?
+
+00:24:17 And many of the profilers, I'll go and say most of the profilers, answer the question of where am I spending time, not where am I spending memory, right?
+
+00:24:26 >> I would agree that that's true.
+
+00:24:27 There are definitely other memory profilers.
+
+00:24:29 We're not the only one, but the majority of profilers are looking at where time is spent.
+
+00:24:32 >> And yet, understanding memory in Python is super important.
+
+00:24:36 I find Python to be interesting from the whole memory, understanding the memory allocation algorithms, and there's a GC, but it only does stuff some of the time.
+
+00:24:47 Like, how does all this work, right?
+
+00:24:49 And we as a community, maybe not Pablo as a core developer, but as a general rule, I don't find people spend a ton of time obsessing about memory like maybe they do in C++ where they're super concerned about memory leaks or some of the garbage collected languages where they're always obsessed with, you know, is the GC running and how's it affecting real time or near real time stuff.
+
+00:25:11 It's a bit of a black box, maybe how Python memory works.
+
+00:25:15 Would you say for a lot of people out there?
+
+00:25:17 - Oh yeah, absolutely. - Yeah, I think that's definitely true.
+
+00:25:20 I think it is as well.
+
+00:25:21 And even these days, with all the machine learning and data science, and the higher the extraction goes, the easier it is to just allocate three gigabytes without you knowing.
+
+00:25:30 Like you do something, and then suddenly you have half of the RAM filled by something that you don't know what it is.
+
+00:25:36 Because you are so high level that you didn't allocate any of this memory.
+
+00:25:39 - It's just the library. - Yeah.
+
+00:25:40 Profiling for where time is being spent is something that pretty much every developer wants to do at some point.
+
+00:25:45 from the very first programs you're writing, you're thinking to yourself, "Well, I wish this was faster. And how can I make this faster?" I think looking at where your program is spending memory is more of a special case that only comes up in either when you have a program that's using too much memory and you need to figure out how to pair it back, or if you are trying to optimize an entire suite of applications running on one set of boxes, and you need to figure out how to make better use of a limited set of machine resources across applications.
+
+00:26:14 So that comes up more at the enterprise level.
+
+00:26:17 Yeah, sure. We heard Instagram give a talk about what did they entitled it?
+
+00:26:21 Something like dismissing the GC or something like that, where they talked about actually.
+
+00:26:26 It was very funny because they made that talk and then they make a following up saying like that the previous idea was actually bad.
+
+00:26:33 So now we have a refined version of the idea.
+
+00:26:37 This was the one where they were disabling GC in their worker processes.
+
+00:26:43 Yeah, I think they're Django workers.
+
+00:26:45 Yes, they have a 4k sec.
+
+00:26:47 Quite interesting use case because it's quite common.
+
+00:26:49 But I want to add to what Matt said that memory has this funny thing compared with time, which is that when people think about the time my program is spending on something, they don't really know what they are talking about.
+
+00:27:01 Like they know what they want.
+
+00:27:02 Memory is funny because most of the time they actually don't.
+
+00:27:06 And you will say, how is that possible?
+
+00:27:07 Like the problem is with memory is that you understand the problem.
+
+00:27:10 I have this thing called memory on my computer, and it's like a number, like 12 gigabytes or 6 gigabytes, or whatever it is, and it's half full.
+
+00:27:19 And I understand that concept.
+
+00:27:21 But the problem is that why it's half full, or what is even memory in my program, which is different from that value, now there's a huge disconnect, right?
+
+00:27:31 And this is so interesting.
+
+00:27:33 I don't know if this is going to be super interesting to talk about, but I want to just highlight this, Because when I ask you, what is allocating memory for you?
+
+00:27:43 Like, what is that?
+
+00:27:44 It's calling malloc, it's creating a Python object.
+
+00:27:47 It like, because when you, this is very interesting.
+
+00:27:49 And in Python, because we are so high level, who knows?
+
+00:27:52 Because when you create a Python object, well, it may or may not require memory.
+
+00:27:57 But when you call malloc, it may or may not actually allocate memory, right?
+
+00:28:01 And if you really go and say, okay, so just tell me when I really go to that, you know, Physical memory and I really spend some of that physical memory in my program If you want just that then you are not going to get information about your program Because you are about so many abstractions that if I just told you when that happens You're going to miss so much because you're going to find that the Python and the runtime C++ and the OS really but likes to batch this operation the same way You don't want to you know, you're going to read a big file when you call read you are not going to read one byte at a time because that will be very expensive the OS is going to kind of read a big chunk and every time you call read it's going to give you the pre chunk that it already fetched right and here it will happen the same it's going to basically even if you ask for like a tiny amount like let's say you want just a 5k bytes right it's going to record like grab a big chunk and then it's going to give you from the chunk until it gets rid of so what's going to happen is that you may be very unlucky and you're going to ask for a tiny, tiny object. And if you only care when I really go to the physical memory, you're going to get like maybe a 4k allocation from that very, very tiny object that you ask. And then you're going to be done. That doesn't make any sense because I just wanted space for this tiny object and ginger located four kilobytes of memory or even more.
+
+00:29:20 Yeah, it's super not obvious, isn't it?
+
+00:29:22 Yeah. On Linux, the smallest amount you could possibly allocate from the system is always a multiple of four kilobytes.
+
+00:29:28 Well, that's by default. You can actually change that. The page size can be changed.
+
+00:29:34 Can it be lowered?
+
+00:29:35 I don't think it can be lowered, but certainly it can be made higher. And when you make it higher, there is this big page optimization. When it's super ridiculous. Actually, Windows, you can do the same, if I recall, because Windows has something called huge pages. There's something called huge pages, and it's very funny because it affects some important stuff like the speed of hard drive, something like that.
+
+00:29:58 This portion of Talk Python to Me is brought to you by InfluxData, the makers of InfluxDB.
+
+00:30:03 InfluxDB is a database purpose-built for handling time series data at a massive scale for real-time analytics.
+
+00:30:11 Developers can ingest, store, and analyze all types of time series data, metrics, events, and traces in a single platform.
+
+00:30:18 So dear listener, let me ask you a question.
+
+00:30:20 How would boundless cardinality and lightning-fast SQL queries impact the way that you develop real-time applications?
+
+00:30:27 InfluxDB processes large time series data sets and provides low latency SQL queries, making it the go-to choice for developers building real-time applications and seeking crucial insights.
+
+00:30:38 For developer efficiency, InfluxDB helps you create IoT, analytics, and cloud applications using timestamped data rapidly and at scale.
+
+00:30:47 It's designed to ingest billions of data points in real-time with unlimited cardinality.
+
+00:30:53 InfluxDB streamlines building once and deploying across various products and environments from the edge on premise and to the cloud.
+
+00:31:01 Try it for free at talkpython.fm/influxdb.
+
+00:31:05 The link is in your podcast player show notes.
+
+00:31:08 Thanks to influxdata for supporting the show.
+
+00:31:10 Maybe one of you two can give us a quick rundown on the algorithm for all the listeners.
+
+00:31:18 But the short version is, if Python went to the operating system for every single byte of memory that it needed, so if I create the letter A, it goes, "Oh, well, I need," you know, what is that, 30, 40 bytes, turns out.
+
+00:31:32 - Hopefully less.
+
+00:31:33 Hopefully less.
+
+00:31:34 But yeah, it's not eight.
+
+00:31:36 - Yeah, it's not just the size, actually, of like you would have in C. There's like the reference count and some other stuff.
+
+00:31:42 Whatever, like it's, let's say, 30, 20 bytes.
+
+00:31:46 It's not going to go to the operating system and go, "I need 20 more, 20 more bytes, 20 more bytes." It has a whole algorithm of getting certain blocks of memory, kind of like 4K blocks of page size, and then internally say, "Well, here's where I can put stuff until I run out of room to store new 20-byte-sized pieces." And then I'll go ask for more.
+
+00:32:07 So you need something that understands Python to tell you what allocation looks like, not just something that looks at how the process talks to the OS, right?
+
+00:32:16 Yeah, I think that's definitely the case.
+
+00:32:18 There's one pattern that you'll notice with large applications is that there tend to be caches all the way down.
+
+00:32:23 And you can think of this as the C library fetching, allocating memory from the system and then caching it for later reuse once it's no longer in use.
+
+00:32:33 And above that, you've got the Python allocator doing the same thing.
+
+00:32:36 It's fetching memory from the system allocator and it's caching it itself for later reuse.
+
+00:32:42 and not bringing it back to the system immediately, necessarily.
+
+00:32:46 The key here, which is a conversation that I have with some people that are surprised, like, okay, so when they ask, like, what is this Python allocator business?
+
+00:32:55 And when you explain it, they say, well, it's doing the same thing as malloc, in the sense that when you call malloc, it doesn't really go to the system every single time.
+
+00:33:02 It does the same thing in a different way with a different algorithm, I mean, that the Python allocator does. So what's the point if they are doing the same thing?
+
+00:33:10 The key here is the focus.
+
+00:33:12 The algorithm that malloc follows is generic.
+
+00:33:15 It doesn't know what you're going to do.
+
+00:33:17 It's trying to be as fast as possible, but because it doesn't know how you're going to use it, it's going to try to make it as fast as possible for all possible cases.
+
+00:33:26 But the Python allocator knows something which is very important, which is that most Python objects are quite small, and the object itself, not the memory that it holds to, right?
+
+00:33:36 Because the list object by itself is small.
+
+00:33:39 It may contain a lot of other objects, but that's a big array, but the object itself is very small.
+
+00:33:44 And the other thing is that there tend to be short live.
+
+00:33:46 This means that there is a huge amount of objects that are being created on the strawberry fast.
+
+00:33:49 And that is a very specific pattern of uses.
+
+00:33:52 And it turns out that you can customize the algorithm doing the same basic thing.
+
+00:33:57 What Matt mentioned, this caching of memory, you can customize the algorithm to make that particular pattern faster.
+
+00:34:02 And that's why we have a Python allocator in Python and we have also model.
+
+00:34:06 Right.
+
+00:34:07 So there's people can go check out the source code.
+
+00:34:09 there's a thing called PyMalloc that has three data structures that are not just bytes, but it has arenas, chunks of memory that PyMalloc directly requests, that has pools which contain fixed sizes of blocks of memory, and then these blocks are basically the places where the variables are actually stored.
+
+00:34:32 Like I need a 20 bytes, so that goes into a particular block.
+
+00:34:36 Often the block is dedicated to a certain size of object, if possible, right?
+
+00:34:41 And this tends to be quite small, because the other important thing is that this is only used if your object is smallish.
+
+00:34:46 I think it's 512 kilobytes or something. There is a limit, it doesn't matter.
+
+00:34:52 The important thing is that if the object is medium size or big, it goes directly to malloc.
+
+00:34:57 So it doesn't even bother with any of these arenas or blocks.
+
+00:35:01 So this is just for the small ones.
+
+00:35:02 And I guess that's because it's already different from the normal allocation pattern that we see for Python objects, that they tend to be small.
+
+00:35:09 At the point where you're getting bigger ones, we might not have as good of information about what's going on with that allocation, and it might make sense to just let the system malloc handle it.
+
+00:35:18 Okay, so there's that side.
+
+00:35:20 We have reference counting, which does most of the stuff.
+
+00:35:22 And then we have GCs that catches the cycle.
+
+00:35:24 Not really worth going in, but primarily reference counting should be people's mental model, I would imagine, right?
+
+00:35:29 For the lifetime, you mean?
+
+00:35:31 For the lifetime of objects, yeah.
+
+00:35:32 - Yeah. - Yeah.
+
+00:35:33 That's why it was at least conceivable that Instagram could turn off the GC and instantly run out of memory, right?
+
+00:35:39 - Right, right.
+
+00:35:40 I mean, when they turn off, this is just the pydantic compiler engineer mindset turning on here.
+
+00:35:46 But technically, reference count is a GC model.
+
+00:35:48 So technically, there is two GCs in Python, right?
+
+00:35:51 But yeah, but normally when people say the GC--
+
+00:35:54 - How about not the mark and sweep GC?
+
+00:35:57 - Right, right. - Yeah.
+
+00:35:58 - When people say the GC, they say the cycle GC.
+
+00:36:01 - Yeah, right, yeah.
+
+00:36:02 - Python doesn't actually have a mark and sweep GC.
+
+00:36:05 The way the cycle collecting GC works is not mark and sweep.
+
+00:36:08 It's actually implemented in terms of the reference counts.
+
+00:36:11 Was something that surprised me a lot when I learned it.
+
+00:36:13 - Yeah, there is an interesting page in the dev guide written by a crazy Spanish person that goes into detail over how it is done.
+
+00:36:20 - Yeah, I wonder who wrote that.
+
+00:36:21 Okay, we talked a bit about profilers.
+
+00:36:24 We, I think, probably dove enough into the memory.
+
+00:36:26 Again, that could be a whole podcast, just like how does Python memory work?
+
+00:36:29 But let's focus on not how does it work, but just measuring it for our apps.
+
+00:36:34 And you touched on this earlier, you guys, when you talked about there's memory and there's performance, but there's also a relationship between memory and performance, right?
+
+00:36:43 Like, for example, you might have an algorithm that allocates a bunch of stuff that's thrown away really quickly, and allocation and deallocation has a cost, right?
+
+00:36:51 You might have more things in memory that mean cache misses on the CPU, which might make it run slower, right?
+
+00:36:58 There's a lot of effects that kind of tie together with performance and memory.
+
+00:37:02 So I think it's not just about memory, is what I'm trying to say, that you want to know what it's up to.
+
+00:37:07 So tell us about Memory.
+
+00:37:09 It's such a cool project.
+
+00:37:10 - So yeah, Memory is our memory profiler as a lot of fairly interesting features.
+
+00:37:16 - It does.
+
+00:37:17 - One of them is that it supports a live mode where you can see what your application is, where your application is spending memory as it's running, has a nice little automatically updating grid that has that information in it that you can watch as the program runs.
+
+00:37:31 It also has the ability to attach to an already running program and tell you some stuff about it.
+
+00:37:36 But sort of the main way of running it is just capturing a capture file as the program runs in the same way as C-Profile would capture its capture file.
+
+00:37:44 - Check out the report, yeah.
+
+00:37:46 - Yeah, doing some reporting based on that capture file after the fact.
+
+00:37:49 - So just for people listening, 'cause I know they can't see this, the live version is awesome.
+
+00:37:54 if you've ever run Glances or Htop or something like that, where you can kind of see a two-y type of semi-graphical live updating dashboard, like it's that but for memory.
+
+00:38:07 And this is really nice.
+
+00:38:09 - Yeah, and the other really cool feature that it's got is the ability to see into a C or a ruster's C++ extension modules.
+
+00:38:16 So you can see what's happening under the hood inside of things that are being used from your Python code.
+
+00:38:23 So if you're calling a library that's implemented partly in C, like NumPy, you can see how NumPy is doing its allocations under the hood.
+
+00:38:30 Pablo, you were touching on this a little bit, like how the native layer is kind of a black box that you don't really see into.
+
+00:38:36 You don't see into it with C Profile, but also with some of the other memory profilers, right?
+
+00:38:42 And this looks at it across the board, C, C++, Rust.
+
+00:38:45 Right. So this is kind of important because, as we discussed before, what is memory, not only is complicated, but also depends on what you want.
+
+00:38:53 Like the thing is that, and this is quite a big important part, is that you really need to know what you're looking for.
+
+00:38:59 So for instance, we, Memray kind of highlights two important parts, which is that it sees all possible allocations, so not only the ones made by Python, because like Python has a way to tell you when an object is going to be created, but it doesn't really, it's not going to tell you is you are going to kind of like use memory for it or not, among other things, because for instance, there is, Python even caches entire objects.
+
+00:39:21 There is this concept of free lists.
+
+00:39:23 So object creation doesn't really mean memory allocation.
+
+00:39:26 It also tells you when you are going to allocate memory.
+
+00:39:30 When you normally run Python, you may use PyMalloc, and PyMalloc caches the memory, so you may not go to the actual system.
+
+00:39:38 So by default, memray checks all allocations done to the system allocator, so malloc, basically.
+
+00:39:43 So every time you call malloc or memmap or one of these, we see it.
+
+00:39:47 And apart from seeing it and recording it, we also can tell you who made the allocation from C++ and Python.
+
+00:39:54 On top of that, if you really want to know when you create objects, well, not objects, but when Python says, "I need memory," we can also tell you that if you want.
+
+00:40:02 So if you really want to know, "Well, I don't really care if PyMalloc caches and whatnot.
+
+00:40:08 "Every single time Python requires memory, just tell me." Even if you reuse it, I just want to know, because that kind of will show you a bit of like when you require object creation or things like that.
+
+00:40:19 Again, not 100%, but mostly doing that.
+
+00:40:22 And the idea here is that you can really customize what you want to track and you don't pay for what you don't want.
+
+00:40:28 So for instance, most of the time, you don't want to know when Python requires memory because most of the time, it's not going to actually impact your memory usage, right?
+
+00:40:38 Because as you mentioned, PyMalloc is going to use one of these arenas and you're going to see the actual malloc call.
+
+00:40:44 But sometimes you want.
+
+00:40:45 So Memray allows you to know the site when you want to track one, and by default is going to use the faster method, which is mostly the, is the most similar to when you execute your program.
+
+00:40:56 And an interesting feature as of this time, only Memray has is that it can tell you the location, like who actually made the location.
+
+00:41:04 So who called who, et cetera, right?
+
+00:41:06 So you're going to tell you this Python function called this C function that in turn called this Python function, and this one actually made a call to malloc or created a Python list or something like that.
+
+00:41:15 >> I think that was really a fantastic feature that it's easy to miss the significance of that.
+
+00:41:21 But if you get a memory profiler, it just says, "Look, you allocated a thousand lists and they used a good chunk of your memory." You're like, "Well, okay.
+
+00:41:29 Well, let's go through and find where lists are coming from." Converting that information back of how many of these types of objects, and how many of those objects you allocated back to, where can I look at my code and possibly make a change about that, that can be really, really tricky.
+
+00:41:44 And so the fact that you can see this function is allocating this much stuff is super helpful.
+
+00:41:50 - One of the important things here to highlight, which I think is interesting, maybe Matt can also cover it more in detail, but is that memory, most memory profilers are actually sampling profilers.
+
+00:42:01 Reason is that the same way tracing profilers for function calls need to trace every single function call, a memory profiler, a tracing memory profiler needs to trace every single allocation.
+
+00:42:11 but turns out that allocation happen much more often than function calls if you made a calculation based on normal programs, it can be anything that you want just open Python even or even any C or C++, you're going to see that actually you allocate a huge amount of... so doing something per allocation is super expensive it's extremely expensive and most profilers what they do is that they do sampling it's a different kind of sampling so it's not this photo kind of thing they use a different statistic based on bytes So they basically see these memories, a stream of bytes, and they decide to sample some of them.
+
+00:42:42 So they are inaccurate, but normally they try to be, use statistics to tell you some information.
+
+00:42:48 So memray on the other hand.
+
+00:42:49 - To give an example, instead of sampling every 10 milliseconds and seeing what the process is doing right now, it's sampling every 10 bytes.
+
+00:42:56 So every time a multiple of 10 bytes is allocated from the system, it checks what was allocating that.
+
+00:43:02 Although it'll use a bigger number than 10 in order for this to actually be effective, since most allocations will get at least 10 bytes, but something like that.
+
+00:43:09 - Right.
+
+00:43:10 So memray is illustration, which means that it sees every single allocation.
+
+00:43:13 This is quite an interesting kind of decision here because like, you know, it's very, very hard to make a traction profiler that is not extremely slow.
+
+00:43:21 So, you know, memory tries to be very fast, but obviously it's going to be a bit slower than sampling profilers.
+
+00:43:26 But the advantage of this, what makes memray quite unique, is that because it captures every single allocation into the file, which has a huge amount of technical challenges.
+
+00:43:34 For instance, these files can be ginormous.
+
+00:43:37 Like we are talking gigabytes and gigabytes, and we put a ridiculous amount of effort into making them as small as possible.
+
+00:43:43 So it has double compression and things like that.
+
+00:43:44 - So you're not using XML to store that?
+
+00:43:46 - No, certainly not.
+
+00:43:48 (laughing)
+
+00:43:49 - You know, the first version, almost.
+
+00:43:50 I think if you look at our release notes from one version to the next, every version, we're like, and the capture files are now 90% smaller again.
+
+00:43:58 We've continued to find more and more ways to shrink.
+
+00:44:00 - Sure.
+
+00:44:01 - All right, at the cost of that, now reasoning about what is in the file is just bananas, because we do a first manual compression based on the information we know is there, but then we run it C4 on that.
+
+00:44:13 So it's like double compression already.
+
+00:44:15 And there is even a mode when we pre-massage the data into the only one that you care, so it's even smaller.
+
+00:44:22 So it is out of effort there.
+
+00:44:24 But the advantage of having that much information is that now we can produce a huge amount of reports.
+
+00:44:29 So for instance, not only we can show you the classic flame graph, like this visualization of a hook or what, like instead of where you're spending your time, where do you locate your memory?
+
+00:44:39 But we can do some cooler things.
+
+00:44:41 So for instance, we can, you mentioned that there is this relationship between like running time and memory.
+
+00:44:47 So one of the things that we can show you in the latest versions of memray is that, for instance, in my end that you have like a Python list or if you're in C++ a vector, right?
+
+00:44:56 And then you have a huge amount of data you want to put into the vector and you start adding, so in Python will be append.
+
+00:45:01 So you start calling append, and then at some point the list has a pre-allocated size and you're going to fill it and then there's no more size, no more room for the data. So it's going to say "well, I need more memory" So it's going to require a bigger chunk of memory, it's going to copy all the previous elements into the new chunk and then it's going to keep adding elements and it's going to happen again and again and again and again So if you want to introduce millions of elements into your list because it doesn't know how many you need I mean you could tell it but in Python is a bit more tricky than in C++ C++ has a call reserve when you can say, I'm going to need this many.
+
+00:45:36 So just make one call to the allocator and then let me fill it.
+
+00:45:40 But in Python, there is a way to do it, but not a lot.
+
+00:45:43 So the idea here is that it's going to go through the cycles of getting bigger and bigger.
+
+00:45:46 And obviously it's going to be as low because every time you require memory, you pay time.
+
+00:45:51 And memray can detect this pattern because we have the information.
+
+00:45:54 So memray can tell you when you are doing this pattern of like creating a bigger chunk, copying, creating a bigger chunk, copying.
+
+00:45:59 And it's going to tell you, hey, these areas of your code, you could pre-reserve a bigger chunk.
+
+00:46:05 In Python, there is idioms depending on what you're doing, but it's going to tell you, maybe you want to tell whatever you're creating to just allocate once.
+
+00:46:12 So for instance, in Python, you can multiply a list of nodes by 10 million and it's going to create a list of 10 million nones.
+
+00:46:18 And instead of calling append, you set the element using--
+
+00:46:22 - Oh, interesting.
+
+00:46:23 Yeah, you can keep track of yourself of where it is instead of just using len of--
+
+00:46:27 - Exactly.
+
+00:46:28 - But in C++, for instance, with memory also sees as long as it's called from Python.
+
+00:46:33 So it's going to tell you, wow, you should use reserve.
+
+00:46:36 So tell the vector how many elements you need.
+
+00:46:38 Therefore, you're not going to go into this.
+
+00:46:41 - There's not a way to do that in Python lists though, is there, to actually set like a capacity level when you allocate it? - With this trick.
+
+00:46:48 - Yeah, yeah, yeah. - You can't--
+
+00:46:49 - Then you can't use a lend on it anymore, right?
+
+00:46:51 There's not a something in the initialization.
+
+00:46:54 Yeah, okay, I didn't think so either, but I could have missed it and it would be important.
+
+00:46:58 - No, no, no, no.
+
+00:46:59 There are ways that I don't want to reveal because the list has a, it works the same as a vector.
+
+00:47:05 It's just that the reserve call is not exposed, but there are ways to trick the list into thinking that it needs a lot of memory, but I'm not going to reveal it so people don't rely on them.
+
+00:47:15 - Those ways are implementation details that can change from one Python version to the next.
+
+00:47:19 - Right, for instance, one example.
+
+00:47:21 Let me give you one example.
+
+00:47:22 Imagine that you have a tuple of 10 million elements, and then you call list on the tuple.
+
+00:47:27 So you want a list of those two million elements.
+
+00:47:29 Because Python knows that it's a tuple and it knows the size, it knows how many elements it needs.
+
+00:47:34 So it's going to just require the million element array and then it's going to just copy them in one go.
+
+00:47:38 So it's not going to go through this--
+
+00:47:40 - I see.
+
+00:47:40 - Over a point pattern.
+
+00:47:41 - You can pass some kind of iterable to a list to allocate it, but if it's a specific type where Python knows about it, it says, "Oh, I actually know how big that is." Instead of doing the growing algorithm, it'll just initialize, okay.
+
+00:47:54 - I think it's an implementation detail of CPython in the sense that this only works in CPython, I don't really remember, but there is this magic method you can implement on your classes called len_hint.
+
+00:48:04 So this is underscore, underscore, len_hint, underscore, underscore, that is not the len, but it's a hint to Python.
+
+00:48:11 And it's going to say, well, this is not the real len, but it's kind of an idea.
+
+00:48:15 And this is useful, for instance, for generators or iterators.
+
+00:48:18 So you may not know how many elements there are because it's a generator, but you may know, like, at least this many.
+
+00:48:24 So Python uses this information sometimes to pre-allocate.
+
+00:48:28 But I don't think this is like in the language.
+
+00:48:29 I think this is just in CPython.
+
+00:48:31 - Sure, okay, excellent.
+
+00:48:33 So let's talk about maybe some of the different reporters you've got.
+
+00:48:38 So you talked about the flame graph.
+
+00:48:39 You've got a TQDM style report you can put just out on, you know, nice colors and emoji out onto the terminal.
+
+00:48:48 Like give us some sense of like how we can look at this data.
+
+00:48:50 - Yeah, that one is showing you kind of just aggregate statistics about the run.
+
+00:48:54 So it tells you a histogram of how large your allocations tended to be.
+
+00:48:58 It gives you some statistics about the locations that did the most allocating and the locations that did the largest number of allocations.
+
+00:49:07 So the most by number of bytes and the most by count, as well as just what your total amount of memory allocated was.
+
+00:49:14 It's interesting because this one looks across the entire runtime of the process.
+
+00:49:18 A lot of our other reports will...
+
+00:49:20 The other major one that we need to talk about is the Flame Graph Reporter. That's probably the most useful way for people in general to look at what the memory usage of their program is.
+
+00:49:31 But the Flame Graph – so what a Flame Graph is, let's start there. A Flame Graph shows you memory broken out by call tree. So rather than showing any time dimension at all, the Flame Graph shows you this function called that function called that function called that function. And at any given depth of the call tree, the width of one of the function nodes in the graph shows you what percentage of the memory usage of the process can be allocated to that call or one of the children below it. That can be a really useful way, a really intuitive way, of viewing how time or memory is being spent across a process. But the downside to it is that it does not have a time dimension. So with a memory flame graph like this, it's showing you a snapshot at a single moment in time of how the memory usage at that time existed. There's two different points in time that you can select for our flame graph reports. You can either pick time right before tracking started, or sorry, right before tracking stopped, which is sort of the point at which you would expect everything to have been freed. And you can use that point to analyze whether anything was leaked, something was allocated and not deallocated, and you want to pay attention to that.
+
+00:50:45 The other place where you can ask it to focus in on is the point at which the process used the most memory.
+
+00:50:52 So the point during tracking when the highest amount of memory was used, it'll by default focus on that point, and it will tell you at that point how much memory could be allocated to each unique call stack.
+
+00:51:04 - Yeah, these Flamegraphs are great.
+
+00:51:05 You have nice search, you got really good tooltips.
+
+00:51:07 obviously because some of these little slices can be incredibly small.
+
+00:51:11 Tooltips are...
+
+00:51:12 - You can click on them.
+
+00:51:14 If you click on one of them, it will zoom in.
+
+00:51:16 - Oh yeah, okay.
+
+00:51:18 Yeah, if you click on one, then it'll expand down and just focus on...
+
+00:51:21 - For instance, the example that you're looking at, for the people here in the podcast, they were not going to see it, but here there is one of these flame graphs, and one of the paths in the flame graph, one of the nodes in the tree is about imports.
+
+00:51:35 So here I'm looking at a line that says from something import core.
+
+00:51:39 So that's obviously memory that was allocated during importing.
+
+00:51:42 So obviously you cannot get rid of that, but hopefully unless you're implementing the library.
+
+00:51:46 So you may not care about that one.
+
+00:51:48 You may care about the rest.
+
+00:51:49 So you could click in the other path, and then you don't care about, you are going to see only the memory that was not allocated during imports, right?
+
+00:51:57 Or you could be surprised.
+
+00:51:59 You could go, "Wait, why is half my memory being used during an import?
+
+00:52:02 And I only sometimes even use that library." You could push that down.
+
+00:52:06 Well, it's like additionally imported or something, right?
+
+00:52:08 Like here, as you can see, you go up in this example, I think this example uses NumPy.
+
+00:52:13 Yes.
+
+00:52:13 So you hover over this line that says import NumPy as MP.
+
+00:52:17 You may be surprised that importing NumPy is 63 megabytes.
+
+00:52:21 And for 44,000 allocations.
+
+00:52:26 Yeah.
+
+00:52:26 Just by importing.
+
+00:52:27 So, so here you go.
+
+00:52:29 Surprise.
+
+00:52:29 So yes, that's, and if someone wants to be extremely surprised, just try to import TensorFlow and see what happens.
+
+00:52:36 (laughing)
+
+00:52:38 I can tell you it's not a nice surprise.
+
+00:52:40 But here you can kind of focus on different parts if you want.
+
+00:52:44 Also we have these nice check boxes in the top that automatically hide the imports.
+
+00:52:49 So you don't care about the imports one, it just hides them.
+
+00:52:53 So you can just focus on the part that is not imports, which is a very common pattern because again, you may not be able to optimize NumPy yourself, right?
+
+00:53:01 So you may not be able to--
+
+00:53:02 - If you decide you have to use it, - That's the answer. - You have to use it.
+
+00:53:04 - So it's hard to clean a bit, because these ones can get quite complicated.
+
+00:53:09 - So another thing that stands out here is, I could see that it says the Python allocators, PyMalloc.
+
+00:53:14 This is the one that we've been talking about with arenas, pools, and blocks, and pre-allocating, and all of those things.
+
+00:53:21 That's not what's interesting.
+
+00:53:22 What's interesting is, you must be showing us this because there might be another one?
+
+00:53:26 - That's right.
+
+00:53:28 Well, not another one.
+
+00:53:29 Python only ships with, well, Python does ship with two, kind of.
+
+00:53:32 it's also got a debug one that you wouldn't normally use. But the reason we're showing this to you is because it makes it very hard to find where memory leaks happen if you're using the PyMalloc allocator. So if you're using PyMalloc as your allocator, you can wind up with memory that has been freed back to Python, but not yet freed back to the system. And we won't necessarily know what objects were responsible for that. And if you're looking at memory leaks, we won't be able tell you whether every object has been destroyed because we won't see that the memory has gone back to the system. And that's what we're looking for at the leaks level. Now, as Pablo said earlier, there's an option of tracing the Python allocators as well. So in memory leaks mode, you either want to trace the Python allocators as well so that we can see when Python objects are freed and we know not to report them as having been leaked as long as they were ever freed. Or you you can run with a different allocator, just malloc. You can tell Python to disable the PyMalloc allocator entirely and just whenever it needs any memory to always just call the system malloc. And in that case, >> Oh, interesting.
+
+00:54:39 >> There is an environment variable called Python malloc. So all uppercase, all together, Python malloc. And then you can set it to malloc, the word malloc, and that will deactivate PyMalloc. You can set it to PyMalloc, which will do nothing because by default you get But you can also set it to PyMalloc debug or something like that.
+
+00:54:58 I don't recall exactly that one.
+
+00:54:59 - I think it's PyMalloc plus debug. - Right.
+
+00:55:02 And that will set the debug version of PyMalloc, which will tell you if you use it wrong or things like that.
+
+00:55:07 The important thing also, apart from what Matt said, is that using PyMalloc can be slightly surprising sometimes.
+
+00:55:13 But the important thing to highlight here is that this is what really happens.
+
+00:55:17 So normally you want to run with this on, because that is going to tell you what happened.
+
+00:55:21 It's just that what happened may be a bit surprising.
+
+00:55:23 Imagine, for instance, the case that we mentioned before.
+
+00:55:26 Imagine that you allocate a big list, not a huge one, but quite a big one.
+
+00:55:31 And then it turns out that that didn't allocate any memory because it was already there, available in the arenas.
+
+00:55:37 And then you allocated the letter A.
+
+00:55:40 Well, maybe not the letter A, but the letter Eñe from the Spanish alphabet, which is especially not cached because why are you going to cache that?
+
+00:55:48 If you allocate the letter Eñe, then suddenly there is no more memory.
+
+00:55:52 So PyMalloc says, "Well, I don't have any more memory, so let me allocate four kilobytes." And then when you look at your Flamegraph, your Flamegraph is going to tell you your letter "ñ" took four kilobytes, and you're going to say, "What? How is that possible?" - And then you're going to go on to Reddit and rage about how bad memory.
+
+00:56:12 - Exactly, and you are going to say, "How is this even possible?" Well, the two important facts here is that, yes, it's possible because it's not that the letter "ñ" Itself needed four kilobytes, but when you when you wanted that then this happens Which is what the flame graph is telling you you may say oh, but that's not what I want to know I want to know how much the lettering you to then you need to the active by malloc or set by central location Which you can is just that normally the actual thing that you want Which is very and in tweet if you do think about it is what happened when I requested this object because that's right when you're program run is going to happen because like imagine that normally you reach for one of these memory profilers not by not for looking at your program like oh let me look at my beautiful program how is this in memory you reach because you have a problem the problem normally is that I don't have an old memory and my problem is using too much why is that and and they have to answer that question you normally want to know what happens when you run your program you don't want to know what happens if I deactivate this thing and yeah yeah right and you want to absolutely take care of like okay there is this thing that is caching memory because like if you run it without PyMalloc it may report a higher peak right because like it's going to simulate that every single object that you want to request require memory when it really didn't happen right because maybe actually was cached before or in other words the actual peak that your program is going to reach may be in a different point as well because Because if you deactivate this caching, then the actual peak is going to happen at a different point, right?
+
+00:57:46 Or under different conditions.
+
+00:57:47 So you really want that engine to report 4k most of the time, except with leaks.
+
+00:57:51 Because in leaks, it's a very specific case.
+
+00:57:53 In leaks, you want to know, did I forget to deallocate an object?
+
+00:57:57 And for that, you need to know really, like, you know, the relationship between every single allocation and deallocation, and you don't want caching.
+
+00:58:04 Right, they gotta be exactly always traced and always removed.
+
+00:58:08 We saw a big red warning if you run with leaks and PyMalloc saying like, "This is very likely not what you want." But who knows? Maybe someone wants that, right?
+
+00:58:19 Maybe. You might still detect it, but you might not.
+
+00:58:22 I have used that in CPython itself, for instance, because we have used successfully, like the spam, we have used successfully memory in several cases in CPython to find memory leaks and to greater success because the fact that we can see C code is just fantastic for CPython because it literally tells you where you forgot to put PyInkRef or PyDeref or something like that, which is fantastic.
+
+00:58:47 We have found bugs that were there for almost 15 years just because we couldn't, it was so complicated to locate those bugs until we have something like this.
+
+00:58:57 - Memory sign.
+
+00:58:57 - Right, exactly.
+
+00:58:58 But, and I have required sometimes to know the leaks with PyMalloc enable just to understand how PyMalloc was holding onto memory, which for us is important, but maybe not for the user.
+
+00:59:10 - All right, two more things.
+
+00:59:11 We don't have a lot of time left.
+
+00:59:13 Let's talk about temporary allocations real quick.
+
+00:59:16 I think that that's an interesting aspect that can affect your memory usage, but also can affect just straight performance, both from caching and also spending time allocating things maybe you don't have to.
+
+00:59:28 Who wants to take this one?
+
+00:59:28 - Matt.
+
+00:59:29 we talked about this for a while when Pablo was talking about how lists allocate memory.
+
+00:59:34 One thing that memory has that most memory profilers don't have is an exact record of what allocations happened when and in what order relative to other allocations. And based on that, we can build a new reporting mode that most memory profilers could not do, where we can tell you if something was allocated and then immediately thrown away after being allocated and then something new is allocated and then immediately thrown away. We can detect that sort of thrashing pattern where you keep allocating something and then throwing it away very quickly, which lets you figure out if there's places where you should be reserving a bigger list or reallocating a vector or something like that. That's based on just this rich temporal data that we're able to collect that most other memory profilers can't.
+
+01:00:18 Yeah, that's excellent.
+
+01:00:19 And you can customize what it means to be temporary. So by default, this is what Matt mentioned this allocate, deallocate, allocate, deallocate, allocate, deallocate, but you could decide for whatever reason that any allocation that is followed by a bunch of things and then it's the allocation and then a bunch of things is two, three, four, five, six allocations, then it's considered temporary because you have, I don't know, some weird data structure that just happens to work like that. So you can select that, that end, let's say.
+
+01:00:48 Excellent. Yeah. And you've got some nice examples of that list.append, right? Story you were talking about, yeah.
+
+01:00:54 - And this absolutely matters because allocating memory is very slow.
+
+01:00:58 So when you're doing this, it literally transforms something that is quadratic, like O(n) squared into something that is constant.
+
+01:01:06 So you absolutely want that.
+
+01:01:07 - You do want that, that's right.
+
+01:01:09 Yeah, when I was thinking of temporary variables, I was thinking of sort of math and like as you multiply some things, maybe you could change the orders or do other operations along those lines.
+
+01:01:20 But yeah, the growing list is huge because it's not just, oh, there's one object that was created.
+
+01:01:26 You're making 16 and then you're making 32 and copying the 16 over, then you're making 64 and copying the 32 over. It's massive, right? Those are really big deals.
+
+01:01:35 The advantage of this, just the last thing I want to say about this, is that although understanding the problem is very simple, because I just told you and you said, "Yeah, I see the pattern." And you could absolutely, if you're reading code, you could absolutely spot this pattern, like you could see we're doing it wrong here.
+
+01:01:48 Like it's very easy to see.
+
+01:01:49 The problem is that doing that in a huge code base is just super hard because you will need to read everything.
+
+01:01:55 Not only that, but also this case with the list that grows and keeps growing, copying and all that is one of the easy cases.
+
+01:02:02 But you may have this pattern happening between two objects or maybe between like a more complicated data structure, like a tree or something like that.
+
+01:02:10 So detecting when this happens across a huge code base and with like more complicated data structures that hide a bit where the arrays lie, like dictionary, you mean, or like other kinds of data structures, it's much harder.
+
+01:02:22 So the advantage here is that you can just run memory, and it's going to tell you all the places when this happens by size, because you will say, well, this is happening, but you know, it's just 42 kilobytes, it's nothing.
+
+01:02:33 But then you're going to see this big chunk that is just five megabytes, and you're going to say, like, oh boy, this is bad.
+
+01:02:39 And it may be like some weird tree or like something like that so you can immediately spot the places that you will care about, because the bigger the chunk, probably the slower the code is going to be, and then try to find what it is and fix it, which is much easier than obviously reading your entire code base, for sure.
+
+01:02:53 - Yeah, absolutely.
+
+01:02:54 It sure is.
+
+01:02:55 Just tell me where it's bad, and I'll go look there.
+
+01:02:57 Oh, that does look bad.
+
+01:02:58 - I did execute this on CPython, by the way, and we found a bunch of places in the standard library where we could spend less time by doing these tricks of pre-allocating, or just maybe calling pre-allocate on more parts of the C API.
+
+01:03:12 So we have actually used this into speedups in Python.
+
+01:03:14 - Oh, that's amazing. - And like I said, this is a feature that we're able to do exactly because we're a tracing profiler and we do see every single allocation.
+
+01:03:22 We built a new feature that was just released literally last week, where we have a new type of flame graph we can generate that is a temporal flame graph that gives you sliders on it, where you can adjust the range of time that you are interested in.
+
+01:03:35 So instead of only being limited to looking at that high watermark point or only being limited to looking at the point right before tracking stop to see what was allocated and not deallocated.
+
+01:03:45 You can tell the flame graph to focus in on this spot or on that spot to see what was happening at a particular point in time.
+
+01:03:51 And that's again, a pretty unique feature that requires tracing profiling in order to be able to do because you need to know allocations that existed at any given point in time from one moment to the next.
+
+01:04:03 - Yeah, that ability to actually assign an allocation to a place in time really unlocks a lot of cool things.
+
+01:04:09 - Right.
+
+01:04:10 It seems to me that this is really valuable for people with applications.
+
+01:04:15 You got a web app or some CLI app, that's great.
+
+01:04:18 It also seems like it'd be really valuable for people creating packages that are really popular that other people use, right?
+
+01:04:26 - Right.
+
+01:04:27 - If I was Sebastian creating FastAPI, it might be worth running this a time or two on FastAPI.
+
+01:04:32 - I think they are actually using it on FastAPI.
+
+01:04:35 - Are they?
+
+01:04:35 - No, it's by Identik, I think.
+
+01:04:37 They're using it in ByteDict.
+
+01:04:38 And I think our other bigger, I mean, there's a lot of users, I'm trying to think of the big ones.
+
+01:04:43 I think the other ones--
+
+01:04:43 - The Urllib 3.
+
+01:04:45 There was a feature that they came to us and they said, "We used memory to track down "where memory was being spent "in a new version of Urllib 3." And they said that they would not have been able to release the new feature that they wanted if they hadn't been able to get the memory under control and that we helped them do it very quickly.
+
+01:05:00 - That is awesome.
+
+01:05:02 Yeah, like all the ORMs, I'm sure that they're doing a lot of like, read this cursor and put this stuff into the list.
+
+01:05:08 We're going to, you know, like, there's probably a lot of low hanging fruit, actually. And the reason this this comes to mind for me is we can run it on our code and make it faster. But if somebody who's got a popular library, like the ones you all mentioned, can find some problem, like the multiplicative improvement across everybody's app across all the different programs in the libraries that use those, it's, it's a huge, huge benefit, I would think.
+
+01:05:33 - We are also very lucky because we have a wonderful community and we have, using this GitHub discussions, a lot of people probably don't know that that is a thing, but we have in the Memray repo a discussion for feedback and there is a lot of people from like library maintainers in the Python ecosystem that have used Memray successfully and they tell us about that.
+
+01:05:57 And it's quite cool to see like how many problems have been solved by Memray, of them super challenging. I've got to say, I didn't know that discussions existed until we enabled it on this repo. So I'm learning things every day. Absolutely. Maybe just a quick question to wrap up the conversation here is Bernega Bore out there asked, does Memray support Python 3.12 yet? It's the short answer. We're at the moment blocked on that by Cython 0.29 not supporting 3.12 yet. We need to get that sorted before we can even build on 3.12 to start testing on 3.12.
+
+01:06:32 Do you have to build on 3.12 to analyze 3.12 applications?
+
+01:06:36 Yes. Yes. Okay.
+
+01:06:37 Because these runs on the application itself. So this is not something that exists outside.
+
+01:06:43 This is something that runs inside.
+
+01:06:45 Yeah.
+
+01:06:46 So you need to run your app in 3.12 to run memory on 3.12.
+
+01:06:49 Yes. That's the difference between this and PyStack, which we were speaking about last time.
+
+01:06:53 PyStack can attach to a 3.12 process from a 3.11 processor or something like that, but memory can't.
+
+01:06:59 Okay, well, good to know. All right, guys, thank you for coming back. Thanks for taking the extra time to tell people about this. But mostly, you know, thanks to you all and thanks to Bloomberg for these two apps, Memory and PyStack. They're both the kind of thing that looks like it takes an insane amount of understanding the internals of CPython and how code runs and how operating systems work and you've done it for all of us so we could just run it and benefit not have to worry about it that much You have no idea I will add linkers because we didn't even have the time to go there but memdray uses quite a lot of dark linker magic to be able to activate itself in the middle of nowhere even if you didn't prepare for that which a lot of memory profile require you to modify how you run your program, memory can magically activate itself, which allows to attach itself to a running process.
+
+01:07:51 I think like that. But yeah, for another time maybe.
+
+01:07:53 >> I wrote some of the craziest code of my life last week in support of memory.
+
+01:07:57 You have no idea how wild it can get.
+
+01:07:59 >> It seems intense and even that's not enough.
+
+01:08:03 Okay, awesome. Again, thank you.
+
+01:08:05 This is an awesome project.
+
+01:08:06 People should certainly check it out and I want to encourage library package authors out there to say, If you got a popular package and you think it might benefit from this, just give it a quick run and see if there's some easy wins that would help everyone.
+
+01:08:19 >> Absolutely. Well, and I just want to add, thank you very much for inviting us again.
+
+01:08:23 We are super thankful for being here and always very happy to talk with you.
+
+01:08:27 >> Thanks, Pablo.
+
+01:08:28 >> Seconded.
+
+01:08:28 >> Yeah. Thanks, Matt. Bye, you guys. Thanks everyone for listening.
+
+01:08:31 >> Bye.
+
+01:08:31 >> Thank you.
+
+01:08:31 >> This has been another episode of Talk Python to Me. Thank you to our sponsors.
+
+01:08:37 Be sure to check out what they're offering. It really helps support the show.
+
+01:08:41 The folks over at JetBrains encourage you to get work done with PyCharm.
+
+01:08:45 PyCharm Professional understands complex projects across multiple languages and technologies, so you can stay productive while you're writing Python code and other code like HTML or SQL.
+
+01:08:57 Download your free trial at talkpython.fm/done-with-pycharm.
+
+01:09:01 InfluxData encourages you to try InfluxDB. InfluxDB is a database purpose-built for for handling time series data at a massive scale for real-time analytics.
+
+01:09:13 Try it for free at talkpython.fm/influxdb.
+
+01:09:17 Want to level up your Python?
+
+01:09:19 We have one of the largest catalogs of Python video courses over at Talk Python.
+
+01:09:23 Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+01:09:28 And best of all, there's not a subscription in sight.
+
+01:09:31 Check it out for yourself at training.talkpython.fm.
+
+01:09:34 Be sure to subscribe to the show, Open your favorite podcast app and search for Python.
+
+01:09:38 We should be right at the top.
+
+01:09:40 You can also find the iTunes feed at /iTunes, the Google Play feed at /play, and the Direct RSS feed at /rss on talkpython.fm.
+
+01:09:49 We're live streaming most of our recordings these days.
+
+01:09:52 If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+01:10:01 This is your host, Michael Kennedy.
+
+01:10:02 Thanks so much for listening.
+
+01:10:03 I really appreciate it.
+
+01:10:04 Now get out there and write some Python code.
+
+01:10:06 [MUSIC]

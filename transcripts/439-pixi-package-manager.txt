@@ -1,0 +1,351 @@
+00:00:00 In this episode, we have Wolf Volprecht and Ruben Arts from the Pixi Project here to talk about Pixi, a high performance package manager for Python and other languages that actually manages Python itself too. They have a lot of interesting ideas on where Python packaging should go, and they're putting their time and effort behind them. Will Pixi become your next package manager?
+
+00:00:20 Listen in to find out. This is Talk Python to Me, episode 439, recorded October 19th, 2023.
+
+00:00:39 Welcome to Talk Python to Me, a weekly podcast on Python. This is your host, Michael Kennedy.
+
+00:00:47 Follow me on Mastodon, where I'm @mkennedy, and follow the podcast using @talkpython, both on fosstodon.org. Keep up with the show and listen to over seven years of past episodes at talkpython.fm. We've started streaming most of our episodes live on YouTube. Subscribe to our YouTube channel over at talkpython.fm/youtube to get notified about upcoming shows and be part of that episode. This episode is sponsored by Posit Connect from the makers of Shiny. Publish, share, and deploy all of your data projects that you're creating using Python. Streamlet, Dash, Shiny, Bokeh, FastAPI, Flask, Reports, Dashboards, and APIs. Posit Connect supports all of them. Try Posit Connect for free by going to talkpython.fm/posit, P-O-S-I-T. And it's brought to you by Python Tutor. Visualize your Python code step-by-step to understand just what's happening with your code. Try it for free and anonymously at talkpython.fm/python-tutor.
+
+00:01:48 Wolf, Ruben, welcome to Talk Python to Me.
+
+00:01:52 >> Hello.
+
+00:01:53 >> Thanks for having us.
+
+00:01:53 >> Yeah, it's great to have you here. We're going to dive into packaging once again. And we've talked about packaging a couple of times over the last few months. It's a super interesting topic. And there are these times where it seems like there's a fixed way and everyone kind of agrees, like, this is how you do things. For example, you know, I think Flask and Django have kind of been web frameworks for a long time. Then all of a sudden, you know, a thousand flowers bloom and there's a bunch of new ideas. In the web space, I think that was driven by async and the typing stuff. And a bunch of people said, well, let's try new things now that we have these new ideas. And the other frameworks were more stable, couldn't make those adjustments. And I think people are just, you know, we're kind of at one of these explosion points of different ideas and different experiments in packaging. What do you all think?
+
+00:02:40 >> Yeah, that's an interesting way to put it. I think we definitely see a lot of interest in package management these days and new ideas being explored. But I also think that we're definitely standing on the shoulders of giants. So kind of similar to what you just described with the web frameworks, where actually I think we are taking a lot of inspiration from multiple different ecosystems that are out there and try to kind of synthesize the best ideas into our tools. Yeah, you got some interesting ideas for sure. Ruben? I cannot really add to that anymore. I'm standing on the shoulders of giants like, whoa. Yeah, absolutely.
+
+00:03:14 >> But I think we'll go into that. Yeah, we sure will. Now, before we get into the topics, let's just do a quick introduction for folks who don't know you. I feel like this is a really interesting coincidence because the very last previous show that I did was with Sylvan and Jeremy, a bunch of folks from QuantStack. And just out of coincidence, like I said, your colleagues, right? So Wolf, let's start with you, a little background on you.
+
+00:03:37 >> I did work at QuantStack for quite a while. And it's also where my journey with package management began. But maybe just taking one more step back, I studied in Zurich and I actually graduated in robotics there with a master's degree. Wow.
+
+00:03:51 >> Yeah. >> That's awesome.
+
+00:03:53 >> I had some fun times. I was also working with Disney Research on like a little robot that was drawing images in the sand and these kind of fun things. But at QuantStack, we were doing a lot of scientific computing stuff. Initially trying to like re-implement NumPy in C++, which is a library called XTensor. And always doing a lot of package management and mostly in the CondaForge and Conda ecosystem. And Conda at some point became really slow and CondaForge became really large. And that led me to kind of experiment with new things, which resulted in Mamba. And then I got really lucky and had the opportunity to create my own little startup around more of these package management ideas, which is the current company called Prefix. And we'll dive more into Pixi and all these new things that we're doing, I think, later on.
+
+00:04:43 >> Yeah. That's a lot of interesting stuff. What language do you program a robot that writes in the sand in? >> It's always a mix of Python and C++.
+
+00:04:51 So I think I stuck to that up until now. Yeah. Yeah. It sounds like it. Ruben, what's your story? Tell people a bit about yourself. Yeah. So I also started in robotics.
+
+00:05:01 I did a mechatronics engineering degree. And while working in robotics, I started at my previous company, Smart Robotics. And there we were building the new modern AI-driven robots.
+
+00:05:14 So that also involves a lot of deep learning packages and stuff like that. And that is kind of how I got into these package management solutions. And we started using Conda to package our C++ and our Python stuff and to make it easy to use in these virtual environments where we combine those packages. And it all was made easier by Mamba, which was built by Wolf. So that's how we got in touch. And later on, I moved to Wolf's company. So that's why I'm here now. >> Excellent.
+
+00:05:45 So you're a prefix dev as well. Yes. Awesome. I'm an expert dev there. Yeah.
+
+00:05:50 >> Cool. Well, I guess let's start with a little bit of maybe setting the stage. So you all talked about Conda and Conda Forge and really relying on that for a while and then wanting better performance, some other features we're going to talk about as well. But give us a quick background for those maybe non-data scientists or people who are not super into it. What is Conda and what is Conda Forge and the relationship of those things? Who wants to take that? Conda is, generally speaking, a package manager. That's all it is. Actually has nothing specific to AI, ML, data science, et cetera. But most people associate it with Python and machine learning, let's say.
+
+00:06:30 And Conda is written in Python and it's like, I don't know, 10 or 15 years old. And it kind of comes out of an era where there were no wheel files on PyPI and people had to compile stuff on their own machines. There was no good Windows support. Right. You can't use this. Where's your Fortran compiler? Come on. Yeah, exactly. What year is this again? And you need your GCC, et cetera. That's kind of when Conda was born. And I think it really was one of those early tools that tried something with binary package management cross-platform. So basically, Conda allowed you to install Python and a bunch of Python packages that needed compiled extensions like NumPy, SciPy, et cetera. And it kind of comes out of this Travis Olyphant universe of scientific Python tools. >> Yeah. He's made a huge impact, for sure. >> Yeah. But for us, sort of, the key feature is just that it's like a cross-platform generic package manager that you can actually use for any language. So you can also create Conda packages for R.
+
+00:07:36 And there are actually quite a few R packages on Conda for us, let's say. And you can also do Julia or Rust, et cetera. So there's a lot of possibility and potential. I think it also kind of hits a sweet spot where Conda is really not a language-specific package manager, at the same time cross-platform. Because usually what you have is you have either some sort of Windows package manager or Linux package manager like apt-get or DNF on Fedora, or you have a language-specific package manager like pip or Julia has package.jl or, I don't know, R has CRAN, et cetera. And so Conda kind of sits at the crossroads of those two, where it's not language-specific and also cross-platform. And I think that makes it really interesting. And then maybe I can also talk a little bit about Conda Forge, because I think that's the other really impactful part about the Conda universe, where Conda Forge is really a group of, I think, over 5,000 individual people that are building packages in GitHub repositories. And each of those repositories basically builds a recipe on a CI system that then kind of results in the artifact, which is a Conda package that you can install. And so all of the packages on Conda Forge are built on CI systems. And most of them are cross-platform available. So you have them for Windows, macOS, and Linux. And those packages are all the low-level stuff. Usually, Conda starts at the glibc level, let's say. So glibc is that fundamental library that we need to get from the operating system. And on Windows and macOS, there's an SDK and other DLLs that we need from the operating system. But everything above is managed by Conda or Mamba or Pixi. So all of these tools work on the base of the same packages. And that starts at bzip2 or zlib, these low-level compression libraries, OpenSSL, and then up to Python. And then you can also get Qt, which is a graphical user interface library, which is written in C++. And applications that are building on top of Qt, so for example, physics simulation engines and stuff like this. And you also get Cuda and lots of libraries like this. All is not bound to a specific operating system in that sense. And that makes it pretty nice. For example, also in CI, when you want to test your own software and stuff like this, you can use the same commands to set up basically the same packages across different platforms.
+
+00:10:04 - Yeah, nice. So kind of like what Wheels did for pip and PyPI, Conda was way ahead of that game, right? But with a harder challenge because it wasn't just Python packages, it was all these different ones, right? - Yeah, including Python itself. So that's also one of the things that people sometimes maybe not realize, but Python itself is actually properly packaged on Conda Forge and installable via Conda or Mamba or Pixi. - Ruben, anything you want to add to that before we start talking about what you all are creating? - Yeah, so from my history, it's like this multi-platform stuff is left used in robotics because a lot of the stuff is still running in Linux, but it moved it from the ability to run it only on Ubuntu to, yeah, any version you want. And you could install any version of the robotics software you're running on like any version of Ubuntu. So where we were locked, not just to Linux, but locked to a distribution of Linux, we were now like completely unbound and the developers can set their own environments, which is just really powerful for the user itself. That brought it back into our company in a much better way. - That's excellent. I'm always blown away at how much traffic these package managers have, how much bandwidth they use and things like that. Who's hosting Conda Forge and where you get that stuff from? - Currently, Conda Forge is entirely hosted by anaconda.org. We do have a couple of mirrors available, but they are not really used. But one of the more exciting mirrors that we have is on GitHub itself. GitHub has this GitHub packages feature and we are using an OCI registry where you would usually put your Docker containers and stuff like that. We upload all the Conda packages there just as a backup. And we're planning to make it usable as well. So that would be nice for your own GitHub actions and stuff because they could just take the package from GitHub internal. - Just write down the server rack in the data center. - Yeah, exactly.
+
+00:12:04 - Keep it local. It's always good to be local. - Yep.
+
+00:12:07 - Okay. I want to focus mostly on Pixi for our conversation because I think that's got a lot of excitement. Maybe we'll get some time to talk about Mamba and other things as well. But yeah, you all wrote this interesting announcement entitled, "Let's Stop Dependency Hell," talking about Pixi here. I think we can just sort of talk through some of the ideas you laid out there and that'll give people a good idea of what this is all about. - Yeah.
+
+00:12:31 - Yeah. So first of all, let's start with some of the problems you're trying to solve here. So we've all experienced issues with reproducibility and dependency management. I will tell you just yesterday, and if it was later in the day for me, it would probably be today, I'm running into a problem with my courses website where I try to install both the developer dependencies and the production dependencies. And it's like, this one requires greater than this dependency, and this one requires less than that dependency. You can't install it. I'm like, well, how am I supposed to do this? I'd rather have it shaky than impossible. So, you know, dependency challenges are all too present for me. But yeah, let's maybe you can lay out some of the ideas, like what you had in mind when you're talking about reproducibility and challenges here. - Yeah. I think you're not alone, first of all. So a lot of people have these kind of problems and it's also not only in the Python world, let's say, but I think it's maybe a bit more pronounced in the Python world just because there are so many packages and the way that package management in the Python world works.
+
+00:13:38 - Yeah. I feel like we can always look over at the JavaScript. People feel a little bit better, but it's still a challenge for us. - That's true. Yeah. With Pixi, just to take one step back. So we kind of started to, again, rewrite the entirety of how you manage conda packages with Pixi or with the lower level tools that we're using in Pixi, which are called, it's like a set of crates that is under the retla repository. And those are like, I don't know, eight or nine crates that basically do everything from fetching the package, resolving the versions that you want to have, reading the metadata from the packages and linking it into the virtual environment because we're creating these virtual environments on the hard drive and we have a central cache and things like this. And so retla is kind of the low level tools that take care of all of this. And it's written more or less from scratch in Rust. I mean, obviously we're reusing a lot of the nice things that we found in the Rust ecosystem. So there are many very useful crates, but yeah, basically that's sort of the bottom line thing that we're doing. And what's also nice about it is that we are spinning off multiple things from the same set of crates.
+
+00:14:45 So it's not only Pixi, there's also one thing called Rattler build, which is actually building the conda packages. And there is another, and then we have the backend of our website, prefix.dev, which is also written in Rust and also uses Rattler underneath. So that's really nice for us.
+
+00:14:59 And a big win.
+
+00:15:00 This portion of talk Python to me is brought to you by Posit, the makers of Shiny, formerly RStudio, and especially Shiny for Python. Let me ask you a question. Are you building awesome things? Of course you are. You're a developer or data scientist. That's what we do. And you should check out Posit Connect. Posit Connect is a way for you to publish, share and deploy all the data products that you're building using Python. People ask me the same question all the time. Michael, I have some cool data science project or notebook that I built. How do I share it with my users, stakeholders, teammates, I need to learn fast API or flask or maybe Vue or react JS. Hold on now.
+
+00:15:40 Those are cool technologies, and I'm sure you'd benefit from them. But maybe stay focused on the data project. Let Posit Connect handle that side of things. With Posit Connect, you can rapidly and securely deploy the things you build in Python, Streamlit, Dash, Shiny, Bokeh, fast API, flask, Quadro, reports, dashboards and APIs. Posit Connect supports all of them. And Posit Connect comes with all the bells and whistles to satisfy IT and other enterprise requirements. Make deployment the easiest step in your workflow with Posit Connect. For a limited time, you can try Posit Connect for free for three months by going to talkpython.fm/posit. That's talkpython.fm/posit.
+
+00:16:20 Talkpython.fm/posit. The link is in your podcast player show notes. Thank you to the team at Posit for supporting Talk Python. If I wanted to stick with say, Conda, could I still use Rattler build and then somehow upload that to Conda Forge, something along those lines? Okay.
+
+00:16:38 You can totally, like, that's kind of the baseline sort of commonality between all of these tools is that we are sharing the same sort of Conda packages and the same metadata. And like, we definitely want to be 100% compatible package-wise with Conda for now.
+
+00:16:53 Excellent.
+
+00:16:53 We might have features later on, but we like, we don't like, we want to go through, like, Conda as a project has also like, become much more community oriented. And there's like, a process called Conda Enhancement Proposals. And we have already written a few of those.
+
+00:17:07 So there are many ideas, but we can talk about that later.
+
+00:17:10 Trying to improve the overall system instead of overthrow it.
+
+00:17:13 Yes. Yes. Yeah. Like we would love to like, improve the entirety of like, Conda packages, Conda Forge and all of this. Like that's, that's our main dream.
+
+00:17:22 So, and then with some of the low-level tools in Rattler and with Pixi, we're kind of combining a bunch of tools that already existed. And one thing essential for reproducibility is that you have log files. So at the point where you are sort of resolving your, your dependencies, we are also writing them into a log file. And that's like something known from poetry, from NPM, Yarn, Cargo also has it. And there's also a Conda project that's called Conda Log that writes log files. And so we have adopted the same format that Conda Log uses, which is a YAML-based log file format and implemented in Rattler. And we are exposing it and using it in Pixi. So anytime you like, add a new dependency to your project, we write it in a log file and we make sure that like, you can install the same packages, the same set of packages, the same versions and SHA hashes in like the future. And the other part about reproducibility, and that's more on the repository side is that Conda Forge never deletes old packages. So that's similar to PyPI, but not really this, like it's different in a lot of like Linux distributions, but with PyPI, it's also the case that, you know, old versions are just kept around.
+
+00:18:29 Do you ever worry that that might not be sustainable? Like it's fine now in 20 years, but like we cannot pay for the thing in 20 years. Like it's, we just can't get enough donations to support Flask 0.1. We just can't. It's out. That's the problem of the person that uses Flask 0.1, right? Like that's not the problem of the repository. I think we're just making sure that you could still run it and you should probably sandbox it like crazy so that there are no like zero days that could affect your system. You do have some things that are like self-hosted Conda capabilities that maybe we'll get a chance to talk about. Like theoretically you could download these and save as a company or an organization or a researcher.
+
+00:19:16 You could get the ones that actually count for you, right?
+
+00:19:18 Yeah. Like, I mean, only have a subset of the packages that you need.
+
+00:19:21 Yeah. Say I'm using 50 packages with the transitive closure of everything I'm using. And so I'm just going to make sure I have every version of those on Dropbox or on a hard drive I put away somewhere.
+
+00:19:33 It's actually pretty funny because what you create on your local system is a cache of all the packages that you ever used. And you could activate that cache as a channel like what Conda Forge is. You could make your own channel of all your packages locally. This is something we use when the internet went down in our company and we still needed to share packages with each other and needed to make our environments. And just some people would spin up their own channel and you could use it from there. It's just a different URL.
+
+00:19:59 Yeah. That's awesome. Cool. I derailed your, your there, Wolf.
+
+00:20:04 No, but yeah, I think like log files are the basis for reproducibility. And then the fact that packages are never deleted. I think that's something that like log files make a little bit like a Docker container sort of. Because you know exactly what's in your software environment.
+
+00:20:22 We don't control the outside and we don't do sandboxing as of now, but that's kind of the way we think about log files. And it just makes it very convenient also to ship basically that log file plus the Pixi Toml and stuff to your coworker and they can just run it. And we also resolve for multiple operating systems at the same time. So you can say, you can specify in your Pixie Toml if you want Linux, MacOS and Windows, and we resolve everything at the same time in parallel with async Rust code and stuff like this. So it's pretty fast and nice. And yeah, the idea is that you can send it to your coworker. They can just do a Pixi run start, which would just give them everything they need and have them up and going.
+
+00:21:01 Really cool. So in your announcement for Pixie, one of the things you said is you're looking for the convenience of modern package managers, such as Cargo. What's different than say pip and PyPI versus Cargo? Like when you say that, what are these new features? You're like, I wish we had this already. We don't, so I'm going to build it. I think one thing that's just really nice was Cargo is, and that also attracts so many contributors to Rust projects, at least that's the way I feel about it, is that it's so easy to just say Cargo run whatever, and it most of the time works and you just do Cargo build and it builds. And that's the experience that we want to recreate with Pixi. And Cargo also comes with log files and Cargo just does this pretty nicely.
+
+00:21:47 I mean, there are some peculiarities about how Rust builds packages or things about dependencies where the result is pretty different, let's say from like Python ecosystem and stuff like this, but the baseline experience is definitely what we're also striving for.
+
+00:22:01 And part of the problem is maybe also that pip is not managing Python. So you always have that a little bit of a chicken and egg problem where you need to get Python first to be able to run PIP. And with Pixi, you don't have that problem because we also manage Python. So you can specify in your Pixi what version of Python you want. You get it on Windows, MacOS, and Linux in the same way. And everything is just one command and everything is also locked in your log file, et cetera. So that's kind of, yeah, we just control a bit more than PIP. And I think that's what's giving us some power. And then pip also, as far as I'm aware, and we recently had discussions with Python package management developers, they haven't come up with a log file format that works for everyone yet. So Poetry has their own implementation and a bunch of other tools maybe have their own implementations as well. - Right. There's the pip log from PIPenv and others.
+
+00:22:53 - We're also kind of working on that. I don't know if you saw that, but we just announced another tool that's also low level, sort of on the same level as Red Lab, but it's called RIP. And it deals with Python resolving and wheel files. And so we want to kind of cross over those two worlds where we resolve the Conda packages first, and we resolve the Python packages after, and we stick everything into the same log file that will for now be similar to the, yeah, basically based on the Conda log format, which is a YAML file. - Interesting. So this RIP, I'm familiar with that. I didn't necessarily in my mind, tie it back to Pixie, but would that allow you to, could you mix and match? Like some stuff comes off Conda forwards and some stuff comes off of PyPI, but you express that in your dependency file? - Yeah. Like there are parts of the semantics that aren't yet figured out, let's say, but the idea is definitely that you can install Python and NumPy, for example, from Conda forwards. And then I don't know, scikit-learn from PyPI. Like that's maybe not the example of how you would use it, but. - Yeah, of course. Right. Maybe you do a, one of the web frameworks, right? Like fast API versus some of the scientific stuff from Conda.
+
+00:23:59 At least the official Conda stuff. Sometimes the framework, certain frameworks are a little bit behind and there are situations where having the latest one within an hour matters a lot. You know, for example, Hey, it turns out theoretically it's not real. It turns out that say Flask has a super bad remote code execution problem. We just found out that if you send like a cat emoji as part of the URL, it's all over. So patch it now. Right. Like you don't want to wait for that to like slowly get through some, you need that now. Right. And PyPI I find is kind of the tip of the latest in that regard. - I do agree to some extent. So it's like, we also found that a lot of, there are these no arch packages, like pure Python packages. And I think, and there's just way more packages on PyPI and the turn of managing that on Conda forwards is a bit high. So that's also like, we have lots of reasons. And also in real world examples, we often find people mixing PyPI, pip and Conda. So that's why we're thinking like we need proper sort of support for PyPI in our tool to make it really nice for Python developers. - It would take it to another level for sure. And it would certainly make it stand out from what Conda does or what pip does honestly.
+
+00:25:12 - Conda for example, there is a way to kind of like add some Python dependency or pip dependencies, but it's really just invoking pip as like a sub process and then installing some additional stuff into your environment. And it's not really nice, not really tightly integrated. And so we actually kind of did the work and wrote a resolver and rust, so SAT solver. And we've just extended it to also deal with Python or PyPI metadata, which is kind of what RIP is. So that's going to be very interesting to figure out how to integrate those things and like really make them work nicely together. - I wanna talk about the ergonomics using Pixi, but first, maybe Ruben, you could address this first, but I opened this whole conversation with a thousand flowers blooming around the package management story. And I think for a long time, what people had seen was they're going to try to innovate within Python. So you install Python, you create your environment, and then like you have a different workflow with different tools. But some of the new ideas are starting to move to the outside. Like we'll also manage Python itself. If you say you want Python 3.10 and you only have 3.11 installed, we'll take care of that. And something built on Python has a real hard time installing Python because there's this chicken and egg, probably needs it first, right? And it sounds like you all are taking that approach of we're going to be outside of Python, you know, built in rust or any binary that just runs on its own would work to have a greater control, right?
+
+00:26:39 So yeah, I know, just what are your thoughts on that? - Yeah, so one of the strong points is Pixi that you can install it as a standalone binary. So you have a simple script or you can even just download it and put it in your machine and then you can install whatever you want. So you're not limited to Python alone. And in a lot of cases, you want to mix a lot of stuff. Sometimes you need a specific version of SSH or sometimes you need a specific version of OpenSSL or whatever that meets your package. And you would have these long lists of getting started to like, oh, you need to install this with APT or you need to install this with name anything, any other package manager, and then you can run pip install and then it should all work. And Pixi kind of moves it back to you have to have Pixi and you have to have the source code of the package that you're running or you're directly like using Pixi to install something. And like you're most of the time just two commands away from running the actual code that you're trying to run instead of going to read some kind of readme from a person on the internet.
+
+00:27:42 Yeah. And it's also pretty challenging for newcomers to programming.
+
+00:27:46 This is really focused on making it easy.
+
+00:27:48 Yeah, exactly. I just want to run this. You're like, but what am I doing all this terminal stuff? Like I just want to run, I wrote the program. I want it to go. I feel like maybe that's part of why notebooks and that whole notebook, Jupyter side of things is so popular because assuming somebody has created a server and got it started for you, like you don't worry about those things. Right.
+
+00:28:06 Yeah, exactly.
+
+00:28:07 Yeah. Let's talk about kind of the, that beginner experience. If you have an example on your website somewhere where it just shows, if you just check out a repository that's already been configured to use Pixi, it's just clone Pixi run to run start or something like that. Right.
+
+00:28:25 You don't have to create the environments. And even that could potentially happen without Python even on the machine initially. Right.
+
+00:28:30 Totally. So a funny part of Pixi is we Pixi itself is a Pixi project. So if we want to build Pixi, it is a Rust project, but we run Pixi run build in this case, or Pixi run install.
+
+00:28:43 So you kind of move everything back into the tasks in Pixi and you can run it using Pixi.
+
+00:28:50 And Pixi will take care of your environment.
+
+00:28:52 Nice.
+
+00:28:52 Yeah. So basically, as I also said before, we're learning a lot, for example, from Cargo. So we also have a single Pixi terminal file that kind of defines all of your dependencies, a bit of metadata about your project, and then you can define these tasks. And so like what we see on the screen is that we have a task that's called start and that just runs Python main.py. So that's pretty straightforward, but obviously like you can go further, like you can have tasks that depend on other tasks and that we're learning a lot from. There's a project called taskfile.dev.
+
+00:29:23 And we also want to integrate caching into these tasks so that if you like one task might download something on your system, like some assets that you need, like images and stuff.
+
+00:29:33 And if you already have them cached, then you don't need to re-download them and these kind of things. So we're really like wanting to build a simple but powerful task system in there.
+
+00:29:41 And that benefits greatly from having these dependencies available because like in this case, what we see on the screen, we have two dependencies. And one of those is Python 3.11.
+
+00:29:50 And that means the moment you run Pixi run start, it will actually look at the log file and look at what you have in your local environment installed. And the environments are always local to the project, which is also a difference to call that number.
+
+00:30:03 So it will look into that environment and check if Python 3.11 is there. And if the version that you have in your environment corresponds to the one that's listed in the log file, and if not, it will download the version and install it into your environment and like make sure that you have all the stuff that's necessary or listed to run what you need.
+
+00:30:21 Nice. This portion of talk Python to me is brought to you by Python tutor. Are you learning Python or another language like JavaScript, Java, C or c++? If so, check out Python tutor. This free website lets you write code, run it and visualize what happens line by line as your code executes.
+
+00:30:40 No more messy print statements are fighting with the debugger to understand what code is doing.
+
+00:30:45 Python tutor automatically shows you exactly what's going on step by step in an intuitive visual way.
+
+00:30:51 You'll see all the objects as they are represented in Python memory, and how they are connected and potentially shared across variables over time. It's a great free tool to complement what you're learning from books, YouTube videos, and even online courses like the ones right here at Talk Python Training. In fact, I even used Python tutor when creating our Python memory management and tips course. It was excellent for showing just what's happening with references and containers in memory. Python tutor is super easy to check out. Just visit talk Python dot fm slash Python dash tutor and click visualize code. It comes preloaded with an example and you don't even need an account to use it. Again, that's talk Python.fm/Python-tutor to visualize your code for free. The link is in your podcast player show notes. Thank you to Python tutor for sponsoring this episode. So for example, you got in your example, a Python 311 for some flexibility there on the very, very end. Does that download a binary version or does it build from source or what happens when it needs that? Yeah. So typically like Conda is a binary package manager. So usually what you download is binary. We are working on the source dependency capabilities where also Rackler build, what I mentioned before is going to play a big role because the idea is that you can also run pixi build at some point soon and that will build your Conda package out of your pixi project. But we would use the same capabilities to basically also allow you to get local dependencies and then build them ad hoc and put them into your environment.
+
+00:32:21 Yeah. So that comes back to the example you gave before with the problem that there's a user debug or something and you would want to use a non support. Yeah. A version that's not shared around the world yet. So you need this GitHub link and that package you need to install.
+
+00:32:40 And that's something we still want to support through this local or URL based dependency.
+
+00:32:46 But for that, we first need to be able to build it. Yeah. Kind of like the get plus on pip install.
+
+00:32:51 Yeah. Yeah, exactly. I found that where this little section was here, where this pixie is made for collaboration on your announcement, where it just says get clone some repo pixi run, start build, whatever. Yeah. Maybe just talk through like what happens there? Because if I don't even have Python, much less a virtual environment, much less the things installed, you know, if I try this at Python, if I, they just say clone this, go here, Python run. Like if you don't have Python, it'll just say Python. What is that? You do a Python. It'll say, you know, fast API. What is that? Right? Like there's a lot of steps that this really simplifies. And that's kind of what I was talking about with the beginners as well. Like, you know, maybe speak to what's happening here. Yeah. So when you do pixi run, it will create, and you have nothing on your system, right? Except for pixi and that repository, then it's going to create a hidden folder inside of your project. That's called dot pixi. And in there, it will install all of these tools that are dependencies of the project. So Python, NumPy, scikit-learn, whatever. And that like, and then when you do pixi run, it will invoke, actually, there's a thing called Dino task share, which we're using. And that's basically something, like, it looks like bash, but it also works in Windows, which is like the key feature here. So that will sort of run the task. And in this case, like some task is probably defined inside of the pixie toml. And that might run something like Python, I don't know, start flask or start Jupyter or, you know, whatever the developer desires to do. But the cool thing is that it will, like in the background, activate the environment, like the virtual environment and use it to run your software.
+
+00:34:27 - Yeah, that's really cool.
+
+00:34:28 - And that, yeah, most of that kind of happens behind the scenes. So also with Conda, for example, or Mamba, it's usually multiple steps. So usually what you would do is you do like Mamba create my environment, and then the environment would have some name, and then you would need to do Mamba activate my environment. And then only you would be able to run stuff. And what you're running is also probably going to look more complicated than just typing pixie run some task, which does all of that.
+
+00:34:55 - Right. The some task is almost an alias for the actual run command, right?
+
+00:34:59 - Yeah.
+
+00:34:59 - Yeah. Yeah.
+
+00:35:01 - Could be something very complicated. And it could also be multiple tasks that actually run in the background because they can depend on each other.
+
+00:35:06 - Excellent. I really like that the virtual environment or all the binary configuration stuff is a sub directory of the project. That's always bothered me about Conda. If I go, I've got, I think I have about 260 GitHub repos on my GitHub profile, and I check out other people's stuff and check it out. And so if I go just to my file system and I go in there, I'm like, I haven't messed with this for a year. Was that on the old computers on my laptop? Is on my mini?
+
+00:35:35 Like what was that on? I don't, so it could be I haven't set it up or maybe I have, right?
+
+00:35:40 And if I go there and I see there's a VNV folder or something along those lines, I'm like, oh yeah, it might be out of date, but I definitely have done something with this here. I probably can run it. Whereas the Conda style, like you don't know, what did you name it? If you have 200 of them, what is the right one? How do I activate it? And then also if something kind of goes haywire, it's like, you know, I'm just going to RMRF that folder and it's out. Just recreate it on the new version of whatever. Right. But if it's somewhere else, you know, there's just like this, this disconnected, I know there's like a command flag to override or something to like get Conda to put it locally, but defaults are powerful. Right. And I really like that. It's, it's like there and you can just blast away the dot pixi and, you know, start over if you need to. We also using the same tricks that Conda uses and a bunch of other package managers. So you can have these multiple environments, but they actually share the underlying files. So if you use the same Python 3.11 version and multiple environments, it's not like you don't duplicate those files. You don't lose a lot of storage, for example. Oh, that's nice. And the other thing that's really cool.
+
+00:36:42 And I mean, Conda also gives you that, but you can have completely different Python versions and all of these environments. And it's it's very like straightforward to use. Like you don't need to run it through containers or stuff like that. It's just like all in your system and yeah, very nice and isolated. Yeah. So one thing that I ran across here that was pretty interesting while just researching this, as you said, Pixie and Conda like Nix are language agnostics. And I'm like, what is this Nix thing? And that brought me over to Nix OS. What is this?
+
+00:37:12 Nix basically is a functional package manager. It works with a functional programming language, which is kind of an interesting idea. And a lot of people that know Nix really love it. So we would like for Pixi to also be as loved as Nix is by Nix people. And basically what's nice about the functional programming language is that it kind of, you know, from the input, the output, so you can cache the function execution and you know, okay, like if the function didn't change and the inputs didn't change, then the output is also not going to change. Right. You can cache the heck out of it. You can parallelize it so much and so on. Yeah. And that's kind of what like, that's how I understand Nix is that basically you have a function that you execute to, let's say, get bash on your system or get Python on your system. And once you have executed that function for that specific Python version, you know that you have, you know, Python with that hash in your system somewhere. And then Nix has some magic to kind of string things together so that you can also sort of do something like a conda activate where it would put the right version of Python, NumPy and whatever you installed through Nix onto your like system path and make it usable. And so I think Nix and Pixie are competitors. Anyway, the thing about the functional language is that it also makes it like way less beginner friendly, at least of my opinion. Yeah, I agree. The way Pixi kind of works is like really straightforward in a way. Like you just define your dependencies and ranges and stuff and you get the binaries. With Nix, sometimes you need to like, usually you build things from source. So that's also a difference. I think they have like distributed caches that you could use and things like that. But honestly, I'm not a user of Nix. So I'm not sure how, how widely these caches, like widely used these caches are. But we definitely look at Nix as like also another source of like inspiration. And I think they have something really good going for them because people that use Nix, they are like super evangelical about it.
+
+00:39:08 Well, it also probably helps its functional programming, right? People who do functional programming, like they love functional programming. That's for sure.
+
+00:39:16 The pureness of it is pretty, it's pretty nice. And then NixOS also goes like a set further where you can sort of manage your entire like configuration and everything through, through the same system. And that's also pretty powerful. And maybe, maybe we can find some interesting ways of like supporting something similar. But in a way, like if you look at Pixi, I think we are trying to, we don't actually care so much about Conda in a way, or like maybe that's also the wrong way to put it. But, but basically what we're looking is also like, how does Docker do things and how does Nix do things and like, how can we kind of like learn from those tools? And...
+
+00:39:49 Yeah, we have a pretty well-defined vision for ourselves. And the main part is that we just want to make it easy to get started. So you shouldn't have to hassle of learning a new thing to get started. You should just know like the bare minimum of information on how to run something. And Pixi is there to help you instead of we do something like with a complete vision, that's making it perfect. And we're even doing it in a specific OS that you need to install.
+
+00:40:14 We want this to be used on every OS and we want this to be used by everyone. So you can share your code with anyone, anywhere. That's something we really focus on.
+
+00:40:23 Sure. The clone and then just Pixi run. That's pretty easy. It's pretty easy for people to do, right?
+
+00:40:28 I would say so.
+
+00:40:29 So that's the experience of someone's set up a project for you. On your announcement post, you'll have a nice little example of not a terribly complicated example of an app that you might, or a project you set up, but maybe just talk through, like, if I want to start with just, maybe I have a GitHub repo already, but I haven't set it up. Like what's the process there?
+
+00:40:49 If you already have a GitHub repository, for example, you would just do Pixie init and then give it, yeah, basically you would just say dot because that's your current folder.
+
+00:40:58 Or if you don't have anything, you would just do something like Pixie.ini my project.
+
+00:41:01 And that will create the my project folder for you with a Pixi.toml file inside. And then once you have that, you can do Pixi add Python and you can use like the specifiers from Conda. So you could do something like Python equals 3.11 and that would get you Python 3.11 into the dependencies of that project. And then when you, and it also installed it at that point.
+
+00:41:22 And after it installs, it creates that log file that you can also like should check into your repository so that you know what the latest versions were that were like working for your project. Okay. Like the pinned, basically the pinned versions or constraints. Yeah.
+
+00:41:36 Yeah. One other thing that happens when you do Pixi add is that it actually goes and tries to figure out like what's the latest version that's available for that package and then already puts a pin into your dependencies. So what we see on the screen is like we do Pixi add cow py and then it adds cow py 1.1.5.star. So that's a pretty specific version already. Nice. And you haven't done it here, but so example is Pixie run cow py. And then the parameters, hello, blog reader. And it like does the cow saying hello, blog reader.
+
+00:42:03 But when you talked earlier about the tasks or whatever, you could just say create a task called cow and it is Python cow pie. Hello, blog reader. Right. And that you would just say Pixi run cow. And the same thing would happen. Is that, I got that all put together, right? That's absolutely the case. And, but basically everything, any binary executable that you have in your environment, like in this case, cow pie, you can also call was Pixi run whatever. Like, so you can also do Pixi run Python and it would start Python 3.11 or whatever you have installed inside of that environment. Yeah. And that would actually do the REPL and everything. Yeah. Yeah. Yeah. Just like having it globally installed.
+
+00:42:37 So one other feature of Pixi that we haven't mentioned before is that you can still do global installs. So sometimes you have that comment line tool that you really love. One of the things we, I usually install is bat, which is like cat with wings. What you can do with Pixi is you can do Pixi global installed bat and that will install bat and make it globally available. So you can run it from wherever it's not tied to any like project environment. It's just on your system in your home folder, essentially. And you can just run bat wherever you are and it works. The one that comes to mind for me a lot is PIPX is one of them. That's exactly where we got this using similar mechanisms to that. So every tool that you install this way is installed into its own virtual environment. So they don't have any overlap. You can install versions that are completely unrelated. Even that different Pythons, right? One thing that I also like a lot about this and, you know, pour one out for poor old PEP something, something, something about the dunder Py packages folder. I can't remember where the PEP number is, but basically the idea that if I'm just in the right place, the run command should grab whatever local environment is the one I've set up rather than explicitly going, finding the environment, activating the environment, et cetera. So it looks like when you say Pixi run, there's no Pixi activate or any of those things, right? How's that work? The way conda environments work is that you need to have some sort of like little activation thing where basically the past variable environment variables changed and adjusted and some other activation scripts are run. And with Pixi, what we're doing is we run those in the background and then we extract all the environment variables that are necessary for, for the activation basically to work. And then we just inject it right before we execute what you want to execute, like copa in this case.
+
+00:44:27 Yeah. So there's like an implicit activate or you don't even have to say activate in Python. You can just, if you just use that Python, you say the path to the virtual environment, Python run that like that's sufficient. Yeah.
+
+00:44:39 That's more or less what happens. Like sometimes, you know, packages can have different requirements when it comes to activation. So like Python doesn't have many requirements when it comes to activation, but some other packages, they, they might need some other like environment variables that are specific to the environment location where they are installed, et cetera.
+
+00:44:55 Sure. Well, even Python virtual environments can get weird where like you can set environment variables that get set during the activation of the virtual environment. Right. Like, I don't think many people do that because it's transient, but it could.
+
+00:45:08 We also have a pixi shell command. So if you want to have that experience of like an activated environment, you can use pixi shell. And then it is like basically a shell that acts like an activated environment. Like poetry has the same and many others.
+
+00:45:22 The example here shows like I'm in the top level of the project and I say pixie run.
+
+00:45:26 What if I'm like three directories down and I say pixie run, what happens then?
+
+00:45:31 The exact same thing will happen because pixi runs from the root of the project.
+
+00:45:35 And all your tasks are by default running from the root of the project. So you define them with the boss in your project as they are always. And then where you are, you can run those thoughts as they are. But if you want to run something in that directory, you can just use pixi run and then your own commands to, to X on that directory. There's this other way of using it.
+
+00:45:57 Like the pixi itself will run down the path that you're in and we'll find the first picture project that it encounters. And for instance, pixi itself has some examples. So if you move into the example, start three and then in one of the examples, those are their own pixie project.
+
+00:46:15 So if you run it there, pixie run start, it will start the example instead of the actual pixi project. Interesting. So you could have a nested one, like there's a main one, but then inside you could have a little sub pixie projects. Yeah. A little bit like node and NPM in that regard.
+
+00:46:31 We have an issue that's open about mono repo support and Cargo does a pretty nice job. Yeah.
+
+00:46:37 Yeah. And this sounds like a really good idea for mono repo support.
+
+00:46:41 There's a different problem that you normally would mono repos have some shared dependencies.
+
+00:46:46 So if you, for instance, have in your, your, your root of your repository, you have fightin dependency defined, then you want that shared between all the packages. Yeah. Down in your repo tree. So that's something we still have to support. So right now there are like two separate projects and the pixi tool will just find the first projects that encounters, but we need some kind of way to define a workspace or mono repo. If you would say it like that, and then you could like link those environments together. And if you start a lower level one, you would start the main one with it or something like that. That's still in the works.
+
+00:47:27 Look at the dependencies of the top one. And then you might add some more in your little sub project type of thing, something like that. Yeah. Well, even what you already have sounds pretty excellent for you. Yeah. So currently if you have like a system where you have a backend server, that's completely poisoned or rest or whatever, you could have that as a separate project and then have a, another project that is like the front end. So you do some, you know, you install MPM there or whatever. And those are completely separate within your repository. And the main repository is just some tooling to for instance, lint everything or, or something like that, or install your base dependencies that you want to use in the, in the complete report story, but you could already set it up pretty nicely. I'm sure if you have a truly large organization with the mono repo, which for people that know that just means like all the code or the whole organization is in one huge repository instead of a bunch of projects with dependencies across projects. It's just within that kind of that file structure. Like it's a lot. I was complaining about having a dependency that had two things that wanted the same library, both lower than and greater than some version number. Like that's for one project. You know what I mean? You put it all together. It's only going to get more challenging. So tools like this, these sub projects and stuff I think could help go like, all right, this part needs these things. Cause that's the data science part. This other part needs that thing. Cause that's the microservice part. So what else do people know about Pixie taking dependency, taking PR PRS and contributions?
+
+00:48:54 Definitely. Like we also still like pretty early. So we love people that test Pixie and tell us the feedback on like our discord channel or on like GitHub. I think we have discussions open as well and issues, any feedbacks appreciated. And we're really like trying to take package management to the next level that includes like building packages that includes like package signing, stuff like this, security, et cetera. There are so many things and issues to work on.
+
+00:49:21 And I think it's going to be very fun. I'm also actually organizing packaging con. That's happening in like a week from now actually. And really looking forward to that. So that's going to be fun to chat with a lot of package manager developers. Does it have an online component?
+
+00:49:37 Yeah, virtual. So it's in Berlin, but it's also hybrid. So you can join virtually if you want.
+
+00:49:42 Will the videos be on some, something like YouTube later?
+
+00:49:45 Yep. Yep.
+
+00:49:46 Okay, cool. If the timing lines up, you'll have to give me the link to the videos and I'll put it into the show notes for people. Like we might somehow miss like the conference runs, but the videos aren't yet up, but if they are, you know, send me a link and we'll make it part of the show.
+
+00:49:59 So people can check it out.
+
+00:50:00 And one of Prefix Bas will also talk about this, these Rust crates that we've been building and how it all fits together. If you want to learn more about that and if you want to contribute, like also if you want to learn Rust, like we're more than happy to kind of like help you, like guide you as time permits, obviously.
+
+00:50:18 Yeah. We're trying to be really active on our channels. So on GitHub, we have some good first issues. And if you have some questions, just ask around. And then our Discord, we're very active and really try to react as fast as possible to anything.
+
+00:50:32 Right at the bottom of prefix.dev, you've got your little Discord icon down there. So people can click on that to kind of be part of it. Right.
+
+00:50:40 I think it's also on the top.
+
+00:50:41 Yeah.
+
+00:50:42 Yeah. I see you all both are like me and have like, not accepted that, that X Twitter is called X.
+
+00:50:49 Yeah.
+
+00:50:51 I'm not changing mine.
+
+00:50:52 They should come out with the final logo, right? Like that's not, that can't be it.
+
+00:50:57 I can't be it. It's like a child. Like I'm just, this is what I got. And it's there. Maybe I need, I should probably put an EX Twitter in there just for, yeah. And then a quick question from Elliot's, any meaning behind the name Pixie?
+
+00:51:12 We thought very long about the name. We had a bunch of different versions. Like initially we thought PX, just P and X, but that was somehow like hard.
+
+00:51:22 Have you considered X? I hear you just use that for whatever. Just kidding. Sorry. But back to Twitter.
+
+00:51:27 I think that name is burnt.
+
+00:51:28 It is burnt.
+
+00:51:30 We also thought about PAX, like P A X, but that's partly executable that you already have on your system if you're using Linux or Mac. So that didn't work because then tab completion is broken and all of that. We thought about P E X. I don't know. We wanted to derive it a little bit from the name prefix because that's kind of the company name, but Pixie seemed really cool because it's partly a magical fairy and we want to make a package management magic.
+
+00:51:57 Yeah, exactly. I think the name is great. It's short enough to type. It's pretty unique. You can, it's somewhat Google-able, right?
+
+00:52:05 Yeah. You can pronounce it. That was also important to it.
+
+00:52:08 Yeah. You don't have to debate. Is it Py Py or is it PyPI? Like, let's say, make it lowercase. It's not an acronym. You don't say the letters.
+
+00:52:16 We created this thing called MicroMamba, which I don't want to like go into too much detail, but a lot of people complained about MicroMamba being too long to type. So we had to stay under the five character limit.
+
+00:52:28 Yeah. I think there's value in that. There's definitely value in that. So let's close out our conversation with where you all are headed. What's next?
+
+00:52:36 Yeah. Like we are super excited about a bunch of upcoming features. One is definitely what I already mentioned, PixieBuild so that you can build packages right away from Pixie.
+
+00:52:45 To prepare them for CondaForge, right?
+
+00:52:47 Well, for CondaForge, or like maybe you also have some internal stuff or your own private things and stuff. We just want to make that easy because that is currently way too hard to like make a Conda package. It's like a bunch of steps. And that also kind of precludes that you could use source and get dependencies for like other Pixie projects. Because basically what we do, what we will do in the background is like, if you depend on a source dependency for another Pixi project, we will build it into a like package on the fly and then put it into your environment. And then like integrating with the PyPI ecosystem, that's what we're actually working on the most right now. And that is the rip thing that I told you about.
+
+00:53:25 Yeah, that's awesome.
+
+00:53:26 Because we just see a lot of need in the community to have this. A lot of projects in the wild are kind of mixing it.
+
+00:53:32 Yeah. If you get it working with PyPI, I will switch my stuff over and give it a try and see how it works. So that would be great. Until then I can't, right? I've just got, I've got hundreds of packages and a lot of them I'm sure are just unique to PyPI.
+
+00:53:45 We're not far away. Like I think the hard bits are solved and that was like resolving because it works quite different from, from Conda. You need to like get the individual wheel files to get the metadata, et cetera. And like that doesn't scale if you need all the metadata upfront, which is actually the case in Conda, you have all the metadata upfront, but with PyPI you don't. And so we had to make the solver lazy. We had to make the solver generic and we are through that process now. And now it's basically just engineering work in that sense to, to integrate it with Pixie, but it's going to happen and it's going to be nice. I'm sure.
+
+00:54:17 Yeah. We also have some ideas of like, can we somehow merge Pixi Toml into PyPI Project Toml so that it's like more natural to like Python developers and you only need to manage one file. And I think Py Project Toml gives us the flexibility that we would need to do that.
+
+00:54:32 It does. You've got things like Hatch and others that, that kind of got a way to go in there.
+
+00:54:38 Yeah. And then we have some other ideas that are a bit more out there maybe, but, or not really, but like we already have a set up Pixi action for GitHub. That's, that's really nice. And then another idea is like, how, how can you go from a virtual environment to a Docker image easily? So that's also something that we're thinking about.
+
+00:54:56 Okay.
+
+00:54:56 These kinds of things.
+
+00:54:57 All very exciting.
+
+00:54:58 Awesome.
+
+00:54:58 How long has this been around? I'm, your blog post is two months old, but it's announcing this stuff. So.
+
+00:55:04 Yeah. I mean, I think we maybe made the repository public months earlier than the blog post or so, but it like prefix as a company is like just very little over a year old. And that's when we like, really started to build the website, the platform, Pixi, Rattler, and all of these things. So I think Pixi, we started maybe like five months ago. So not too old, still very fresh.
+
+00:55:29 Yeah. Yeah. It still has that, that new software smell.
+
+00:55:32 Yeah.
+
+00:55:32 Exactly.
+
+00:55:33 Definitely.
+
+00:55:35 I hope we don't get the, yeah, like, The old and baldy smell.
+
+00:55:38 We also know how to, yeah, you don't want that.
+
+00:55:41 Personally, I'm very surprised how stable it is already. And I think that's partly due to the use of Rust and the fact that we can very heavily check some of the inner workings of the tool before we ship it.
+
+00:55:55 Well, it looks like it's off to a really good start. I like a lot of the ideas here. So yeah, keep up the good work before we wrap it up or basically out of time, but there's the, always the open source dream of I'm going to build a project. It's going to get super popular.
+
+00:56:09 The dream used to be, I'm going to do some consulting around it, right? I've created Project X, Project X is popular so I can charge high consulting rates. That's the dream of the nineties. I think the new dream is I'm going to start a company around my project and, and have some kind of open core model and something interesting there. You guys have prefix.dev.
+
+00:56:29 What's the dream for you? Like how, what's your, how are you approaching this? I think a ton of people would be interested to just hear, like, how did you make that happen? You know?
+
+00:56:37 So you saved the hardest question for last.
+
+00:56:39 You don't have to answer it, but I do think it's interesting.
+
+00:56:43 Yeah. Package management is a hard problem. And there are lots of sort of sub problems that I would say enterprise customers in a way are willing to pay for that includes like security, managed repositories, let's say like basically Red Hats and like more or less Red Hats product is that they have this like, I know five or 10 years or something like of support for like old versions of packages for enterprise customers. And I think we have a pretty interesting approach to package management that is pretty easy to kind of grasp. And like part of why we want to make Pixi Build a thing is also because we want people to make more packages and then upload them to our website and kind of grow this entire thing in popularity and make it super useful so that we hopefully end up with customers that are supporting our work.
+
+00:57:32 Awesome. Well, good luck to both of you. And thanks for being on the show to share what you're up to. Sure. Thank you.
+
+00:57:39 This has been another episode of Talk Python to Me. Thank you to our sponsors. Be sure to check out what they're offering. It really helps support the show. Python Tutor, visualize your Python code step by step to understand just what's happening with your code. Try it for free and anonymously at talkpython.fm/python-tutor. Want to level up your Python? We have one of the largest catalogs of Python video courses over at Talk Python. Our content ranges from true beginners to deeply advanced topics like memory and async. And best of all, there's not a subscription in sight. Check it out for yourself at training.talkpython.fm. Be sure to subscribe to the show. Open your favorite podcast app and search for Python. We should be right at the top. You can also find the iTunes feed at /iTunes, the Google Play feed at /play, and the direct RSS feed at /rss on talkpython.fm. We're live streaming most of our recordings these days.
+
+00:58:36 If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at talkpython.fm/youtube. This is your host, Michael Kennedy. Thanks so much for listening. I really appreciate it. Now get out there and write some Python code. [Music]

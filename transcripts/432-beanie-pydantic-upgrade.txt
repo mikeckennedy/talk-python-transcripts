@@ -1,0 +1,1209 @@
+00:00:00 By now, surely you've heard how awesome Pydantic version 2 is.
+
+00:00:03 The team led by Simuil Kolvin spent almost a year refactoring and reworking the core into a high-performance Rust version while keeping the public API in Python and largely unchanged.
+
+00:00:13 The main benefit of this has been massive speedups for the frameworks and devs using Pydantic.
+
+00:00:19 But just how much work is it to take a framework deeply built on Pydantic and make that migration?
+
+00:00:25 And what are some of the pitfalls?
+
+00:00:26 On this episode, we welcome back Roman Wright to talk about his experience converting Beanie, the popular MongoDB async framework based on Pydantic, from Pydantic 1 to 2.
+
+00:00:37 And we'll have some fun talking about MongoDB while we're at it.
+
+00:00:40 This is Talk Python to Me, episode 432, recorded August 16th, 2023.
+
+00:00:45 [Music]
+
+00:00:58 Welcome to Talk Python To Me, a weekly podcast on Python.
+
+00:01:01 This is your host, Michael Kennedy.
+
+00:01:03 Follow me on Mastodon, where I'm @mkennedy, and follow the podcast using @talkpython, both on fosstodon.org.
+
+00:01:10 Be careful with impersonating accounts on other instances.
+
+00:01:13 There are many.
+
+00:01:14 Keep up with the show and listen to over seven years of past episodes at talkpython.fm.
+
+00:01:20 We've started streaming most of our episodes live on YouTube.
+
+00:01:23 Subscribe to our YouTube channel over at talkpython.fm/youtube to get notified about upcoming shows and be part of that episode.
+
+00:01:32 This episode is brought to you by Studio 3T.
+
+00:01:35 Studio 3T is the IDE that gives you full visual control of your MongoDB data.
+
+00:01:40 With the drag and drop visual query builder and multi-language query code generator, new users will find they're up to speed in no time.
+
+00:01:47 Try Studio 3T for free at talkpython.fm/studio2023.
+
+00:01:54 And it's brought to you by us over at Talk Python Training.
+
+00:01:57 Did you know we have over 250 hours of Python courses?
+
+00:02:01 And we have special offers for teams as well.
+
+00:02:04 Check us out over at talkpython.fm/courses.
+
+00:02:06 Roman, welcome back to Talk Python to Me.
+
+00:02:11 Hi.
+
+00:02:12 Hey, so good to have you back on the show.
+
+00:02:14 Good to see you again.
+
+00:02:15 Yeah, you as well.
+
+00:02:16 Thank you.
+
+00:02:17 How have you been?
+
+00:02:18 So it was a nice adventure for me, like these two years of building Python projects, of moving to other countries.
+
+00:02:25 So yeah.
+
+00:02:26 Are you up for sharing that with people?
+
+00:02:27 What you're up to?
+
+00:02:28 Sorry?
+
+00:02:29 Are you up for sharing where you've moved to?
+
+00:02:30 When last time we spoke, you were in Berlin, I believe.
+
+00:02:33 I was in Germany.
+
+00:02:34 And now I'm in Africa.
+
+00:02:35 - Africa.
+
+00:02:36 (laughing)
+
+00:02:37 - So completely different country.
+
+00:02:38 - Somewhere new?
+
+00:02:39 - Completely different continent.
+
+00:02:40 - Yeah, are you enjoying your time there?
+
+00:02:42 - Yeah, so I like it so much.
+
+00:02:45 Honestly, I like Germany too.
+
+00:02:46 So Germany is a great country, but I like different things.
+
+00:02:50 - Yeah, but you're probably looking forward to not freezing cold winters.
+
+00:02:54 - I want to try, honestly.
+
+00:02:55 I don't know if I will like it or not, but I want to try it in just a few years, for example.
+
+00:03:00 - I moved to San Diego, California a long time ago.
+
+00:03:04 I didn't really enjoy the fact that there was no winters and there was no fall.
+
+00:03:08 It was just always nice, always.
+
+00:03:11 Until one day I realized, you know what?
+
+00:03:13 We just headed out mountain biking in the mountains and the weather was perfect and it was February and we didn't even check if it was gonna rain or be nice 'cause it's always nice.
+
+00:03:22 You know what?
+
+00:03:22 That's a good trade-off.
+
+00:03:24 You could do a lot of cool stuff when you live in a place like that.
+
+00:03:26 So I'm glad to hear that.
+
+00:03:29 You'll have to let us know how it goes.
+
+00:03:30 And Beanie has been going really well as well, right?
+
+00:03:35 So when we first spoke, Beanie was just kind of a new project.
+
+00:03:39 And the thing that caught my eye about it was two really cool aspects, asynchronous and Pydantic.
+
+00:03:47 I'm like, oh, those things together, plus MongoDB sound pretty awesome.
+
+00:03:50 And so it's been really fun to watch it grow over the last two years and it's gaining quite a bit of popularity.
+
+00:03:55 - I don't know, it's kind of popular, but not that much as Pydantic itself as fast API.
+
+00:04:00 but yeah, still popular in context of MongoDB.
+
+00:04:03 - I think it's a little bit different than a web framework, potentially, right?
+
+00:04:06 Like it's hard to say, you know, is it as popular as FastAPI or Flask or something like that, right?
+
+00:04:12 Because those things, you know, those are the contexts in which this is used, but not everyone uses Mongo, not everybody cares about AsyncMongo, all that, right?
+
+00:04:20 There's a lot of filters down, but it's, I think you've done a really great job shepherding this project.
+
+00:04:25 I think you've been really responsive to people.
+
+00:04:27 I know I've seen the issues coming back and forth.
+
+00:04:29 I've seen lots of releases on it.
+
+00:04:32 And I guess the biggest news is around, yeah, you're welcome.
+
+00:04:35 I think the biggest news is around, you know, when Pydantic 2 came out, that kind of changed so many things.
+
+00:04:41 I mean, you know, I spoke to Sam McCulvin about his plan there.
+
+00:04:46 I spoke to Sebastian Ramirez from FastAPI about like what he was thinking and where that was going.
+
+00:04:53 And it sounded like it was not too much work for people using Pydantic, but quite a bit of work for people like you that was like deep inside of Pydantic, yeah?
+
+00:05:02 - Yeah, so honestly, I have a Discord channel for support Beanie users.
+
+00:05:06 And there I was talking with other guys, like probably, I'm sorry, but probably I will not support both versions in the same time.
+
+00:05:14 Maybe I will have two different branches of Beanie with v1 and v2 supporting.
+
+00:05:19 But finally I am ended, you know, to in a single branch.
+
+00:05:24 And this was very challenging, honestly, because--
+
+00:05:27 - Okay, interesting.
+
+00:05:28 I didn't realize you were going backwards in that maintainability there for the people who didn't want to move to Pydantic 2.
+
+00:05:35 - Yeah, there are legacy stuff.
+
+00:05:38 It must support new features for Pydantic V1 also, definitely, because it may be, maybe people want to move to Pydantic V2, but they could be stuck on other libraries that support only V1, for example.
+
+00:05:51 And it can go for a while, like months.
+
+00:05:54 And even for me, it took like three weeks So to make, to make it work.
+
+00:05:59 So just so people know, talk python.fm and Python bytes set up him.
+
+00:06:04 Both of those are based on MongoDB and Beanie.
+
+00:06:07 And when you came out with the new one, I saw when the release for V2 came out, like, all right, how long until Beanie supports this, you know, and I saw that you were like right on top of it and working on that was great.
+
+00:06:18 And then when I went to upgrade it, it was really easy, right?
+
+00:06:23 I use pip tools and I use pip compile to just get all the latest versions of the dependencies and update the requirements.
+
+00:06:29 So then I install the new one and it wouldn't run because there's not because of anything that Beanie did, but just some changes to Pydantic 2.
+
+00:06:37 For example, if I had a, let's say there's a database field that was URL and it was an optional string.
+
+00:06:44 In Pydantic 1, you could say URL colon optional bracket str, that's it.
+
+00:06:50 That's it. But there's no default value explicitly set. So in Pydantic 2, that's not accepted, right? It says, no, no, no. If you want it to be none by default, you have to set it to be none explicitly. So I had to go through and like find all my database documents. Basically, anytime there's an optional something, set it equal to none. And then that was it. That was the upgrade process. And now the website runs faster. Thank you. Welcome. Yeah, I meant it at a middleware, like a few classes and functions that just check if you use Pydantic V1 or Pydantic V2 and based on this, uses different kind of backends, but interface is the same for both.
+
+00:07:28 So I'm a unified interface inside of Beanie.
+
+00:07:31 So, before we get too far down this conversation, give us two quick bits of background information here.
+
+00:07:37 First of all, why MongoDB?
+
+00:07:39 There's a lot of excitement around things like MySQL, but especially Postgres, relational databases, MongoDB's document database.
+
+00:07:49 Give us the elevator pitch. Why do you like to work with Mongo?
+
+00:07:52 Honestly, I like to work with all the databases.
+
+00:07:54 I mean, BigMap database is fun and nerd.
+
+00:07:57 So I like them all.
+
+00:07:59 But yeah, MongoDB is a document database, and it means the schema, the data schema is much more flexible than in SQL databases.
+
+00:08:08 because in SQL you use tables, plain tables, while in MongoDB you use actual documents, which could be nested, and the level of this nestedness could be really high.
+
+00:08:21 There are some trade-offs based on this.
+
+00:08:24 The relation system for plain tables could be implemented much simpler than for documents, because this flexi structure, it's hard to make nice relations.
+
+00:08:35 But I'd say it's much more useful for if you use nested data structures in your applications, it's much simpler to keep this same data structure in your database.
+
+00:08:49 And this makes all the processes of development much more easy and more simple to understand it, I'd say.
+
+00:08:57 You don't have the so-called object relational impedance mismatch, where it's like, Well, you break it all apart like this in the database and you reassemble it into an object hierarchy over here and then you do it again in the other way and like all that stuff.
+
+00:09:10 It's kind of just mirrored the same, right?
+
+00:09:12 True. And I really like MongoDB to make like small projects.
+
+00:09:16 I mean, when I just want to play with something and I play with data structures a lot and using Postgres or MySQL, I have to do a lot of migrations because, you know, when I change the type of field or just number of fields, I have to do this stuff and this kind of annoying because I just want to make fun and to play.
+
+00:09:35 Yes, exactly.
+
+00:09:37 Exactly.
+
+00:09:38 For me, it's easy to make MongoDB fast.
+
+00:09:41 And it's operationally almost trivial, right?
+
+00:09:45 If I want to add a field to some collection, I just add it to the class and start using it.
+
+00:09:51 And it just, it appears, you know, it just shows up and you want adding nested object, use add it.
+
+00:09:55 And it just, you don't have to keep running migrations and having server downtime and all that.
+
+00:09:59 It's just, it's glorious.
+
+00:10:00 So that's the background where people maybe haven't done anything with Mongo.
+
+00:10:04 What about Beanie?
+
+00:10:05 What is Beanie really quick for people?
+
+00:10:06 We talked about a bit, but give us the quick rundown on Beanie and why you built it.
+
+00:10:10 Like there were other things that talked to MongoDB and Python before.
+
+00:10:13 Yeah, so there's a lot of tools.
+
+00:10:15 There is Mongo engine, which is nice and which is official.
+
+00:10:18 Yeah, I like the Mongo engine too.
+
+00:10:19 Yeah.
+
+00:10:19 Yeah, but one day I was playing again with new technologies and FastAPI was super new that time.
+
+00:10:26 It was like, it wasn't that famous at that time, like three years ago.
+
+00:10:30 and already was super nice.
+
+00:10:32 And I wanted to play with it before I can use it in my production projects.
+
+00:10:37 And I found that there is no nice, let's say, connector to MongoDB from FastAPI because there is nothing that could support and Pydantic and asynchronous MongoDB driver motor.
+
+00:10:51 And I decided, like, why? I think I can implement it myself. Why not?
+
+00:10:55 And I made a very small, tiny ODM.
+
+00:10:58 I even thought it would be tiny all the time.
+
+00:11:01 Like, you know, it could support only models of the documents.
+
+00:11:05 It could insert them.
+
+00:11:06 And all the operations of MongoDB, it wasn't hidden inside of Beanie.
+
+00:11:13 You had to use MQL, Mongo Query Language, there.
+
+00:11:17 So I just released this.
+
+00:11:19 And somehow in one month it got not that popular.
+
+00:11:23 But people just came to me and like, "I like what you did.
+
+00:11:27 "Could you please add this feature and that feature? And this part works wrongly, so please fix this." And I was like, "Whoa, whoa, I didn't know, but I made an open source product." Wow.
+
+00:11:38 Yeah, that's cool. Some weird podcaster guy goes, "This is great, except for where are the indexes?" Yeah, this was like first, maybe second week after I published it. And yeah, you came to my GitHub issues. "Could you add indexes?" And I was like, "I forgot about indexes." I have to add them.
+
+00:11:54 Yeah, indexes are like database magic.
+
+00:11:56 It's they're just awesome.
+
+00:11:57 So yeah, and this was kind of playground project.
+
+00:12:00 And now this is nice.
+
+00:12:01 Oh, damn.
+
+00:12:02 Oh, I'm gonna be.
+
+00:12:03 It's been really, really reliable for all the work that we've been doing.
+
+00:12:06 So good work on that.
+
+00:12:07 Let's see.
+
+00:12:08 I guess there's two angles to go here.
+
+00:12:10 One, if we go over the releases, the big release is this 1.21.0, which says Pydantic v2 support.
+
+00:12:20 So I want to spend a lot of time talking to you about like, What was your experience going from Pydantic one to two?
+
+00:12:25 Because as you said, there's the really famous ones like FastAPI and others, but there's many, many projects out there that use Pydantic.
+
+00:12:34 I wonder if we could get it to show it.
+
+00:12:36 So, you know, GitHub has that feature where it shows used by 229,000 projects.
+
+00:12:42 228,826 projects.
+
+00:12:45 Yeah, they all use Pydantic now, right?
+
+00:12:47 Exactly.
+
+00:12:49 Just on GitHub, use Pydantic.
+
+00:12:51 So, you know, many of them still haven't necessarily done this work to move to two.
+
+00:12:57 And so I want to make that the focus of our conversation.
+
+00:12:59 However, since we had a nice episode on Beanie before, before we get into that aspect, let's just do a catch up on like what's happened with Beanie in the last two years.
+
+00:13:08 What are some of the cool new features and things that you want to highlight for folks?
+
+00:13:12 I added a lot of features, honestly, but there were a few really big.
+
+00:13:17 I really like one.
+
+00:13:18 I didn't know that it could be needed for anybody, but I was continuously asked about "please add this" and I didn't want to add, but finally I added. And now I love this so much.
+
+00:13:30 This is called inheritance. You can inherit documents, so you can make a big inherited structure like car, then vehicle, then from vehicle you can inherit bicycle, bike, car, and from current here it's something else. And the thing is, everything will be stored in the same collection, in the same MongoDB collection, and if you want to make statistics over all the types, you can do it. And when you need to operate only with a type or subtype, you can do it as well. You can choose what you want to do.
+
+00:14:07 And I know this feature is used in productions now in many projects, and this is nice, this kind of...
+
+00:14:14 Yeah, this is really cool.
+
+00:14:15 So when I first heard about it, my first impression was, okay, so instead of deriving from beanie.document, you create some class that has some common features, maybe properties and validation and stuff, and then other documents can derive from it.
+
+00:14:29 So like you said, bicycle versus car, but in my mind, those would still go into different collections, right?
+
+00:14:37 They would go in different collections and that would just be a simpler way to have the code that would have a significant bit of reuse, but the fact they all go into the same collection and the documents are kind of supersets of each other.
+
+00:14:48 I think that's pretty interesting. I hadn't really thought about how I'd use that.
+
+00:14:51 This portion of Talk Python to me is brought to you by Studio 3T. Do you use MongoDB for your apps?
+
+00:14:59 As you may know, I'm a big fan of Mongo and it powers all the Talk Python web apps and APIs.
+
+00:15:04 I recently created a brand new course called MongoDB with AsyncPython. This course is an end-to-end journey on getting fully up to speed with Mongo and Python.
+
+00:15:13 When writing this course, I had to choose a GUI query and management tool to use and recommend.
+
+00:15:19 I chose Studio 3T. It strikes a great balance between being easy to use, very functional, and remaining true to the native MongoDB Shell CLI experience.
+
+00:15:28 That's why I'm really happy that Studio 3T has joined the show as a sponsor.
+
+00:15:33 Their IDE gives you full visual control of your data, plus with a drag-and-drop visual query builder and a multi-language code generator, new users will find they're up to speed in no time.
+
+00:15:43 For your team members who don't know MongoDB query syntax but are familiar with SQL, they can even query MongoDB directly with Studio 3T using SQL, and migrate tabular data from relational databases into MongoDB documents.
+
+00:15:57 Recently, Studio 3T has made it even easier to collaborate, too.
+
+00:16:01 Their brand new team sharing feature allows you to drag and drop queries, scripts, and and connections into permission-based shared folders.
+
+00:16:09 Save days of onboarding team members and tune queries faster than ever.
+
+00:16:12 Try Studio 3T today by visiting talkpython.fm/studio2023, the links in your podcast player show notes, and download the 30-day trial for free.
+
+00:16:23 Studio 3T, it's the MongoDB management tool I use for Talk Python.
+
+00:16:27 - You can do even two different, if you want to count all the vehicles, You can do it without, you know, without making requests to each of the collections because everything in the same collection.
+
+00:16:40 And you can do this with different fields there as well.
+
+00:16:43 And you can make aggregations over all of them.
+
+00:16:45 And even over cars separately.
+
+00:16:48 This is nice.
+
+00:16:49 And yeah, I like it.
+
+00:16:50 Does the record have something, some kind of indicator of what...
+
+00:16:53 Yeah, inside there is...
+
+00:16:55 What class it is.
+
+00:16:56 It's like, I'm a car class, I'm a bike class.
+
+00:16:58 Yeah, yeah. You can specify...
+
+00:17:00 Originally it is called class name or something like this with underscore, but you can specify which fields would work for this.
+
+00:17:07 So we can specify the name of this field.
+
+00:17:09 And in this field, it stores not only the name of the class, but the structure itself.
+
+00:17:14 Like for bus, it will keep vehicle, car, bus.
+
+00:17:19 Yeah.
+
+00:17:19 So in this field, that's why it will be able to, even on the database level, it will understand the hierarchy of this object.
+
+00:17:27 Right.
+
+00:17:27 And so if you want to do data science-y things, you could use the aggregation framework to run a bunch of those types of queries on it, right?
+
+00:17:34 Yeah.
+
+00:17:34 And it's, it's better to do all this stuff on the database layer because, because Python is not that fast with iterations.
+
+00:17:41 While MongoDB is super fast.
+
+00:17:43 Yeah.
+
+00:17:43 And plus, you know, you don't need necessarily to pull all the data back just to read some field or whatever.
+
+00:17:49 Right.
+
+00:17:50 So yeah, that's really cool.
+
+00:17:51 This is not what I expected when I first heard about it, but this is quite cool.
+
+00:17:55 First time I heard this about this feature, I was like, nobody wants this.
+
+00:18:00 Why do you try to?
+
+00:18:02 But then I found how flexible this is getting to be.
+
+00:18:05 And so yeah, this is nice.
+
+00:18:07 The reason I guess it's a surprise to me is it leverages an aspect of MongoDB that's in document databases in general that are interesting, but that I don't find myself using very much is in that you don't have to have, there's not a real structured schema.
+
+00:18:22 And a lot of people say that and kind of get a sense for it.
+
+00:18:24 For me, that's always meant like, well, the database doesn't control the schema, but my code does, and that's probably going to be the same, right?
+
+00:18:30 So there's kind of an implicit static schema at any given time that matches the code.
+
+00:18:36 But you can do things like put different records into the same collection.
+
+00:18:41 You wouldn't do it just like, well, here's a user and here's a blog post and just put them in the same collection.
+
+00:18:46 That would be insane.
+
+00:18:47 But there's, you know, if you have this commonality of this base class, I can see why you might do this.
+
+00:18:52 It's interesting.
+
+00:18:53 Yeah, in this context, blog post or video post could be different by structure but could be stored in a single collection.
+
+00:18:59 One other thing on the page here that we could maybe talk about is link.
+
+00:19:02 I want to tell people about what link.
+
+00:19:04 MongoDB is a non-relational database, but you can force it to work with relations.
+
+00:19:10 And there is a data type in MongoDB called dbRef, dbReference, which is used to work with this link type in Beanie
+
+00:19:21 So in BINI with this generic type link, you can put inside of the link any document type. It can make relations based on this link.
+
+00:19:29 So you can fetch linked documents from another collection using just standard find operations in Beanie.
+
+00:19:36 There is kind of magic under the hood. I use, instead of using find operations, MongoDB find operations, I use aggregation framework of MongoDB, but it is hidden under the hood of Beanie and so yeah. And you can use relations then.
+
+00:19:51 And the nice thing about new features, because LINQ already was implemented, I think, two years ago. But again, I don't come up with my own features, I think.
+
+00:20:02 Every feature somebody asked me for. And I was asked for another feature to make backtracking, back references for these links. Like if you have a link from one document to another, another document should be able to have to fetch this relation backwards.
+
+00:20:19 So in this case, you've got an owner which has a list of vehicles, but given a vehicle, you would like to ask who is its owner, right?
+
+00:20:26 True. And I implemented this, I named it backlinks, backlink, and it can just fetch it in reverse direction.
+
+00:20:34 That's cool.
+
+00:20:35 And the nice thing about this is it only uses the magic of aggregations and it doesn't store anything for backlink fields in the collection itself.
+
+00:20:45 Okay.
+
+00:20:45 So, in a MongoDB document, you never will find these fields for backlink because everything you need is on the link.
+
+00:20:52 And this is nice.
+
+00:20:53 Yeah, that is really cool.
+
+00:20:54 In the queries, in the find statement, you add fetch_link=true and that's kind of like a join.
+
+00:21:00 Is that how that works?
+
+00:21:01 There are options.
+
+00:21:02 Eager versus lazy loading type of thing.
+
+00:21:04 When you find without this option, default it is false.
+
+00:21:07 You will see in the field, in the link at field, you will see only link itself.
+
+00:21:11 It will be linked with ID inside of the object.
+
+00:21:15 But if you put fetch and you can fetch it manually like with method .fetch it will work.
+
+00:21:21 But when you put fetch links through it will fetch it everything automatically on the database layer.
+
+00:21:28 And yeah, it will return all the linked documents.
+
+00:21:30 That's really cool.
+
+00:21:31 Other one?
+
+00:21:31 Lazy parsing.
+
+00:21:33 I mean, we all want to be lazy.
+
+00:21:34 But what are we doing here?
+
+00:21:35 What is this one?
+
+00:21:36 Yeah, so this is...
+
+00:21:37 In some cases, Beanie could be used for really high-load projects, and sometimes you need to fetch like thousands of documents in a moment. And the nature of Pydentic is synchronous, not asynchronous, because it uses CPU-bound operations there. And when you fetch hundreds of documents, or even thousands of documents, you completely block your system, because a lot of loops to parse data, to validate data, and etc.
+
+00:22:06 And if you use it in asynchronous framework, this is not behavior that you like to have.
+
+00:22:12 And to fix this problem...
+
+00:22:14 Maybe even in asynchronous framework, it might be the behavior you don't want to have as well.
+
+00:22:18 Yeah.
+
+00:22:19 Right? Even then. Yeah.
+
+00:22:19 This is true. But even in asynchronous, you don't accept it.
+
+00:22:23 Yeah, exactly. But it's totally reasonable to think, well, I'm going to do a query against this document and it's got some nested stuff. Maybe it's a big sort of complex one, but you really just want three fields in this case.
+
+00:22:35 Now, you can use projections, right?
+
+00:22:38 Like that is the purpose of projections, but it limits the flexibility because you only have those fields that were projected.
+
+00:22:44 And in different situations, maybe you don't really know what parts you're going to use, right?
+
+00:22:50 You can have a complicated load.
+
+00:22:51 Yeah, so this kind of lets the consumer of the query use only what they need, right?
+
+00:22:56 Yeah, and so when you use this lazy parsing, Pydantic doesn't parse anything on the initial call.
+
+00:23:02 Like, you receive everything and store everything in a raw format in dictionaries, in Python dictionaries there.
+
+00:23:07 And when you call any field of the document, just parse it using Pydantic tools to parse as Pydantic do it internally.
+
+00:23:16 So is this lazy parse primarily implemented by Pydantic or is this something you've done on top of Pydantic?
+
+00:23:22 I implemented my own library for this. Like, it's on top of Pydantic for sure.
+
+00:23:26 but it uses... In pydantic, there are tools different in v1 and v2. The name of this tool is different, but you can parse something into type, not into a base model, but just into type. You can provide a type and the value to be parsed into this type, and it can parse it. So I use this, and additionally, I had to handle with all the validator stuff, because this is a very important part of pydantic, and you have to be able to validate things. And with lazy parsing, if it sees that there are root validators, then it will validate it against any field. Or if there is a field-specific validator, it will validate it against the field if this field was called. So yeah, I had to do some magic with pydantic there. But especially with pydantic v1, which was slower than v2, significantly slower, It was very helpful for people who have to fetch really big amounts of documents and to not block their pipeline in this step.
+
+00:24:28 This is a nice feature also.
+
+00:24:30 Yeah, I think this is a really nice feature.
+
+00:24:32 What's the harm?
+
+00:24:33 Does it make certain things slower if you're going to use every field?
+
+00:24:37 Why not just turn this on all the time, right?
+
+00:24:41 That's my question.
+
+00:24:42 Yes, for sure.
+
+00:24:43 There are trade-offs.
+
+00:24:44 if you will use this all the time, it would be like around twice slower than just pydantic validation if you will use all the fields. If you will use just a few fields, it would be faster.
+
+00:24:57 But I didn't turn it on by default because in general case, when people just want to fetch 10, maybe 20 documents and use all the fields of them, it would be slower.
+
+00:25:06 That's kind of what I expected. But if you've got a really complicated document and you only use a few fields here and there, then it seems like a real win, but you're going to use everything anyway.
+
+00:25:15 And especially for Pydantic V2, when all the validation happens on the Rust layer, but here I cannot do this, because I cannot put the logic into the Rust layer, because there is no Rust layer for Beanie. And if you will fetch all the fields of the documents using this lazy parsing, everything will happen on the Python layer instead of the Rust layer, and it will be as slow as we won. So we will not see a benefit.
+
+00:25:39 So it's interesting, even in the V1 version of Pydantic, but now with Pydantic 2 being roughly 22 times faster that all of a sudden that you want to let Pydantic do its thing if it can.
+
+00:25:49 Yeah.
+
+00:25:50 Speaking of Pydantic getting some speed up from Rust, is any part of Beanie some other runtime compilation story than pure Python?
+
+00:26:00 Is there like a Cython thing or a Numba or any of those?
+
+00:26:04 The thing about the speed of Beanie is, Beanie is not about...
+
+00:26:09 So, as Pydantic is very CPU-bound, all the stuff happens on the CPU layer.
+
+00:26:15 While Beanie uses mostly input-output operations, because it interacts with the database.
+
+00:26:21 And for this, just default, I think, await pattern of Python works the best.
+
+00:26:28 And all the time, if there are any delays, it's most likely about this interaction process between application and MongoDB.
+
+00:26:37 It could be network.
+
+00:26:38 It could be, could be just delay from the query and et cetera, but not, not Binny because Beanie doesn't, doesn't compute anything.
+
+00:26:45 Beanie doesn't do very much, I guess.
+
+00:26:47 Right.
+
+00:26:47 It's it coordinates motor, the asynchronous engine from MongoDB and it coordinates by Pydantic and it kind of clicks those together using async and a nice query API that you put together.
+
+00:27:00 And so, right, it's more about letting motor be fast and letting pydantic be fast and getting out of the way, I suppose.
+
+00:27:07 This is true, yeah.
+
+00:27:08 Beanie is mostly about making some magic and convert Python syntax into MongoDB syntax.
+
+00:27:14 Thank you for that. That's really nice.
+
+00:27:16 It's super nice the way that the syntax works, right?
+
+00:27:18 The fact that you're able to use native operators, for example, right?
+
+00:27:22 To do the queries. I really like that.
+
+00:27:24 Yeah, it was.
+
+00:27:25 It is, I don't like when somebody uses this in production applications.
+
+00:27:29 I mean, when, because it is hard to find problems, but when we are talking about libraries, this is really nice when it supports Python syntax.
+
+00:27:37 So that's why I decided to implement it.
+
+00:27:39 People shouldn't get too crazy with overloading their own operators, but as an API, it's really good.
+
+00:27:44 So for example, in this case, you have a sample document and it has a number.
+
+00:27:47 And so the query is sample.find.
+
+00:27:49 And then the argument is sample.number == 10, right?
+
+00:27:54 which is exactly the way you would do it in an if statement.
+
+00:27:57 You'll contrast that with other languages or other frameworks such as Mongo engine which I used previously and is nice but you would say sample.find and then just number_eq=10 You're like, "I know what that means." But it's not speaking to me the same way as if I was just doing a raw database query or writing pure Python, right?
+
+00:28:20 Yeah, it sounds like you have to learn another one of English, right?
+
+00:28:23 Exactly. You've got to, like, if you want to do a nested thing, it's the double underscore, you know, it'd be like number__ item__ EQ =10. You're like, oh my goodness. So yeah, that's kind of tricky.
+
+00:28:35 Okay. Well, let's talk about this, this upgrading story for the 22, 229,000 other folks out there who maybe haven't done this. So a while ago, back in 2022, almost exactly to the day a year ago I had Samuel Colvin on to talk about the plan to move to Pydantic v2 why he did it it was really interesting so that's worth listening to people want to learn more as well as I had Sebastian Ramirez and Samuel Colvin on to talk about it live at PyCon and that was fun too so people want background on what is the story of Pydantic 2, they can check that out. But the big announcement was on June 30th a couple months ago I guess that's a month than a half ago. Pydantic v2 is here after just one year of hard work. That was a huge project for the Pydantic folks, which, you know, they've done a great job on it. And I guess the big takeaway really is that Pydantic v2 is quite a bit faster. Maybe you could speak to that. And it's mostly but not exactly the same because as you already pointed out, the core of it is rewritten in Rust for performance reasons.
+
+00:29:40 I've made a lot of tests in Beanie. It is much faster when you talk about validation of the models itself, especially when you validate parse really nested and complicated models, then it's much, much faster than Python, than v1 implementation.
+
+00:29:56 While with Beanie, you still can see significant performance upgrade, but not that much because Beanie works with MongoDB, and there is this input-output operation, which is slow and which could not be upgraded just by decreasing processing time.
+
+00:30:15 When we are talking about simple documents, it's not that visible, like 10, sometimes 20% faster.
+
+00:30:23 But when we talk about nested documents, when there are nested dictionaries or nested lists of dictionaries, then it's much, much faster. In my Alert test, it is twice faster, v2 against v1.
+
+00:30:37 And I was super impressed by this because I was expecting this, expecting this, that it would not be that, that fast as then as pydantic tool itself, because of this put output operation.
+
+00:30:49 But yeah, this is, this is crazy.
+
+00:30:51 Right, because it's not just the parsing that Beanie does, right?
+
+00:30:56 Beanie sends the message over to Mongo, the network does some stuff, Mongo does its thing, sends it back, serialized as BSON, and then it's got to deserialize into objects somehow and then the pydantic part kicks in right and plus all the extra bits you've already talked about right so it it can Only affect that part, but I think it your example here shows. You know standard computer science answer it depends I Is a faster it depends I would guess the more complicated your document is the bigger bonus you get what you've already said and the more documents you return. So if I return one record from the database, it's got five fields, the amount that of that processing that is pydantic is small. But if I return 1000 records, and there's all that serialization, like, you know, the database has kind of done more or less the same amount of work, it's streamed the stuff back. But at this, when it gets to Python, it's like, whoa, I've got a lot of stuff to validate and parse. And I suspect that also matters how many records are coming back.
+
+00:31:54 Yes, this is true. That's why this affected this case for lazy parsing that was implemented for v1.
+
+00:32:00 And now it's not necessary for many cases.
+
+00:32:03 Only for very extreme high load.
+
+00:32:06 That's really cool.
+
+00:32:07 What makes me smile from this is the more Pydantic you use, the more awesome this upgrade to 2 becomes.
+
+00:32:15 And like I said, it's almost no work.
+
+00:32:17 Technically, I had to set all the optionals to be none.
+
+00:32:20 That's not a beanie thing, that's a Pydantic thing, but it's not a big deal.
+
+00:32:23 So upgrading basically means all the parts of your frame, all the frameworks you use that are built on Pydantic get faster.
+
+00:32:30 So for me, when I upgraded the website, it went about, I don't know, 40% faster or something like that, which is a huge speed up or very little work.
+
+00:32:39 It's already really fast, right?
+
+00:32:40 If you go to, you know, the podcast, you pull up an episode page.
+
+00:32:43 It's like 30 milliseconds.
+
+00:32:44 You go to the courses and you pull up a video to play.
+
+00:32:48 It's got many queries it does, but it's probably 20 milliseconds.
+
+00:32:51 So now it's 15 milliseconds or 14 milliseconds.
+
+00:32:54 But still, to get that much of a speed up and do basically no work on my part, that's awesome.
+
+00:33:00 And I'm not using a framework like FastAPI where the other side of that story is also Pydantic.
+
+00:33:06 So if you're using FastAPI and Beanie, which I think is probably a common combination, both the database side that gets you the Pydantic things is faster, and then the outbound and inbound processing that the API itself does is a lot faster because of Pydantic.
+
+00:33:21 And so you get this kind of multiplicative doubling of the speed on both ends, right?
+
+00:33:26 The numbers you just told about your website, it's like this time is only about this communication.
+
+00:33:33 I mean, how bits are going from one computer to another.
+
+00:33:38 There is no computations there, probably.
+
+00:33:40 It's super, super impressive.
+
+00:33:42 You know, people say, "Well, Python is not fast enough." That may be true for a few very rare, extremely high load situations, but I would bet it's fast enough for most people.
+
+00:33:54 If your website end-to-end processing is responding in 15 milliseconds, you've got other parts of your system like CDNs and an amount of JavaScript you send to worry about, not your truly awesome.
+
+00:34:07 Because of indexes also, don't forget your indexes.
+
+00:34:11 Yeah, each time when I have any requests about my things are slow and probably have to switch Python to anything else.
+
+00:34:19 Usually the problem is about the data model, not about the processing, because, you know, people could store things a bit wrongly, a bit too nested or less nested than it should be, and etc.
+
+00:34:30 And yeah, indexes.
+
+00:34:32 Yeah, indexes or you've done a query where you return a hundred things of huge documents and you only want, like, say, the title and last updated.
+
+00:34:40 But you don't do a projection, and so you're sending way too much data.
+
+00:34:43 It's like select star instead of select title comma date.
+
+00:34:47 You know, something like that.
+
+00:34:48 Sometimes, sometimes, sometimes also works to make protection on the database layer.
+
+00:34:53 Like to make some, like to find maximum elements or minimum elements and to do this stuff on the database is better than in Python because in Python you have to iterate over the objects to find things which is not that efficient.
+
+00:35:06 So we just have to...
+
+00:35:07 You've got to pull them all back, deserialize them, and validate them and then iterate over them rather than just let that happen on just the fields in the database.
+
+00:35:14 That's a good point.
+
+00:35:15 And maybe the query is just bad as well.
+
+00:35:16 Okay, so what was your experience?
+
+00:35:19 You know, they shipped a migration guide about the things that you've got to do.
+
+00:35:24 And if you look at the scroll bar here, the migration guide is large.
+
+00:35:28 I don't know how many pages.
+
+00:35:29 Let's see if I press print, if it'll tell me how many pages.
+
+00:35:33 No, sadly, it doesn't want to tell me how many pages it would print.
+
+00:35:35 But there are many pages here, I guess.
+
+00:35:38 If I were to print this out, was this a daunting experience?
+
+00:35:41 How did it go for you?
+
+00:35:42 It was very interesting. So when I just switched pip install, a Pydantic V2.
+
+00:35:47 Or you're like, let's see if it just works. Come on.
+
+00:35:49 And just run tests and everything was ready.
+
+00:35:53 Firstly, it was like only one error. Nothing can work.
+
+00:35:57 I don't run any tests. So one error.
+
+00:36:00 I handled it and each test was read and everything.
+
+00:36:05 It was really interesting and challenging.
+
+00:36:08 Interesting because it's kind of really a computer science problem.
+
+00:36:11 sometimes there. So, Pydantic moved a lot of logic to the Rust layer, and it got hidden for me as a user of Pydantic.
+
+00:36:21 For example, in Python there is a thing called "forward ref". What is it?
+
+00:36:27 When you have two classes in a single module, for example, and in one class you have a field of the second class, and in the second class you have a field of type of the first class, you cannot just put these names without any magic. You can make input from annotation or you can just write it as a string instead of the class itself. But then Python will understand it as a forward ref, a forward reference for another class. And Pydantic can resolve it and make it an actual class, finally, in the base model. And in v1, this mechanism was implemented in Python and I could use it, and I could use the results of this while in Pydantic V2 everything is in the Rust layer.
+
+00:37:10 And when it updates this reference, it updates inside of the Rust and I cannot see the actual class finally.
+
+00:37:16 And I had to implement my own resolvers there.
+
+00:37:18 And there are a few stuff like this.
+
+00:37:21 Another one big change was about...
+
+00:37:23 That does not sound easy.
+
+00:37:25 Yeah. I was like, "So, will I?" "Am I going to do this?" Yes, exactly.
+
+00:37:32 And it, you know, for people maybe haven't played with this, it's really important because Pydantic and hence Beanie depends on the types, right?
+
+00:37:42 The parsing and the validation and all of those things, you have to know exactly what type a thing is, right?
+
+00:37:48 And so if you lose access to the forward reference resolution, that's going to be bad.
+
+00:37:53 Yeah, for example, in links or in backward links, if you don't clearly understand which document is linked to this document, You cannot build a query for this.
+
+00:38:03 So yeah, and I have made this resolver.
+
+00:38:05 I honestly, I just was reading identically one code and was, I didn't copy paste, but I was using nearly the same algorithm.
+
+00:38:14 And another big feature was about how validation of the custom types happens.
+
+00:38:20 Yeah.
+
+00:38:21 And get the pydantic core schema.
+
+00:38:23 So everything is in the schema inside of the Rust layer now, and you can write instructions in Python, which would be imported to this Rust layer and would be called from there.
+
+00:38:36 That's why the whole syntax of this completely changed. And that's why I was thinking, how can I have two completely different syntaxes for the same thing inside of the same class?
+
+00:38:49 And I was thinking, maybe I have to switch branches now and have Bini v2 after Pydantic v2 and Beanie v1 and support all the new features in both versions and it was oh no it will be nightmare. You're already busy with one project do you need because I already have Bunnet. Yeah do you want two projects? Yeah and I already have Bunnet which is a synchronous version of Beanie which also would be split into two then and I will have four projects which is which is too crazy. Yeah no kidding. I can't split myself this is a problem and yeah finally finally Finally, I found, I honestly, I just went to FastAPI code, and I was reading how they deal with this.
+
+00:39:31 And like, nice idea. I will do the same. Thank you, guys. And that's the power of open source.
+
+00:39:38 Yeah, it is. I feel like Sebastian and FastAPI are kind of examples for a lot of different projects and different people, you know, people look to them for kind of an example.
+
+00:39:49 Yeah, this is true. And so and finally, finally, I solved all the problems.
+
+00:39:53 It took me, to solve all the problems, it took me like one, maybe one and a half weeks.
+
+00:39:58 But then I published a better version, and there were performance problems with better versions.
+
+00:40:03 There were some corner cases that I didn't catch, and the community found them.
+
+00:40:09 And this is great also about open sourcing, because honestly, I would not be able to find all of these problems myself for this short period of time.
+
+00:40:17 Definitely.
+
+00:40:18 I guess, how much of this is at runtime?
+
+00:40:21 And how much of the, I guess it's all at runtime, but how much of this is startup versus kind of once the app is up and running.
+
+00:40:27 So, you know, you've got your Beanie init code where you pass the motor async client over and you pass the models and it's got to like verify that they all click together correctly.
+
+00:40:38 You know, they all have the settings that say, you know, what database they go to and the indexes are set up correctly and whatever else is in there.
+
+00:40:45 And then once I imagine once that gets processed, it kind of just knows it and runs.
+
+00:40:51 So how much of this stuff that you're talking about was kind of the setup, get things working, and how much of it is happening on every query, every insert?
+
+00:40:59 Most of this was about run time of about every query and every...
+
+00:41:04 Not even this way, like, how do I set up the document itself?
+
+00:41:09 how do I set up validators, because I also have validators in the documents to make things simpler, and the syntax changed, and etc.
+
+00:41:18 So, for example, there was a nested class called "config" before in pydantic v1, and now this is a field called "model-config", which you see is a completely different interface again, because this is not a class, this is just a field now. And I was using and still use this config stuff, and I had to not only switch to the new syntax, but support on the class if you use Pydantic V1.
+
+00:41:43 And that's why inside of my classes, I have conditions, like which field I want to define based on the version of Pydantic.
+
+00:41:51 And yeah, most of the changes were about this setups of the documents and setups of the types, but you use it not on the initialization layer, but on the runtime, yeah, with all these things.
+
+00:42:05 You also talked about the performance story.
+
+00:42:08 Do you do any profiling or have any tools like that?
+
+00:42:12 - Honestly, I didn't.
+
+00:42:14 So there are pprofile and other tools to do this stuff.
+
+00:42:19 I was measuring using just time start, time end, but I was doing this for different parts of the code just to see what's happening there and here.
+
+00:42:30 And honestly, it was when I faced a performance problem, this was because there are some methods in Pydantic V2 that they keep but marked as deprecated.
+
+00:42:41 They keep from V1.
+
+00:42:42 In some cases, I just didn't switch it to the new versions.
+
+00:42:46 And this was the performance problem.
+
+00:42:49 And when I found all the places where I used deprecated methods, then everything--
+
+00:42:54 Switch it to the new, more intended one, and that's got the fully optimized version or something like that.
+
+00:43:00 Yeah.
+
+00:43:00 - Yeah, yeah, true, because Beanie is working with a lot of internal things of Pydantic, and it uses this very heavily.
+
+00:43:08 And sometimes I just don't know that in this, I mean, don't remember that in this specific part, there is something internal for Pydantic, and I use this also, and so I had to check everything.
+
+00:43:20 And Pydantic code base is big already, so it's hard to keep everything in mind.
+
+00:43:24 - Yeah, I feel like that's the challenge for people like you and FastAPI and others.
+
+00:43:29 you have your code way deeper in the internals of Pydantic than people who just consume Fast API or consume Beanie like I do.
+
+00:43:38 This is very interesting.
+
+00:43:39 I mean, this is true computer science problem, like when you have to swap interfaces, and you don't even know where all those interfaces are used.
+
+00:43:48 And you have to detect them.
+
+00:43:49 So yeah, this is nice.
+
+00:43:50 Super interesting.
+
+00:43:51 Yeah, and again, on your side, you've got to do that to adapt to the new Pydantic, but you've also got to present some kind consistent forward-looking view to people consuming Beanie so they don't have to rewrite all their code too, right?
+
+00:44:03 Yeah, true.
+
+00:44:04 So, and all the interfaces, I didn't change any Beanie interface when I was working with this.
+
+00:44:12 Like, all the interfaces are still the same for Beanie and nobody should change their code which uses Beanie.
+
+00:44:18 I implemented kind of middleware between Pydantic and Beanie and this middleware have static interfaces and inside of this there are these conditions like if Pydantic v2 then and yeah this kind of logic. Nice. It's a pretty good question on the audience from Marwan here says other than getting the code to execute correctly were there any gnarly parts you had to figure out to appease type checkers and linters and that kind of stuff? I don't remember any changes about this thing, like mypy and Ruff, I use Ruff instead of flake8 currently.
+
+00:44:57 I didn't fix this stuff. Everything was okay with new Pydantic. I think guys made a really great job about this to make everything work, because I have other checks about mypy and about ruff, and everything went smoothly about this.
+
+00:45:12 So I can't imagine being Samuel on team to have to rewrite Pydantic with such a major refactoring, realizing quarter million other projects depend on this and then people depend on those projects.
+
+00:45:25 You know, and like, how are we going to do this without the world just completely breaking, you know?
+
+00:45:30 Currently, they have a Discord channel also for Pydantic.
+
+00:45:33 And I see many people asking for help and some questions about new syntax.
+
+00:45:41 But I see that it could be much more because so current syntax is very similar to the previous syntax, but the change, it's completely rewritten, right?
+
+00:45:51 Oh yeah, this is very impressive work.
+
+00:45:53 Yeah, completely rewritten.
+
+00:45:54 A good part of it in another language.
+
+00:45:56 Broken into multiple modules and still it seems to go pretty well.
+
+00:46:01 Yeah, and the assumptions about the default values for optionals, that was the only thing that seemed to have caught me out.
+
+00:46:06 You can put in the config that you can have options, like, use the same logic as for v1, but you just have to mention it in the config now.
+
+00:46:17 But I don't remember, honestly.
+
+00:46:19 There was a few other things that maybe I ran across, like, and honestly, I don't know why some of these changed.
+
+00:46:23 So it used to be able to just call .json on an object, and now it's model_dump_json.
+
+00:46:30 Or there was dict model_dump, right?
+
+00:46:33 Everything has a prefix model currently in Pydantic.
+
+00:46:36 And I believe this is to not make conflicts with the user logic.
+
+00:46:41 Because when you have your own suffix or prefix, then it's simpler for users to have their own methods.
+
+00:46:50 And I like this solution. This is really nice.
+
+00:46:53 I guess this is the other thing that I ran into, is I have a few places I was calling .dict, I think.
+
+00:46:57 For me as well. And I have conditions.
+
+00:46:59 I see.
+
+00:47:00 Anything else you want to talk about, about the migration?
+
+00:47:03 Like what's go okay for you or any other thing you want to highlight about how it went?
+
+00:47:07 Honestly, I think I mentioned everything and yeah, it's been very smooth, thanks to the pedantic team.
+
+00:47:14 And yeah, I really like pydantic v2.
+
+00:47:17 I still really like pydantic v1 actually.
+
+00:47:20 I like both.
+
+00:47:21 But this completely different libraries inside and very similar libraries regarding interfaces.
+
+00:47:28 So I really like how it's--
+
+00:47:30 It's not too often that you get that massive of a speed up of your code and you didn't have to do anything, right?
+
+00:47:36 I was using this library and it was really right in the core of all the processing and now it's a lot faster. So is my code.
+
+00:47:43 When you read the code, the Rust part of Pydantic, I started to read it just to learn.
+
+00:47:48 And this is really nice how it can interact with Python parts.
+
+00:47:53 I mean, I can write Rust itself, just logic.
+
+00:47:56 I even implemented a database in Rust.
+
+00:47:59 But how to do all this Python stuff inside of another language.
+
+00:48:03 So this is super impressive.
+
+00:48:05 It is super impressive.
+
+00:48:06 We'll get a little short on time here. Let's see what...
+
+00:48:08 I guess I'll give a shout out to this course I recently released.
+
+00:48:12 MongoDB with Async Python.
+
+00:48:14 Which of course uses Beanie as well.
+
+00:48:17 And I created this course on Beanie 1.10 or something prior to the 1.21 switch this to pydantic 2 and it's all pydantic 1.
+
+00:48:27 And so I was always wondering like, well, how, you know, how tricky is it going to be to upgrade?
+
+00:48:31 And there was really either zero or very little changes.
+
+00:48:34 I think maybe the default values on optionals was also a thing I had to adjust on there.
+
+00:48:39 But if people want to learn all the stuff that we're talking about, you know, just talkpython.fm.
+
+00:48:44 Go to courses, check out the MongoDB async course.
+
+00:48:47 It's all about Beanie and stuff like that.
+
+00:48:49 I was reading this course also and I can highly recommend it.
+
+00:48:52 Thank you so much.
+
+00:48:54 One thing I do want to give a shout out to is I use Locus.
+
+00:48:57 Are you familiar with Locus?
+
+00:48:58 Locus.io?
+
+00:48:59 Yeah.
+
+00:48:59 What a cool project.
+
+00:49:01 So this lets you do really nice modeling of how users interact with your site using Python.
+
+00:49:07 And then what you get is, I don't know if there's any cool pictures that show up on here in terms of the graphs, but you get really nice graphs that show you real time, but how many requests per second and different scenarios you get.
+
+00:49:19 And on this one, I'm pretty sure when I upgraded it to Pydantic 2 and ran it again, trying to think of all the variations that you know, there could be something that has changed that I wasn't aware of, like maybe, maybe I recorded it on my M1 Mac Mini and then ran it again on my M2 Pro Mac Mini, so that could affect it by like a little bit as well, like 20%.
+
+00:49:39 But I think just, so using Beanie and FastAPI and upgrading all those paths to Pydantic 2 and the respective Beanie and FastAPI versions, I think it went 50% or double fast, two times as fast, 100% faster, just by making that change.
+
+00:49:56 So that was pretty awesome.
+
+00:49:58 - This is great, yeah.
+
+00:49:59 Yeah, I see this 50% also and yeah.
+
+00:50:03 - All I did is I just reran pip tools to get the new versions of everything and reran the load tests and look how much faster they are.
+
+00:50:11 And so that's a real cool example of kind of what I was talking about.
+
+00:50:14 So yeah, if you wanna see all this stuff in action, Check out the MongoDB with Async Python course.
+
+00:50:19 Thanks for coming on the show and updating us on Beanie and especially giving us this look into your journey of migrating based on Pydantic 1.2. I think that's really cool.
+
+00:50:29 Yeah, thank you very much.
+
+00:50:30 It's a great time, it's here.
+
+00:50:31 Of course. So, before you get out of here, got a PyPI project library to recommend to people?
+
+00:50:38 Something besides, of course, Beanie and Pydantic, which are pretty awesome and obvious.
+
+00:50:42 I would recommend to use Motor.
+
+00:50:43 This is, this is kind of PyMongo, but asynchronous.
+
+00:50:47 Integrates with async and await perfectly, which is real, real nice.
+
+00:50:51 If you want to do something more low level than, than Beanie, then you have to at least meet with Mojo because this is really nice library.
+
+00:50:59 And even after that many years, it's still very actual.
+
+00:51:04 And what else? Honestly, I don't have anything in my mind.
+
+00:51:07 Kind of just Pydantics.
+
+00:51:09 Yeah, Pydantics, good stuff. Awesome.
+
+00:51:11 Okay, I'll throw Locust out there for people.
+
+00:51:13 They can check out Locust. That's pretty cool.
+
+00:51:15 If you are going through the same process, you've got code built on Beanie or just Pydantic in general, and you want to see, you know, how does my system respond before and after, Locust is like ridiculously easy to set up.
+
+00:51:28 Run it against your code, pip install upgrade, run it again, and just see what happens.
+
+00:51:34 I think that'll be a really good recommendation too.
+
+00:51:36 Yeah, final call to action.
+
+00:51:37 People want to get started with Beanie.
+
+00:51:39 maybe people out there already using Beanie want to upgrade their code.
+
+00:51:42 What do you tell them?
+
+00:51:42 Just pip install it.
+
+00:51:43 Everything would be, would work fine.
+
+00:51:46 So just try it.
+
+00:51:47 But at least you have to upgrade everything.
+
+00:51:49 So please write tests.
+
+00:51:51 Absolutely.
+
+00:51:52 And if something will go wrong, go to my Discord channel and me or other people will answer your questions.
+
+00:51:59 Sounds good.
+
+00:52:00 All right.
+
+00:52:00 Well, congrats on upgrading Beanie.
+
+00:52:02 You must be really happy to have it done.
+
+00:52:04 Yeah, I think.
+
+00:52:05 I think very much.
+
+00:52:06 Yeah, you bet.
+
+00:52:07 See you later.
+
+00:52:07 See you.
+
+00:52:09 This has been another episode of Talk Python to Me.
+
+00:52:12 Thank you to our sponsors.
+
+00:52:14 Be sure to check out what they're offering.
+
+00:52:15 It really helps support the show.
+
+00:52:17 Studio 3T is the IDE that gives you full visual control of your MongoDB data.
+
+00:52:22 With the drag and drop visual query builder and multi-language query code generator, new users will find they're up to speed in no time.
+
+00:52:29 You can even query MongoDB directly with SQL and migrate tabular data easily from relational DBs into MongoDB documents.
+
+00:52:37 Try Studio 3T for free at talkpython.fm/studio2023.
+
+00:52:43 Want to level up your Python?
+
+00:52:44 We have one of the largest catalogs of Python video courses over at Talk Python.
+
+00:52:49 Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+00:52:54 And best of all, there's not a subscription in sight.
+
+00:52:56 Check it out for yourself at training.talkpython.fm.
+
+00:52:59 Be sure to subscribe to the show, open your favorite podcast app, and search for Python.
+
+00:53:04 We should be right at the top.
+
+00:53:05 You can also find the iTunes feed at /iTunes, the Google Play feed at /play, and the Direct RSS feed at /rss on talkpython.fm.
+
+00:53:15 We're live streaming most of our recordings these days.
+
+00:53:18 If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+00:53:26 This is your host, Michael Kennedy.
+
+00:53:28 Thanks so much for listening. I really appreciate it.
+
+00:53:30 Now get out there and write some Python code.
+
+00:53:32 [MUSIC]
+
+00:53:42 (upbeat music)
+
+00:53:45 [MUSIC PLAYING]
+
+00:53:48 [MUSIC PLAYING]
+
+00:53:52 [BLANK_AUDIO]

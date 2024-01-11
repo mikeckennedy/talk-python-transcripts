@@ -1,0 +1,1379 @@
+00:00:00 We write tests to show us when there are problems with our code, but what if there are intermittent problems with the tests themselves? That can be a big hassle. In this episode, we have Gregory Kapfhammer and Owain Parry on the show to share their research and advice for taming flaky tests.
+
+00:00:14 This is Talk Python to Me, episode 429, recorded August 10th, 2023.
+
+00:00:19 Welcome to Talk Python To Me, a weekly podcast on Python.
+
+00:00:36 This is your host, Michael Kennedy.
+
+00:00:37 Follow me on Mastodon, where I'm @mkennedy, and follow the podcast using @talkpython, both on fosstodon.org.
+
+00:00:45 Be careful with impersonating accounts on other instances.
+
+00:00:47 There are many.
+
+00:00:48 Keep up with the show and listen to over seven years of past episodes at talkpython.fm.
+
+00:00:54 We've started streaming most of our episodes live on YouTube.
+
+00:00:57 Subscribe to our YouTube channel over at talkpython.fm/youtube to get notified about upcoming shows and be part of that episode.
+
+00:01:05 This episode is brought to you by JetBrains, who encourage you to get work done with PyCharm.
+
+00:01:11 Download your free trial of PyCharm Professional at talkpython.fm/done-with-pycharm.
+
+00:01:19 And it's brought to you by Sentry.
+
+00:01:21 Don't let those errors go unnoticed.
+
+00:01:23 Use Sentry.
+
+00:01:24 Get started at talkpython.fm/sentry.
+
+00:01:27 Owain, Gregory, welcome to Talk Python to Me.
+
+00:01:30 - Hi, Michael.
+
+00:01:31 It's great to be on the show.
+
+00:01:32 Thank you for inviting us today.
+
+00:01:33 - Hi there, thanks for having us.
+
+00:01:34 - Really great to have you both on the show.
+
+00:01:36 It's gonna be a bit of a flaky episode though, wouldn't you say?
+
+00:01:39 - It's definitely going to be flaky.
+
+00:01:41 - Very flaky.
+
+00:01:42 Looking forward to talking about flaky tests And what we can do about them.
+
+00:01:46 It's one of these realities of writing lots of unit tasks for real world systems, right?
+
+00:01:51 They end up in weird places.
+
+00:01:52 So for better, for worse, I've implemented a lot of programs in Python and many of them have test suites with flaky test cases inside of them.
+
+00:02:00 So I have to confess to everyone.
+
+00:02:02 I myself have written programs with many flaky tests.
+
+00:02:05 As have I, as have I.
+
+00:02:07 All right.
+
+00:02:08 Before we get into the show itself, maybe just a little bit of background on E2.
+
+00:02:13 Gregory, you want to go first?
+
+00:02:14 Just a quick introduction about who you are, how you got into programming in Python?
+
+00:02:17 Sure.
+
+00:02:18 My name is Gregory Kaphammer, and I'm a faculty member in the Department of Computer Science at Allegheny College.
+
+00:02:25 And I've actually been programming in Python since I took an AI course in graduate school years ago, and we had to implement all of our algorithms in Python.
+
+00:02:34 Stopped using Python for a short period of time, and then picked it back up again once I learned about pytest because I found it to be such an awesome test automation framework and I've been programming in Python regularly since then.
+
+00:02:46 That's cool.
+
+00:02:47 What's pretty interesting is people who don't even necessarily do Python sometimes use Python to write the tests.
+
+00:02:53 Yeah, absolutely.
+
+00:02:54 I have to say I've used a bunch of different test automation frameworks and pytest is by far and away my favorite framework out of them all.
+
+00:03:02 Owain, hello.
+
+00:03:03 Hi, I'm a PhD student at the University of Sheffield.
+
+00:03:07 I'm actually coming right to the end of my time as a PhD student.
+
+00:03:10 So...
+
+00:03:11 That's quite a journey, isn't it?
+
+00:03:12 It is quite a journey, yeah.
+
+00:03:14 And throughout my whole PhD, my main topic has been flaky tests.
+
+00:03:18 Okay.
+
+00:03:19 So, before I even started my PhD, I had Python experience from just odd undergraduate projects that had to be done in Python.
+
+00:03:26 But for all of my research, I've thought it very important to use real software, real tests written by real people to identify flaky tests, find out what causes them, that kind of thing.
+
+00:03:37 And all of my sort of practical work has been done with Python.
+
+00:03:40 So for example, I've written pytest plugins to help detect flaky tests.
+
+00:03:46 And as Greg said, I think pytest is a great framework.
+
+00:03:50 It's very extensible.
+
+00:03:51 It's very great for writing plugins, very good API.
+
+00:03:54 And yeah, I've used lots of different types of Python projects as subjects in experiments.
+
+00:04:00 So I've seen quite a wide array of different types of software written in Python.
+
+00:04:05 Have you studied a lot of other people's software, interviewed different people to see how they're encountering flaky tests?
+
+00:04:12 So I've not interviewed anyone exactly, but I did do a questionnaire that I sent out on Twitter, LinkedIn, that kind of thing, where we just wanted to get as many different kinds of developers talking about flaky tests.
+
+00:04:25 So we asked them questions like, first of all, what is a flaky test?
+
+00:04:28 People have slightly different definitions.
+
+00:04:30 And then I went into, you know, what do you think causes them?
+
+00:04:33 What impacts do they have on you and your sort of professional workflow?
+
+00:04:36 And then we've talked a little bit about what people do about them as well.
+
+00:04:39 Interesting.
+
+00:04:40 Well, maybe that's a good place to start in either of you just jump in as you see fit.
+
+00:04:45 So let's just start with, you know, what is a flaky test?
+
+00:04:47 I mean, we all know that having unit tests and broader tests, you know, integration tests and so on for our code is generally a good thing.
+
+00:04:55 I guess if you write them poorly enough, it's not a good thing, but you know, Mostly it's recommended advice and there's a spectrum of how strongly it's recommended.
+
+00:05:04 Is it extreme programming TDD recommended or is it you have to have some tests to submit a PR level of recommended, but we think it's great.
+
+00:05:12 But there are these negative aspects of having tests as well, right?
+
+00:05:17 It's easy to sell them as a positive, but they become a maintenance burden.
+
+00:05:21 They become duplicate code and the flakiness, I think is a particularly challenging part of it.
+
+00:05:28 Let's start there. What's a flaky test for you all?
+
+00:05:31 So I'll start off and then Owen, if you'd like to add more details, that would be awesome.
+
+00:05:35 I would say that a flaky test is a test case that passes or fails in a non-deterministic fashion, even when you're not changing the source code of the program or the test suite for the program.
+
+00:05:49 So this is a situation where the test case may sometimes pass, then it may fail and then it may start to pass again, even though as a developer, you're not making changes to the program under test or the source code of the test suite itself.
+
+00:06:05 - Yeah, that is tricky, right?
+
+00:06:06 Because there's one day the tests start failing.
+
+00:06:09 We didn't change anything.
+
+00:06:10 Nothing has changed here.
+
+00:06:10 Why?
+
+00:06:11 How could this have anything to do with it, right?
+
+00:06:13 - And-- - Owen?
+
+00:06:13 - Sorry, go ahead, Greg.
+
+00:06:14 - The only other thing I was going to add is that flaky test cases could manifest themselves on a developer workstation, or they could also manifest when you're running them in a continuous integration environment as well.
+
+00:06:26 Yeah, for sure.
+
+00:06:26 So to just sort of build on what Greg said there a little bit.
+
+00:06:28 So one interesting thing we found from that developer survey, so the definition that Greg gave just then was pretty much the definition we proposed to the respondents to the survey.
+
+00:06:38 And then we asked them, do you agree?
+
+00:06:40 If not, what's your definition?
+
+00:06:42 Most people agreed, but some people said, well, it doesn't just depend on the source code of the program and the code of the test, but also the execution environment.
+
+00:06:49 So you can have, like you can take one piece of software and it's associated test suite, run it on one computer.
+
+00:06:56 It passes, run it on another system.
+
+00:06:58 And then for whatever reason it doesn't.
+
+00:06:59 So nothing's changed at all except for the execution environment.
+
+00:07:02 And that's quite prevalent when you're talking about CI, because most of the time, these are running on cloud machines, which may not be all exactly the same in spec from the perspective of the developer.
+
+00:07:14 It looks as if a test could just fail, but maybe it failed because it was running on a slightly different machine that time it was run.
+
+00:07:20 >> I never really thought of that.
+
+00:07:21 Obviously, the different environments, a CI machine is very different than my MacBook.
+
+00:07:26 Clearly, it could be the case that the test passes on my machine, not CI or vice versa.
+
+00:07:32 But I hadn't really thought about, well, this time it got an AMD Cloud processor, and it was already under heavy load, and so the timing changed versus the other time it was on a premium Intel thing in the Cloud that had no other thing going on, so it behaved differently. It's pretty wild.
+
+00:07:48 - Your point is a good one, Michael.
+
+00:07:50 It's actually often the case that the speed of the CPU or the amount of memory or the amount of disk on the testing workstation can make a big difference when it comes to manifesting a flaky tests.
+
+00:08:02 - Yeah, I guess that makes a lot of sense, especially if it's a race condition, right?
+
+00:08:05 If you're having some sort of parallelism, then that could really come into memory as well, maybe.
+
+00:08:10 Maybe you run out of memory, you get an out of memory exception.
+
+00:08:12 So when we're talking about flaky tests, one thing that came to mind for me, And I want to bring it up at the start here, 'cause I'm wondering if this classifies as flaky for you, if this is some other kind of not great test.
+
+00:08:25 It has to do with science, right?
+
+00:08:28 So scientific type of computing, mathematical stuff.
+
+00:08:31 Obviously you shouldn't say, I've got some floating point number, equal, equal, you know, some other long, precise, you know, here's my definition of the square root of two as a float equal, equal that, right?
+
+00:08:42 That might be too precise.
+
+00:08:43 But what I'm thinking about is, if you make the smallest amount of change to some algorithm or the way something works could change some, like maybe you're trying to say, does this, do we get a curve that looks like this?
+
+00:08:55 Or do we match some kind of criteria on, you know, statistics?
+
+00:08:59 It could change just a little bit, but the way that you're testing for it to be a match, it changes enough in that regard, even though effectively it kind of means the same thing.
+
+00:09:09 You know what I'm asking?
+
+00:09:10 Does that count as a flaky test for you?
+
+00:09:12 - So what you're talking about is a very specific category flaky test. So I would call that a flaky test. So yeah, so when you're dealing with programs, like for example, various machine learning packages that are very common in Bison, you'll see a lot of test cases that will say, assert X is equal to this within a certain tolerance range or something, or is approximately equal to something. With these kinds of tests, they are kind of inherently flaky. There is a trade-off between how strong you want the test to be.
+
+00:09:40 i.e. how narrow you want that acceptable band to be versus how flaky you want it to be.
+
+00:09:46 Sorry, how flaky you don't want it to be. So the stronger you make the test, the more flaky it's likely to be because that band is narrower. But if you just increase that tolerance then, yeah, it won't be as flaky anymore, but then maybe it won't catch as many bugs anymore because it's too relaxed of a test.
+
+00:10:01 Sure.
+
+00:10:02 And unfortunately, if you're going to reduce a test case to either a pass or a fail, which which is something that we have to do.
+
+00:10:07 There's no real way around that.
+
+00:10:09 There is, there has been done work where people have sort of tried to calculate, sorry, via, there we go.
+
+00:10:15 It's on a motion sensor.
+
+00:10:16 - Got away with the light, it's going dark for you.
+
+00:10:19 - Well, I was like, yeah, so there's a, there is work people have done where they try to calculate sort of what is the best sort of tolerance threshold in test cases, but there's no kind of silver bullet solution for that kind of flakiness.
+
+00:10:31 - Yeah, it's tricky, isn't it?
+
+00:10:32 - Yeah.
+
+00:10:33 - Yeah, Pradhwan out in the audience has an interesting one.
+
+00:10:35 maybe probably lands a little more into the realm directly of the kind of stuff that you're talking about.
+
+00:10:40 It says, "At one of my jobs, we were testing chained celery tasks that become flaky sometimes.
+
+00:10:46 Since one celery task fails for some reason, the chain task could fail as well." Those kind of external systems are probably at the heart of a lot of this, right?
+
+00:10:55 Yeah, I think it is often at the heart of it.
+
+00:10:57 And whether you're using celery or some other work processing queue, Or alternatively, if you're interacting with a document database or a relational database, in all of those occasions, when you interact with some storage or processing system in your environment, you may not have control over that part of your environment. And then once again, that's another way in which flakiness can creep into the testing process.
+
+00:11:23 Right. And you maybe don't care about how the Celery server is doing, but at the same time, maybe you haven't mocked that part out. You need to somehow, are you doing an end-to-end test or something, and it becomes part of the reliability of your system.
+
+00:11:35 Even though maybe that's like a Q and A celery server, not the production server, right?
+
+00:11:39 Yeah.
+
+00:11:40 And in fact, you brought up another really good point when it comes to mocking.
+
+00:11:43 There are many circumstances in which I've had to use one of the various mocking features that Python provides in order to stand up my own version of an external service.
+
+00:11:54 However, that is a trade-off like Owen mentioned previously, because now my test case may be less flaky and yet it's also less realistic and so therefore may not be able to catch certain types of bugs. So now we've seen another example of the trade-off associated with making a test less flaky but perhaps also making it less realistic.
+
+00:12:20 Yeah, I'm starting to get a sense that there's probably a precision versus stability trade-off that's always at play here.
+
+00:12:27 - Yeah, and obviously in the extreme end of the spectrum, you can make any test non-flaky by just deleting it, right?
+
+00:12:35 - Put an ignore attribute on it.
+
+00:12:36 - Exactly.
+
+00:12:37 So you've got to be careful that you're not optimizing your tests just for passing, which if you're trying to get a PR through, then that is a trap you might fall into.
+
+00:12:47 - Yeah, absolutely.
+
+00:12:48 So you talked about that survey a little bit before.
+
+00:12:50 Maybe you want to talk about some more of the things you learned from there, like what were some of the responses there?
+
+00:12:54 - So we got some really interesting ones, actually.
+
+00:12:57 If you want to find the paper yourself, or if anyone's listening wants to find the paper, if you just Google "surveying the developer experience of flaky tests," you should be able to find it.
+
+00:13:06 As I said, we also asked developers what they thought were the most common causes of flaky tests.
+
+00:13:12 And the cause that got the most votes was setup and teardown.
+
+00:13:17 So what I mean by that is flakiness being caused by a test case that either doesn't fully set up its executing environment, alternatively doesn't clean up after itself.
+
+00:13:28 And if it doesn't clean up after itself correctly, it could leave some global state behind that could then impact a later test case that's executed, if that makes sense.
+
+00:13:36 - Yeah, absolutely.
+
+00:13:36 The cleanup one is especially tricky, right?
+
+00:13:40 We kind of know about setup because you're like, oh, well, we have to do this in order for this file to exist or whatever.
+
+00:13:47 Teardown part, that becomes really tricky because it could have knock-on effects for tests that either pass and they shouldn't or don't pass because it didn't start fresh, right?
+
+00:14:01 This portion of Talk Python to Me is brought to you by JetBrains and PyCharm.
+
+00:14:05 Are you a data scientist or a web developer looking to take your projects to the next level?
+
+00:14:10 Well, I have the perfect tool for you, PyCharm.
+
+00:14:13 PyCharm is a powerful integrated development environment that empowers developers and data scientists like us to write clean and efficient code with ease. Whether you're analyzing complex data sets or building dynamic web applications, PyCharm has got you covered. With its intuitive interface and robust features, you can boost your productivity and bring your ideas to life faster than ever before. For data scientists, PyCharm offers seamless integration with popular libraries like NumPy, Pandas, and Matplotlib. You can explore, visualize, and manipulate data effortlessly, unlocking valuable insights with just a few lines of code.
+
+00:14:49 And for us web developers, PyCharm provides a rich set of tools to streamline your workflow.
+
+00:14:53 From intelligent code completion to advanced debugging capabilities, PyCharm helps you write clean, scalable code that powers stunning web applications.
+
+00:15:02 Plus, PyCharm's support for popular frameworks like Django, FastAPI, and React make it a breeze to build and deploy your web projects.
+
+00:15:11 It's time to say goodbye to tedious configuration and hello to rapid development.
+
+00:15:16 But wait, there's more!
+
+00:15:17 With PyCharm, you get even more advanced features like remote development, database integration, and version control, ensuring your projects stay organized and secure.
+
+00:15:26 So whether you're diving into data science or shaping the future of the web, PyCharm is your go-to tool.
+
+00:15:31 Join me and try PyCharm today.
+
+00:15:33 Just visit talkpython.fm/done-with-pycharm, links in your show notes, and experience the power of PyCharm first hand for three months free. PyCharm, it's how I get work done.
+
+00:15:46 Well, this kind of leads us into a whole other type of flaky test called a test order dependent test. When you have a test case that doesn't clean up after itself properly, then that can potentially mean that later tests that perhaps are targeting similar parts of the program where there might be some state involved, they might fail when they should pass or alternatively pass when they should fail just because the assumptions that were there when the developer wrote that test aren't being met anymore because something's changed by another test. So what that means is that if you just take an arbitrary test suite, randomize the order, shuffle it, for any large test suite I can almost guarantee that some tests are going to fail and all you've done is change the order and they're failing because somewhere a test isn't cleaning up after itself properly.
+
+00:16:29 Yeah or cleaning up can mean different things right? Cleaning up can mean we didn't change, we didn't take away that file we created or put back the file we deleted as part of this test scenario we're working with.
+
+00:16:41 But it could also be we're testing by talking to a database and we made an insert to it and didn't roll that back.
+
+00:16:47 Or maybe the most subtle, yes, there's two more levels here.
+
+00:16:51 One, you could have changed in memory state, right?
+
+00:16:54 You could have like, there's a shared variable, which is probably the most common reason.
+
+00:16:58 Like some shared state of the process just isn't in its starting or expected position.
+
+00:17:03 But the fourth one, I said, oh, there's three, but actually I think there's more, is you mocked out something.
+
+00:17:09 Like, I've mocked out what datetime.now means.
+
+00:17:12 I forgot to put it back.
+
+00:17:13 So time has stopped.
+
+00:17:14 Or something like that, right?
+
+00:17:15 Yeah, those are all really good examples of the flakiness that can appear when you have shared state.
+
+00:17:21 And building on what both you and Owen just said, again, I think there's another trade-off here.
+
+00:17:27 One of the trade-offs is connected to the efficiency of the testing process.
+
+00:17:33 versus the flakiness of the testing process.
+
+00:17:35 So if you do a really good job at clearing out state from your database or resetting state in the memory of your process, that may take a longer time, but potentially reduce the amount of flakiness that manifests in your tests.
+
+00:17:49 And then additionally, it's worth noting that when you have test suites with really good setup and really good teardown and cleaning mechanisms, Those are also more time consuming for us to write as developers, which may mean we're spending a lot of time investing in our test suite and perhaps slightly less time actually adding new features to our program. And so there's trade-offs both in terms of developer productivity and the efficiency of the testing process.
+
+00:18:17 Those both matter. Which one matters more to you probably depends on your situation, right?
+
+00:18:22 If you're a small team and you need to move quick, the developer overhead is probably a a serious hassle. But if you're a large team and you have a hundred thousand tests, you want to get answers today, not tomorrow from your test suite, the speed of execution probably matters more at that point.
+
+00:18:39 Yeah, I think that's absolutely the case. And so there have been some situations where I have certain test cases that take a really long time to run. And so in pytest, I might set a marker and only run those test cases at certain points of time during development on my laptop and then always run them inside a CI.
+
+00:19:00 And the nice thing about removing those long running test cases is that it can make the testing process faster and I don't have to do my rigorous cleaning approach except when I am running them in CI.
+
+00:19:12 Yeah, that's an interesting idea.
+
+00:19:13 Maybe giving them tags and then coming up with a category of speed.
+
+00:19:17 I mean, I know I've heard of people doing like marking a test as slow, a set of tests as slow.
+
+00:19:23 Maybe that's not fine grained enough.
+
+00:19:25 been doing something like fast, less than a second, less than five seconds, less than 10 seconds.
+
+00:19:29 So I'm willing to run all the ones that run in three seconds or less, but not more than that.
+
+00:19:34 Right.
+
+00:19:34 So you could kind of scale it up more than just fast and slow.
+
+00:19:37 So on the topic of markers, there's several plugins for pytest that enable you to mark a test as flaky.
+
+00:19:43 Okay.
+
+00:19:44 Basically what that then means is that if it fails, it'll retry it some number of times.
+
+00:19:49 And then if it passes at least once, it will call the whole thing a pass.
+
+00:19:53 So while that means, yeah, you can just make your test suite pass, it's like, so for example, so in the, in the survey, we had one respondent tell us sometimes a flaky test, always a bad thing because sometimes the fact that a test is non-deterministic is showing that part of the software is non-deterministic when it shouldn't be.
+
+00:20:12 So if you were to follow this methodology of just rerunning all your flaky tests and ignoring them, if they pass at least once, then you'd miss out on that because you wouldn't be notified that that test failed.
+
+00:20:22 Yeah.
+
+00:20:23 Maybe it's highlighting a weakness in your infrastructure, your DevOps story.
+
+00:20:28 You could say, "Well, that's out of my control.
+
+00:20:30 It's not my problem." Or you could say, "Actually, folks, look, this is pointing out this is the least stable pillar of our uptime for our app." >> Yeah, that's a good point.
+
+00:20:40 The other thing since we're talking about randomness, that's important to discuss, is the use of property-based testing tools.
+
+00:20:47 For example, I use hypothesis in order to automatically generate inputs and then send them into my function under test.
+
+00:20:57 And there may be cases where hypothesis reveals a bug and that could in fact actually be a bug in my program even though I've run exactly that same test case frequently in the past.
+
+00:21:10 And it just happens to be the case that in that run when I was using a hypothesis property-based test, it was able to find a potential problem.
+
+00:21:20 So in that situation, even though that test didn't fail the last three times, this could still be a silver lining to suggest that there is a problem with my program and I need to resolve it because hypothesis has randomly generated an input that I haven't seen previously.
+
+00:21:37 Yeah.
+
+00:21:37 The hypothesis story is interesting.
+
+00:21:39 I was thinking about that as well.
+
+00:21:41 After reading some of the work that you're doing here, thinking things like hypothesis and parameterized testing and those sorts of things where they just, they naturally take some test scenario and run it over and over with a bunch of different inputs.
+
+00:21:54 Probably uncovers this better than one-off tests, I imagine.
+
+00:21:57 - And Hypothesis also has a mode that lets you run a long running fuzz testing campaign.
+
+00:22:03 And in those situations, it doesn't constrain its execution by a specific period of time.
+
+00:22:08 And I have found that when I let a fuzzing campaign go for a given function, maybe I've described its inputs with a JSON schema and I'm using the hypothesis JSON schema plugin, I might not find a bug for a long period of time.
+
+00:22:23 And then suddenly a bug will crop up.
+
+00:22:25 And I often use that as an opportunity to rethink my assumptions about the function that I'm testing.
+
+00:22:31 - So you said fuzzing.
+
+00:22:33 Tell people out there, give people a definition that they're familiar with fuzzing.
+
+00:22:36 - So when I think of fuzzing as a process where you're randomly generating inputs that you're going to send to the function under test And you're frequently doing that in what I would call a campaign, which means that the input generation process is going to range perhaps for an extended period of time.
+
+00:22:57 And you may have different goals during that fuzzing campaign, like covering more of the program under test or attempting to realize as many crash inducing inputs as is possible.
+
+00:23:09 - Yeah, that's such a cool idea.
+
+00:23:11 And that's sort of how a hypothesis works.
+
+00:23:13 Although I don't know, it's really meant for buzzing in the sense of just we're gonna hit it with a whole bunch of stuff at extreme scale until it breaks, but it certainly is meant to run it a lot of times with different inputs.
+
+00:23:25 So sort of the effect, if not necessarily the intent of it.
+
+00:23:29 Here's another one from the audience that also is one that I hadn't thought about from Marwan.
+
+00:23:33 It says, "Sometimes flakiness shows up as conflicts "to access a shared resource when more than one CI pipeline is running for same code.
+
+00:23:41 That's pretty wild. I hadn't really thought about that, right?
+
+00:23:43 But you have a lock on something.
+
+00:23:45 Resource availability in general is quite a common cause of flakiness.
+
+00:23:49 So that might be, so this resource could be a file system or a database or anything really.
+
+00:23:55 Or even something, even if we're not talking about CI, just on a local machine, you've got, like you said, locks and things that aren't supposed to be shared between multiple processes or whatever.
+
+00:24:04 So yeah, that is a relatively common cause that I've seen in the programs that I've tested.
+
+00:24:09 Yeah, the thing about that that stands out to me is you might have an assumption that only one process of your app is ever going to be running on a server at a time.
+
+00:24:18 And yet somehow, because, you know, there were multiple Git commits that you weren't even aware of, now they're running kind of in parallel.
+
+00:24:25 So you're in this situation that, you know, you never saw coming because you just don't run your app that way.
+
+00:24:31 You know what I mean?
+
+00:24:32 Yeah.
+
+00:24:32 This is actually a really good example of when a flaky test is again a silver lining because it forces you to question your assumptions about how your program will run and when it will run and how much of resources your program is going to consume.
+
+00:24:49 So in the situation when I never thought about my program running in multiple instances at the same time, if my tests become flaky, that may actually open up a whole new opportunity for me to refactor and improve my program.
+
+00:25:03 - Yeah, that's right.
+
+00:25:03 You're like, wait a minute, I didn't realize this was a problem, but yes, maybe it is.
+
+00:25:08 Let's see.
+
+00:25:09 So let's talk a little bit about some articles that a couple of the big tech companies wrote here.
+
+00:25:16 So both Google and Spotify talked about how they're using, how they're experiencing flaky tests and what they're doing to either reduce them or maybe as you put it, Gregory, some of the silver linings that they're finding in it and some of the tools that are building to help deal with that.
+
+00:25:33 So over at Google, they say they're running obviously a large set of tests.
+
+00:25:38 You could probably, like that is a massive understatement I imagine, but it says they see a continual rate of flakiness of about 1.5% on all test cases, which for them, I imagine is a lot of tests.
+
+00:25:53 And so you wanna talk a little bit about this, this either you guys and maybe some of the mitigation strategies they have.
+
+00:26:00 So from a developer perspective, so this article and others as well point out an interesting side of flakiness that when you're talking from a purely technical perspective, you don't really consider.
+
+00:26:10 And that's the kind of the sort of the psychological impact of them.
+
+00:26:13 So it's a little bit like the boy who cried wolf.
+
+00:26:16 So if you have a test case that's known to be flaky, you might be tempted to just put some marker on it that says ignore it or it's an expected fail or whatever.
+
+00:26:26 But then suppose it fails for real sometime and you're ignoring it or you have it quarantined or something, then that means you're missing out on real bugs.
+
+00:26:35 So as well as just being a hindrance to CI and that kind of thing, it could almost make a developer team lose the discipline to properly investigate every test failure.
+
+00:26:45 If they've got a test suite that's known to be full of flaky tests, then naturally you're not going to trust it as much.
+
+00:26:50 Yeah.
+
+00:26:51 So that's probably one of the biggest problems that flaky tests cause in my opinion.
+
+00:26:53 I think the mental aspect of it, the how much do I trust it?
+
+00:26:57 Do I have faith in our test suite?
+
+00:27:00 Do I have faith in the continuous deployment capabilities of our pipelines and things like that?
+
+00:27:06 That's, I think that's pretty serious.
+
+00:27:08 There's already a bit of a challenge, I think, on teams to have complete buy-in on making sure the software is self-evaluating.
+
+00:27:16 You know, like some people will check in code that breaks the build, but they're kind of like, YOLO, whatever, other people really, you know, Somehow they really want the build to work.
+
+00:27:25 So it's their job to kind of chase that person down and make them fix it.
+
+00:27:28 And it's always kind of a bit of a struggle, but that's when the tests are awesome.
+
+00:27:32 Right.
+
+00:27:33 It just changes to the code makes it sort of adds this, these breaking builds.
+
+00:27:37 But if the code is flaky, all of a sudden you can start to see CI as an annoyance because it tells you something's wrong.
+
+00:27:44 You're like, I know nothing's wrong.
+
+00:27:45 It's just, it'll go away.
+
+00:27:46 So maybe speak to the psychological bit of like how flakiness can maybe degrade people's caring about tests at all.
+
+00:27:53 I would say that overall, developers have the risk of losing a confidence in two types of correctness.
+
+00:28:01 First of all, flaky test cases may cause developers to begin to mistrust and lose confidence in the test suite.
+
+00:28:09 Then they also may lose confidence in the overall correctness of their program, and then may cause them to stop running test cases, which then reduces test quality and maybe even also reduces the quality of the program under test as well.
+
+00:28:24 So I think regrettably, it's a negative reinforcing cycle where you start to mistrust your tests so you don't run them.
+
+00:28:33 But then you start to lose confidence in the correctness of your program.
+
+00:28:37 And now you're not sure what to do because tests are failing for spurious reasons.
+
+00:28:42 You disable them, but then as Owen mentioned previously, you lose the opportunity to get the feedback from those tests.
+
+00:28:48 It goes both ways, right?
+
+00:28:49 you don't feel like if it says it's broken, it provides you much value 'cause it might report broken even though it's working.
+
+00:28:55 But on the flip side, if you were doing continuous deployment, and by that I mean, I check into a branch, that branch noticed the change, automatically it rolls out the new version, right?
+
+00:29:05 Maybe you merge over to a production branch and then it just, it takes off.
+
+00:29:09 The gate to making that not go to production is the CI system that's gonna say whether or not the tests pass.
+
+00:29:17 If the test pass in, maybe they shouldn't have because you got this flakiness.
+
+00:29:22 Well, that's also not good.
+
+00:29:24 - That's a situation when you could have just deployed software that wasn't working.
+
+00:29:28 And then the flip side of that is you have a flaky build and you want to be able to release quickly, but because test cases are failing, you don't release your system.
+
+00:29:39 And so it can really be a hindrance to being able to quickly push your work to production because you frequently have flaky test cases that are causing you to limit the velocity of your development process.
+
+00:29:51 - This portion of Talk Python to Me is brought to you by Sentry.
+
+00:29:57 You know Sentry for their error tracking service, but did you know you can take that all the way through your multi-tiered and distributed app with their distributed tracing feature?
+
+00:30:06 Distributed tracing is a debugging technique that involves tracking requests of your system, starting from the very beginning, like a user action, the way to the backend, database, and third-party services. This can help you identify if the cause of an error in one project is due to the error in another.
+
+00:30:23 Every system can benefit from distributed tracing, but they are especially useful for microservices. In this architecture, logs won't give you the full picture, so you can't debug every request in full just by reading the logs. Distributed tracing with a platform like Sentry gives you a visual overview about which services were called during the execution of certain requests.
+
+00:30:43 Aside from debugging and visualizing your architecture, distributed tracing also helps you identify performance bottlenecks.
+
+00:30:50 Through a visual like a Gantt chart, you can see if a particular span in your stack took longer than expected and how it could be causing slowdowns in other parts of your app.
+
+00:30:59 Learn more and see some examples in the tracing section at docs.sentry.io.
+
+00:31:04 To take advantage of all the features of the Sentry platform, just create your free account.
+
+00:31:08 And for all of you Talk Python listeners, use the code Talk Python, all one word, and you'll activate a free month of their premium paid features.
+
+00:31:17 Get started today at talkpython.fm/sentry-trace.
+
+00:31:21 That link is in your podcast player show notes and the episode page.
+
+00:31:25 Thank you to Sentry for supporting Talk Python to me.
+
+00:31:30 Got thoughts on that?
+
+00:31:31 No, I think Greg's pretty much covered that pretty well.
+
+00:31:33 Yeah, yeah.
+
+00:31:34 Excellent.
+
+00:31:35 - Two things, two takeaways from the Google article is one, they talked about mitigation strategies.
+
+00:31:42 And they said, they have a tool that monitors the flakiness of tests.
+
+00:31:46 And if the flakiness is too high, it automatically quarantines the test, takes it out of the critical path, takes it out of CI.
+
+00:31:52 You know, maybe somebody notices like, hey, there's a new flaky test.
+
+00:31:56 We need to go find the root cause of that.
+
+00:31:58 But that's a pretty interesting idea, isn't it?
+
+00:32:00 Some sort of automation or maybe not quite totally automatic but some kind of tool that you can run that'll say, this thing has reached a point where maybe its value in the test suite is degraded because it's so flaky that we need to either fix it or just delete it.
+
+00:32:15 - I think the problem with quarantining tests is it only works if the development team is serious about investigating them.
+
+00:32:23 Otherwise, what could end up happening is quarantining becomes effectively equivalent to just deleting it.
+
+00:32:29 If they all end up in a special flaky bucket and no one looks at them again, the whole point of the process is kind of moot really.
+
+00:32:35 So doing something like that, I think can be really useful if the developers are willing to actually investigate why these tests are flaky.
+
+00:32:43 - That's true.
+
+00:32:44 If it becomes just a black box and basically a trash can for tests, then what's the point, right?
+
+00:32:48 - Exactly, yeah.
+
+00:32:49 - It kind of goes back to my talking about like, there's some people on the team that really care about the build and continuous integration and all this and other people who are just don't.
+
+00:32:57 So it does come back to the team mentality and people really caring about these things.
+
+00:33:02 But it's a cool idea, if, at least in the optimistic point of view, where assuming everyone wants to make sure these keep working and someone's gonna pay attention to this and so on.
+
+00:33:13 - Yeah, it's a difficult one, 'cause I mean, sometimes you can just write a bad test and that test is flaky purely because it's a bad test.
+
+00:33:20 But other times you can write a good test that's flaky because there's a problem.
+
+00:33:24 Like I said before, we had one developer say that sometimes a flaky test implies that a part of the program they thought was deterministic was actually non-deterministic.
+
+00:33:32 So you're potentially throwing away useful information as well as potentially throwing away just poorly written tests.
+
+00:33:39 And it's hard to distinguish between those two.
+
+00:33:41 - I'm sure that it is.
+
+00:33:41 Yeah, I mean, identifying these, maybe not quarantine them, but identifying them is pretty valuable, I would think.
+
+00:33:48 And then you can see what lessons come from that, right?
+
+00:33:50 What you do once you've identified it, I think that is up for debate, right?
+
+00:33:54 - Yeah.
+
+00:33:54 - Okay, the other one is test flakiness, methods for identifying and dealing with flaky tests by Jason Palmer from Spotify, which is also cool.
+
+00:34:03 This one has pictures, which is fun.
+
+00:34:04 They've got like a graphical analysis of their tests and the flakiness of it and so on.
+
+00:34:10 They came up with a thing called flaky bot and it's a GitHub integration, GitHub bot that they can make it run and they can ask it to exercise the test really quickly and see if it's flaky.
+
+00:34:23 And I got the sense that it does that by just running it a bunch of different times with different delays and seeing if it always passes or if it potentially sometimes passes or fails.
+
+00:34:32 - So I think broadly, one of the things that is mentioned in this article and something that's done by a number of pytest plugins as well is rerunning the test suite.
+
+00:34:42 And so you could imagine rerunning each test case in isolation.
+
+00:34:47 You could also imagine picking a group of test cases and then rerunning the test cases in that group, either in a random order or in certain fixed orders.
+
+00:34:59 So rerunning is often a very helpful way for us to detect flaky test cases, whether we rerun the whole test suite, whether we run test cases individually, or whether we run test cases in groups.
+
+00:35:14 Obviously, one of the clear downsides associated with rerunning a test suite is the execution time associated with the rerunning process.
+
+00:35:23 - Yeah, the more you run it, the more likely you're able to detect flakiness.
+
+00:35:27 If it's only a little bit flaky, but at the same time, the longer that goes, the longer it takes, that's also a problem.
+
+00:35:34 There's another thing in here that I thought was pretty interesting, but I'm struggling to find it in this article for the second integration now.
+
+00:35:42 I thought, oh, end to end maybe.
+
+00:35:44 So in the Spotify article, they say that, in their assessment, that end-to-end tests are flaky by nature.
+
+00:35:52 Write fewer of them.
+
+00:35:53 So I get the sense, I don't know, I get the sense maybe you all sort of feel this way as well, but I don't necessarily agree with that.
+
+00:35:59 I think end to end tests, if they are flaky, that's telling you something about your program.
+
+00:36:04 It might not be really precisely narrowing in on it, but it's telling you something about your program.
+
+00:36:10 If you can write end to end tests that are flaky, what do you think?
+
+00:36:13 I think with end to end tests, I mean, sort of saying they're flaky by nature, maybe a little strong, but they're certainly more susceptible to flakiness purely because there's a hell of a lot more going on.
+
+00:36:23 So I think when we talk about this sort of flakiness and sort of precision trade-off, I think with end-to-end tests, you should be a little bit more forgiving with flakiness purely because there's more going on.
+
+00:36:33 So like, for example, for a unit test, you shouldn't really accept any flakiness because that's a very focused test case.
+
+00:36:39 So yeah, those are my thoughts on that.
+
+00:36:40 Okay.
+
+00:36:41 I would agree with what Owen said.
+
+00:36:43 I still think there is quite a bit of value end-to-end or integration testing because from my perspective, it's increasing the realism of the testing process.
+
+00:36:53 So I still write end-to-end test cases if I'm building a web API or even if I'm building an application, but I think I have to be willing to tolerate a little bit more flakiness and perhaps even be creative with the various strategies that I adopt when I do rerunning.
+
+00:37:11 Maybe I need to run some of my integration tests with really good setup and teardown to avoid pollution between test cases.
+
+00:37:19 Or maybe certain integration test cases have to be run completely in isolation and they can't be run while any other part of the program is being used.
+
+00:37:29 So in those cases, maybe my integration tests are run less frequently, but I still keep them as a part of my pytest test suite.
+
+00:37:37 - Yeah, interesting, both of you.
+
+00:37:39 For me, one of the things I do that I think is really valuable is over at Talk Python, we have the courses and that web app that serves up the courses once people buy them and all that sort of stuff.
+
+00:37:48 It's like 20,000 lines of Python, maybe more.
+
+00:37:51 These days I haven't measured it for a long time, but it's a non-trivial amount.
+
+00:37:54 And it's got a site map of all the pages on there.
+
+00:37:58 And one of the things I do for the test is just go and find every, pull the site map, look at every page on the site and just request it and make sure it doesn't 500 out or 404 or things like that.
+
+00:38:10 And it just, they all work, right?
+
+00:38:12 Now there's like 6,000 links in the sitemap.
+
+00:38:16 So it says, well, these 500 are all really the same thing with just different data behind it.
+
+00:38:22 So just pick one of those.
+
+00:38:23 There's a way to kind of winnow it down to, you know, 20 requests and not 6,000, but that kind of stuff, your, there should be no time where there is a 404 on your site.
+
+00:38:34 It's not an inherent flakiness of testing that there's not a 404.
+
+00:38:37 There should not be a 404.
+
+00:38:39 Same thing, there should not be a 500, my website, my server crashed, it should never crash.
+
+00:38:45 All right.
+
+00:38:45 And so those types of integration tests, I think they still add a lot of value, right?
+
+00:38:49 'Cause you could miss something like, well, I checked the database models, they were fine.
+
+00:38:53 I checked the code that works with the database models are fine, but the HTML assume there was a field in the database model we passed to it.
+
+00:39:00 There is value in these sort of holistic, like does it still click together story, I think.
+
+00:39:05 - No, I think you're making a really good point, Michael.
+
+00:39:07 And so what I often do, like say, for example, I'm adding a new feature or I'm adding a bug fix.
+
+00:39:14 What I'm going to regularly do to be confident in my changes to the system is run my integration tests maybe every once in a while and run my unit tests very frequently during the refactoring process.
+
+00:39:28 I can't run them all the time because they regrettably take too long to run, but I can run my integration test cases very frequently when I'm adding a bug fix or adding a new feature.
+
+00:39:39 And then every once in a while, do the kind of smoke tests that you mentioned, and then the integration or end-to-end testing that we've been discussing, so that ultimately I have rapid feedback that gives me confidence.
+
+00:39:53 And then additionally, I have longer running tests that further give me confidence that my program is working.
+
+00:39:59 - That's a really good point.
+
+00:40:00 Maybe you don't even run all your unit tests as you're writing that feature.
+
+00:40:03 Maybe you run a group of them that you think are related.
+
+00:40:06 - Yeah, so you're bringing up something that I really love about the Python ecosystem, which is the awesome coverage.py and the pytest-cov plugin.
+
+00:40:16 Those plugins are really good.
+
+00:40:18 And what's awesome about coverage.py is that it can track code coverage on a per test case basis.
+
+00:40:24 So one of the things that I will often do is look at what test case or what part of the system.
+
+00:40:31 And as you mentioned, I'll only run those test cases that are covering the parts of the system that I'm changing because that helps me to get very rapid feedback from my unit test cases while I'm adding a new feature to a certain part of my program.
+
+00:40:45 - I didn't realize that coverage.py would tell you that in reverse, like for this part of your program, these are the five tests.
+
+00:40:52 That's really cool.
+
+00:40:53 - Yeah, so I really like that feature.
+
+00:40:55 I think it was released in coverage.py 5.0 and I've been using it since the feature was available.
+
+00:41:02 It's incredibly helpful because of the fact that you can look at specific statements in your code and then find out which test cases cover those statements and then choose to rerun those specific tests when you're repeatedly running your test suite.
+
+00:41:18 And I call that test suite reduction or coverage-based test suite reduction.
+
+00:41:24 And having what Coverage.py calls the context of coverage is in my experience, very, very helpful.
+
+00:41:32 - Yeah, the bigger your test suite is, the more helpful it is, right?
+
+00:41:34 - Absolutely.
+
+00:41:35 - Owen, did you find that a lot of people were using those kinds of tools to sort of limit the amount of tests they got to run?
+
+00:41:41 - With the sort of programs I was working with, for the purposes of my experiments, I was running the whole test suite in its entirety, multiple times to find flaky tests, but I did see evidence of that kind of thing being set up.
+
+00:41:52 So I think it is fairly well adopted.
+
+00:41:55 Once again, it's a lot more relevant to very large projects as opposed to small projects where if it only takes you 10 seconds to run the whole test suite.
+
+00:42:04 Obviously there's not a lot of point in doing--
+
+00:42:06 - Just let it run. - Yeah.
+
+00:42:07 But when you've got, I've dealt with test suites that take best part of six hours to run end to end.
+
+00:42:15 So having some kind of test selection, test reduction there is essential really.
+
+00:42:20 - In the winter it's nice, because then your computer can spend six hours heating the room.
+
+00:42:24 It puts a little less stress on the house heater, or office heater.
+
+00:42:29 Seriously, what do you think about the systems, like the IDEs that have their extensions are built right in, where they just constantly run the tests as you make changes.
+
+00:42:38 They just notice the files have changed, so we're rerunning the tests.
+
+00:42:41 - So I don't use that in an IDE, but I do have something like that set up that runs in a terminal window.
+
+00:42:48 And I found continuous testing to be quite helpful.
+
+00:42:52 It's really helpful in cases where maybe I forget to run my test suite while I'm refactoring my program, and it can give me immediate feedback.
+
+00:43:01 To go back to a comment that I made previously, you can also use different pytest plugins or use something like Hypothesis so that you can run your test suite with random inputs on a regular basis.
+
+00:43:14 And I have found that's another good way for me to be able to, without having to think too hard, find potential bugs in the functions that I'm testing.
+
+00:43:23 - Okay, interesting.
+
+00:43:24 Let's talk about some of the tools.
+
+00:43:26 So you all highlighted a couple of tools that people can use to help find flaky tests.
+
+00:43:32 So over at Datadog, they've got a one for flaky test management.
+
+00:43:36 Want to tell people about that?
+
+00:43:38 - So many of the tools that are provided by companies like Datadog are offering you type of dashboard that will help you to better understand the characteristics of your test suite.
+
+00:43:50 So you can see what are the test cases that tend to be the most flaky.
+
+00:43:56 I think oftentimes it's hard for us to get a big picture view of our test suite and to understand what is and is not flaky.
+
+00:44:05 And so therefore having a flaky test management dashboard like Datadog provides can often give me the observability or the visibility that I might miss otherwise.
+
+00:44:16 - That's super cool.
+
+00:44:17 And let's see, there's, I don't know, that's not the one I want to pull up.
+
+00:44:19 Also at Cypress has flaky test management.
+
+00:44:22 This is a really interesting approach because I normally use Cypress when I'm testing websites.
+
+00:44:28 And in my experience, when I'm...
+
+00:44:29 What is Cypress?
+
+00:44:30 I'm not familiar with that.
+
+00:44:31 Maybe people aren't as well.
+
+00:44:32 Give us a quick intro first.
+
+00:44:33 Sure.
+
+00:44:34 I'd love to do so.
+
+00:44:35 So Cypress is a tool that helps you to do testing of your web user interfaces.
+
+00:44:41 So if you have a web application and you want to be able to test the input to a form, or or you want to be able to test certain workflows through your web application, you can use Cypress and you write your test cases.
+
+00:44:56 Essentially, it's as if Cypress is running its own Chrome and it can control your test suite, it can run your test cases.
+
+00:45:04 When things fail, it can actually give you snapshots of what failed.
+
+00:45:09 It can tell you about the browser version that it was using or maybe the mobile ready viewport that it was currently running at that.
+
+00:45:18 And again, the nice thing about things like what Cypress provides is that it can give you some kind of flaky test case analytics, which can show you which are failing and which are passing.
+
+00:45:31 And it can also say, hey, these that are flaky and then break it out in terms of which ones are the most flaky versus the least flaky.
+
+00:45:40 Again, primarily in the context of testing web interfaces or web applications.
+
+00:45:46 Sounds a little bit like Selenium or Playwright, which are both nice.
+
+00:45:49 It is. So I have to say I've had the most flaky tests for my Selenium test cases, but when I switched to either Cypress or Playwright, Playwright as well has a way so that you don't have to do these baked-in weights inside of your test case, which is one of the sources of flakiness that Owen and I have found in a number of real-world programs.
+
+00:46:14 I'd say that's almost one of the most common actually.
+
+00:46:16 - Okay, Owen.
+
+00:46:17 So Gregory points out that it could be not exactly there's something wrong with your program or your code or the infrastructure your code depends upon, but maybe almost a flaky test framework itself, a flaky test runner scenario or where the flakiness is not even necessarily, it's in the observation, not in the execution.
+
+00:46:39 That's pretty interesting.
+
+00:46:40 - Yeah, the classic formula for something like that It's a test case that says launch something asynchronously, wait one second, check something.
+
+00:46:48 Yeah, you might think that that one second is enough.
+
+00:46:50 If there's a time when for whatever reason there's some background work going on or it takes a little longer than that, then.
+
+00:46:56 >> Then all of a sudden it needed one and a half seconds.
+
+00:46:58 >> Then you have a flaky test. Yeah.
+
+00:47:00 >> Yeah, for sure. Any of those things where you have to start something and then wait for it to something to happen remotely, that's got to be pretty sketchy.
+
+00:47:08 >> The usual approach is to have an explicit wait.
+
+00:47:11 So you'll sort of say, I'm actually going to wait until this is completed, whatever that means.
+
+00:47:17 But then you run into a situation where, well, what if for whatever reason, this asynchronous thing you're interacting with is timed out or frozen, then you're going to end up with a test that's waiting forever.
+
+00:47:27 So you have to have some kind of upper limit to how long you'll wait for.
+
+00:47:30 Otherwise, you may wait forever. Yeah, this test case is real slow.
+
+00:47:33 So once again, there's no kind of silver bullet solution, really. It's just trade offs again.
+
+00:47:38 Yeah, yeah, yeah. What do you all think about things like tenacity where you can go and put a decorator onto a function and just say, retry this with some scenario?
+
+00:47:48 Or another one that I just learned about is Henix stamina, which is cool as well.
+
+00:47:53 You can say, put a decorator and say, retry certain number of attempts with, you know, like some kind of back off, an exponential back off where you give it a certain amount of time.
+
+00:48:03 Like, for flaky tests, you see it making sense to say, well, maybe call the functions this way in some of your test cases.
+
+00:48:11 So I've never actually seen either of these plugins, but they do look quite interesting.
+
+00:48:15 Yeah.
+
+00:48:15 I haven't used Tenacity either, but I was aware of it.
+
+00:48:19 And I think you could imagine using Tenacity in two distinct locations.
+
+00:48:23 Maybe you want to put some of these Tenacity annotations on your multi-threaded code, and then let the test case call those annotated functions.
+
+00:48:34 - Yes, exactly.
+
+00:48:35 Don't put them in your production code, don't put them on your test, but just have like an intermediate one that you can control the back off and retry count.
+
+00:48:42 - Exactly, exactly.
+
+00:48:43 And another thing that I think is worth pointing out since we were previously discussing web testing is that there is a way in which it can be a problem with your testing framework, like you previously mentioned, Michael.
+
+00:48:57 So for example, Playwright does have a really nice auto weighting feature.
+
+00:49:02 And so when I'm testing a web application, I can use Playwright's auto weight feature, and that will help me to avoid baking in hard coded weights inside my test, because the actual testing framework itself has a way to do auto weighting.
+
+00:49:21 So when you say auto weighting, you can say things like, request this page, find this field, put my email address into it, click this button, test that this thing is, now the page has this thing in it.
+
+00:49:32 But obviously servers don't instantly respond to that, so you've got to have some sorts of delays.
+
+00:49:38 So you're talking about the system can kind of track that automatically?
+
+00:49:41 - Yeah, so Playwright can actually do some of that on its own.
+
+00:49:44 So for example, if you're looking for a certain element in the webpage to be available, Playwright has a way that will allow you to ensure that the element is actually attached to the DOM, that it's actually visible, that it hasn't moved around or that it's not being animated in some way.
+
+00:50:04 And all of those things are actually part of the testing framework, which makes it incredibly helpful because then I don't have to actually implement all of that when I'm writing my test cases.
+
+00:50:15 - Fantastic.
+
+00:50:16 We're getting a little short on time here.
+
+00:50:18 Let's round, I want to round it out with a little bit of a survey.
+
+00:50:22 If I find the right thing of some, y'all mentioned some of the, Py test plugins that might be relevant here.
+
+00:50:30 So I'm pulling up awesome Py test, which I'll link to just an awesome list of.
+
+00:50:34 Py test things, but you've got things like in here, like Py test randomly, which lets you randomly order tests and set a seed and those kinds of things.
+
+00:50:44 And a bunch of other stuff.
+
+00:50:46 You want to pull out some of these, you maybe think are relevant or see if they're at least in your list, the ones you like, so I've used randomly before. And like how I said earlier, this could be a great way of finding those tests that not necessarily the ones that don't clean up after themselves properly, but it will certainly show you tests that are potentially impacted by other tests, not cleaning up after themselves.
+
+00:51:07 So I think if you take almost any large test suite and apply randomly to it, the chances are you are probably going to see some failed tests that weren't failing before you shuffled the order.
+
+00:51:16 So I think that's quite an interesting plugin and you can use to quickly assess if you've got all the dependent tests in your test suite.
+
+00:51:23 Speaking from experience, the one additional point that I would add is that when I use pytest randomly, I try to make sure I integrate it early into the lifetime of my development process. So instead of writing 947 test cases, and then trying to use pytest randomly, I tried to always make sure that pytest randomly is running in GitHub Actions very early in the development of my application so that when I only have 40 or 50 test cases, I can immediately find those dependent tests that could have flakiness and then begin to be more proactive when it comes to avoiding flakiness very early when I'm launching a new product.
+
+00:52:06 Yeah, that makes sense.
+
+00:52:07 One of my follow-up questions was going to be, would you all recommend de facto installing that into and turning that on at least unless you have a reason to disable it for new projects?
+
+00:52:17 I find it very helpful.
+
+00:52:19 one of the things that I frequently add to a new project.
+
+00:52:22 So when I'm, I use poetry for a lot of my package management and I have various templates that I use and I often add pytest randomly right away as one of my dev dependencies and then make sure I'm always running my test suite in a random order when I'm running it in GitHub actions.
+
+00:52:39 So I can't remember who I heard this off for, where I read it exactly, but I have heard that at Google, other companies as well, running the tests in a random order is actually standard practice for the reason like Greg just said.
+
+00:52:52 So when you start on a new project, you're starting with this sort of shuffled order test running.
+
+00:52:57 And now I suppose it's kind of like a technical debt, then you're kind of paying it off early rather than writing a bunch of tests and then having a big fixing effort when you realize there's a big problem with a whole bunch of them.
+
+00:53:08 I feel like it's a little similar to linting and you have things that go through and tell you these are the recommended issues or issues we found.
+
+00:53:16 We recommend fixing them for your code.
+
+00:53:18 And if you apply that retroactively, like rough or whatever, if you apply that to your project after it's huge, you'll get thousands of lines and nobody wants to spend the next two weeks fixing them.
+
+00:53:29 But if you just run that as you develop, you go, there's two little things we gotta fix, no big deal.
+
+00:53:33 See, it sounds similar to that effect.
+
+00:53:36 - I agree.
+
+00:53:37 - Yeah, here's another one that's interesting.
+
+00:53:38 pytest-socket to disable socket calls during tests.
+
+00:53:41 So you heard me talk about requesting every page on the sitemap.
+
+00:53:46 So I'm not necessarily suggesting that you would want to just do this in general.
+
+00:53:50 But you know, one of the areas that seems to me that could be result in flakiness for a set of tests is like I depend on an external system.
+
+00:53:57 Like, oh, I thought we were mocking out the database, but I'm actually talking to the database.
+
+00:54:01 Or, oh, I thought we were mocking out the API call, but we're talking to it.
+
+00:54:05 You could probably turn that on for a moment, see which test fails and just go, well, these three were not supposed to be talking over the network, but somehow they fail when we don't let them talk to the network.
+
+00:54:15 So that might be worth looking into.
+
+00:54:16 What do you think about that?
+
+00:54:17 - Good point. I haven't tried that tool, but the way that you've explained it makes it really clear that there would be a lot of utility to using it.
+
+00:54:25 - Yeah. Let's see.
+
+00:54:25 There's probably a couple other ones in here.
+
+00:54:27 There was one right back here.
+
+00:54:29 It was called a pytest-picked.
+
+00:54:33 And I don't really know how I feel about this.
+
+00:54:34 I don't know if it's precise enough, but you were talking, Greg, about winnowing down the set of tests you were running using coverage.
+
+00:54:41 And this one says it runs test related to changes detected by version control, just unstaged files.
+
+00:54:47 I feel like this is a really cool idea, but it does it in the wrong order.
+
+00:54:51 I feel like it's looking at just the test files that are not changed or that are not committed and rerunning those.
+
+00:54:57 But you should look at the code covered, the changes, unstaged production files, and then use code covers to figure out which tests need to be rerun, right?
+
+00:55:07 It's really cool to use the idea of having the source control tell you what the changes are since your last commit.
+
+00:55:13 But then this is just applying it to the test files, I think.
+
+00:55:17 But if it could say, well, now we use coverage to figure out these tests, that would be awesome.
+
+00:55:21 - Yeah, and I regret that I can't remember the name of it.
+
+00:55:23 There is a tool that does a type of test suite reduction as a pytest plugin.
+
+00:55:29 And maybe I'll look it up after the show and we can include it in the show notes.
+
+00:55:33 Of course, the thing that you've got to be careful about is that there could be dependencies between program components that are not evidenced in the source code or the cover relationship, but maybe by access to external resources.
+
+00:55:47 And so in those cases, the selection process may not work as intended.
+
+00:55:51 - Right, this thing changed something in the database.
+
+00:55:53 Some other part of the code read it and that makes it crash.
+
+00:55:57 You didn't actually touch that code over there.
+
+00:55:59 Something like that.
+
+00:55:59 - Yeah, absolutely.
+
+00:56:00 - Yeah, interesting.
+
+00:56:02 Maybe one more, I don't know too much about this, but Bill points out, says, I remember Anthony bracket, So Tiliy, had worked on a tool to detect test pollution, which is a kind of related topic.
+
+00:56:13 And it says a test pollution is where a test fails due to the side effects of some other test in the suite.
+
+00:56:20 And that's pretty interesting.
+
+00:56:22 So maybe that's worth something for people to look at.
+
+00:56:24 Have you heard of this?
+
+00:56:25 I haven't heard of this before, so I can't speak too much about it.
+
+00:56:28 - I've not heard of this specific tool, but I've seen it done in Java as a Java project.
+
+00:56:35 And yeah, you can do it fairly successfully and you can go quite deep with it as well.
+
+00:56:40 I mean, it's hard to see exactly how this one works just based on the description.
+
+00:56:43 But I mean, I think there was an example where it had a global variable.
+
+00:56:47 But I mean, obviously that's quite a trivial example.
+
+00:56:50 But I mean, you can get state pollution in ways you really wouldn't expect it.
+
+00:56:54 So for example, I've seen a test where two tests that were dependent on each other were individual parameterizations of the same test.
+
+00:57:04 is a dependency because in the parameterization decorator, someone had used a list object as an argument. And then in the test, they've modified that list, but then the list isn't then recreated for the next test. So then the next test gets... But that's not a global variable that's just sort of created when that file is executed.
+
+00:57:24 Yeah. A weird Python default value behavior. Yeah, that is...
+
+00:57:29 Yeah, it's quite... I've seen people complain about that quite a lot. So like when you have a function and you put a list or a mutable object as like a default argument, that's quite a common gotcha.
+
+00:57:40 So it's a similar kind of thing.
+
+00:57:41 Yeah.
+
+00:57:41 And it's, if you run tools, like I talked about linting, if you run tools like rough or others that will, you know, flake eight, those types of things, you know, many of them will warn you like, no, this is a bad idea.
+
+00:57:51 Don't do that.
+
+00:57:51 So maybe running, I would imagine running tools like rough and other linters that detect these issues.
+
+00:57:58 Might actually reduce the test flakiness by finding some of these, you know, anti-patterns that you maybe didn't catch.
+
+00:58:05 >> Yeah, it may well do, yeah.
+
+00:58:06 >> I think another thing that's important to note when we're talking about a linter like Ruff is that it's so fast to run that there's not really a big cost from a developer's perspective.
+
+00:58:17 >> Yeah, it's nearly instant.
+
+00:58:18 >> Yeah.
+
+00:58:19 Again, integrate it early, use it regularly, have it in your IDE, use it in CI, and it's one of those things where it might help you to avoid certain coding practices that would ultimately lead to test flakiness creeping into your system.
+
+00:58:33 Yeah.
+
+00:58:33 Really good advice.
+
+00:58:34 It is so fast.
+
+00:58:36 I ran it against, like I said, 20,000 lines of Python and it went, it just, it looked like it didn't even do anything.
+
+00:58:42 I thought, oh, I didn't do it right because nothing happened.
+
+00:58:45 You know, but it's so quick and you can put it, there's plugins for both a PyCharm and VS code that'll just run it.
+
+00:58:51 And PyCharm even integrates it into its code fixes and all of its, its behaviors and just reformat code options and stuff.
+
+00:58:59 It's really good.
+
+00:58:59 I've been using Ruff recently and I really like it as well.
+
+00:59:03 Along with the point that you mentioned, I like the fact that you can configure it through the PyProject Toml file, which is where I'm already putting all of my other configurations.
+
+00:59:12 Yeah.
+
+00:59:12 And then it also essentially can serve as a language server protocol implementation.
+
+00:59:18 So even if you don't use the two text editors that you mentioned, you can still get all of the code actions and fixes.
+
+00:59:26 And because it's so fast, it's really easy to use it even on big code basis.
+
+00:59:30 Okay, one more really quick, because I think this is a good suggestion.
+
+00:59:33 And this goes back to how I talked about, you know, like the call is coming from inside the house type of problem in that the error could actually be with the test framework and the test code, not just not actually your code. So Marwan points out that scoping fixtures incorrectly could be another source of flakiness. So the fixture could say, create a generator and pass it over to you. But you could say this is a class-based one instead of a test instance one. And then you get different results depending on the order and all these kinds of things, right? That's really interesting, I think.
+
+01:00:07 I would agree. I think that's a really good point. The other thing that I sometimes need to be very careful about is having auto-use test fixtures inside of my code, because then those Those might be applied everywhere along with other decorators that are fixtures that are just applied selectively.
+
+01:00:25 And then I might get a kind of non-determinant process just because of the way that various text fixtures are applied or the order in which they're applied.
+
+01:00:34 Absolutely.
+
+01:00:35 All right, Owen, last word on this.
+
+01:00:36 The other Pytest plugin that might be interesting is pytest xdist or running these distributed.
+
+01:00:42 Like, what do you think of, does that help or hurt us here?
+
+01:00:45 Running your tests in parallel can be obviously a great way to expose concurrency related flakiness because as you said before, when you're writing the test, you might be writing it under the assumption that you're the only one accessing certain resources or running it at a certain time.
+
+01:01:01 Another thing that something like this can do as well is it can also expose order dependent tests because, so the way it will work is it will create, say you're wanting to run eight tests at a time, this plugin will then create eight separate processes. But within those processes, each one has its own independent Python interpreter. So they're running independently of each other. But then you could also, by doing that, expose a test case that was expecting a previous test to run, but now isn't because it's running in a different process. And that test could then go on to fail. So that would then be another issue of inadequate setup from that test.
+
+01:01:41 - Yeah, this is something I should probably be running more of as well, like why not?
+
+01:01:45 I have 10 cores on this computer.
+
+01:01:47 Why don't I just have my tests run faster?
+
+01:01:49 Probably not 10 times faster, but it could do more than just running one thread in serial.
+
+01:01:54 - You could do, yeah.
+
+01:01:55 - But certainly running them in parallel would certainly pull up some of those ordering issues as well as resource contention issues.
+
+01:02:01 - Yeah, so as well as providing a speed up, it's also great because it exposed some problems in your test suite as well.
+
+01:02:07 - Absolutely.
+
+01:02:08 All right, guys, I think we're gonna have to leave it there for the time we got, but excellent stuff.
+
+01:02:13 And there's a lot of detail here, isn't there?
+
+01:02:15 As you dig into it.
+
+01:02:16 - Yeah, I think flaky tests are something that all of us as developers have encountered.
+
+01:02:21 We recognize that they limit us as developers, but also there's something that if we can automatically detect them or mitigate them in some way, we can remove that hassle from developers.
+
+01:02:33 So I think what we would like to do, both as researchers and developers, is allow people who write pytest test suites to be more productive and to write better tests that are less flaky.
+
+01:02:46 - Excellent.
+
+01:02:46 All right, before we wrap up the show, I'll just ask you one quick question I usually do at the end, and that is you've got a flaky test related project on PyPI, some library, some package you wanna recommend to people, or it could be something other than flaky related, but something you wanna recommend, some package you've come across lately.
+
+01:03:05 I was actually going to recommend something that's not connected to flaky test cases.
+
+01:03:10 - Go for it.
+
+01:03:11 - So a lot of the work that I do involves various types of processing of the abstract syntax tree of a Python program.
+
+01:03:19 And so I thought I might first call out the AST package that's actually a part of Python, which is built in and an incredibly useful tool, which isn't available in a lot of programming languages.
+
+01:03:33 The other two packages which are on PyPI, which I'll share is number one, libcst, which implements something that's called a concrete syntax tree.
+
+01:03:43 And it's a super useful tool when you want to be able to make changes to Python code or detect patterns in Python code.
+
+01:03:52 And you want to be able to fully preserve things like the blank space in the code and the comment strings in the code and things of that nature.
+
+01:04:00 Libcst is actually the foundation for another tool which is called Fixit.
+
+01:04:06 And Fixit is a little bit like Ruff, except that it allows you to very easily write your own linting rules.
+
+01:04:15 And then finally, the last thing that I would share on this same theme, Michael, is that there's a really fun to use tool by someone who is a core member of the Django project, and it's called Pyastgrep.
+
+01:04:29 And it actually lets you write XPath expressions.
+
+01:04:33 And then you can use those XPath expressions to essentially query the abstract syntax tree of your Python program.
+
+01:04:41 - Incredible, okay.
+
+01:04:42 Looks like, I guess syntax trees are a little bit like XML, aren't they?
+
+01:04:47 Okay.
+
+01:04:48 - And if anybody has to do work where they're building an automated refactoring tool, or they're building a new linting tool, or various types of program analysis tools, The packages that I've mentioned might be very helpful.
+
+01:05:01 Thank you, that was a bunch of good ones.
+
+01:05:03 Owen, you got anything you want to give a shout out to?
+
+01:05:05 That's actually a bit spooky because I was also about to recommend libcst as well.
+
+01:05:09 So one small library I've used a few times is radon.
+
+01:05:15 So that's R-A-D-O-N, I believe it's spelled.
+
+01:05:19 So this will basically calculate a load of code metrics for you.
+
+01:05:23 Oh, nice. Okay.
+
+01:05:24 So these are from relatively simple things like number of lines while taking into account comments and that kind of things to more complex metrics.
+
+01:05:33 So there's this maintainability index, which is basically like a weighted sum of a bunch of other code metrics.
+
+01:05:38 I really like that one.
+
+01:05:39 Yeah.
+
+01:05:40 It's like it combines and says, well, it's like complexity is this line length is that function length, like all that kind of stuff.
+
+01:05:46 Right.
+
+01:05:47 And I've actually found sort of empirically there is appears to be some correlation in in some cases to between having a high, sorry, or having a poor maintainability to having very complex code, having very complex test case code and that test case actually being flaky, which is interesting.
+
+01:06:03 - Yeah, I can believe it.
+
+01:06:03 Okay, that's also a cool, I hadn't heard of Radon, that's neat.
+
+01:06:06 All right, guys, thank you for being on the show.
+
+01:06:08 It's been a super interesting conversation.
+
+01:06:11 Final call to action, people either have flaky tests and want to get out of them or they want to avoid having them in the first place.
+
+01:06:18 What do you tell them?
+
+01:06:19 What are your parting thoughts?
+
+01:06:20 So my quick parting thought is as follows.
+
+01:06:23 We'll have some links in the show notes to various papers and tools that Owen and our colleagues and I have developed.
+
+01:06:30 And we hope that people will try them out.
+
+01:06:33 It would also be awesome if people can get in contact with us and share some of their flaky test case war stories.
+
+01:06:40 We would love to learn from you and partner with you to help you solve some of the flaky test case challenges that you have.
+
+01:06:46 Owen, what else do you want to add?
+
+01:06:48 - I think that's pretty much it for me.
+
+01:06:49 I'd say probably most important thing to do would just be to stick with testing.
+
+01:06:53 Don't let flaky tests put you off test-driven development or anything like that, because it's better than not testing.
+
+01:07:00 Yeah, indeed. All right. Well, thanks, guys. Thanks for being on the show.
+
+01:07:02 Thank you.
+
+01:07:03 Thank you.
+
+01:07:04 This has been another episode of Talk Python to Me.
+
+01:07:07 Thank you to our sponsors.
+
+01:07:09 Be sure to check out what they're offering. It really helps support the show.
+
+01:07:12 The folks over at JetBrains encourage you to get work done with PyCharm.
+
+01:07:17 PyCharm Professional understands complex projects across multiple languages and technologies, so you can stay productive while you're writing Python code and other code like HTML or SQL.
+
+01:07:28 Download your free trial at talkpython.fm/done-with-pycharm.
+
+01:07:33 Take some stress out of your life. Get notified immediately about errors and performance issues in your web or mobile applications with Sentry. Just visit talkpython.fm/sentry and get started for free. And be sure to use the promo code "talkpython" all one word. Want to level up your Python? We have one of the largest catalogs of Python video courses over at Talk Python. Our content ranges from true beginners to deeply advanced topics like memory and async. And best of all, there's not a subscription in sight. Check it out for yourself at training.talkpython.fm.
+
+01:08:06 Be sure to subscribe to the show, open your favorite podcast app, and search for Python.
+
+01:08:11 We should be right at the top. You can also find the iTunes feed at /iTunes, the Google Play feed at /play, and the Direct RSS feed at /rss on talkpython.fm. We're live streaming most of our recordings these days. If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at talkpython.fm/youtube. This is your host, Michael Kennedy. Thanks so much for listening. I really appreciate it. Now get out there and write some Python code.
+
+01:08:39 [MUSIC PLAYING]
+
+01:08:42 [Music]
+
+01:08:57 [BLANK_AUDIO]
