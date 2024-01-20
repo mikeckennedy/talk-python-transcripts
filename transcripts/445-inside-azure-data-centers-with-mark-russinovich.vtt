@@ -1,4545 +1,1712 @@
 WEBVTT
 
-00:00:00.360 --> 00:00:01.920
-- When you run your code in the cloud,
+00:00:00.040 --> 00:00:04.000
+When you run your code in the cloud, how much do you know about where it runs?
 
+00:00:04.000 --> 00:00:09.300
+I mean the hardware it runs on and the data center it runs in. There are just a
 
-00:00:01.920 --> 00:00:04.200
-how much do you know about where it runs?
+00:00:09.300 --> 00:00:13.040
+couple of hyperscale cloud providers in the world. This episode is a unique
 
+00:00:13.040 --> 00:00:18.320
+chance to get a deep look inside one of them, Microsoft Azure. Azure is comprised
 
-00:00:04.200 --> 00:00:06.360
-I mean, the hardware it runs on
+00:00:18.320 --> 00:00:23.520
+of over 200 physical data centers with hundreds of thousands of servers in each
 
+00:00:23.520 --> 00:00:28.760
+one of those. A look at how code runs on them is fascinating. Our guide for this
 
-00:00:06.360 --> 00:00:08.960
-and the data center it runs in.
+00:00:28.760 --> 00:00:33.480
+journey will be Mark Russinovich. Mark is the CTO of Microsoft Azure and a
 
+00:00:33.480 --> 00:00:38.000
+technical fellow, Microsoft's senior most technical position. He's also a bit of a
 
-00:00:08.960 --> 00:00:11.120
-There are just a couple of hyperscale cloud providers
+00:00:38.000 --> 00:00:41.680
+programming hero of mine. Even if you don't host your code in the cloud, I
 
+00:00:41.680 --> 00:00:45.920
+think you'll enjoy this conversation. Let's dive in. This is Talk Python to Me
 
-00:00:11.120 --> 00:00:11.960
-in the world.
+00:00:45.920 --> 00:00:55.200
+episode 445 recorded on-site at Microsoft Ignite in Seattle, November 16th, 2023.
 
+00:00:55.200 --> 00:01:06.920
+[Music]
 
-00:00:11.960 --> 00:00:14.840
-This episode is a unique chance to get a deep look
+00:01:06.920 --> 00:01:11.640
+Welcome to Talk Python to Me, a weekly podcast on Python. This is your host
 
+00:01:11.640 --> 00:01:15.720
+Michael Kennedy. Follow me on Mastodon where I'm @mkennedy and follow the
 
-00:00:14.840 --> 00:00:17.580
-inside one of them, Microsoft Azure.
+00:01:15.720 --> 00:01:21.200
+podcast using @talkpython both on fosstodon.org. Keep up with the show and
 
+00:01:21.200 --> 00:01:26.160
+listen to over seven years of past episodes at talkpython.fm. We've started
 
-00:00:17.580 --> 00:00:20.920
-Azure is comprised of over 200 physical data centers
+00:01:26.160 --> 00:01:30.360
+streaming most of our episodes live on YouTube. Subscribe to our YouTube channel
 
+00:01:30.360 --> 00:01:35.440
+over at talkpython.fm/youtube to get notified about upcoming shows and be
 
-00:00:20.920 --> 00:00:25.020
-with hundreds of thousands of servers in each one of those.
+00:01:35.440 --> 00:01:40.960
+part of that episode. This episode is sponsored by Posit Connect from the
 
+00:01:40.960 --> 00:01:44.880
+makers of Shiny. Publish, share, and deploy all of your data projects that you're
 
-00:00:25.020 --> 00:00:28.000
-A look at how code runs on them is fascinating.
+00:01:44.880 --> 00:01:50.400
+creating using Python. Streamlet, Dash, Shiny, Bokeh, FastAPI, Flask, Reports,
 
+00:01:50.400 --> 00:01:55.400
+Dashboards, and APIs. Posit Connect supports all of them. Try Posit Connect
 
-00:00:28.000 --> 00:00:30.940
-Our guide for this journey will be Mark Russinovich.
+00:01:55.400 --> 00:02:01.760
+for free by going to talkpython.fm/posit. P-O-S-I-T. And it's brought to you by the
 
+00:02:01.760 --> 00:02:05.920
+PyBytes Developer Mindset Program. PyBytes core mission is to help you break
 
-00:00:30.940 --> 00:00:33.300
-Mark is the CTO of Microsoft Azure
+00:02:05.920 --> 00:02:09.480
+the vicious cycle of tutorial paralysis through developing real-world
 
+00:02:09.480 --> 00:02:13.240
+applications. The PyBytes Developer Mindset Program will help you build the
 
-00:00:33.300 --> 00:00:34.920
-and a technical fellow,
+00:02:13.240 --> 00:02:17.440
+confidence you need to become a highly effective developer. Check it out at
 
+00:02:17.440 --> 00:02:24.200
+talkpython.fm/pdm. Mark, welcome to Talk Python. Thanks. Thanks, Michael.
 
-00:00:34.920 --> 00:00:37.440
-Microsoft's senior most technical position.
+00:02:24.200 --> 00:02:28.240
+Yeah, it's fantastic to have you here. I've been a fan of your work for a really long
 
+00:02:28.240 --> 00:02:32.520
+time. We're gonna have a really cool look inside of Azure and there's not very
 
-00:00:37.440 --> 00:00:39.760
-He's also a bit of a programming hero of mine.
+00:02:32.520 --> 00:02:36.200
+many hyperscale clouds in the world. You can probably count them on your hands, right?
 
+00:02:36.200 --> 00:02:41.600
+And so I think as developers, Python developers generally, will be really
 
-00:00:39.760 --> 00:00:41.800
-Even if you don't host your code in the cloud,
+00:02:41.600 --> 00:02:45.280
+interested to just kind of get a sense of when we run on the cloud, what exactly
 
+00:02:45.280 --> 00:02:49.280
+does that mean because it's been a journey. Yeah, for sure. Before we dive
 
-00:00:41.800 --> 00:00:43.720
-I think you'll enjoy this conversation.
+00:02:49.280 --> 00:02:52.880
+into that though and some other cool things you're up to, tell people quick
 
+00:02:52.880 --> 00:02:57.200
+about it, a bit about yourself. Sure. I'm CTO and Technical Fellow at Microsoft,
 
-00:00:43.720 --> 00:00:44.960
-Let's dive in.
+00:02:57.200 --> 00:03:01.080
+CTO of Azure. I've been in Azure since 2010. Prior to that, I was in Windows. I
 
+00:03:01.080 --> 00:03:04.960
+joined Microsoft in 2006 when it acquired my software company and my
 
-00:00:44.960 --> 00:00:47.980
-This is "Talk Python to Me," episode 445,
+00:03:04.960 --> 00:03:10.880
+freeware website, Winternals and Sysinternals, respectively. And since 2010,
 
+00:03:10.880 --> 00:03:14.000
+I've effectively been in the same role the entire time, which is overseeing
 
-00:00:47.980 --> 00:00:51.320
-recorded on-site at Microsoft Ignite in Seattle,
+00:03:14.000 --> 00:03:17.440
+technical strategy and architecture for the Azure platform. And the skill of that
 
+00:03:17.440 --> 00:03:21.200
+is quite something. So it'll be great to get in that. That's awesome.
 
-00:00:51.320 --> 00:00:53.680
-November 16th, 2023.
+00:03:21.200 --> 00:03:27.520
+You first came on my radar probably in the late 90s, early aughts, through the
 
+00:03:27.520 --> 00:03:31.440
+Sysinternals thing, not through Microsoft. You brought that up. So tell people a bit
 
-00:00:53.680 --> 00:00:56.260
-(upbeat music)
+00:03:31.440 --> 00:03:35.480
+about Sysinternals. It was like if you wanted to see inside your, what your app
 
+00:03:35.480 --> 00:03:38.760
+is doing on Windows, you go to Sysinternals, right? Tell us about that.
 
-00:00:58.840 --> 00:01:09.100
-Welcome to "Talk Python to Me,"
+00:03:38.760 --> 00:03:43.080
+Sysinternals grew out of my just love of understanding the way things work and I
 
+00:03:43.080 --> 00:03:48.680
+was doing a lot of work on Windows internals actually in my PhD program
 
-00:01:09.100 --> 00:01:11.040
-a weekly podcast on Python.
+00:03:48.680 --> 00:03:53.080
+where I was trying to figure out how to get operating systems to be able to save
 
+00:03:53.080 --> 00:03:57.120
+their state and then come back in case of a failure. So I learned the internals
 
-00:01:11.040 --> 00:01:12.820
-This is your host, Michael Kennedy.
+00:03:57.120 --> 00:04:03.120
+of Windows 3.1 and then Windows 95 and then Windows NT and started to think
 
+00:04:03.120 --> 00:04:06.680
+about cool ways that I could understand the way things worked underneath the
 
-00:01:12.820 --> 00:01:15.180
-Follow me on Mastodon, where I'm @mkennedy,
+00:04:06.680 --> 00:04:10.920
+hood. So actually the first Sysinternals tool was something called Control2Cap,
 
+00:04:10.920 --> 00:04:15.640
+which swaps the caps lock and key, you know, the control key because I came from
 
-00:01:15.180 --> 00:01:17.900
-and follow the podcast using @talkpython,
+00:04:15.640 --> 00:04:19.720
+a Unix background. And who needs caps lock? Yeah, exactly. No one should be that.
 
+00:04:19.720 --> 00:04:26.160
+I'm not yelling at people very much. So the second tool that I wrote was actually
 
-00:01:17.900 --> 00:01:20.460
-both on fosstodon.org.
+00:04:26.160 --> 00:04:31.520
+called NTFS DOS to bring NTFS to DOS, but the native Windows NT tools that
 
+00:04:31.520 --> 00:04:35.760
+Bryce Cogswell, who I met in grad school, and I co-wrote together were RegMon and
 
-00:01:20.460 --> 00:01:22.580
-Keep up with the show and listen to over seven years
+00:04:35.760 --> 00:04:39.440
+FileMon. They were like the originals and RegMon allowed you to watch
 
+00:04:39.440 --> 00:04:42.920
+registry activity, FileMon file system activity. We later merged them into
 
-00:01:22.580 --> 00:01:25.700
-of past episodes @talkpython.fm.
+00:04:42.920 --> 00:04:48.560
+Process Monitor after we joined Microsoft. But we decided to make those
 
+00:04:48.560 --> 00:04:53.040
+tools available for free and so we started the NTinternals.com
 
-00:01:25.700 --> 00:01:29.200
-We've started streaming most of our episodes live on YouTube.
+00:04:53.040 --> 00:04:57.800
+website, which then Microsoft's lawyers said don't use NT, so we switched over to
 
+00:04:57.800 --> 00:05:02.360
+renaming it Sysinternals. And then Bryce was like, hey, some of the tools that
 
-00:01:29.200 --> 00:01:30.420
-Subscribe to our YouTube channel
+00:05:02.360 --> 00:05:05.480
+we've made we should sell. So we wrote a tool that would allow you to mount a
 
+00:05:05.480 --> 00:05:10.280
+dead NT system through a serial cable as if it was a local drive on the recovery
 
-00:01:30.420 --> 00:01:32.820
-over at talkpython.fm/youtube
+00:05:10.280 --> 00:05:14.160
+system. And he said if we make a read/write version we should sell it. So
 
+00:05:14.160 --> 00:05:18.760
+he started, he went and set up a credit account, you know, credit card account on
 
-00:01:32.820 --> 00:01:35.020
-to get notified about upcoming shows
+00:05:18.760 --> 00:05:26.440
+e-commerce.net or something like that. And we started selling the
 
+00:05:26.440 --> 00:05:29.720
+software and that grew into what became Winternals, a commercial software
 
-00:01:35.020 --> 00:01:36.640
-and be part of that episode.
+00:05:29.720 --> 00:05:33.240
+company. But Sysinternals and Winternals, like I said, were both acquired at the
 
+00:05:33.240 --> 00:05:38.520
+time. I joined Microsoft in 2006. But Bryce and I continued to work on
 
-00:01:36.640 --> 00:01:40.840
-This episode is sponsored by Posit Connect
+00:05:38.520 --> 00:05:43.240
+Sysinternals. He worked on him until he retired from Microsoft and retired just
 
+00:05:43.240 --> 00:05:48.000
+in general four years later. And then I've continued. I have now a couple
 
-00:01:40.840 --> 00:01:42.380
-from the makers of Shiny.
+00:05:48.000 --> 00:05:52.320
+people, three people, working on Sysinternals engineering systems, keeping
 
+00:05:52.320 --> 00:05:55.960
+them healthy and the build pipelines working, and then adding features to
 
-00:01:42.380 --> 00:01:44.800
-Publish, share, and deploy all of your data projects
+00:05:55.960 --> 00:05:59.680
+them. And I still code on them and still add features. Like just at a Zoomit
 
+00:05:59.680 --> 00:06:04.240
+release a few days ago I added some, I blur and highlight to Zoomit. Yeah,
 
-00:01:44.800 --> 00:01:46.820
-that you're creating using Python.
+00:06:04.240 --> 00:06:08.200
+people are doing presentations on Windows. With Zoomit you can say let me
 
+00:06:08.200 --> 00:06:11.480
+quickly draw on the screen, not PowerPoint, but just whatever happens to
 
-00:01:46.820 --> 00:01:50.220
-Streamlet, Dash, Shiny, Bokeh, FastAPI, Flask,
+00:06:11.480 --> 00:06:15.600
+be on your screen, which is really nice. I love my Macs these days, but boy I wish
 
+00:06:15.600 --> 00:06:19.680
+Zoomit existed on the Mac. Actually, people have asked for Zoomit for Mac and
 
-00:01:50.220 --> 00:01:52.980
-Reports, Dashboards, and APIs.
+00:06:19.680 --> 00:06:24.280
+I'd like to make a Zoomit for Mac. And now with Copilot, I wonder how good
 
+00:06:24.280 --> 00:06:28.240
+it is at writing Mac apps because I don't want to spend all the time to
 
-00:01:52.980 --> 00:01:54.860
-Posit Connect supports all of them.
+00:06:28.240 --> 00:06:31.960
+learn how to write a Mac apps just to write Zoomit, but if Copilot can help
 
+00:06:31.960 --> 00:06:35.200
+maybe it'll, you know, something that I can do in my, you know, you know, spare time.
 
-00:01:54.860 --> 00:01:56.340
-Try Posit Connect for free
+00:06:35.200 --> 00:06:39.080
+I don't know if it'll do it, but it'll get you close. It's crazy how these LLMs
 
+00:06:39.080 --> 00:06:42.160
+are writing code for us these days. And we're gonna talk a bit about maybe how
 
-00:01:56.340 --> 00:02:00.820
-by going to talkpython.fm/posit, P-O-S-I-T.
+00:06:42.160 --> 00:06:47.920
+some of those run. Yeah. And so on, I mean, Azure is doing tons of stuff with large
 
+00:06:47.920 --> 00:06:50.880
+language models and you all have some, you know, we're here at the Microsoft
 
-00:02:00.820 --> 00:02:01.660
-And it's brought to you
+00:06:50.880 --> 00:06:55.080
+Ignite conference, you've got some big announcements. But yeah, I was such a fan
 
+00:06:55.080 --> 00:07:00.640
+still of Sysmon and I use that for all sorts of things still. So, super cool.
 
-00:02:01.660 --> 00:02:04.300
-by the PyBytes Developer Mindset Program.
+00:07:00.640 --> 00:07:04.480
+Now, before we jump in, I kind of want to talk about some of your big announcements.
 
+00:07:04.480 --> 00:07:08.600
+Yeah. Because they really caught me off guard here. I'm like, yes, this is exciting.
 
-00:02:04.300 --> 00:02:06.260
-PyBytes' core mission is to help you break
+00:07:08.600 --> 00:07:12.280
+But maybe since we're gonna talk a decent amount about Azure, the internals
 
+00:07:12.280 --> 00:07:16.200
+of hardware, how our code runs, just give us a quick history of Azure. You know, when
 
-00:02:06.260 --> 00:02:08.540
-the vicious cycle of tutorial paralysis
+00:07:16.200 --> 00:07:19.400
+did this whole thing get started? Yeah, Azure started right as I joined
 
+00:07:19.400 --> 00:07:22.840
+Microsoft in 2006. There was a group of people, including Dave Cutler, one of the
 
-00:02:08.540 --> 00:02:10.980
-through developing real-world applications.
+00:07:22.840 --> 00:07:26.600
+people that I've looked up to because Dave was the original architect behind
 
+00:07:26.600 --> 00:07:31.520
+the VMS operating system and then Windows NT, which is now underlying
 
-00:02:10.980 --> 00:02:12.740
-The PyBytes Developer Mindset Program
+00:07:31.520 --> 00:07:37.800
+Windows. He and some other people were just at the suggestion of Ray Ozzie. This
 
+00:07:37.800 --> 00:07:44.160
+is back when services was a big thing. And Ray sent a memo to the company,
 
-00:02:12.740 --> 00:02:14.700
-will help you build the confidence you need
+00:07:44.160 --> 00:07:47.920
+kind of echoing Bill Gates's internet memo, saying it's software and services
 
+00:07:47.920 --> 00:07:52.480
+now. And they said, how can we build a data center scale type platform to make
 
-00:02:14.700 --> 00:02:17.120
-to become a highly effective developer.
+00:07:52.480 --> 00:07:57.120
+it easier for Microsoft to develop services? And so this was called Project
 
+00:07:57.120 --> 00:08:01.680
+Red Dog, which was incubating for a while. And then 2008, they publicly launched it
 
-00:02:17.120 --> 00:02:20.260
-Check it out at talkpython.fm/pdm.
+00:08:01.680 --> 00:08:05.280
+because Steve said, we need to make this available to third parties as well as
 
+00:08:05.280 --> 00:08:11.040
+Windows Azure. And, sorry, 2008 they announced the preview of it. 2010, it
 
-00:02:20.260 --> 00:02:23.660
-Mark, welcome to "Talk Python" with me.
+00:08:11.040 --> 00:08:16.320
+commercially launched publicly in February, and I joined in July. And a few
 
+00:08:16.320 --> 00:08:19.560
+years later, with the rise of open source software and so many enterprise
 
-00:02:23.660 --> 00:02:24.660
-- Thanks, thanks, Michael.
+00:08:19.560 --> 00:08:25.000
+customers wanting to have Linux, we re-branded it Microsoft Azure. And we
 
+00:08:25.000 --> 00:08:28.680
+also... Can I run Linux on Windows Azure? I don't know if that makes any sense. Yeah, and one of the
 
-00:02:24.660 --> 00:02:26.180
-- Yeah, it's fantastic to have you here.
+00:08:28.680 --> 00:08:35.240
+first things I'd done, worked on with Corey Sanders, was being asked, hey,
 
+00:08:35.240 --> 00:08:38.480
+we've got platform as a service. We have this thing called cloud services, this
 
-00:02:26.180 --> 00:02:29.420
-I've been a fan of your work for a really long time.
+00:08:38.480 --> 00:08:42.160
+model for how you write apps. But our enterprise customers were saying, I can't
 
+00:08:42.160 --> 00:08:49.160
+move my existing IT stuff to Azure because it just needs VMs. And so
 
-00:02:29.420 --> 00:02:31.820
-We're gonna have a really cool look inside of Azure.
+00:08:49.160 --> 00:08:54.680
+the first thing we did was, hey, we should get IaaS capability in Azure. And so in
 
+00:08:54.680 --> 00:08:58.400
+2012, we launched the preview of IaaS for Azure. And that's really when the
 
-00:02:31.820 --> 00:02:35.020
-And there's not very many hyperscale clouds in the world.
+00:08:58.400 --> 00:09:01.840
+business started to take off because enterprises then could, with minimal
 
+00:09:01.840 --> 00:09:07.080
+effort, start to move. Well, that's like doing what we do in our data center, but in your data center.
 
-00:02:35.020 --> 00:02:36.820
-You can probably count 'em on your hands, right?
+00:09:07.080 --> 00:09:12.200
+Yeah, exactly. Now no one even thinks about it. Exactly. So IaaS has continued
 
+00:09:12.200 --> 00:09:16.040
+to evolve, PaaS has continued to evolve. Cloud services was designed in a world
 
-00:02:36.820 --> 00:02:41.220
-And so I think as developers, Python developers generally,
+00:09:16.040 --> 00:09:19.760
+without containers. Now we've got containerization, the rise of Kubernetes,
 
+00:09:19.760 --> 00:09:23.720
+and then application models on top of containers. And so Azure's evolved and
 
-00:02:41.220 --> 00:02:43.980
-we'll be really interested to just kind of get a sense of,
+00:09:23.720 --> 00:09:27.600
+actually, I think, led some of that evolution of cloud-native computing up
 
+00:09:27.600 --> 00:09:31.920
+into containers and abstractions. But it's been a long, long journey towards
 
-00:02:43.980 --> 00:02:46.180
-when we run on the cloud, what exactly does that mean?
+00:09:31.920 --> 00:09:35.840
+that. I mean, I think one of the things is I've always believed that ultimately
 
+00:09:35.840 --> 00:09:39.680
+cloud should be about making it easy for developers to say, here's what I want, and
 
-00:02:46.180 --> 00:02:47.660
-Because it's been a journey.
+00:09:39.680 --> 00:09:43.800
+then the cloud takes care of the rest. And we're moving towards it relentlessly.
 
+00:09:43.800 --> 00:09:48.480
+That time when you'll really be able to do that. Yeah, so you don't have to
 
-00:02:47.660 --> 00:02:48.540
-- Yeah, for sure.
+00:09:48.480 --> 00:09:53.240
+know DevOps, you don't have to know distributed architectures, you just give
 
+00:09:53.240 --> 00:09:58.480
+you guys the code. Yeah, which is beautiful. It's beautiful. Now, real quickly, just
 
-00:02:48.540 --> 00:02:50.220
-- Yeah, before we dive into that, though,
+00:09:58.480 --> 00:10:03.160
+give us a scale. Like, think of how many data centers, how many servers, how many
 
+00:10:03.160 --> 00:10:08.680
+miles, fiber. It's kind of astonishing. It is pretty flabbergasting. And the numbers
 
-00:02:50.220 --> 00:02:52.500
-and some other cool things you're up to,
+00:10:08.680 --> 00:10:13.320
+continue to grow exponentially. I'll just give you, because I remember when I
 
+00:10:13.320 --> 00:10:18.360
+first started in Azure, I was asked to give a talk at the Azure All Hands about
 
-00:02:52.500 --> 00:02:54.300
-just tell people a bit about yourself.
+00:10:18.360 --> 00:10:21.960
+architecture and some of the announcements we had coming. And the All
 
+00:10:21.960 --> 00:10:27.440
+Hands was two rooms with the partition removed in our on-campus
 
-00:02:54.300 --> 00:02:56.740
-- Sure, I'm a CTO and technical fellow
+00:10:27.440 --> 00:10:32.720
+conference room meeting center. A total of about 500 people. That was
 
+00:10:32.720 --> 00:10:37.240
+all of the Azure team in 2010. And really nobody outside the Azure team knew
 
-00:02:56.740 --> 00:02:58.340
-at Microsoft, CTO of Azure.
+00:10:37.240 --> 00:10:40.120
+anything about Azure. Really, the world didn't know about Azure.
 
+00:10:40.120 --> 00:10:44.640
+Inside, right? Yeah, inside. So effectively, that was like most, at least half the people in the
 
-00:02:58.340 --> 00:02:59.700
-I've been in Azure since 2010.
+00:10:44.640 --> 00:10:48.280
+world that knew anything about Azure was in those two rooms. And today,
 
+00:10:48.280 --> 00:10:52.360
+you know, Scott Guthrie's organization, Cloud and AI, all of it's working on
 
-00:02:59.700 --> 00:03:01.220
-Prior to that, I was in Windows.
+00:10:52.360 --> 00:10:57.920
+Azure. And that's tens of thousands of people. So at least, you know, a good
 
+00:10:57.920 --> 00:11:02.880
+percentage, majority percentage even, of the company is working directly on
 
-00:03:01.220 --> 00:03:03.820
-I joined Microsoft in 2006 when it acquired
+00:11:02.880 --> 00:11:06.280
+things that come under the Azure umbrella. So it's come a long way from
 
+00:11:06.280 --> 00:11:09.920
+that perspective. And you talked about physical scale. Back then, when we
 
-00:03:03.820 --> 00:03:06.540
-my software company and my freeware website,
+00:11:09.920 --> 00:11:15.320
+originally launched Azure in two regions, it was like 40,000 servers. Like 20,000
 
+00:11:15.320 --> 00:11:19.640
+in one, 20,000 in the other. That's a lot of servers. Yeah, but back, but you know, it was
 
-00:03:06.540 --> 00:03:08.460
-Winternals and Sysinternals, respectively.
+00:11:19.640 --> 00:11:25.000
+like, let's, that is kind of cloud scale back then. Now, we are at millions
 
+00:11:25.000 --> 00:11:30.160
+of servers. And when it comes to data centers, we've got 60 regions around the
 
-00:03:08.460 --> 00:03:12.700
-And since 2010, I've effectively been in the same role
+00:11:30.160 --> 00:11:36.640
+world, 60 plus regions. And each of those consists of one, in many cases, multiple
 
+00:11:36.640 --> 00:11:40.600
+data centers. And we're still building out, we're launching a data, like two
 
-00:03:12.700 --> 00:03:15.060
-the entire time, which is overseeing technical strategy
+00:11:40.600 --> 00:11:44.280
+data centers every week, I think is the number that we're launching. Wow, that's
 
+00:11:44.280 --> 00:11:48.080
+crazy. And these could be slotted into one of these regions or it could be, yeah,
 
-00:03:15.060 --> 00:03:16.460
-and architecture for the Azure platform.
+00:11:48.080 --> 00:11:52.320
+a new region. Yeah, yeah. Incredible, incredible. And so the big announcement
 
+00:11:52.320 --> 00:11:54.920
+that I wanted to ask you about, just before we run out of time, then we'll
 
-00:03:16.460 --> 00:03:18.740
-- And the skill of that is quite something.
+00:11:54.920 --> 00:11:59.520
+dive into some of that, that sort of how does your code run story is Azure Cobalt.
 
+00:11:59.520 --> 00:12:04.240
+Yeah, that's a new processor you guys announced. And you know, listeners, I'm a
 
-00:03:18.740 --> 00:03:20.140
-So it'll be great to get in that.
+00:12:04.240 --> 00:12:08.240
+big fan of Apple Silicon and how it sort of changed the computing landscape for
 
+00:12:08.240 --> 00:12:12.480
+power and speed on like little laptops and stuff. And this is kind of that idea
 
-00:03:20.140 --> 00:03:21.260
-That's awesome.
+00:12:12.480 --> 00:12:15.440
+but for the data center, right? Tell us about that. It is that idea. I think
 
+00:12:15.440 --> 00:12:20.600
+having a processor that can be designed really with our specifications. If you
 
-00:03:21.260 --> 00:03:23.620
-You first came on my radar probably
+00:12:20.600 --> 00:12:24.960
+take a look at Intel and AMD processors, they're fantastic processors. They're
 
+00:12:24.960 --> 00:12:28.400
+very versatile. They're taking requirements from lots of different
 
-00:03:23.620 --> 00:03:25.860
-in the late '90s, early aughts,
+00:12:28.400 --> 00:12:33.200
+sources. And so we're just, we're a voice. We're a significant voice when it comes
 
+00:12:33.200 --> 00:12:37.040
+to saying we'd like your processors to do these things. When we have our own,
 
-00:03:25.860 --> 00:03:28.060
-through the Sysinternals thing, not through Microsoft.
+00:12:37.040 --> 00:12:40.640
+we've got the ability to just decide unilaterally what we'd like it to do
 
+00:12:40.640 --> 00:12:44.560
+based off of what we see and can vertically integrate it into our systems.
 
-00:03:28.060 --> 00:03:29.740
-And you brought that up, so tell people
+00:12:44.560 --> 00:12:49.440
+We can put it on SSEs and integrate it with memory and GPUs. And so that is
 
+00:12:49.440 --> 00:12:55.080
+kind of the reason that we've done that verticalization for processors.
 
-00:03:29.740 --> 00:03:30.580
-a bit about Sysinternals.
+00:12:55.080 --> 00:12:59.000
+That's not to say that the other processors aren't going to be significant.
 
+00:12:59.000 --> 00:13:01.480
+It's going to be probably a blend of the offerings.
 
-00:03:30.580 --> 00:03:33.400
-It was like, if you wanted to see inside your,
+00:13:01.480 --> 00:13:04.560
+They'll have different capabilities that ours won't have. There are customers that
 
+00:13:04.560 --> 00:13:08.600
+want the specific features that they've got or performance speeds and feeds that
 
-00:03:33.400 --> 00:03:35.460
-what your app is doing on Windows,
+00:13:08.600 --> 00:13:11.840
+they've got because they're not all going to look the same. And so I think
 
+00:13:11.840 --> 00:13:15.840
+it's just better optionality for everybody. Well I can tell you as
 
-00:03:35.460 --> 00:03:36.620
-you go to Sysinternals, right?
+00:13:15.840 --> 00:13:21.160
+somebody who tries to run Linux on that thing, it's hit and miss if there's
 
+00:13:21.160 --> 00:13:25.320
+even an ARM version available. More often than not, there's not. And so there's
 
-00:03:36.620 --> 00:03:37.460
-Tell us about that.
+00:13:25.320 --> 00:13:28.640
+certainly not going to be an insane rush to just drop everything because
 
+00:13:28.640 --> 00:13:33.120
+there's a lot of code that's written for x86. And optimized. That's the
 
-00:03:37.460 --> 00:03:39.260
-- Yeah, Sysinternals grew out of my just love
+00:13:33.120 --> 00:13:37.360
+other thing too. Yeah, for sure. So on my list here of things I was going to
 
+00:13:37.360 --> 00:13:40.600
+ask you is, well what about ARM in the data center? Well that is ARM.
 
-00:03:39.260 --> 00:03:40.660
-of understanding the way things work.
+00:13:40.600 --> 00:13:44.680
+Exactly. I'm like, well okay, so you guys beat me to the punch.
 
+00:13:44.680 --> 00:13:48.640
+This portion of Talk Python to Me is brought to you by Posit, the makers of
 
-00:03:40.660 --> 00:03:44.800
-And I was doing a lot of work on Windows internals,
+00:13:48.640 --> 00:13:54.640
+Shiny, formerly RStudio, and especially Shiny for Python. Let me ask you a
 
+00:13:54.640 --> 00:13:58.760
+question. Are you building awesome things? Of course you are. You're a developer or
 
-00:03:44.800 --> 00:03:47.740
-actually, in my PhD program, where I was trying
+00:13:58.760 --> 00:14:03.180
+data scientist. That's what we do. And you should check out Posit Connect. Posit
 
+00:14:03.180 --> 00:14:07.400
+Connect is a way for you to publish, share, and deploy all the data products
 
-00:03:47.740 --> 00:03:49.780
-to figure out how to get operating systems
+00:14:07.400 --> 00:14:12.360
+that you're building using Python. People ask me the same question all the time.
 
+00:14:12.360 --> 00:14:16.360
+Michael, I have some cool data science project or notebook that I built. How do
 
-00:03:49.780 --> 00:03:52.980
-to be able to save their state and then come back
+00:14:16.360 --> 00:14:21.040
+I share it with my users, stakeholders, teammates? Do I need to learn FastAPI or
 
+00:14:21.040 --> 00:14:26.720
+Flask or maybe Vue or React.js? Hold on now. Those are cool technologies and I'm
 
-00:03:52.980 --> 00:03:54.140
-in case of a failure.
+00:14:26.720 --> 00:14:30.440
+sure you'd benefit from them, but maybe stay focused on the data project? Let
 
+00:14:30.440 --> 00:14:34.400
+Posit Connect handle that side of things. With Posit Connect you can rapidly and
 
-00:03:54.140 --> 00:03:57.060
-So I learned the internals of Windows 3.1
+00:14:34.400 --> 00:14:39.280
+securely deploy the things you build in Python. Streamlet, Dash, Shiny, Bokeh,
 
+00:14:39.280 --> 00:14:45.520
+FastAPI, Flask, Quadro, Reports, Dashboards, and APIs. Posit Connect supports all of
 
-00:03:57.060 --> 00:03:59.660
-and then Windows 95 and then Windows NT
+00:14:45.520 --> 00:14:50.120
+them. And Posit Connect comes with all the bells and whistles to satisfy IT and
 
+00:14:50.120 --> 00:14:54.360
+other enterprise requirements. Make deployment the easiest step in your
 
-00:03:59.660 --> 00:04:02.220
-and started to think about cool ways
+00:14:54.360 --> 00:14:58.240
+workflow with Posit Connect. For a limited time you can try Posit Connect
 
+00:14:58.240 --> 00:15:02.640
+for free for three months by going to talkpython.fm/posit. That's
 
-00:04:02.220 --> 00:04:04.300
-that I could understand the way things worked
+00:15:02.640 --> 00:15:08.720
+talkpython.fm/posit. The link is in your podcast player show notes. Thank you to
 
+00:15:08.720 --> 00:15:13.680
+the team at Posit for supporting Talk Python. Awesome. Now one of the things
 
-00:04:04.300 --> 00:04:05.140
-underneath the hood.
+00:15:13.680 --> 00:15:17.640
+I wanted to kind of maybe have you go through for listeners that I think is
 
+00:15:17.640 --> 00:15:22.040
+just super interesting is sort of the evolution of the hardware where our code
 
-00:04:05.140 --> 00:04:07.260
-So actually, the first Sysinternals tool
+00:15:22.040 --> 00:15:25.560
+runs throughout the data center. So you talked about in some of your talks
 
+00:15:25.560 --> 00:15:29.520
+like the data center generations and what is that like six or seven, eight
 
-00:04:07.260 --> 00:04:09.220
-was something called Control to Cap,
+00:15:29.520 --> 00:15:33.280
+maybe different variations. I'll kind of give you some prompts from them
 
+00:15:33.280 --> 00:15:36.680
+and all, but one of the things that I was thinking about when I was looking at this
 
-00:04:09.220 --> 00:04:11.460
-which swaps the caps lock and key,
+00:15:36.680 --> 00:15:41.080
+is you know do you have a bunch of small servers or do you have like or do you
 
+00:15:41.080 --> 00:15:46.840
+partition up really large servers right? What's the right flow for that?
 
-00:04:11.460 --> 00:04:15.060
-the control key, because I came from a Unix background.
+00:15:46.840 --> 00:15:50.720
+So one of the things that you've seen since the start of cloud back when we
 
+00:15:50.720 --> 00:15:55.440
+launched Azure there was one server type. Yeah. And it we had different virtual
 
-00:04:15.060 --> 00:04:15.900
-- And who needs caps lock?
+00:15:55.440 --> 00:15:59.440
+machines offerings but they were just all different sizes that could fit on
 
+00:15:59.440 --> 00:16:04.320
+that one server. It was a 32 core Dell Optron with I think 32 gig of RAM. Yeah.
 
-00:04:15.900 --> 00:04:16.900
-- Yeah, exactly.
+00:16:04.320 --> 00:16:09.600
+And so that was the server back then. What we've seen is more workloads come
 
+00:16:09.600 --> 00:16:12.440
+to the cloud that have different requirements. Some require large memory,
 
-00:04:16.900 --> 00:04:17.860
-- No one should be that dumb.
+00:16:12.440 --> 00:16:17.040
+some require more compute, some require GPUs, some require InfiniBand back-end
 
+00:16:17.040 --> 00:16:21.200
+networking for high-performance computing. And so we've there's been a
 
-00:04:17.860 --> 00:04:20.020
-- I'm not yelling at people very much.
+00:16:21.200 --> 00:16:27.560
+drastic diversification of the server hardware in Azure that's being offered
 
+00:16:27.560 --> 00:16:31.880
+and current at any one point in time. And I think you'll continue to see that. So
 
-00:04:20.020 --> 00:04:24.020
-So the second tool that I wrote was actually called
+00:16:31.880 --> 00:16:36.800
+the old you know it's just a pizza box, it's it's a low low-end commodity
 
+00:16:36.800 --> 00:16:41.920
+server kind of that's the cloud vision back in 2010. Now it's the cloud
 
-00:04:24.020 --> 00:04:26.060
-NTFS DOS, to bring NTFS to DOS,
+00:16:41.920 --> 00:16:46.680
+contains specialized servers for specific applications. And when it comes
 
+00:16:46.680 --> 00:16:52.320
+to large servers back in 2014 we started to introduce very large servers. The kind
 
-00:04:26.060 --> 00:04:30.140
-but the native Windows NT tools that Bryce Cogswell,
+00:16:52.320 --> 00:16:56.080
+that you know people that were cloud purists back in 2010 would have been
 
+00:16:56.080 --> 00:17:00.040
+like no don't allow that. It's all about the cheap. It's all about the cheap and scale
 
-00:04:30.140 --> 00:04:32.700
-who I met in grad school, and I co-wrote together,
+00:17:00.040 --> 00:17:05.360
+out. Is scale up servers for SAP workloads in memory database workloads.
 
+00:17:05.360 --> 00:17:11.720
+So we introduced a machine that we nicknamed Godzilla which had 512 gig of
 
-00:04:32.700 --> 00:04:34.300
-were RegMon and FileMon.
+00:17:11.720 --> 00:17:17.080
+RAM in 2014 which was like an astonishing number. And we've continued
 
+00:17:17.080 --> 00:17:21.440
+to as SAP workloads have gotten bigger and bigger and more has migrated to the
 
-00:04:34.300 --> 00:04:35.740
-They were like the originals.
+00:17:21.440 --> 00:17:25.160
+cloud created bigger and bigger and bigger and bigger machines. In fact I'm
 
+00:17:25.160 --> 00:17:28.640
+showing here at Ignite the latest generation of the SAP scale up machines
 
-00:04:35.740 --> 00:04:38.180
-And RegMon allowed you to watch registry activity,
+00:17:28.640 --> 00:17:31.560
+that we're offering. It's not yet they're not yet public but I'm going to show a
 
+00:17:31.560 --> 00:17:37.360
+demo of them of one of them call that I'm calling nicknaming super mega
 
-00:04:38.180 --> 00:04:39.900
-FileMon, file system activity.
+00:17:37.360 --> 00:17:41.800
+Godzilla beast because we've gone through so many iterations. So this this
 
+00:17:41.800 --> 00:17:47.160
+one is super is the new. Yeah you're running low on agitator. Yeah and I don't
 
-00:04:39.900 --> 00:04:42.300
-We later merged them into Process Monitor
+00:17:47.160 --> 00:17:49.720
+know what I'll come up with next. But anyway we're at super mega Godzilla
 
+00:17:49.720 --> 00:17:55.960
+beast as the current generation which has 1790 cores. Wow. And 32 terabytes of
 
-00:04:42.300 --> 00:04:43.780
-after we joined Microsoft.
+00:17:55.960 --> 00:18:03.280
+RAM. 32 terabytes of RAM. Incredible. So do you do things to like pin VMs to
 
+00:18:03.280 --> 00:18:07.480
+certain cores so that they get better cache hits and stuff like that rather
 
-00:04:43.780 --> 00:04:47.700
-But we decided to make those tools available for free
+00:18:07.480 --> 00:18:11.480
+than it just kind of mosh around. That's especially important with NUMA
 
+00:18:11.480 --> 00:18:15.000
+architectures where you've got memory that has different latencies to different
 
-00:04:47.700 --> 00:04:49.900
-and so, and available, so we started
+00:18:15.000 --> 00:18:19.640
+sockets. As you want to have the VM that's using certain cores on a socket
 
+00:18:19.640 --> 00:18:24.880
+have memory that is close to it close to that socket. So that's and that's just
 
-00:04:49.900 --> 00:04:52.820
-the ntinternals.com website, which then,
+00:18:24.880 --> 00:18:29.720
+part of Hyper-V scheduling is doing that kind of assignment which we have under
 
+00:18:29.720 --> 00:18:33.240
+the hood. And again it's like the control plane at the very top says launch a
 
-00:04:52.820 --> 00:04:54.700
-Microsoft's lawyers said, don't use NT,
+00:18:33.240 --> 00:18:38.200
+virtual machine of this size of this skew. Then there's a resource manager the
 
+00:18:38.200 --> 00:18:41.480
+Azure allocator that goes and figures out this is the best server to put that
 
-00:04:54.700 --> 00:04:57.560
-so we switched over to renaming it Sysinternals.
+00:18:41.480 --> 00:18:47.240
+on. It has enough space and will reduce minimize fragmentation and places on
 
+00:18:47.240 --> 00:18:51.600
+there and then Hyper-V underneath is saying okay these are the cores to assign
 
-00:04:57.560 --> 00:04:59.940
-And then Bryce was like, hey, some of the tools
+00:18:51.600 --> 00:18:54.760
+it to. Here's the RAM to give it. Excellent and how much of that can you
 
+00:18:54.760 --> 00:18:59.720
+ask for? You can ask for the whole machine. You can. For a full machine you know
 
-00:04:59.940 --> 00:05:01.460
-that we've made, we should sell.
+00:18:59.720 --> 00:19:04.280
+full server virtual machine sizes. Wow okay there's probably not too many of
 
+00:19:04.280 --> 00:19:08.800
+those in. Yeah. But some people using them. Yeah. Like on the SAP ones because
 
-00:05:01.460 --> 00:05:02.740
-So we wrote a tool that would allow you
+00:19:08.800 --> 00:19:12.640
+they're designed for SAP. I think for those kinds of what the current
 
+00:19:12.640 --> 00:19:15.960
+generations I think we offer just two size like either half of it or the whole
 
-00:05:02.740 --> 00:05:05.320
-to mount a dead NT system through a serial cable,
+00:19:15.960 --> 00:19:22.100
+or the whole thing. Incredible. Wow okay how much of a chunk of a rack does that
 
+00:19:22.100 --> 00:19:26.480
+take? It's basically the whole rack. Yeah pretty much. Top to bottom. Yeah it's
 
-00:05:05.320 --> 00:05:08.460
-as if it was a local drive on the recovery system.
+00:19:26.480 --> 00:19:31.400
+like a 10 kilowatt server. Yeah a little power plan on the side there. As you
 
+00:19:31.400 --> 00:19:35.480
+kind of talk through the history of sort of how your code ran it was more more
 
-00:05:08.460 --> 00:05:11.180
-And he said, if we make a rewrite version, we should sell.
+00:19:35.480 --> 00:19:40.280
+colo as you said like the more smaller smaller ones and then as you got bigger
 
+00:19:40.280 --> 00:19:44.560
+and bigger on some of this you started working on things like well how do we
 
-00:05:11.180 --> 00:05:14.580
-So he started, he went and set up a credit account,
+00:19:44.560 --> 00:19:49.040
+let the servers run hotter and have the air cool them rather than more actively
 
+00:19:49.040 --> 00:19:54.560
+cooled and then it even gets to a almost more just remove big chunks of it and
 
-00:05:14.580 --> 00:05:17.180
-you know, credit card account on eCommerce.
+00:19:54.560 --> 00:19:57.960
+let them fail and then when enough of it has failed take them out you want to
 
+00:19:57.960 --> 00:20:02.600
+kind of talk about. Yeah we're still yeah good question because we're we're still
 
-00:05:17.180 --> 00:05:19.140
-- Authorized.net or something like that,
+00:20:02.600 --> 00:20:07.360
+exploring this space towards higher efficiency lower energy consumption more
 
+00:20:07.360 --> 00:20:11.160
+sustainable. One of the experiments that came out of Microsoft Research was
 
-00:05:19.140 --> 00:05:20.860
-it was weird APIs, yeah.
+00:20:11.160 --> 00:20:14.760
+Project Natick which is taking a bunch of servers putting it or a rack of
 
+00:20:14.760 --> 00:20:20.280
+servers putting it in a container that has nitrous oxide gas in it so it's an
 
-00:05:20.860 --> 00:05:22.740
-- We started selling the software
+00:20:20.280 --> 00:20:25.320
+inert gas and dropping it into the ocean floor and letting it be cooled ambiently
 
+00:20:25.320 --> 00:20:30.520
+through the water there. Not water on the inside but the outside. Yeah so giant
 
-00:05:22.740 --> 00:05:24.980
-and that grew into what became Winternals,
+00:20:30.520 --> 00:20:34.760
+heat sink. And the there was potential benefits of that and and it's still
 
+00:20:34.760 --> 00:20:38.560
+something that might get revived at some point but what we found coming out of
 
-00:05:24.980 --> 00:05:25.900
-a commercial software company.
+00:20:38.560 --> 00:20:44.080
+that was if the parts are in an inert environment they have one eighth the
 
+00:20:44.080 --> 00:20:48.480
+failure rates as ones that are in air environment and with particulate matter
 
-00:05:25.900 --> 00:05:27.860
-But Sysinternals and Winternals, like I said,
+00:20:48.480 --> 00:20:53.360
+and corrosive materials in the air. So we started exploring liquid cooling both
 
+00:20:53.360 --> 00:20:57.840
+for that as well as potential energy savings and more sustainable cooling and
 
-00:05:27.860 --> 00:05:29.220
-were both acquired at the time.
+00:20:57.840 --> 00:21:02.440
+then air cooled. We've explored a two-phase liquid immersion we had a
 
+00:21:02.440 --> 00:21:06.600
+pilot running there's some regulations that's changed around the the kinds of
 
-00:05:29.220 --> 00:05:31.140
-I joined Microsoft in 2006.
+00:21:06.600 --> 00:21:10.520
+fluids that have made us take a look at a different direction so we. Is that kind
 
+00:21:10.520 --> 00:21:14.320
+of like the chlor what you would get in like an air conditioner or some of the
 
-00:05:31.140 --> 00:05:33.940
-But Bryce and I continued to work on Sysinternals.
+00:21:14.320 --> 00:21:18.560
+stuff they. They're called the forever chemicals or materials. The ones we're
 
+00:21:18.560 --> 00:21:23.920
+using actually aren't but the regulation is a little broad and so we're just
 
-00:05:33.940 --> 00:05:37.020
-He worked on them until he retired from Microsoft
+00:21:23.920 --> 00:21:27.840
+steering clear and it might be revisited at some point but we're also they have
 
+00:21:27.840 --> 00:21:32.040
+been exploring liquid cooling kind of traditional liquid cooling cold plate
 
-00:05:37.020 --> 00:05:39.500
-and retired just in general four years later.
+00:21:32.040 --> 00:21:37.120
+cold and some people listening probably like me are gamers and have liquid
 
+00:21:37.120 --> 00:21:41.560
+cooled GPUs or your CPUs at home in their gaming rigs which allow them to
 
-00:05:39.500 --> 00:05:40.780
-And then I've continued.
+00:21:41.560 --> 00:21:44.880
+get overclocked and it's the same thing we're doing in our data centers. In fact
 
+00:21:44.880 --> 00:21:48.320
+one of the things Satya showed in the keynote was something called sidekick
 
-00:05:40.780 --> 00:05:42.740
-I have now a couple people, three people
+00:21:48.320 --> 00:21:52.720
+which is a cabinet that it allows us to take liquid cold plate liquid cooling
 
+00:21:52.720 --> 00:21:59.440
+into an existing data center air cooled data center where the Maya 100 AI
 
-00:05:42.740 --> 00:05:45.780
-working on Sysinternals engineering systems,
+00:21:59.440 --> 00:22:04.320
+accelerators are in the cabinet sitting right next to it and the cooling pipes
 
+00:22:04.320 --> 00:22:10.240
+are going into the Maya cabinet to cool the accelerators themselves and so that
 
-00:05:45.780 --> 00:05:48.740
-keeping them healthy and the build pipelines working
+00:22:10.240 --> 00:22:14.440
+is. Do they manage like some big metal plate and then the metal plate is liquid
 
+00:22:14.440 --> 00:22:17.640
+cooled or something like that? Yeah it's effectively that there's a plate on top
 
-00:05:48.740 --> 00:05:49.820
-and then adding features to them.
+00:22:17.640 --> 00:22:21.440
+of the processor and then liquid is going through that. So I'm gonna actually
 
+00:22:21.440 --> 00:22:26.520
+show pictures of the inside of the Maya system tomorrow in my AI innovation
 
-00:05:49.820 --> 00:05:52.140
-And I still code on them and still add features.
+00:22:26.520 --> 00:22:31.720
+closing keynote but that is I think the takeaway here is that at the scale we're
 
+00:22:31.720 --> 00:22:35.720
+at and with the efficiency gains that you might get from even a few percentage
 
-00:05:52.140 --> 00:05:54.420
-Like just in a Zoomit release a few days ago,
+00:22:35.720 --> 00:22:40.480
+we're exploring everything at the same time like single phase liquid immersion
 
+00:22:40.480 --> 00:22:44.640
+cooling still exploring that and then how to do cold plate more efficiently.
 
-00:05:54.420 --> 00:05:57.380
-I added some, I blur and highlight to Zoomit.
+00:22:44.640 --> 00:22:48.720
+I'll also be showing something called micro fluidics we're exploring which is
 
+00:22:48.720 --> 00:22:52.960
+much more efficient than just pure liquid cold plate which a cold plate is
 
-00:05:57.380 --> 00:05:59.820
-- Yeah, people are doing presentations on Windows.
+00:22:52.960 --> 00:22:56.240
+just putting the plate like you just said right on top of the processor and
 
+00:22:56.240 --> 00:23:03.160
+so the water's taking the heat away but if we can put the liquid right into the
 
-00:05:59.820 --> 00:06:01.180
-With Zoomit, you can say,
+00:23:03.160 --> 00:23:08.000
+processor like. Are we talking channels in the process? Around the processor. Okay.
 
+00:23:08.000 --> 00:23:11.680
+Just flow it right on top of it and so that's what something we're calling
 
-00:06:01.180 --> 00:06:03.460
-let me quickly draw on the screen, not PowerPoint,
+00:23:11.680 --> 00:23:15.040
+micro fluidics and I'll show that and talk a little bit about that tomorrow
 
+00:23:15.040 --> 00:23:20.200
+too offers much more efficient cooling and it's not it's not prime time yet but
 
-00:06:03.460 --> 00:06:05.420
-but just whatever happens to be on your screen,
+00:23:20.200 --> 00:23:23.160
+looks incredibly promising. That looks awesome.
 
+00:23:23.160 --> 00:23:28.200
+This portion of Talk Python to Me is brought to you by the PyBite Python
 
-00:06:05.420 --> 00:06:06.260
-which is really nice.
+00:23:28.200 --> 00:23:33.680
+Developer Mindset Program. It's run by my two friends and frequent guests Bob
 
+00:23:33.680 --> 00:23:37.600
+Delderbos and Julian Sequeira and instead of me telling you about it let's
 
-00:06:06.260 --> 00:06:08.000
-I love my Macs these days,
+00:23:37.600 --> 00:23:43.120
+hear them describe their program. Happy New Year! As we step into 2024 it's time
 
+00:23:43.120 --> 00:23:47.680
+to reflect. Think back to last year what did you achieve with Python? If you're
 
-00:06:08.000 --> 00:06:09.900
-but boy, I wish Zoomit existed on the Mac.
+00:23:47.680 --> 00:23:50.680
+feeling like you haven't made the progress you wanted and procrastination
 
+00:23:50.680 --> 00:23:55.960
+got the best of you it's not too late. This year can be different. This year can
 
-00:06:09.900 --> 00:06:11.780
-- People have asked for Zoomit for Mac
+00:23:55.960 --> 00:24:01.000
+be your year of Python mastery. At PyBites we understand the journey of
 
+00:24:01.000 --> 00:24:05.720
+learning Python. Our coaching program is tailor-made to help you break through
 
-00:06:11.780 --> 00:06:13.420
-and I'd like to make a Zoomit for Mac.
+00:24:05.720 --> 00:24:11.120
+barriers and truly excel. Don't let another year slip by with unmet goals.
 
+00:24:11.120 --> 00:24:17.000
+Join us at PyBites and let's make 2024 the year you conquer Python. Check out
 
-00:06:13.420 --> 00:06:15.820
-Now with Copilot, I wonder how good it is
+00:24:17.000 --> 00:24:22.160
+PDM Today, our flagship coaching program, and let's chat about your Python journey.
 
+00:24:22.160 --> 00:24:28.640
+Apply for the Python Developer Mindset today. It's quick and free to apply. The
 
-00:06:15.820 --> 00:06:17.620
-at writing Mac apps,
+00:24:28.640 --> 00:24:32.440
+link is in your podcast player show notes. Thanks to PyBites for sponsoring
 
+00:24:32.440 --> 00:24:36.760
+the show. One of the things I saw in the opening keynote, I don't know if it fits
 
-00:06:17.620 --> 00:06:19.380
-because I don't want to spend all the time
+00:24:36.760 --> 00:24:40.040
+into what you were just talking about or if it's also another of things, where
 
+00:24:40.040 --> 00:24:44.520
+actually had the whole motherboard submerged and then even just the entire
 
-00:06:19.380 --> 00:06:21.860
-to learn how to write a Mac apps just to write Zoomit,
+00:24:44.520 --> 00:24:48.280
+computer is just underwater. So that was two-phase liquid immersion cooling like
 
+00:24:48.280 --> 00:24:52.320
+I mentioned. Yeah. Just dunking the whole thing in the dielectric fluid. And you
 
-00:06:21.860 --> 00:06:23.180
-but if Copilot can help,
+00:24:52.320 --> 00:24:55.720
+had it boil at a low temperature I guess because the phase change is like an
 
+00:24:55.720 --> 00:25:00.200
+extremely energy intense aka heat exchange. Yeah and it's called, yeah,
 
-00:06:23.180 --> 00:06:24.140
-maybe it'll, you know,
+00:25:00.200 --> 00:25:04.400
+that's it's actually two-phase because of the boiling it goes, it phase changes
 
+00:25:04.400 --> 00:25:09.120
+into gas and then condenses again back into liquid. So it's that was the idea
 
-00:06:24.140 --> 00:06:26.020
-something that I can do in my spare time.
+00:25:09.120 --> 00:25:13.120
+behind two phases. I see. Instead of just running a radiator you like almost
 
+00:25:13.120 --> 00:25:17.560
+condense it back somewhere else and then bring it back around. Yeah. Okay. Cool. So
 
-00:06:26.020 --> 00:06:27.900
-- I don't know if it'll do it, but it'll get you close.
+00:25:17.560 --> 00:25:21.840
+if we go and run our Python codes whether it's pass or I has or whatever,
 
+00:25:21.840 --> 00:25:25.120
+what's the chance it's hitting that or is this this kind of cutting-edge stuff
 
-00:06:27.900 --> 00:06:30.460
-It's crazy how these LLMs are writing code
+00:25:25.120 --> 00:25:30.680
+reserved for high energy AI training? Is it more like if we ask ChatGPT it's
 
+00:25:30.680 --> 00:25:36.000
+liquid cooled? Our standard data centers right now are air-cooled. So
 
-00:06:30.460 --> 00:06:31.300
-for us these days.
+00:25:36.000 --> 00:25:40.920
+it's air-cooled servers. This Maya part is liquid cooled. So when that you know
 
+00:25:40.920 --> 00:25:44.000
+in our first summer we've got some of our own workloads now starting to
 
-00:06:31.300 --> 00:06:32.380
-And we're going to talk a bit about
+00:25:44.000 --> 00:25:47.880
+leverage Maya. Do you put on your own workloads first just in case? Yeah.
 
+00:25:47.880 --> 00:25:52.360
+Well it's just to see it like shake it out. Yeah. Yeah. Yeah. Piloting it. Yeah. You're not
 
-00:06:32.380 --> 00:06:34.460
-maybe how some of those run and so on.
+00:25:52.360 --> 00:25:57.760
+offering that up to the big customers just right away. And so Maya I don't know
 
+00:25:57.760 --> 00:26:03.720
+how many people know about this either. This is one of the GPU training systems
 
-00:06:34.460 --> 00:06:37.860
-I mean, Azure is doing tons of stuff
+00:26:03.720 --> 00:26:08.120
+you guys have. I mean for those who don't know OpenAI and ChatGPT run on Azure
 
+00:26:08.120 --> 00:26:12.880
+which probably takes a couple of cores, a couple GPUs to make happen. Yeah. I want
 
-00:06:37.860 --> 00:06:40.500
-with large language models and you all have some,
+00:26:12.880 --> 00:26:18.320
+to talk about that. Yeah. So the right now our fleet, a large-scale AI
 
+00:26:18.320 --> 00:26:23.200
+supercomputing fleet is made up of NVIDIA parts. So the previous generation
 
-00:06:40.500 --> 00:06:42.260
-you know, we're here at the Microsoft Ignite conference.
+00:26:23.200 --> 00:26:27.320
+was well the original generation that we trained GPT-3 on with OpenAI was
 
+00:26:27.320 --> 00:26:32.240
+NVIDIA V100s and then we introduced A100s which is what GPT-4 was trained on.
 
-00:06:42.260 --> 00:06:43.900
-You've got some big announcements.
+00:26:32.240 --> 00:26:37.680
+And these are graphics cards like 4080s or something but specifically for AI
 
+00:26:37.680 --> 00:26:41.320
+right? Yeah. Okay. That's right. And then the current generation of supercomputer
 
-00:06:43.900 --> 00:06:46.780
-I was such a fan still of Sysmon
+00:26:41.320 --> 00:26:44.520
+we're building for OpenAI training their next generation of their model that's
 
+00:26:44.520 --> 00:26:51.320
+a NVIDIA H100 GPUs. Then Maya is our own custom AI accelerator. So it's not a GPU.
 
-00:06:46.780 --> 00:06:49.140
-and I use that for all sorts of things still.
+00:26:51.320 --> 00:26:56.720
+You know one of the aspects of NVIDIA's parts has been their GPU base. So
 
+00:26:56.720 --> 00:27:01.560
+they're also can do texture mapping for example. But you don't need that if
 
-00:06:49.140 --> 00:06:50.260
-So super cool.
+00:27:01.560 --> 00:27:05.560
+you're just doing pure AI workloads. So back to that specialization right?
 
+00:27:05.560 --> 00:27:08.800
+So if you could build it just for the one thing maybe you build it
 
-00:06:50.260 --> 00:06:51.740
-Now, before we jump in,
+00:27:08.800 --> 00:27:12.000
+slightly different. That's right. So Maya is just designed purely for
 
+00:27:12.000 --> 00:27:17.640
+matrix operations used in in fact low precision matrix operations used for AI
 
-00:06:51.740 --> 00:06:53.820
-I kind of want to talk about some of your big announcements
+00:27:17.640 --> 00:27:22.440
+training and inference. And so that is the specialized part that we've created
 
+00:27:22.440 --> 00:27:27.400
+called Maya 100 the first generation of that. Well if I think of like some of
 
-00:06:53.820 --> 00:06:56.220
-because they really caught me off guard here.
+00:27:27.400 --> 00:27:31.320
+the stuff presented at the opening keynote and stuff here I think the word
 
+00:27:31.320 --> 00:27:37.960
+AI was said a record number of times. Yeah I don't think there was a topic there that AI wasn't a part of.
 
-00:06:56.220 --> 00:06:57.820
-I'm like, yes, this is exciting,
+00:27:37.960 --> 00:27:42.840
+And so how much is this changing things for you guys? Like 12 months ago or
 
+00:27:42.840 --> 00:27:47.840
+something Chachi P appeared on the scene. I mean it's changing it's literally
 
-00:06:57.820 --> 00:07:00.260
-but maybe since we're going to talk a decent amount
+00:27:47.840 --> 00:27:51.640
+changing everything. You know Jensen was saying this is the biggest thing since
 
+00:27:51.640 --> 00:27:56.480
+the internet. Yeah Jensen being the CEO of NVIDIA. Yeah yeah who was on stage with Satya at the
 
-00:07:00.260 --> 00:07:02.460
-about Azure, the internals of hardware,
+00:27:56.480 --> 00:28:01.680
+keynote. It is changing everything. It's changing not just the product offerings.
 
+00:28:01.680 --> 00:28:05.560
+So the way that we you know have integrate AI into the products using
 
-00:07:02.460 --> 00:07:03.300
-how our code runs,
+00:28:05.560 --> 00:28:09.160
+Copilot. It's changing the way we develop the products as well. And the way that we
 
+00:28:09.160 --> 00:28:13.080
+run our systems inside already. So for example incident management. We've got
 
-00:07:03.300 --> 00:07:05.060
-just give us a quick history of Azure.
+00:28:13.080 --> 00:28:17.800
+Copilot built you know our own Copilot internally built into that. So somebody
 
+00:28:17.800 --> 00:28:22.040
+that's responding to an issue and our production systems can say okay so what's
 
-00:07:05.060 --> 00:07:06.980
-You know, when did this whole thing get started?
+00:28:22.040 --> 00:28:26.680
+going on? What's that what happened with this? Yeah show me the graph of this. You
 
+00:28:26.680 --> 00:28:29.880
+know just be able to use human language to get caught up on what's going on.
 
-00:07:06.980 --> 00:07:09.740
-- Azure started right as I joined Microsoft in 2006,
+00:28:29.880 --> 00:28:34.120
+People tell me it's just statistics. Just prediction. It doesn't feel like
 
+00:28:34.120 --> 00:28:39.000
+prediction. You know the people that say that I think are missing
 
-00:07:09.740 --> 00:07:11.540
-there was a group of people, including Dave Cutler,
+00:28:39.000 --> 00:28:44.560
+the scale of the statistics. And because we're probably predicting a little bit.
 
+00:28:44.560 --> 00:28:48.160
+Thinking about what are you gonna say next. That's what we're we're statistical.
 
-00:07:11.540 --> 00:07:13.460
-one of the people that I've looked up to
+00:28:48.160 --> 00:28:54.720
+And so it's just once you get statistics large that at a large
 
+00:28:54.720 --> 00:28:58.440
+enough scale that you start to see something that looks like what we call
 
-00:07:13.460 --> 00:07:15.860
-because Dave was the original architect
+00:28:58.440 --> 00:29:03.240
+intelligence. Yeah yeah it's it's really incredible. I'm starting to use it to
 
+00:29:03.240 --> 00:29:07.960
+just write my git commit logs for me. You know push a button and says oh you
 
-00:07:15.860 --> 00:07:19.300
-behind the VMS operating system and then Windows NT,
+00:29:07.960 --> 00:29:11.600
+added error handling to the background task. So in case this fails you'll be
 
+00:29:11.600 --> 00:29:15.280
+more resilient and it'll keep running like that's better than I could have got.
 
-00:07:19.300 --> 00:07:21.220
-which is now underlying Windows.
+00:29:15.280 --> 00:29:19.760
+But then I crash you know and yeah you just push the button and it's just
 
+00:29:19.760 --> 00:29:23.920
+magic. It's magical. Yeah it really is. I mean it's not it it's called
 
-00:07:21.220 --> 00:07:23.660
-He and some other people were just
+00:29:23.920 --> 00:29:26.800
+copilot for a reason because we're not at the point yet where you can just let
 
+00:29:26.800 --> 00:29:30.760
+it do what it does autonomously. You need to check its work. Like you need to look
 
-00:07:23.660 --> 00:07:26.180
-at the suggestion of Ray Ozzie.
+00:29:30.760 --> 00:29:33.640
+at and say oops you know that time it screwed it up. It didn't get it quite
 
+00:29:33.640 --> 00:29:39.840
+right or I need to add more context to this than it had or it extracted. So but
 
-00:07:26.180 --> 00:07:29.580
-This is back when services was a big thing
+00:29:39.840 --> 00:29:44.160
+as far as accelerating work it's just a game-changer. Yeah it really really is.
 
+00:29:44.160 --> 00:29:47.880
+So before we run out of time I want to ask you just a couple more things bit of
 
-00:07:29.580 --> 00:07:31.980
-and Ray sent the memo to the company,
+00:29:47.880 --> 00:29:52.800
+a diversion. So Python we saw Python appear in the keynote. They were showing
 
+00:29:52.800 --> 00:29:56.600
+off I can't remember who it wasn't Satya it was whoever followed him. They look we
 
-00:07:31.980 --> 00:07:34.620
-kind of echoing Bill Gates' internet memo saying,
+00:29:56.600 --> 00:30:01.760
+want to show off our new sharing of the insanely large GPUs for machine learning.
 
+00:30:01.760 --> 00:30:05.040
+Let's pull up some Python and a Jupyter notebook and I'll just check that out.
 
-00:07:34.620 --> 00:07:36.180
-it's software and services now.
+00:30:05.040 --> 00:30:09.840
+And you're like where are we again? Yeah really interesting. So you know you said
 
+00:30:09.840 --> 00:30:12.880
+you're using a little bit of Python yourself like what's Python look like in
 
-00:07:36.180 --> 00:07:39.260
-And they said, how can we build a data center scale type
+00:30:12.880 --> 00:30:16.480
+your world? Well so the reason that I'm using Python is I took a sabbatical this
 
+00:30:16.480 --> 00:30:20.560
+summer and so I was like I'm gonna do some AI research. So I got connected with
 
-00:07:39.260 --> 00:07:41.900
-platform to make it easier for Microsoft
+00:30:20.560 --> 00:30:23.960
+an AI researcher. In fact I'm gonna talk about this at my keynote tomorrow some
 
+00:30:23.960 --> 00:30:28.640
+of the work that came out of it. The obviously AI is completely Python these
 
-00:07:41.900 --> 00:07:43.540
-to develop services?
+00:30:28.640 --> 00:30:32.760
+days. Yeah almost entirely. So I was I spent the whole summer and I still am
 
+00:30:32.760 --> 00:30:37.120
+spending my time in Python Jupyter notebooks and then Python scripts when
 
-00:07:43.540 --> 00:07:45.820
-And so this was called Project Red Dog,
+00:30:37.120 --> 00:30:42.520
+you want to do some some run for for a final result. So I hadn't used really
 
+00:30:42.520 --> 00:30:45.720
+Python before other than in passing. I mean it's a very language that's very
 
-00:07:45.820 --> 00:07:47.260
-which was incubating for a while.
+00:30:45.720 --> 00:30:49.680
+easy to pick up. Yeah there's a there's a t-shirt that says I learned Python it
 
+00:30:49.680 --> 00:30:52.680
+was a good weekend. Yeah it's a bit of a joke but it's a good joke you know. Yeah
 
-00:07:47.260 --> 00:07:49.980
-And then 2008, they publicly launched it
+00:30:52.680 --> 00:30:56.960
+and I think that's what makes it so powerful is that it's so easy to pick up.
 
+00:30:56.960 --> 00:31:01.880
+But what's made it even easier for me to pick it up I'd say that I'm a
 
-00:07:49.980 --> 00:07:51.740
-'cause Steve said, we need to make this available
+00:31:01.880 --> 00:31:06.400
+mediocre Python programmer but I'm using Copilot and that's made me an expert
 
+00:31:06.400 --> 00:31:12.000
+Python coder. How do I do this? Yeah and it's like I've never I don't go to
 
-00:07:51.740 --> 00:07:54.260
-to third parties as well as Windows Azure.
+00:31:12.000 --> 00:31:14.920
+stack over you know it's a question I don't go to stack over flow for
 
+00:31:14.920 --> 00:31:19.720
+questions. I haven't had to get a book on Python. I basically just either ask
 
-00:07:54.260 --> 00:07:57.340
-And, sorry, 2008 they announced the preview of it.
+00:31:19.720 --> 00:31:24.920
+Copilot explicitly like how do I do this or write me this or I put it in the
 
+00:31:24.920 --> 00:31:29.440
+function or in the comment and it gets it done for me. And there's a occasionally
 
-00:07:57.340 --> 00:08:01.140
-2010, it commercially launched publicly in February
+00:31:29.440 --> 00:31:32.680
+I'll have to go hand met edit it and figure out what's going on but for the
 
+00:31:32.680 --> 00:31:37.200
+most part it is writing almost all my code. And so my goal is how can I just
 
-00:08:01.140 --> 00:08:02.700
-and I joined in July.
+00:31:37.200 --> 00:31:40.880
+not have it write everything for me. So that is kind of become the way that I
 
+00:31:40.880 --> 00:31:46.600
+program in Python and I think Python and AI and it the knowledge of Copilot for
 
-00:08:02.700 --> 00:08:06.380
-And a few years later, with the rise of open source software
+00:31:46.600 --> 00:31:52.440
+Python because OpenAI obviously for their own purposes has made GPT-4 and
 
+00:31:52.440 --> 00:31:57.840
+GPT-3.5 before it really know Python. I hadn't really thought of that connection but of course they
 
-00:08:06.380 --> 00:08:08.780
-and so many enterprise customers wanting to have Linux,
+00:31:57.840 --> 00:32:02.600
+wanted to answer Python questions I'm sure. For themselves. So I think when it
 
+00:32:02.600 --> 00:32:07.560
+comes to seeing what AI can do for programming Python is at the forefront
 
-00:08:08.780 --> 00:08:11.060
-we re-branded it Microsoft Azure.
+00:32:07.560 --> 00:32:10.960
+of that. What was your impression of it? I mean I'm sure you've probably seen it
 
+00:32:10.960 --> 00:32:14.440
+before but like what's your impression working in it coming from a curly brace
 
-00:08:11.060 --> 00:08:12.940
-And we also--
+00:32:14.440 --> 00:32:19.040
+semicolon type language like C++ or something like this weird they drop a
 
+00:32:19.040 --> 00:32:22.920
+bunch of parentheses they have these tab space these four spaces rules. Well it's
 
-00:08:12.940 --> 00:08:14.500
-- Can I run Linux on Windows Azure?
+00:32:22.920 --> 00:32:31.080
+you know the YAML versus JSON. But I mean I've gotten used to it it's not a it's
 
+00:32:31.080 --> 00:32:37.080
+not a big deal. I find it's it's less verbose than C. There's less typing. Less
 
-00:08:14.500 --> 00:08:15.420
-I don't know if that makes any sense.
+00:32:37.080 --> 00:32:41.240
+symbol noise. You get the essence. Yeah. Yeah. Yeah I kind of had that experience as well
 
+00:32:41.240 --> 00:32:44.520
+coming from a C-based language like wow this is really weird and then after I
 
-00:08:15.420 --> 00:08:17.060
-- Yeah, and one of the first things I'd done,
+00:32:44.520 --> 00:32:48.280
+went back to C# I'm like but this is also weird and I kind of like this
 
+00:32:48.280 --> 00:32:52.560
+clarity over here so now what do I do with life? And then you go back and like
 
-00:08:17.060 --> 00:08:20.420
-worked on with Corey Sanders was being asked,
+00:32:52.560 --> 00:32:56.600
+semicolons are annoying now. Yes exactly. Like I thought they were needed they're
 
+00:32:56.600 --> 00:33:01.120
+not needed what's going on? Another thing that I think you know maybe people
 
-00:08:20.420 --> 00:08:22.380
-hey, we've got platform as a service.
+00:33:01.120 --> 00:33:05.960
+really enjoy hearing a bit about and I'm a big fan of. You wrote a three-part
 
+00:33:05.960 --> 00:33:11.280
+series of novels about computer hackers called Zero Day. Mm-hmm. Really good. I read
 
-00:08:22.380 --> 00:08:23.740
-We have this thing called cloud services,
+00:33:11.280 --> 00:33:15.920
+all of them back when they came out and so much of this like computer mystery
 
+00:33:15.920 --> 00:33:19.280
+stuff is like oh I'm they're using vb6 I'm gonna get their IP address. You're like
 
-00:08:23.740 --> 00:08:25.700
-this model for how you write apps.
+00:33:19.280 --> 00:33:24.960
+wait what? Those words are meaningful but the sense is not right? And you know your
 
+00:33:24.960 --> 00:33:28.400
+books are like a lot of sort of spy stuff but also a lot of really cool
 
-00:08:25.700 --> 00:08:27.020
-But our enterprise customers were saying,
+00:33:28.400 --> 00:33:33.080
+legit reasonably possible computer stuff. Yeah tell people a quick bit about
 
+00:33:33.080 --> 00:33:38.420
+that. I love cyber I love thrillers growing up techno thrillers. I read
 
-00:08:27.020 --> 00:08:30.220
-I can't move my existing IT stuff to Azure
+00:33:38.420 --> 00:33:42.180
+Andromeda Strain when I was like in seventh grade. I was like this book is so
 
+00:33:42.180 --> 00:33:46.860
+cool because it's like I'm learning science plus yeah it's actually you know
 
-00:08:30.220 --> 00:08:33.420
-because it just needs VMs.
+00:33:46.860 --> 00:33:51.640
+it's really exciting. So I've always wanted to write one and then coming into
 
+00:33:51.640 --> 00:33:56.800
+after into the late to 1990s when you started to see some of these large-scale
 
-00:08:33.420 --> 00:08:35.900
-And so the first thing we did was,
+00:33:56.800 --> 00:34:01.800
+viruses I was just thinking this is such a powerful weapon for somebody to cause
 
+00:34:01.800 --> 00:34:05.960
+destruction and then 9/11 happened I'm like all right logical next step is
 
-00:08:35.900 --> 00:08:38.740
-hey, we should get IaaS capability in Azure.
+00:34:05.960 --> 00:34:10.080
+leveraging a cyber weapon to do something that with the same goals and
 
+00:34:10.080 --> 00:34:15.840
+so that's what led me to write Zero Day which is taking that idea of using a
 
-00:08:38.740 --> 00:08:42.540
-And so in 2012, we launched the preview of IaaS for Azure.
+00:34:15.840 --> 00:34:19.760
+cyber weapon for terrorism. Then I was like oh that book was really well
 
+00:34:19.760 --> 00:34:23.080
+received I had a lot of fun doing it so let me write the next one and I wanted
 
-00:08:42.540 --> 00:08:44.380
-And that's really when the business started to take off
+00:34:23.080 --> 00:34:27.880
+to continue in this theme with the same characters Darryl Hagen and Jeff Akin
 
+00:34:27.880 --> 00:34:32.280
+and say what what's something else what's other another cyber security
 
-00:08:44.380 --> 00:08:46.140
-because enterprises then could,
+00:34:32.280 --> 00:34:35.520
+angle that I can take a look at in the second one so the second one was state
 
+00:34:35.520 --> 00:34:40.560
+sponsored cyber espionage and actually the ironic thing is I'd already had Iran
 
-00:08:46.140 --> 00:08:46.980
-with minimal effort, start to move.
+00:34:40.560 --> 00:34:44.240
+in the book story I'd already had China in the story I had people trying to
 
+00:34:44.240 --> 00:34:48.560
+figure out how to get Iran a nuclear weapon and then Stuxnet happened right
 
-00:08:46.980 --> 00:08:49.580
-- Oh, well, that's like doing what we do in the--
+00:34:48.560 --> 00:34:52.440
+when I was still writing the book I'm like okay this is like a stolen part of my
 
+00:34:52.440 --> 00:34:57.080
+plot line. So I had to change the book a little to acknowledge Stuxnet
 
-00:08:49.580 --> 00:08:50.420
-- Yeah, in their--
+00:34:57.080 --> 00:35:00.600
+happening and then the third one was about insider threats which I think is
 
+00:35:00.600 --> 00:35:04.720
+one of the toughest threats to deal with in this case it was a long-range plot
 
-00:08:50.420 --> 00:08:51.900
-- Our data center, but in your data center.
+00:35:04.720 --> 00:35:09.160
+from some people that wanted to compromise stock exchange and kind of a
 
+00:35:09.160 --> 00:35:13.520
+mixture of high-frequency trading and insider threat with cyber security
 
-00:08:51.900 --> 00:08:52.860
-Yeah, exactly.
+00:35:13.520 --> 00:35:17.600
+systems was the third one called Rogue Code. Mm-hmm yeah so they were all really
 
+00:35:17.600 --> 00:35:20.720
+good I really enjoyed it. Were you a fan of Mr. Robot did you ever watch that
 
-00:08:52.860 --> 00:08:54.140
-Now no one even thinks about it.
+00:35:20.720 --> 00:35:24.920
+series? I did I love that series. Yeah oh my gosh again it's it seemed pretty
 
+00:35:24.920 --> 00:35:29.360
+plausible. Yeah I really like that imagine a lot of people out there have seen
 
-00:08:54.140 --> 00:08:54.980
-- Exactly.
+00:35:29.360 --> 00:35:33.680
+Mr. Robot as well if they want you know that kind of idea but in just a
 
+00:35:33.680 --> 00:35:37.440
+series they can binge. Yeah cool. Maybe we should wrap up our chat here but just a
 
-00:08:54.980 --> 00:08:58.500
-So IaaS has continued to develop, PaaS has continued to develop.
+00:35:37.440 --> 00:35:42.560
+quick of like some of the future things you talked about like rapidly deploying
 
+00:35:42.560 --> 00:35:46.800
+some of these data centers and some of these ballast systems maybe just give us
 
-00:08:58.500 --> 00:09:01.780
-Cloud services was designed in a world without containers.
+00:35:46.800 --> 00:35:51.120
+a sense of like and even like disaggregated rack architecture do you
 
+00:35:51.120 --> 00:35:56.320
+have instead of having a GPU alongside a server like a rack of GPUs and then
 
-00:09:01.780 --> 00:09:04.460
-Now we've got containerization, the rise of Kubernetes,
+00:35:56.320 --> 00:36:00.240
+optical connections to a rack of servers like give us a sense of some of the
 
+00:36:00.240 --> 00:36:03.240
+stuff where it's going. Yeah so that's some of the stuff that we're exploring
 
-00:09:04.460 --> 00:09:06.700
-and then application models on top of containers.
+00:36:03.240 --> 00:36:07.800
+like I mentioned we're taking a look at lots of different ways to re-architect
 
+00:36:07.800 --> 00:36:10.920
+the data center to be more efficient and one of the ways that you get efficient
 
-00:09:06.700 --> 00:09:08.180
-And so Azure's evolved.
+00:36:10.920 --> 00:36:15.600
+is by and in reduced fragmentation is by having larger pools to allocate
 
+00:36:15.600 --> 00:36:18.720
+resources from. If you think about allocating a virtual machine on a server
 
-00:09:08.180 --> 00:09:10.340
-It actually, I think, led some of that evolution
+00:36:18.720 --> 00:36:22.440
+how much RAM can you give it at most? Well as much as sitting on the server.
 
+00:36:22.440 --> 00:36:26.480
+How many GPUs can you attach to it? Well as most as are attached to that server.
 
-00:09:10.340 --> 00:09:12.900
-of cloud-native computing up into containers
+00:36:26.480 --> 00:36:30.920
+Right how many PCI slots you got? Yeah so but if you think about I've got a large
 
+00:36:30.920 --> 00:36:36.200
+resource pool it's a whole group of GPUs then I could be able to give it as many
 
-00:09:12.900 --> 00:09:13.940
-and abstractions.
+00:36:36.200 --> 00:36:41.760
+GPUs as you want. 50? Yeah ask for 50. Exactly the benefits of pooling for a
 
+00:36:41.760 --> 00:36:44.400
+resource allocation are that you reduce fragmentation and you get more
 
-00:09:13.940 --> 00:09:15.660
-But it's been a long, long journey towards that.
+00:36:44.400 --> 00:36:48.360
+flexibility so we've been trying to explore how we can do this from rack
 
+00:36:48.360 --> 00:36:52.080
+scale disaggregation of saying there's a whole bunch of SSDs at the top of the
 
-00:09:15.660 --> 00:09:18.780
-I mean, I think one of the things is I've always believed
+00:36:52.080 --> 00:36:56.480
+rack then there's a bunch of GPUs and then there's a bunch of CPU cores and
 
+00:36:56.480 --> 00:36:59.880
+let's just compose the system dynamically. There's a bunch of
 
-00:09:18.780 --> 00:09:21.580
-that ultimately cloud should be about making it easy
+00:36:59.880 --> 00:37:04.760
+challenges from a resiliency perspective like how do you prevent one failure of
 
+00:37:04.760 --> 00:37:09.080
+the GPU part of the system bringing down the whole rack for example. There's
 
-00:09:21.580 --> 00:09:23.260
-for developers to say, here's what I want,
+00:37:09.080 --> 00:37:13.400
+latency and bandwidth challenges like how do you when you're sitting there on
 
+00:37:13.400 --> 00:37:16.680
+the PCI bus you get a whole bunch of bandwidth and you get very low latency.
 
-00:09:23.260 --> 00:09:25.140
-and then the cloud takes care of the rest.
+00:37:16.680 --> 00:37:21.000
+If you're going across the rack you might have the same bandwidth you might
 
+00:37:21.000 --> 00:37:24.640
+have lower bandwidth just because you can't deliver that much bandwidth out of
 
-00:09:25.140 --> 00:09:27.660
-And we're moving towards it relentlessly,
+00:37:24.640 --> 00:37:28.800
+the GPUs. Right all the systems are optimized to make assumptions about these
 
+00:37:28.800 --> 00:37:32.560
+numbers. Exactly and your latency is gonna be higher and so some workloads
 
-00:09:27.660 --> 00:09:29.980
-that time when you'll really be able to do that.
+00:37:32.560 --> 00:37:35.760
+can't tolerate their latency so we've been exploring disaggregated memory
 
+00:37:35.760 --> 00:37:39.080
+disaggregated GPUs I've shown demos of both of them there's we're still
 
-00:09:29.980 --> 00:09:32.260
-- Yeah, so you don't have to know DevOps.
+00:37:39.080 --> 00:37:42.680
+exploring those we're not you know it's not ready for production. Which is harder.
 
+00:37:42.680 --> 00:37:47.360
+Yeah disaggregated memory or GPUs? Yeah I would guess memory but I have a zero
 
-00:09:32.260 --> 00:09:34.900
-You don't have to know distributed architectures.
+00:37:47.360 --> 00:37:52.000
+experience. Memory is challenging because there are certain GPU workloads that
 
+00:37:52.000 --> 00:37:57.120
+aren't so latency sensitive like AI training. Sure like a batch job sort of thing.
 
-00:09:34.900 --> 00:09:37.340
-You just, give you guys a go.
+00:37:57.120 --> 00:38:02.880
+Yeah but when it comes to memory you almost always see the latency and so
 
+00:38:02.880 --> 00:38:07.480
+what we think we can do is get remote memory down to NUMA you know speaking of
 
-00:09:37.340 --> 00:09:39.380
-Yeah, which is beautiful, it's beautiful.
+00:38:07.480 --> 00:38:12.320
+non-uniform memory architecture latency down to that level and a lot of
 
+00:38:12.320 --> 00:38:16.400
+applications can tolerate that. Okay. And so we have a memory tiering where you've
 
-00:09:39.380 --> 00:09:41.980
-Now, real quickly, just give us a scale.
+00:38:16.400 --> 00:38:19.160
+got closed memory that's on the system and then remote memory which is like
 
+00:38:19.160 --> 00:38:23.840
+NUMA latency. Kind of like a L2 cache but like a bigger idea of it. Very very cool
 
-00:09:41.980 --> 00:09:45.540
-Like, think of how many data centers, how many servers,
+00:38:23.840 --> 00:38:28.600
+I think you guys are doing such neat stuff and when you see these hyperscale
 
+00:38:28.600 --> 00:38:34.640
+clouds I think a lot of what people see is the the insane dashboard of choices
 
-00:09:45.540 --> 00:09:47.820
-how many miles, fiber.
+00:38:34.640 --> 00:38:41.080
+like do I do yeah I do routing do I do firewalls do I do VPCs do I do like paths
 
+00:38:41.080 --> 00:38:45.400
+I as what do I do but oftentimes don't really think about like well you're
 
-00:09:47.820 --> 00:09:48.780
-It's kind of astonishing.
+00:38:45.400 --> 00:38:49.440
+getting a slice of this giant server and you know maybe someday to live under the
 
+00:38:49.440 --> 00:38:53.940
+ocean or whatever right so it's really cool to yeah. What you're seeing is the
 
-00:09:48.780 --> 00:09:50.060
-- It is pretty flabbergasting.
+00:38:53.940 --> 00:38:57.040
+cloud it started with a few basic building blocks and then we started to
 
+00:38:57.040 --> 00:39:01.080
+explore lots of different directions of creating lots of different paths
 
-00:09:50.060 --> 00:09:53.300
-And the numbers continue to grow exponentially.
+00:39:01.080 --> 00:39:05.400
+services and past services for compute and then different data offerings I
 
+00:39:05.400 --> 00:39:11.040
+think this space and again coming to the workload you get this is is it high do
 
-00:09:53.300 --> 00:09:55.340
-I'll just give you, 'cause I remember
+00:39:11.040 --> 00:39:14.960
+you need key value store do you need a vectorized database do you need and and
 
+00:39:14.960 --> 00:39:19.520
+do you need any of those to be extreme performance because then if you need
 
-00:09:55.340 --> 00:09:58.820
-when I first started at Azure, I was asked to give a talk
+00:39:19.520 --> 00:39:24.400
+extreme performance go for the design for purpose vectorized database if you
 
+00:39:24.400 --> 00:39:29.240
+want key value with vectorization but it's okay if the vectorization isn't the
 
-00:09:58.820 --> 00:10:01.260
-at the Azure All Hands about architecture
+00:39:29.240 --> 00:39:34.160
+fastest possible you know you can go use this other offering so that's why the
 
+00:39:34.160 --> 00:39:38.960
+the list of options is continue to expand is just because every workload
 
-00:10:01.260 --> 00:10:02.700
-and some of the announcements we had coming.
+00:39:38.960 --> 00:39:42.160
+says I need this and that's the most important thing to me and everyone says
 
+00:39:42.160 --> 00:39:45.280
+no I need this that's the most important thing and others are like I don't care
 
-00:10:02.700 --> 00:10:07.100
-And the All Hands was two rooms with partition removed
+00:39:45.280 --> 00:39:50.240
+well as it becomes the mainframe of the world right there's a lot of different
 
+00:39:50.240 --> 00:39:54.120
+types of apps running on it yeah yeah awesome all right mark final call to
 
-00:10:07.100 --> 00:10:11.660
-in our on-campus conference room meeting center.
+00:39:54.120 --> 00:39:57.480
+action people maybe want to learn more about some of the stuff we saw here see
 
+00:39:57.480 --> 00:40:01.120
+some pictures but or maybe also just do more with Azure what do you say so a
 
-00:10:11.660 --> 00:10:13.060
-Total about 500 people.
+00:40:01.120 --> 00:40:05.080
+couple things one is I've been doing a series of Azure innovation talks at
 
+00:40:05.080 --> 00:40:08.320
+building ignite session so go back to the last build and you'll see the most
 
-00:10:13.060 --> 00:10:15.780
-That was all of the Azure team in 2010.
+00:40:08.320 --> 00:40:11.800
+recent one of those and then at this ignite I'm doing one on that's just
 
+00:40:11.800 --> 00:40:17.520
+looking at AI related innovation so that's on Friday tomorrow here at ignite
 
-00:10:15.780 --> 00:10:17.540
-And really, nobody outside the Azure team
+00:40:17.520 --> 00:40:21.520
+and it'll be available on demand so that's awesome yeah I'll grab the links
 
+00:40:21.520 --> 00:40:24.280
+to some of those put them in the show notes for people excellent well thanks
 
-00:10:17.540 --> 00:10:19.100
-knew anything about Azure.
+00:40:24.280 --> 00:40:27.000
+so much for being on the show all right thanks for having me yeah
 
+00:40:27.000 --> 00:40:32.080
+this has been another episode of talk Python to me thank you to our sponsors
 
-00:10:19.100 --> 00:10:19.940
-Really, the world didn't know about Azure.
+00:40:32.080 --> 00:40:34.900
+be sure to check out what they're offering it really helps support the
 
+00:40:34.900 --> 00:40:40.400
+show this episode is sponsored by posit connect from the makers of shiny publish
 
-00:10:19.940 --> 00:10:21.500
-- It was kind of a secret even inside, right?
+00:40:40.400 --> 00:40:43.560
+share and deploy all of your data projects that you're creating using
 
+00:40:43.560 --> 00:40:49.920
+Python streamlit - shiny bokeh fast API flask quattro reports dashboards and
 
-00:10:21.500 --> 00:10:22.500
-- Inside, yeah.
+00:40:49.920 --> 00:40:55.160
+APIs posit connect supports all of them try posit connect for free by going to
 
+00:40:55.160 --> 00:41:01.880
+talk Python FM slash posit POS IT are you ready to level up your Python career
 
-00:10:22.500 --> 00:10:24.220
-So effectively, that was like most,
+00:41:01.880 --> 00:41:06.400
+and could you use a little bit of personal and individualized guidance to
 
+00:41:06.400 --> 00:41:11.680
+do so check out the pie bites Python developer mindset program at talk Python
 
-00:10:24.220 --> 00:10:25.460
-at least half the people in the world
+00:41:11.680 --> 00:41:16.760
+dot FM slash PDM want to level up your Python we have one of the largest
 
+00:41:16.760 --> 00:41:21.560
+catalogs of Python video courses over at talk Python our content ranges from true
 
-00:10:25.460 --> 00:10:28.660
-that knew anything about Azure was in those two rooms.
+00:41:21.560 --> 00:41:26.080
+beginners to deeply advanced topics like memory and async and best of all there's
 
+00:41:26.080 --> 00:41:29.760
+not a subscription in sight check it out for yourself at training dot talk Python
 
-00:10:28.660 --> 00:10:32.580
-And today, Scott Guthrie's organization, Cloud and AI,
+00:41:29.760 --> 00:41:34.240
+dot FM be sure to subscribe to the show open your favorite podcast app and
 
+00:41:34.240 --> 00:41:38.520
+search for Python we should be right at the top you can also find the iTunes feed
 
-00:10:32.580 --> 00:10:34.100
-all of it's working on Azure.
+00:41:38.520 --> 00:41:43.400
+at slash iTunes the Google Play feed at slash play and the direct RSS feed at
 
+00:41:43.400 --> 00:41:48.280
+slash RSS on talk Python dot FM we're live streaming most of our recordings
 
-00:10:34.100 --> 00:10:36.140
-And that's tens of thousands of people.
+00:41:48.280 --> 00:41:51.600
+these days if you want to be part of the show and have your comments featured on
 
+00:41:51.600 --> 00:41:55.560
+the air be sure to subscribe to our YouTube channel at talk Python dot FM
 
-00:10:36.140 --> 00:10:39.900
-At least a good percentage, a majority percentage even,
+00:41:55.560 --> 00:42:00.160
+slash YouTube this is your host Michael Kennedy thanks so much for listening I
 
+00:42:00.160 --> 00:42:05.000
+really appreciate it now get out there and write some Python code
 
-00:10:39.900 --> 00:10:42.060
-of the company is working directly on things
+00:42:05.000 --> 00:42:07.060
+you
 
-
-00:10:42.060 --> 00:10:43.580
-that come under the Azure umbrella.
-
-
-00:10:43.580 --> 00:10:45.260
-So it's come a long way from that perspective.
-
-
-00:10:45.260 --> 00:10:47.100
-And you talked about physical scale.
-
-
-00:10:47.100 --> 00:10:51.460
-Back then, when we originally launched Azure in two regions,
-
-
-00:10:51.460 --> 00:10:53.900
-it was like 40,000 servers, like 20,000 in one,
-
-
-00:10:53.900 --> 00:10:54.740
-20,000 in the other.
-
-
-00:10:54.740 --> 00:10:55.580
-- That's still a lot of servers.
-
-
-00:10:55.580 --> 00:10:57.940
-- Yeah, that is kind of cloud scale back then.
-
-
-00:10:57.940 --> 00:11:00.220
-Now, we are at millions of servers.
-
-
-00:11:00.220 --> 00:11:02.180
-And when it comes to data centers,
-
-
-00:11:02.180 --> 00:11:05.380
-we've got 60 regions around the world, 60 plus regions.
-
-
-00:11:05.380 --> 00:11:09.220
-And each of those consists of one, in many cases,
-
-
-00:11:09.220 --> 00:11:10.540
-multiple data centers.
-
-
-00:11:10.540 --> 00:11:12.460
-And we're still building out.
-
-
-00:11:12.460 --> 00:11:15.020
-We're launching a data, like two data centers every week,
-
-
-00:11:15.020 --> 00:11:16.620
-I think is the number that we're launching.
-
-
-00:11:16.620 --> 00:11:18.180
-- Wow, that's crazy.
-
-
-00:11:18.180 --> 00:11:20.420
-And these could be slotted into one of these regions
-
-
-00:11:20.420 --> 00:11:22.620
-or it could be something totally new, yeah.
-
-
-00:11:22.620 --> 00:11:23.460
-Incredible.
-
-
-00:11:23.460 --> 00:11:27.540
-This portion of Talk Python to Me is brought to you by Posit,
-
-
-00:11:27.540 --> 00:11:30.780
-the makers of Shiny, formerly RStudio,
-
-
-00:11:30.780 --> 00:11:33.460
-and especially Shiny for Python.
-
-
-00:11:33.460 --> 00:11:34.780
-Let me ask you a question.
-
-
-00:11:34.780 --> 00:11:36.500
-Are you building awesome things?
-
-
-00:11:36.500 --> 00:11:37.340
-Of course you are.
-
-
-00:11:37.340 --> 00:11:38.900
-You're a developer or a data scientist.
-
-
-00:11:38.900 --> 00:11:39.980
-That's what we do.
-
-
-00:11:39.980 --> 00:11:42.300
-And you should check out Posit Connect.
-
-
-00:11:42.300 --> 00:11:45.060
-Posit Connect is a way for you to publish, share,
-
-
-00:11:45.060 --> 00:11:47.060
-and deploy all the data products
-
-
-00:11:47.060 --> 00:11:49.620
-that you're building using Python.
-
-
-00:11:49.620 --> 00:11:52.020
-People ask me the same question all the time.
-
-
-00:11:52.020 --> 00:11:54.140
-Michael, I have some cool data science project
-
-
-00:11:54.140 --> 00:11:55.580
-or notebook that I built.
-
-
-00:11:55.580 --> 00:11:58.820
-How do I share it with my users, stakeholders, teammates?
-
-
-00:11:58.820 --> 00:12:00.980
-Do I need to learn FastAPI or Flask
-
-
-00:12:00.980 --> 00:12:03.860
-or maybe Vue or React.js?
-
-
-00:12:03.860 --> 00:12:04.700
-Hold on now.
-
-
-00:12:04.700 --> 00:12:05.940
-Those are cool technologies
-
-
-00:12:05.940 --> 00:12:07.300
-and I'm sure you'd benefit from them,
-
-
-00:12:07.300 --> 00:12:09.660
-but maybe stay focused on the data project.
-
-
-00:12:09.660 --> 00:12:12.180
-Let Posit Connect handle that side of things.
-
-
-00:12:12.180 --> 00:12:14.340
-With Posit Connect, you can rapidly and securely
-
-
-00:12:14.340 --> 00:12:16.740
-deploy the things you build in Python.
-
-
-00:12:16.740 --> 00:12:20.500
-Streamlet, Dash, Shiny, Bokeh, FastAPI, Flask,
-
-
-00:12:20.500 --> 00:12:23.380
-Quadro, Reports, Dashboards, and APIs.
-
-
-00:12:23.380 --> 00:12:25.460
-Posit Connect supports all of them.
-
-
-00:12:25.460 --> 00:12:28.220
-And Posit Connect comes with all the bells and whistles
-
-
-00:12:28.220 --> 00:12:31.540
-to satisfy IT and other enterprise requirements.
-
-
-00:12:31.540 --> 00:12:34.420
-Make deployment the easiest step in your workflow
-
-
-00:12:34.420 --> 00:12:35.580
-with Posit Connect.
-
-
-00:12:35.580 --> 00:12:37.980
-For a limited time, you can try Posit Connect for free
-
-
-00:12:37.980 --> 00:12:41.860
-for three months by going to talkpython.fm/posit.
-
-
-00:12:41.860 --> 00:12:45.260
-That's talkpython.fm/P-O-S-I-T.
-
-
-00:12:45.260 --> 00:12:47.580
-The link is in your podcast player show notes.
-
-
-00:12:47.580 --> 00:12:50.420
-Thank you to the team at Posit for supporting Talk Python.
-
-
-00:12:50.420 --> 00:12:54.540
-So the big announcement that I wanted to ask you about,
-
-
-00:12:54.540 --> 00:12:55.740
-just before we run out of time,
-
-
-00:12:55.740 --> 00:12:57.540
-and then we'll dive into some of that,
-
-
-00:12:57.540 --> 00:12:59.540
-that sort of how does your code run story,
-
-
-00:12:59.540 --> 00:13:01.100
-is Azure Cobalt.
-
-
-00:13:01.100 --> 00:13:03.340
-That's a new processor you guys announced.
-
-
-00:13:03.340 --> 00:13:06.180
-And, you know, listeners know I'm a big fan of Apple Silicon
-
-
-00:13:06.180 --> 00:13:08.860
-and how it sort of changed the computing landscape
-
-
-00:13:08.860 --> 00:13:11.620
-for power and speed on like little laptops and stuff.
-
-
-00:13:11.620 --> 00:13:13.500
-And this is kind of that idea,
-
-
-00:13:13.500 --> 00:13:14.700
-but for the data center, right?
-
-
-00:13:14.700 --> 00:13:15.540
-Tell us about that.
-
-
-00:13:15.540 --> 00:13:16.380
-- It is that idea.
-
-
-00:13:16.380 --> 00:13:19.460
-I think having a processor that can be designed
-
-
-00:13:19.460 --> 00:13:21.100
-really with our specifications.
-
-
-00:13:21.100 --> 00:13:23.620
-If you take a look at Intel and AMD processors,
-
-
-00:13:23.620 --> 00:13:25.540
-they're fantastic processors.
-
-
-00:13:25.540 --> 00:13:26.940
-They're very versatile.
-
-
-00:13:26.940 --> 00:13:30.060
-They're taking requirements from lots of different sources.
-
-
-00:13:30.060 --> 00:13:32.420
-And so we're just, we're a voice,
-
-
-00:13:32.420 --> 00:13:34.540
-we're a significant voice when it comes to saying,
-
-
-00:13:34.540 --> 00:13:37.500
-we'd like your processors to do these things.
-
-
-00:13:37.500 --> 00:13:38.340
-When we have our own,
-
-
-00:13:38.340 --> 00:13:40.980
-we've got the ability to just decide unilaterally
-
-
-00:13:40.980 --> 00:13:43.100
-what we'd like it to do based off of what we see
-
-
-00:13:43.100 --> 00:13:45.540
-and convert it or integrate it into our systems.
-
-
-00:13:45.540 --> 00:13:49.420
-We can put it on SSEs and integrate it with memory and GPUs.
-
-
-00:13:49.420 --> 00:13:52.540
-And so that is kind of the reason
-
-
-00:13:52.540 --> 00:13:55.700
-that we've done that verticalization for processors.
-
-
-00:13:55.700 --> 00:13:57.260
-That's not to say that the other processors
-
-
-00:13:57.260 --> 00:13:59.020
-aren't going to be significant.
-
-
-00:13:59.020 --> 00:14:00.540
-- It's gonna be probably a blend of these.
-
-
-00:14:00.540 --> 00:14:01.380
-- It's gonna be a blend.
-
-
-00:14:01.380 --> 00:14:03.580
-They'll have different capabilities that ours won't have.
-
-
-00:14:03.580 --> 00:14:06.020
-There are customers that want the specific features
-
-
-00:14:06.020 --> 00:14:08.420
-that they've got or performance speeds and feeds
-
-
-00:14:08.420 --> 00:14:09.420
-that they've got,
-
-
-00:14:09.420 --> 00:14:11.220
-'cause they're not all gonna look the same.
-
-
-00:14:11.220 --> 00:14:14.380
-And so I think it's just better optionality for everybody.
-
-
-00:14:14.380 --> 00:14:17.420
-- Well, I can tell you as somebody who tries to run Linux
-
-
-00:14:17.420 --> 00:14:20.220
-on that thing, it's hit and miss
-
-
-00:14:20.220 --> 00:14:22.460
-if there's even an ARM version available.
-
-
-00:14:22.460 --> 00:14:23.700
-More often than not, there's not.
-
-
-00:14:23.700 --> 00:14:26.900
-And so there's certainly not gonna be an insane rush
-
-
-00:14:26.900 --> 00:14:27.940
-to just drop everything,
-
-
-00:14:27.940 --> 00:14:31.100
-'cause there's a lot of code that's written for x86.
-
-
-00:14:31.100 --> 00:14:32.820
-- And optimized, that's the other thing too.
-
-
-00:14:32.820 --> 00:14:33.660
-- For sure.
-
-
-00:14:33.660 --> 00:14:35.860
-But yeah, so on my list here of things I was gonna ask you
-
-
-00:14:35.860 --> 00:14:37.860
-is, well, what about ARM and the data center?
-
-
-00:14:37.860 --> 00:14:38.700
-- Yeah, that's ARM.
-
-
-00:14:38.700 --> 00:14:39.520
-- No, exactly.
-
-
-00:14:39.520 --> 00:14:40.360
-And I'm like, well, okay,
-
-
-00:14:40.360 --> 00:14:42.060
-so you guys beat me to the punch.
-
-
-00:14:42.060 --> 00:14:44.020
-Exactly, so awesome.
-
-
-00:14:44.020 --> 00:14:46.100
-Now, one of the things I wanted to kind of
-
-
-00:14:46.100 --> 00:14:48.020
-maybe have you go through for listeners
-
-
-00:14:48.020 --> 00:14:50.220
-that I think is just super interesting
-
-
-00:14:50.220 --> 00:14:52.460
-is sort of the evolution of the hardware,
-
-
-00:14:52.460 --> 00:14:53.820
-where our code runs.
-
-
-00:14:53.820 --> 00:14:55.080
-You talked about it in some of your talks,
-
-
-00:14:55.080 --> 00:14:56.500
-like the data center generations,
-
-
-00:14:56.500 --> 00:14:58.700
-and what is that, like six or seven,
-
-
-00:14:58.700 --> 00:15:00.500
-maybe different variations.
-
-
-00:15:00.500 --> 00:15:02.660
-And I'll kind of give you some prompts from them in all.
-
-
-00:15:02.660 --> 00:15:05.140
-But one of the things that I was thinking about
-
-
-00:15:05.140 --> 00:15:06.900
-when I was looking at this is,
-
-
-00:15:06.900 --> 00:15:08.780
-do you have a bunch of small servers,
-
-
-00:15:08.780 --> 00:15:12.980
-or do you partition up really large servers, right?
-
-
-00:15:12.980 --> 00:15:14.940
-What's the right flow for that?
-
-
-00:15:14.940 --> 00:15:16.820
-- One of the things that you've seen
-
-
-00:15:16.820 --> 00:15:17.900
-since the start of cloud,
-
-
-00:15:17.900 --> 00:15:19.740
-back when we launched Azure,
-
-
-00:15:19.740 --> 00:15:21.700
-there was one server type.
-
-
-00:15:21.700 --> 00:15:24.340
-We had different virtual machines offerings,
-
-
-00:15:24.340 --> 00:15:26.420
-but they were just all different sizes
-
-
-00:15:26.420 --> 00:15:27.900
-that could fit on that one server.
-
-
-00:15:27.900 --> 00:15:31.980
-It was a 32-core Dell Opteron with, I think, 32 gig of RAM.
-
-
-00:15:31.980 --> 00:15:34.180
-And so that was the server back then.
-
-
-00:15:34.180 --> 00:15:37.420
-What we've seen is more workloads come to the cloud
-
-
-00:15:37.420 --> 00:15:38.380
-that have different requirements.
-
-
-00:15:38.380 --> 00:15:41.420
-Some require large memory, some require more compute,
-
-
-00:15:41.420 --> 00:15:44.180
-some require GPUs, some require InfiniBand,
-
-
-00:15:44.180 --> 00:15:46.820
-back in networking for each high-performance computing.
-
-
-00:15:46.820 --> 00:15:50.020
-And so there's been a drastic diversification
-
-
-00:15:50.020 --> 00:15:53.020
-of the server hardware in Azure
-
-
-00:15:53.020 --> 00:15:55.540
-that's being offered and current at any one point in time.
-
-
-00:15:55.540 --> 00:15:57.380
-And I think you'll continue to see that.
-
-
-00:15:57.380 --> 00:15:59.820
-So the old, you know, it's just a pizza box,
-
-
-00:15:59.820 --> 00:16:03.020
-it's a low-end commodity server,
-
-
-00:16:03.020 --> 00:16:06.380
-kind of that's the cloud vision back in 2010.
-
-
-00:16:06.380 --> 00:16:09.460
-Now it's the cloud contains specialized servers
-
-
-00:16:09.460 --> 00:16:11.420
-for specific applications.
-
-
-00:16:11.420 --> 00:16:13.700
-And when it comes to large servers,
-
-
-00:16:13.700 --> 00:16:17.860
-back in 2014, we started to introduce very large servers,
-
-
-00:16:17.860 --> 00:16:20.940
-the kind that, you know, people that were cloud purists
-
-
-00:16:20.940 --> 00:16:22.060
-back in 2010 would have been like,
-
-
-00:16:22.060 --> 00:16:23.620
-"No, don't allow that."
-
-
-00:16:23.620 --> 00:16:24.460
->> It's all about the cheap and the--
-
-
-00:16:24.460 --> 00:16:26.260
->> Yeah, it's all about the cheap and scale up.
-
-
-00:16:26.260 --> 00:16:29.180
-It's scale up servers for SAP workloads
-
-
-00:16:29.180 --> 00:16:30.580
-in memory database workloads.
-
-
-00:16:30.580 --> 00:16:34.420
-So we introduced a machine that we nicknamed Godzilla,
-
-
-00:16:34.420 --> 00:16:37.900
-which had 512 gig of RAM in 2014,
-
-
-00:16:37.900 --> 00:16:40.460
-which was like an astonishing number.
-
-
-00:16:40.460 --> 00:16:42.780
-And we've continued to, SAP workloads
-
-
-00:16:42.780 --> 00:16:43.820
-have gotten bigger and bigger
-
-
-00:16:43.820 --> 00:16:45.620
-and more has migrated to the cloud,
-
-
-00:16:45.620 --> 00:16:48.340
-created bigger and bigger and bigger and bigger machines.
-
-
-00:16:48.340 --> 00:16:49.940
-In fact, I'm showing here at Ignite,
-
-
-00:16:49.940 --> 00:16:52.380
-the latest generation of the SAP scale up machines
-
-
-00:16:52.380 --> 00:16:53.220
-that we're offering.
-
-
-00:16:53.220 --> 00:16:54.700
-It's not yet, they're not yet public,
-
-
-00:16:54.700 --> 00:16:57.460
-but I'm going to show a demo of one of them
-
-
-00:16:57.460 --> 00:17:01.540
-that I'm calling, nicknaming, Super Mega Godzilla Beast,
-
-
-00:17:01.540 --> 00:17:03.420
-'cause we've gone through so many iterations.
-
-
-00:17:03.420 --> 00:17:05.780
-So this one is super is the new--
-
-
-00:17:05.780 --> 00:17:08.380
->> Yeah, you're running low on adjectives here.
-
-
-00:17:08.380 --> 00:17:09.580
->> And I don't know what I'll come up with next.
-
-
-00:17:09.580 --> 00:17:12.140
-But anyway, we're at Super Mega Godzilla Beast
-
-
-00:17:12.140 --> 00:17:16.340
-as the current generation, which has 1790 cores
-
-
-00:17:16.340 --> 00:17:20.020
-and 32 terabytes of RAM, 32 terabytes of RAM.
-
-
-00:17:20.020 --> 00:17:20.860
->> Incredible.
-
-
-00:17:20.860 --> 00:17:25.700
-So do you do things to like pin VMs to certain cores
-
-
-00:17:25.700 --> 00:17:28.180
-so that they get better cache hits and stuff like that,
-
-
-00:17:28.180 --> 00:17:30.860
-rather than let it just kind of mosh around 1790 cores?
-
-
-00:17:30.860 --> 00:17:31.860
->> Yeah, that's especially important
-
-
-00:17:31.860 --> 00:17:34.420
-with NUMA architectures, where you've got memory
-
-
-00:17:34.420 --> 00:17:36.820
-that has different latencies to different sockets,
-
-
-00:17:36.820 --> 00:17:38.500
-'cause you want to have the VM
-
-
-00:17:38.500 --> 00:17:40.700
-that's using certain cores on a socket
-
-
-00:17:40.700 --> 00:17:44.340
-have memory that is close to it, close to that socket.
-
-
-00:17:44.340 --> 00:17:47.460
-So that's, and that's just part of Hyper-V scheduling,
-
-
-00:17:47.460 --> 00:17:49.020
-is doing that kind of assignment,
-
-
-00:17:49.020 --> 00:17:50.300
-which we have under the hood.
-
-
-00:17:50.300 --> 00:17:52.980
-And again, it's like the control plane at the very top
-
-
-00:17:52.980 --> 00:17:56.020
-says launch a virtual machine of this size, of this skew.
-
-
-00:17:56.020 --> 00:17:58.860
-Then there's a resource manager, the Azure allocator,
-
-
-00:17:58.860 --> 00:18:01.020
-that goes and figures out this is the best server
-
-
-00:18:01.020 --> 00:18:02.740
-to put that on, that has enough space,
-
-
-00:18:02.740 --> 00:18:05.700
-and will reduce, minimize fragmentation.
-
-
-00:18:05.700 --> 00:18:09.100
-And places it on there, and then Hyper-V underneath
-
-
-00:18:09.100 --> 00:18:11.660
-is saying, okay, these are the cores to assign it to.
-
-
-00:18:11.660 --> 00:18:12.660
-Here's the RAM to give it.
-
-
-00:18:12.660 --> 00:18:15.100
->> Excellent, and how much of that can you ask for?
-
-
-00:18:15.100 --> 00:18:15.940
->> You can ask for the whole machine.
-
-
-00:18:15.940 --> 00:18:16.780
->> You could, you could, if you--
-
-
-00:18:16.780 --> 00:18:18.620
->> You could, for a full machine,
-
-
-00:18:18.620 --> 00:18:20.220
-full server virtual machine sizes.
-
-
-00:18:20.220 --> 00:18:21.620
->> Wow, okay.
-
-
-00:18:21.620 --> 00:18:23.260
-There's probably not too many of those in,
-
-
-00:18:23.260 --> 00:18:24.700
-but some people using them.
-
-
-00:18:24.700 --> 00:18:27.380
->> Like on the SSAP ones, because they're designed for SAP,
-
-
-00:18:27.380 --> 00:18:30.740
-I think for those kinds of, the current generations,
-
-
-00:18:30.740 --> 00:18:32.180
-I think we offer just two sizes,
-
-
-00:18:32.180 --> 00:18:34.620
-like either half of it, or the whole thing.
-
-
-00:18:34.620 --> 00:18:35.460
->> Incredible. >> Yeah.
-
-
-00:18:35.460 --> 00:18:36.280
->> Wow, okay.
-
-
-00:18:36.280 --> 00:18:38.900
-How much of a chunk of a rack does that take?
-
-
-00:18:38.900 --> 00:18:39.740
->> It's basically--
-
-
-00:18:39.740 --> 00:18:40.700
->> It's a whole rack?
-
-
-00:18:40.700 --> 00:18:41.540
->> Yeah, pretty much, yeah.
-
-
-00:18:41.540 --> 00:18:42.380
->> Just top to bottom?
-
-
-00:18:42.380 --> 00:18:44.020
->> Yeah, it's like a 10 kilowatt server.
-
-
-00:18:44.020 --> 00:18:46.180
->> Yeah, a little power plant inside there.
-
-
-00:18:46.180 --> 00:18:48.140
-As you kind of talk through the history
-
-
-00:18:48.140 --> 00:18:50.380
-of sort of how your code ran, it was more,
-
-
-00:18:50.380 --> 00:18:53.980
-more colo, as you said, like the more smaller, smaller ones.
-
-
-00:18:53.980 --> 00:18:56.840
-And then, as you got bigger and bigger on some of this,
-
-
-00:18:56.840 --> 00:18:58.740
-you started working on things like,
-
-
-00:18:58.740 --> 00:19:01.180
-well, how do we let the servers run hotter,
-
-
-00:19:01.180 --> 00:19:02.300
-and have the air cool them,
-
-
-00:19:02.300 --> 00:19:04.540
-rather than more actively cooled?
-
-
-00:19:04.540 --> 00:19:07.020
-And then it even gets to a, almost more,
-
-
-00:19:07.020 --> 00:19:10.340
-just remove big chunks of it, and let them fail,
-
-
-00:19:10.340 --> 00:19:12.500
-and then when enough of it has failed, take them out.
-
-
-00:19:12.500 --> 00:19:13.340
-You want to kind of talk about--
-
-
-00:19:13.340 --> 00:19:15.580
->> Yeah, so, we're still, yeah, good question,
-
-
-00:19:15.580 --> 00:19:17.780
-'cause we're still exploring this space
-
-
-00:19:17.780 --> 00:19:21.340
-towards higher efficiency, lower energy consumption,
-
-
-00:19:21.340 --> 00:19:22.260
-more sustainable.
-
-
-00:19:22.260 --> 00:19:24.760
-One of the experiments that came out of Microsoft Research
-
-
-00:19:24.760 --> 00:19:27.640
-was Project Natick, which is taking a bunch of servers,
-
-
-00:19:27.640 --> 00:19:29.100
-putting it, or a rack of servers,
-
-
-00:19:29.100 --> 00:19:33.380
-putting it in a container that has nitrous oxide gas in it,
-
-
-00:19:33.380 --> 00:19:34.780
-so it's an inert gas,
-
-
-00:19:34.780 --> 00:19:37.260
-and dropping it into the ocean floor,
-
-
-00:19:37.260 --> 00:19:40.100
-and letting it be cooled ambiently through the water there.
-
-
-00:19:40.100 --> 00:19:42.380
->> Not water on the inside, but the outside of the container.
-
-
-00:19:42.380 --> 00:19:43.220
->> Outside of the container, yeah.
-
-
-00:19:43.220 --> 00:19:44.060
->> It's a giant heat sink, kind of.
-
-
-00:19:44.060 --> 00:19:46.580
->> Yeah, and there's potential benefits of that,
-
-
-00:19:46.580 --> 00:19:47.420
-and it's still something
-
-
-00:19:47.420 --> 00:19:48.780
-that might get revived at some point,
-
-
-00:19:48.780 --> 00:19:51.820
-but what we found coming out of that was,
-
-
-00:19:51.820 --> 00:19:55.700
-if the parts are in an inert environment,
-
-
-00:19:55.700 --> 00:19:57.140
-they have one-eighth the failure rates
-
-
-00:19:57.140 --> 00:19:59.240
-as ones that are in an air environment,
-
-
-00:19:59.240 --> 00:20:01.020
-and with particulate matter,
-
-
-00:20:01.020 --> 00:20:02.980
-and corrosive materials in the air.
-
-
-00:20:02.980 --> 00:20:05.660
-We started exploring liquid cooling, both for that,
-
-
-00:20:05.660 --> 00:20:07.500
-as well as potential energy savings,
-
-
-00:20:07.500 --> 00:20:10.580
-and more sustainable cooling than air-cooled.
-
-
-00:20:10.580 --> 00:20:13.340
-We've explored two-phase liquid immersion,
-
-
-00:20:13.340 --> 00:20:14.700
-we had a pilot running,
-
-
-00:20:14.700 --> 00:20:16.260
-there's some regulations that have changed
-
-
-00:20:16.260 --> 00:20:18.020
-around the kinds of fluids
-
-
-00:20:18.020 --> 00:20:20.100
-that have made us take a look at a different direction,
-
-
-00:20:20.100 --> 00:20:20.940
-so we--
-
-
-00:20:20.940 --> 00:20:22.980
->> Is that kind of like the, what you would get
-
-
-00:20:22.980 --> 00:20:24.660
-in an air conditioner, or some of the stuff
-
-
-00:20:24.660 --> 00:20:25.500
-they had replaced--
-
-
-00:20:25.500 --> 00:20:26.820
->> They're called the forever chemicals,
-
-
-00:20:26.820 --> 00:20:28.180
-or PFAS materials.
-
-
-00:20:28.180 --> 00:20:30.100
-The ones we're using actually aren't,
-
-
-00:20:30.100 --> 00:20:32.020
-but the regulation is a little broad,
-
-
-00:20:32.020 --> 00:20:34.260
-and so we're just steering clear,
-
-
-00:20:34.260 --> 00:20:35.940
-and it might be revisited at some point,
-
-
-00:20:35.940 --> 00:20:38.500
-but we're also, they have been exploring liquid cooling,
-
-
-00:20:38.500 --> 00:20:40.300
-kind of traditional liquid cooling,
-
-
-00:20:40.300 --> 00:20:43.060
-cold plate cold, and some people listening,
-
-
-00:20:43.060 --> 00:20:44.620
-probably like me, are gamers,
-
-
-00:20:44.620 --> 00:20:48.220
-and have liquid-cooled GPUs, or CPUs at home
-
-
-00:20:48.220 --> 00:20:50.860
-in their gaming rigs, which allow them to get overclocked,
-
-
-00:20:50.860 --> 00:20:52.940
-and it's the same thing we're doing in our data centers.
-
-
-00:20:52.940 --> 00:20:55.340
-In fact, one of the things Satya showed in the keynote
-
-
-00:20:55.340 --> 00:20:56.740
-was something called Sidekick,
-
-
-00:20:56.740 --> 00:20:59.640
-which is a cabinet that allows us to take liquid,
-
-
-00:20:59.640 --> 00:21:02.720
-cold plate liquid cooling, into an existing data center,
-
-
-00:21:02.720 --> 00:21:03.920
-air-cooled data center.
-
-
-00:21:03.920 --> 00:21:04.760
->> Right, okay.
-
-
-00:21:04.760 --> 00:21:09.520
->> Where Maya 100 AI accelerators are in the cabinet,
-
-
-00:21:09.520 --> 00:21:12.160
-sitting right next to it, and the cooling pipes
-
-
-00:21:12.160 --> 00:21:14.200
-are going into the Maya cabinet
-
-
-00:21:14.200 --> 00:21:16.760
-to cool the accelerators themselves.
-
-
-00:21:16.760 --> 00:21:18.760
->> So they mounted some big metal plate,
-
-
-00:21:18.760 --> 00:21:20.200
-and then the metal plate is liquid-cooled,
-
-
-00:21:20.200 --> 00:21:21.080
-or something like that, or?
-
-
-00:21:21.080 --> 00:21:22.660
->> Yeah, it's effectively that there's a plate
-
-
-00:21:22.660 --> 00:21:24.480
-on top of the processor, and then liquid
-
-
-00:21:24.480 --> 00:21:25.940
-is going through that.
-
-
-00:21:25.940 --> 00:21:27.420
-So I'm gonna actually show pictures
-
-
-00:21:27.420 --> 00:21:29.520
-of the inside of the Maya system tomorrow
-
-
-00:21:29.520 --> 00:21:32.100
-in my AI innovation closing keynote.
-
-
-00:21:32.100 --> 00:21:34.740
-But that is, I think the takeaway here
-
-
-00:21:34.740 --> 00:21:36.700
-is that at the scale we're at,
-
-
-00:21:36.700 --> 00:21:39.240
-and with the efficiency gains that you might get
-
-
-00:21:39.240 --> 00:21:41.320
-from even a few percentage, we're exploring
-
-
-00:21:41.320 --> 00:21:42.640
-everything at the same time.
-
-
-00:21:42.640 --> 00:21:45.480
-Like single phase liquid immersion cooling,
-
-
-00:21:45.480 --> 00:21:47.360
-still exploring that, and then how to do
-
-
-00:21:47.360 --> 00:21:48.800
-cold plate more efficiently.
-
-
-00:21:48.800 --> 00:21:51.280
-Also be showing something called microfluidics
-
-
-00:21:51.280 --> 00:21:53.760
-we're exploring, which is much more efficient
-
-
-00:21:53.760 --> 00:21:55.240
-than just pure liquid cold plate.
-
-
-00:21:55.240 --> 00:21:57.000
-Which, a cold plate is just putting the plate,
-
-
-00:21:57.000 --> 00:21:59.800
-like you just said, right on top of the processor.
-
-
-00:21:59.800 --> 00:22:03.840
-And so the water's taking the heat away.
-
-
-00:22:03.840 --> 00:22:07.680
-But if we can put the liquid right into the processor,
-
-
-00:22:07.680 --> 00:22:08.960
-like-- >> Are we talking channels
-
-
-00:22:08.960 --> 00:22:10.240
-in the processor? >> Like channels
-
-
-00:22:10.240 --> 00:22:11.680
-around the processor, yeah.
-
-
-00:22:11.680 --> 00:22:13.200
-Just flow it right on top of it.
-
-
-00:22:13.200 --> 00:22:15.800
-And so that's something we're calling microfluidics.
-
-
-00:22:15.800 --> 00:22:18.200
-I'll show that and talk a little bit about that tomorrow too.
-
-
-00:22:18.200 --> 00:22:20.480
-Offers much more efficient cooling.
-
-
-00:22:20.480 --> 00:22:22.280
-And it's not prime time yet,
-
-
-00:22:22.280 --> 00:22:24.440
-but it looks incredibly promising.
-
-
-00:22:24.440 --> 00:22:25.360
->> That looks awesome.
-
-
-00:22:25.360 --> 00:22:27.360
-One of the things I saw in the opening keynote,
-
-
-00:22:27.360 --> 00:22:29.040
-I don't know if it fits into what you were just talking
-
-
-00:22:29.040 --> 00:22:31.680
-about or if it's also another things where
-
-
-00:22:31.680 --> 00:22:33.840
-actually had the whole motherboard submerged
-
-
-00:22:33.840 --> 00:22:37.280
-and then even just the entire computer just underwater.
-
-
-00:22:37.280 --> 00:22:38.980
->> So that was two phase liquid immersion cooling
-
-
-00:22:38.980 --> 00:22:41.240
-like I mentioned, is you're just dunking the whole thing
-
-
-00:22:41.240 --> 00:22:42.840
-in the dielectric fluid.
-
-
-00:22:42.840 --> 00:22:44.800
->> And you had it boil at a low temperature, I guess,
-
-
-00:22:44.800 --> 00:22:48.400
-'cause the phase change is like extremely energy intense,
-
-
-00:22:48.400 --> 00:22:50.640
-aka heat exchange type of thing.
-
-
-00:22:50.640 --> 00:22:52.800
->> It's actually two phase because of the boiling.
-
-
-00:22:52.800 --> 00:22:55.500
-It goes, it phase changes into gas
-
-
-00:22:55.500 --> 00:22:57.440
-and then condenses again back into liquid.
-
-
-00:22:57.440 --> 00:23:00.400
-So that was the idea behind two phases.
-
-
-00:23:00.400 --> 00:23:02.440
->> I see, instead of just running a radiator,
-
-
-00:23:02.440 --> 00:23:04.800
-you almost condense it back somewhere else
-
-
-00:23:04.800 --> 00:23:05.880
-and then bring it back around.
-
-
-00:23:05.880 --> 00:23:07.280
-Okay, cool.
-
-
-00:23:07.280 --> 00:23:09.840
-So if we go and run our Python codes,
-
-
-00:23:09.840 --> 00:23:12.040
-whether it's pass or I has or whatever,
-
-
-00:23:12.040 --> 00:23:13.400
-what's the chance it's hitting that
-
-
-00:23:13.400 --> 00:23:14.920
-or is this kind of cutting edge stuff
-
-
-00:23:14.920 --> 00:23:18.680
-reserved for high energy AI training?
-
-
-00:23:18.680 --> 00:23:22.160
-Is it more like if we ask ChatGPT, it's liquid cooled.
-
-
-00:23:22.160 --> 00:23:24.400
->> Our standard data centers right now are air cooled.
-
-
-00:23:24.400 --> 00:23:25.600
-So it's air cooled servers.
-
-
-00:23:25.600 --> 00:23:27.480
-This Maya part is liquid cooled.
-
-
-00:23:27.480 --> 00:23:29.520
-So when that, in our first summer,
-
-
-00:23:29.520 --> 00:23:31.160
-we've got some of our own workloads now
-
-
-00:23:31.160 --> 00:23:32.440
-starting to leverage Maya.
-
-
-00:23:32.440 --> 00:23:34.720
->> Do you put on your own workloads first, just in case?
-
-
-00:23:34.720 --> 00:23:36.680
->> Yeah, well it's just to prove it.
-
-
-00:23:36.680 --> 00:23:37.600
->> Shake it out, yeah.
-
-
-00:23:37.600 --> 00:23:39.200
->> Yeah, it's good, I'm piloting it.
-
-
-00:23:39.200 --> 00:23:41.440
->> Yeah, 'cause you're not offering that up
-
-
-00:23:41.440 --> 00:23:43.880
-to the big customers just right away.
-
-
-00:23:43.880 --> 00:23:47.120
-And so Maya, I don't know how many people know about this.
-
-
-00:23:47.120 --> 00:23:50.840
-Either this is one of the GPU training systems
-
-
-00:23:50.840 --> 00:23:51.680
-you guys have.
-
-
-00:23:51.680 --> 00:23:53.240
-And for those who don't know,
-
-
-00:23:53.240 --> 00:23:55.560
-OpenAI and ChatGPT run on Azure,
-
-
-00:23:55.560 --> 00:23:57.840
-which probably takes a couple of cores,
-
-
-00:23:57.840 --> 00:23:59.600
-a couple of GPUs to make happen.
-
-
-00:23:59.600 --> 00:24:00.480
-You want to talk about that?
-
-
-00:24:00.480 --> 00:24:02.040
->> Right now our fleet,
-
-
-00:24:02.040 --> 00:24:03.840
-our large scale AI supercomputing fleet
-
-
-00:24:03.840 --> 00:24:06.240
-is made up of NVIDIA parts.
-
-
-00:24:06.240 --> 00:24:07.920
-So the previous generation was,
-
-
-00:24:07.920 --> 00:24:10.520
-well the original generation that we trained GPT-3 on
-
-
-00:24:10.520 --> 00:24:13.640
-with OpenAI was NVIDIA V100s.
-
-
-00:24:13.640 --> 00:24:14.920
-And then we introduced A100s,
-
-
-00:24:14.920 --> 00:24:16.760
-which is what GPT-4 was trained on.
-
-
-00:24:16.760 --> 00:24:17.680
->> And these are graphics cards,
-
-
-00:24:17.680 --> 00:24:19.800
-like 4080s or something,
-
-
-00:24:19.800 --> 00:24:21.760
-but specifically for AI, right?
-
-
-00:24:21.760 --> 00:24:22.600
-Okay.
-
-
-00:24:22.600 --> 00:24:23.960
->> The current generation of supercomputer
-
-
-00:24:23.960 --> 00:24:25.520
-we're building for OpenAI training,
-
-
-00:24:25.520 --> 00:24:26.920
-their next generation of their model,
-
-
-00:24:26.920 --> 00:24:29.680
-that's NVIDIA H100 GPUs.
-
-
-00:24:29.680 --> 00:24:32.680
-Then Maya is our own custom AI accelerator.
-
-
-00:24:32.680 --> 00:24:33.840
-So it's not a GPU.
-
-
-00:24:33.840 --> 00:24:37.160
-You know, one of the aspects of NVIDIA's parts
-
-
-00:24:37.160 --> 00:24:38.920
-has been their GPU base.
-
-
-00:24:38.920 --> 00:24:42.540
-So they also can do texture mapping, for example.
-
-
-00:24:42.540 --> 00:24:43.560
-But you don't need that
-
-
-00:24:43.560 --> 00:24:45.440
-if you're just doing pure AI workloads.
-
-
-00:24:45.440 --> 00:24:46.920
->> Back to that specialization, right?
-
-
-00:24:46.920 --> 00:24:49.360
-Like, so if you could build it just for the one thing,
-
-
-00:24:49.360 --> 00:24:50.560
-maybe you'd build it slightly differently?
-
-
-00:24:50.560 --> 00:24:51.400
->> That's right.
-
-
-00:24:51.400 --> 00:24:52.220
->> Okay.
-
-
-00:24:52.220 --> 00:24:54.240
->> So Maya is just designed purely for matrix operations
-
-
-00:24:54.240 --> 00:24:57.200
-used in, in fact, low precision matrix operations
-
-
-00:24:57.200 --> 00:24:59.800
-used for AI training and inference.
-
-
-00:24:59.800 --> 00:25:03.960
-And so that is the specialized part that we've created
-
-
-00:25:03.960 --> 00:25:06.260
-called Maya 100, the first generation of that.
-
-
-00:25:06.260 --> 00:25:09.200
->> This portion of Talk Python to Me
-
-
-00:25:09.200 --> 00:25:11.600
-is brought to you by the PyBytes
-
-
-00:25:11.600 --> 00:25:14.640
-Python Developer Mindset Program.
-
-
-00:25:14.640 --> 00:25:17.280
-It's run by my two friends and frequent guests,
-
-
-00:25:17.280 --> 00:25:19.420
-Bob Delderbos and Julian Sequeira.
-
-
-00:25:19.420 --> 00:25:21.120
-And instead of me telling you about it,
-
-
-00:25:21.120 --> 00:25:23.440
-let's hear them describe their program.
-
-
-00:25:23.440 --> 00:25:24.780
->> Happy New Year.
-
-
-00:25:24.780 --> 00:25:28.040
-As we step into 2024, it's time to reflect.
-
-
-00:25:28.040 --> 00:25:29.240
-Think back to last year.
-
-
-00:25:29.240 --> 00:25:31.280
-What did you achieve with Python?
-
-
-00:25:31.280 --> 00:25:32.520
-If you're feeling like you haven't made
-
-
-00:25:32.520 --> 00:25:33.560
-the progress you wanted
-
-
-00:25:33.560 --> 00:25:35.680
-and procrastination got the best of you,
-
-
-00:25:35.680 --> 00:25:37.080
-it's not too late.
-
-
-00:25:37.080 --> 00:25:38.600
-This year can be different.
-
-
-00:25:38.600 --> 00:25:42.640
-This year can be your year of Python mastery.
-
-
-00:25:42.640 --> 00:25:46.080
-At PyBytes, we understand the journey of learning Python.
-
-
-00:25:46.080 --> 00:25:48.440
-Our coaching program is tailor-made
-
-
-00:25:48.440 --> 00:25:52.020
-to help you break through barriers and truly excel.
-
-
-00:25:52.020 --> 00:25:55.640
-Don't let another year slip by with unmet goals.
-
-
-00:25:55.640 --> 00:25:58.360
-Join us at PyBytes and let's make 2024
-
-
-00:25:58.360 --> 00:26:00.360
-the year you conquer Python.
-
-
-00:26:00.360 --> 00:26:03.720
-Check out PDM Today, our flagship coaching program,
-
-
-00:26:03.720 --> 00:26:06.640
-and let's chat about your Python journey.
-
-
-00:26:06.640 --> 00:26:09.800
->> Apply for the Python Developer Mindset today.
-
-
-00:26:09.800 --> 00:26:12.280
-It's quick and free to apply.
-
-
-00:26:12.280 --> 00:26:14.640
-The link is in your podcast player show notes.
-
-
-00:26:14.640 --> 00:26:16.740
-Thanks to PyBytes for sponsoring the show.
-
-
-00:26:16.740 --> 00:26:20.520
-If I think of some of the stuff presented
-
-
-00:26:20.520 --> 00:26:23.000
-at the opening keynote and stuff here,
-
-
-00:26:23.000 --> 00:26:27.240
-I think the word AI was said a record number of times.
-
-
-00:26:27.240 --> 00:26:28.680
->> Yeah, I think there was a topic there
-
-
-00:26:28.680 --> 00:26:30.280
-where I wasn't a part of.
-
-
-00:26:30.280 --> 00:26:32.640
->> So how much is this changing things for you guys?
-
-
-00:26:32.640 --> 00:26:34.520
-Like 12 months ago or something,
-
-
-00:26:34.520 --> 00:26:37.120
-Chachi P. appeared on the scene and yeah.
-
-
-00:26:37.120 --> 00:26:38.680
->> It's literally changing everything.
-
-
-00:26:38.680 --> 00:26:40.800
-You know, Jensen was saying this is the biggest thing
-
-
-00:26:40.800 --> 00:26:41.640
-since the internet.
-
-
-00:26:41.640 --> 00:26:43.520
->> Yeah, Jensen being the CEO of Embedded.
-
-
-00:26:43.520 --> 00:26:46.360
->> Yeah, who was on stage with Chachi at the keynote.
-
-
-00:26:46.360 --> 00:26:48.680
-It is changing everything.
-
-
-00:26:48.680 --> 00:26:51.560
-It's changing not just the product offerings.
-
-
-00:26:51.560 --> 00:26:54.120
-So the way that we have to integrate AI
-
-
-00:26:54.120 --> 00:26:55.640
-into the products using Copilot,
-
-
-00:26:55.640 --> 00:26:57.800
-it's changing the way we develop the products as well
-
-
-00:26:57.800 --> 00:27:00.560
-and the way that we run our systems inside already.
-
-
-00:27:00.560 --> 00:27:02.000
-So for example, incident management,
-
-
-00:27:02.000 --> 00:27:03.520
-we've got Copilot built,
-
-
-00:27:03.520 --> 00:27:06.120
-you know, our own Copilot internally built into that.
-
-
-00:27:06.120 --> 00:27:08.200
-So somebody that's responding to an issue
-
-
-00:27:08.200 --> 00:27:10.680
-in our production systems can say,
-
-
-00:27:10.680 --> 00:27:12.000
-okay, so what's going on?
-
-
-00:27:12.000 --> 00:27:13.720
-What's the, what happened with this?
-
-
-00:27:13.720 --> 00:27:15.640
-Show me the graph of this, you know,
-
-
-00:27:15.640 --> 00:27:17.160
-just be able to use human language
-
-
-00:27:17.160 --> 00:27:18.520
-to get caught up in what's going on.
-
-
-00:27:18.520 --> 00:27:20.960
->> People tell me it's just statistics, just prediction.
-
-
-00:27:20.960 --> 00:27:22.440
-I, boy, it doesn't feel like,
-
-
-00:27:22.440 --> 00:27:23.280
-it doesn't feel like prediction.
-
-
-00:27:23.280 --> 00:27:24.680
->> People that say that, I think,
-
-
-00:27:24.680 --> 00:27:28.000
-are missing the scale of the statistics.
-
-
-00:27:28.000 --> 00:27:29.520
-And because if you--
-
-
-00:27:29.520 --> 00:27:30.800
->> We're probably predicting a little bit,
-
-
-00:27:30.800 --> 00:27:32.320
-like thinking about what are you gonna say next,
-
-
-00:27:32.320 --> 00:27:33.160
-what were you meaning?
-
-
-00:27:33.160 --> 00:27:34.480
->> Exactly, that's what we are, we're statistical.
-
-
-00:27:34.480 --> 00:27:35.440
->> Yeah, yeah.
-
-
-00:27:35.440 --> 00:27:37.640
->> So it's just once you get statistics
-
-
-00:27:37.640 --> 00:27:40.120
-at a large enough scale that you start to see
-
-
-00:27:40.120 --> 00:27:42.120
-something that looks like what we call intelligence.
-
-
-00:27:42.120 --> 00:27:43.240
->> It's really incredible.
-
-
-00:27:43.240 --> 00:27:46.840
-I'm starting to use it to just write my Git commit logs
-
-
-00:27:46.840 --> 00:27:48.480
-for me, you know, push a button and it says,
-
-
-00:27:48.480 --> 00:27:50.600
-oh, you added error handling to the background task,
-
-
-00:27:50.600 --> 00:27:53.080
-so in case this fails, you'll be more resilient
-
-
-00:27:53.080 --> 00:27:54.360
-and it'll keep running like,
-
-
-00:27:54.360 --> 00:27:55.440
-that's better than I could have gotten.
-
-
-00:27:55.440 --> 00:27:56.600
-(laughing)
-
-
-00:27:56.600 --> 00:27:57.720
-Just thought that might crash, you know,
-
-
-00:27:57.720 --> 00:28:00.240
-and you just push the button and it's just--
-
-
-00:28:00.240 --> 00:28:01.360
->> It's magic, it's magical.
-
-
-00:28:01.360 --> 00:28:02.360
->> Yeah, it really is.
-
-
-00:28:02.360 --> 00:28:03.720
->> It's called Copilot for a reason
-
-
-00:28:03.720 --> 00:28:05.080
-because we're not at the point yet
-
-
-00:28:05.080 --> 00:28:07.480
-where you can just let it do what it does autonomously.
-
-
-00:28:07.480 --> 00:28:09.080
-You need to check its work.
-
-
-00:28:09.080 --> 00:28:11.000
-Like, you need to look at it and say, oops, you know,
-
-
-00:28:11.000 --> 00:28:12.880
-that time it screwed it up, it didn't get it quite right,
-
-
-00:28:12.880 --> 00:28:16.800
-or I need to add more context to this than it had,
-
-
-00:28:16.800 --> 00:28:19.760
-or it extracted, but as far as accelerating work,
-
-
-00:28:19.760 --> 00:28:21.320
-it's just a game changer.
-
-
-00:28:21.320 --> 00:28:22.680
->> Yeah, it really, really is.
-
-
-00:28:22.680 --> 00:28:24.200
-So before we run out of time, I want to ask you
-
-
-00:28:24.200 --> 00:28:26.760
-just a couple more things, bit of a diversion.
-
-
-00:28:26.760 --> 00:28:29.600
-So Python, we saw Python appear in the keynote.
-
-
-00:28:29.600 --> 00:28:31.640
-They were showing off, I can't remember who,
-
-
-00:28:31.640 --> 00:28:33.640
-it wasn't Satya, it was whoever followed him,
-
-
-00:28:33.640 --> 00:28:36.280
-saying, look, we want to show off our new sharing
-
-
-00:28:36.280 --> 00:28:39.200
-of the insanely large GPUs for machine learning.
-
-
-00:28:39.200 --> 00:28:40.520
-So let's just pull up some Python
-
-
-00:28:40.520 --> 00:28:42.600
-and a Jupyter Notebook and we'll just check that out.
-
-
-00:28:42.600 --> 00:28:44.920
-And you're like, wait, where are we again?
-
-
-00:28:44.920 --> 00:28:45.760
-Really interesting.
-
-
-00:28:45.760 --> 00:28:48.040
-So you said you're using a little bit of Python yourself.
-
-
-00:28:48.040 --> 00:28:49.760
-Like, what's Python look like in your world?
-
-
-00:28:49.760 --> 00:28:51.000
->> The reason why I'm using Python is
-
-
-00:28:51.000 --> 00:28:52.680
-I took a sabbatical this summer,
-
-
-00:28:52.680 --> 00:28:55.480
-and so I was like, I'm going to do some AI research.
-
-
-00:28:55.480 --> 00:28:56.880
-So I got connected with an AI researcher.
-
-
-00:28:56.880 --> 00:28:57.920
-In fact, I'm going to talk about this
-
-
-00:28:57.920 --> 00:29:01.200
-at my keynote tomorrow, some of the work that came out of it.
-
-
-00:29:01.200 --> 00:29:04.240
-The, obviously, AI is completely Python.
-
-
-00:29:04.240 --> 00:29:05.480
->> Yeah, almost entirely, yeah.
-
-
-00:29:05.480 --> 00:29:07.480
->> So I spent the whole summer,
-
-
-00:29:07.480 --> 00:29:10.520
-and I still am spending my time in Python,
-
-
-00:29:10.520 --> 00:29:12.280
-Jupyter Notebooks, and then Python scripts
-
-
-00:29:12.280 --> 00:29:15.440
-when you want to do some run for final result.
-
-
-00:29:15.440 --> 00:29:18.160
-I hadn't used really Python before, other than in passing.
-
-
-00:29:18.160 --> 00:29:20.480
-I mean, it's a very large, it's very easy to pick up.
-
-
-00:29:20.480 --> 00:29:21.560
->> There's a t-shirt that says,
-
-
-00:29:21.560 --> 00:29:23.160
-I learned Python, it was a good weekend.
-
-
-00:29:23.160 --> 00:29:24.000
->> Yeah. >> It's a bit of a joke,
-
-
-00:29:24.000 --> 00:29:25.080
-but it's a good joke, you know?
-
-
-00:29:25.080 --> 00:29:27.400
->> I think that's what makes it so powerful,
-
-
-00:29:27.400 --> 00:29:28.880
-is that it's so easy to pick up.
-
-
-00:29:28.880 --> 00:29:31.260
-But what's made it even easier for me to pick it up,
-
-
-00:29:31.260 --> 00:29:34.100
-I'd say that I'm a mediocre Python programmer,
-
-
-00:29:34.100 --> 00:29:35.320
-but I'm using Copilot.
-
-
-00:29:35.320 --> 00:29:36.160
->> Yeah.
-
-
-00:29:36.160 --> 00:29:37.640
->> And it's made me an expert Python coder.
-
-
-00:29:37.640 --> 00:29:38.640
->> It really has.
-
-
-00:29:38.640 --> 00:29:39.480
-How do I do this?
-
-
-00:29:39.480 --> 00:29:43.360
->> I don't go to Stack Overflow for questions.
-
-
-00:29:43.360 --> 00:29:45.360
-I haven't had to get a book on Python.
-
-
-00:29:45.360 --> 00:29:48.920
-I basically just either ask Copilot explicitly,
-
-
-00:29:48.920 --> 00:29:51.520
-like, how do I do this, or write me this,
-
-
-00:29:51.520 --> 00:29:53.600
-or I put it in the function, or in the comment,
-
-
-00:29:53.600 --> 00:29:54.800
-and it gets it done for me.
-
-
-00:29:54.800 --> 00:29:55.640
->> Yeah.
-
-
-00:29:55.640 --> 00:29:57.680
->> And occasionally, I'll have to go hand edit it
-
-
-00:29:57.680 --> 00:29:58.840
-and figure out what's going on,
-
-
-00:29:58.840 --> 00:30:01.960
-but for the most part, it is writing almost all my code.
-
-
-00:30:01.960 --> 00:30:02.800
->> Yeah.
-
-
-00:30:02.800 --> 00:30:04.440
->> So my goal is, how can I just not have it
-
-
-00:30:04.440 --> 00:30:05.640
-write everything for me?
-
-
-00:30:05.640 --> 00:30:08.480
-So that has kind of become the way that I program in Python,
-
-
-00:30:08.480 --> 00:30:11.960
-and I think Python and AI, the knowledge of Copilot
-
-
-00:30:11.960 --> 00:30:14.720
-for Python, because OpenAI, obviously,
-
-
-00:30:14.720 --> 00:30:19.280
-for their own purposes, has made GPT-4 and GPT-35
-
-
-00:30:19.280 --> 00:30:21.600
-before it really know Python and Python--
-
-
-00:30:21.600 --> 00:30:22.640
->> I hadn't really thought of that connection,
-
-
-00:30:22.640 --> 00:30:24.400
-but of course, they wanted to answer
-
-
-00:30:24.400 --> 00:30:25.960
-Python questions, I'm sure.
-
-
-00:30:25.960 --> 00:30:29.360
->> When it comes to seeing what AI can do for programming,
-
-
-00:30:29.360 --> 00:30:31.880
-Python is at the forefront of that.
-
-
-00:30:31.880 --> 00:30:33.480
->> What was your impression of it?
-
-
-00:30:33.480 --> 00:30:34.720
-I mean, I'm sure you've probably seen it before,
-
-
-00:30:34.720 --> 00:30:36.560
-but what's your impression of working in it,
-
-
-00:30:36.560 --> 00:30:39.360
-coming from a curly brace semicolon type language
-
-
-00:30:39.360 --> 00:30:42.760
-like C++ or something, 'cause they drop a bunch
-
-
-00:30:42.760 --> 00:30:44.720
-of parentheses, they have these tab space,
-
-
-00:30:44.720 --> 00:30:46.200
-these four spaces, rules and stuff.
-
-
-00:30:46.200 --> 00:30:48.880
->> You know, it's the YAML versus JSON.
-
-
-00:30:48.880 --> 00:30:50.960
->> It is kind of that debate, isn't it?
-
-
-00:30:50.960 --> 00:30:52.000
->> I mean, I've gotten used to it.
-
-
-00:30:52.000 --> 00:30:53.280
-It's not a big deal.
-
-
-00:30:53.280 --> 00:30:56.520
-I find it's less verbose than C.
-
-
-00:30:56.520 --> 00:30:57.920
-There's less typing.
-
-
-00:30:57.920 --> 00:31:00.480
->> Less symbol noise, you just kind of get the essence, yeah.
-
-
-00:31:00.480 --> 00:31:01.320
->> Yeah.
-
-
-00:31:01.320 --> 00:31:02.160
->> Yeah, I kind of had that experience as well,
-
-
-00:31:02.160 --> 00:31:03.200
-coming from a C-based language.
-
-
-00:31:03.200 --> 00:31:04.760
-I'm like, wow, this is really weird.
-
-
-00:31:04.760 --> 00:31:06.680
-And then after I went back to C#,
-
-
-00:31:06.680 --> 00:31:07.760
-I'm like, this is also weird.
-
-
-00:31:07.760 --> 00:31:09.960
-And I kind of like the clarity over here,
-
-
-00:31:09.960 --> 00:31:11.920
-so now what do I do with life?
-
-
-00:31:11.920 --> 00:31:12.840
->> And then you go back and like,
-
-
-00:31:12.840 --> 00:31:14.720
-semicolons are annoying now.
-
-
-00:31:14.720 --> 00:31:15.560
->> Yes, exactly.
-
-
-00:31:15.560 --> 00:31:16.680
-I'm like, I thought they were needed.
-
-
-00:31:16.680 --> 00:31:18.160
-They're not needed, what's going on?
-
-
-00:31:18.160 --> 00:31:19.800
->> Awesome, oh, that's really cool.
-
-
-00:31:19.800 --> 00:31:22.760
-Another thing that I think maybe people
-
-
-00:31:22.760 --> 00:31:24.280
-would really enjoy hearing a bit about,
-
-
-00:31:24.280 --> 00:31:28.360
-and I'm a big fan of, you wrote a three-part series
-
-
-00:31:28.360 --> 00:31:31.600
-of novels about computer hackers called Zero Day.
-
-
-00:31:31.600 --> 00:31:32.440
-Really good.
-
-
-00:31:32.440 --> 00:31:33.280
->> Thanks.
-
-
-00:31:33.280 --> 00:31:34.760
->> I read all of them back when they came out.
-
-
-00:31:34.760 --> 00:31:37.880
-And so much of this computer mystery stuff is like,
-
-
-00:31:37.880 --> 00:31:40.360
-oh, they're using VB6, I'm going to get their IP address.
-
-
-00:31:40.360 --> 00:31:41.200
-You're like, wait, what?
-
-
-00:31:41.200 --> 00:31:43.160
-I mean, those words are meaningful,
-
-
-00:31:43.160 --> 00:31:45.160
-but the sense is not, right?
-
-
-00:31:45.160 --> 00:31:48.960
-And your books are like a lot of sort of spy stuff,
-
-
-00:31:48.960 --> 00:31:51.720
-but also a lot of really cool, legit,
-
-
-00:31:51.720 --> 00:31:53.960
-reasonably possible computer stuff.
-
-
-00:31:53.960 --> 00:31:55.360
-Yeah, tell people a quick bit about that,
-
-
-00:31:55.360 --> 00:31:56.320
-if they want to catch up.
-
-
-00:31:56.320 --> 00:31:59.120
->> I love thrillers growing up, techno thrillers.
-
-
-00:31:59.120 --> 00:32:02.040
-I read Andromeda Strain when I was in seventh grade,
-
-
-00:32:02.040 --> 00:32:03.600
-and I was like, this book is so cool
-
-
-00:32:03.600 --> 00:32:06.880
-because it's like I'm learning science plus--
-
-
-00:32:06.880 --> 00:32:07.920
->> Yeah, exactly.
-
-
-00:32:07.920 --> 00:32:09.800
->> You know, it's really exciting.
-
-
-00:32:09.800 --> 00:32:11.000
-So I've always wanted to write one,
-
-
-00:32:11.000 --> 00:32:15.800
-and then coming into the late 1990s,
-
-
-00:32:15.800 --> 00:32:18.200
-when you started to see some of these large-scale viruses,
-
-
-00:32:18.200 --> 00:32:21.080
-I was just thinking, this is such a powerful weapon
-
-
-00:32:21.080 --> 00:32:22.560
-for somebody to cause destruction.
-
-
-00:32:22.560 --> 00:32:24.080
-And then 9/11 happened, and I'm like,
-
-
-00:32:24.080 --> 00:32:26.800
-all right, logical next step is leveraging a cyber weapon
-
-
-00:32:26.800 --> 00:32:28.880
-to do something with the same goals.
-
-
-00:32:28.880 --> 00:32:31.480
-And so that's what led me to write Zero Day,
-
-
-00:32:31.480 --> 00:32:33.440
-which is taking that idea
-
-
-00:32:33.440 --> 00:32:36.920
-of using a cyber weapon for terrorism.
-
-
-00:32:36.920 --> 00:32:39.840
-And then I was like, oh, that book was really well-received,
-
-
-00:32:39.840 --> 00:32:41.840
-I had a lot of fun doing it, so let me write the next one.
-
-
-00:32:41.840 --> 00:32:43.320
-And I wanted to continue in this theme
-
-
-00:32:43.320 --> 00:32:47.560
-with the same characters, Darrell Hoggan and Jeff Akin,
-
-
-00:32:47.560 --> 00:32:48.960
-and say, what's something else?
-
-
-00:32:48.960 --> 00:32:51.760
-What's another cyber security angle
-
-
-00:32:51.760 --> 00:32:53.120
-that I can take a look at in the second one?
-
-
-00:32:53.120 --> 00:32:56.240
-So the second one was state-sponsored cyber espionage.
-
-
-00:32:56.240 --> 00:32:58.000
-And actually, the ironic thing is,
-
-
-00:32:58.000 --> 00:32:59.880
-I'd already had Iran in the story,
-
-
-00:32:59.880 --> 00:33:01.480
-I'd already had China in the story,
-
-
-00:33:01.480 --> 00:33:03.040
-I had people trying to figure out
-
-
-00:33:03.040 --> 00:33:05.080
-how to get Iran a nuclear weapon,
-
-
-00:33:05.080 --> 00:33:06.560
-and then Stuxnet happened,
-
-
-00:33:06.560 --> 00:33:08.200
-right when I was still writing the book.
-
-
-00:33:08.200 --> 00:33:11.360
-And I'm like, okay, this is a story part of my plot.
-
-
-00:33:11.360 --> 00:33:12.960
-- Yeah, lining it up for you.
-
-
-00:33:12.960 --> 00:33:14.360
-- So I had to change the book a little
-
-
-00:33:14.360 --> 00:33:16.080
-to acknowledge Stuxnet happening.
-
-
-00:33:16.080 --> 00:33:18.280
-And then the third one was about insider threats,
-
-
-00:33:18.280 --> 00:33:20.600
-which I think is one of the toughest threats to deal with.
-
-
-00:33:20.600 --> 00:33:22.960
-In this case, it was a long-range plot
-
-
-00:33:22.960 --> 00:33:26.480
-from some people that wanted to compromise a stock exchange
-
-
-00:33:26.480 --> 00:33:28.880
-and kind of a mixture of high-frequency trading
-
-
-00:33:28.880 --> 00:33:32.040
-and insider threat with cyber security systems,
-
-
-00:33:32.040 --> 00:33:33.560
-was the third one called Rogue Code.
-
-
-00:33:33.560 --> 00:33:35.600
-- Yeah, so they were all really good, I really enjoyed it.
-
-
-00:33:35.600 --> 00:33:36.880
-Were you a fan of Mr. Robot?
-
-
-00:33:36.880 --> 00:33:37.960
-Did you ever watch that series?
-
-
-00:33:37.960 --> 00:33:39.000
-- I did, I love that series.
-
-
-00:33:39.000 --> 00:33:40.240
-- Yeah, oh my gosh.
-
-
-00:33:40.240 --> 00:33:42.680
-Again, it seemed pretty plausible.
-
-
-00:33:42.680 --> 00:33:44.120
-So I really like that.
-
-
-00:33:44.120 --> 00:33:45.560
-Imagine a lot of people out there listening
-
-
-00:33:45.560 --> 00:33:47.040
-have seen Mr. Robot as well.
-
-
-00:33:47.040 --> 00:33:48.480
-If they want that kind of idea,
-
-
-00:33:48.480 --> 00:33:50.760
-but in just a series, they can binge.
-
-
-00:33:50.760 --> 00:33:51.600
-Yeah, cool.
-
-
-00:33:51.600 --> 00:33:52.880
-Maybe we should wrap up our chat here
-
-
-00:33:52.880 --> 00:33:55.560
-with just a quick of some of the future things.
-
-
-00:33:55.560 --> 00:33:58.640
-You talked about rapidly deploying
-
-
-00:33:58.640 --> 00:34:01.600
-some of these data centers and some of these Balar systems.
-
-
-00:34:01.600 --> 00:34:03.040
-Maybe just give us a sense of like,
-
-
-00:34:03.040 --> 00:34:05.760
-even like disaggregated rack architecture.
-
-
-00:34:05.760 --> 00:34:09.520
-Do you have, instead of having a GPU alongside a server,
-
-
-00:34:09.520 --> 00:34:12.640
-like a rack of GPUs and then optical connections
-
-
-00:34:12.640 --> 00:34:13.800
-to a rack of servers.
-
-
-00:34:13.800 --> 00:34:16.120
-Like give us a sense of some of the stuff where it's going.
-
-
-00:34:16.120 --> 00:34:18.480
-- Yeah, so that's some of the stuff that we're exploring.
-
-
-00:34:18.480 --> 00:34:20.400
-Like I mentioned, we're taking a look at
-
-
-00:34:20.400 --> 00:34:22.800
-lots of different ways to re-architect the data center
-
-
-00:34:22.800 --> 00:34:23.640
-to be more efficient.
-
-
-00:34:23.640 --> 00:34:26.400
-And one of the ways that you get efficient is by,
-
-
-00:34:26.400 --> 00:34:28.840
-in reduced fragmentation, is by having larger pools
-
-
-00:34:28.840 --> 00:34:30.480
-to allocate resources from.
-
-
-00:34:30.480 --> 00:34:32.960
-If you think about allocating a virtual machine on a server,
-
-
-00:34:32.960 --> 00:34:34.840
-how much RAM can you give it at most?
-
-
-00:34:34.840 --> 00:34:36.560
-Well, as much as sitting on the server.
-
-
-00:34:36.560 --> 00:34:38.040
-How many GPUs can you attach to it?
-
-
-00:34:38.040 --> 00:34:40.560
-Well, as most as are attached to that server.
-
-
-00:34:40.560 --> 00:34:42.120
-- Right, how many PCI slots you got.
-
-
-00:34:42.120 --> 00:34:44.840
-- But if you think about, I've got a large resource pool.
-
-
-00:34:44.840 --> 00:34:48.800
-It's a whole group of GPUs that I could be able to give it
-
-
-00:34:48.800 --> 00:34:49.640
-as many GPUs as--
-
-
-00:34:49.640 --> 00:34:50.560
-- What, 50?
-
-
-00:34:50.560 --> 00:34:52.560
-- Yeah, you ask for 50, exactly.
-
-
-00:34:52.560 --> 00:34:54.980
-The benefits pulling for a resource allocation
-
-
-00:34:54.980 --> 00:34:56.280
-are that you reduce fragmentation
-
-
-00:34:56.280 --> 00:34:57.560
-and you get more flexibility.
-
-
-00:34:57.560 --> 00:35:00.440
-So we've been trying to explore how we can do this.
-
-
-00:35:00.440 --> 00:35:02.900
-From rack scale desegregation of saying,
-
-
-00:35:02.900 --> 00:35:05.120
-there's a whole bunch of SSDs at the top of the rack,
-
-
-00:35:05.120 --> 00:35:06.560
-then there's a bunch of GPUs,
-
-
-00:35:06.560 --> 00:35:08.480
-and then there's a bunch of CPU cores,
-
-
-00:35:08.480 --> 00:35:11.760
-and let's just compose the system dynamically.
-
-
-00:35:11.760 --> 00:35:13.080
-There's a bunch of challenges.
-
-
-00:35:13.080 --> 00:35:15.240
-From a resiliency perspective,
-
-
-00:35:15.240 --> 00:35:18.120
-like how do you prevent one failure of the GPU
-
-
-00:35:18.120 --> 00:35:20.520
-part of the system bringing down the whole rack,
-
-
-00:35:20.520 --> 00:35:21.540
-for example.
-
-
-00:35:21.540 --> 00:35:24.200
-There's latency and bandwidth challenges.
-
-
-00:35:24.200 --> 00:35:26.880
-Like how do you, when you're sitting there on the PCI bus,
-
-
-00:35:26.880 --> 00:35:28.360
-you get a whole bunch of bandwidth
-
-
-00:35:28.360 --> 00:35:30.000
-and you get very low latency.
-
-
-00:35:30.000 --> 00:35:31.540
-If you're going across the rack,
-
-
-00:35:31.540 --> 00:35:33.440
-you might have the same bandwidth,
-
-
-00:35:33.440 --> 00:35:34.440
-you might have lower bandwidth,
-
-
-00:35:34.440 --> 00:35:37.080
-just because you can't deliver that much bandwidth
-
-
-00:35:37.080 --> 00:35:38.440
-out of the GPUs.
-
-
-00:35:38.440 --> 00:35:40.800
-- All the systems are optimized to make assumptions
-
-
-00:35:40.800 --> 00:35:42.040
-about these numbers.
-
-
-00:35:42.040 --> 00:35:42.880
-- Exactly.
-
-
-00:35:42.880 --> 00:35:44.000
-And your latency is gonna be higher.
-
-
-00:35:44.000 --> 00:35:45.800
-And so some workloads can't tolerate their latency.
-
-
-00:35:45.800 --> 00:35:48.080
-So we've been exploring desegregated memory,
-
-
-00:35:48.080 --> 00:35:49.120
-desegregated GPUs.
-
-
-00:35:49.120 --> 00:35:50.740
-I've shown demos of both of them.
-
-
-00:35:50.740 --> 00:35:52.600
-We're still exploring those.
-
-
-00:35:52.600 --> 00:35:53.960
-We're not, you know, it's not--
-
-
-00:35:53.960 --> 00:35:54.800
-- Which is harder.
-
-
-00:35:54.800 --> 00:35:55.620
-- Yeah.
-
-
-00:35:55.620 --> 00:35:56.800
-Desegregated memory or GPUs?
-
-
-00:35:56.800 --> 00:35:59.600
-- I would guess memory, but I have zero experience.
-
-
-00:35:59.600 --> 00:36:02.120
-- Memory is challenging because
-
-
-00:36:02.120 --> 00:36:03.360
-there are certain GPU workloads
-
-
-00:36:03.360 --> 00:36:04.940
-that aren't so latency sensitive.
-
-
-00:36:04.940 --> 00:36:05.880
-Like AI training.
-
-
-00:36:05.880 --> 00:36:06.720
-- Sure.
-
-
-00:36:06.720 --> 00:36:07.560
-Like a batch job sort of thing.
-
-
-00:36:07.560 --> 00:36:08.600
-- Yeah, a batch job thing.
-
-
-00:36:08.600 --> 00:36:11.000
-But when it comes to memory,
-
-
-00:36:11.000 --> 00:36:13.200
-you almost always see the latency.
-
-
-00:36:13.200 --> 00:36:15.080
-And so what we think we can do
-
-
-00:36:15.080 --> 00:36:17.560
-is get remote memory down to NUMA,
-
-
-00:36:17.560 --> 00:36:19.800
-you know, speaking of non-uniform memory architecture,
-
-
-00:36:19.800 --> 00:36:21.560
-latency down to that level.
-
-
-00:36:21.560 --> 00:36:23.920
-And a lot of applications can tolerate that.
-
-
-00:36:23.920 --> 00:36:24.760
-- Okay.
-
-
-00:36:24.760 --> 00:36:25.800
-- And so we have a memory tiering
-
-
-00:36:25.800 --> 00:36:27.880
-where you've got class memory that's on the system
-
-
-00:36:27.880 --> 00:36:29.680
-and then remote memory, which is like NUMA latency.
-
-
-00:36:29.680 --> 00:36:30.960
-- Kind of like a L2 cache,
-
-
-00:36:30.960 --> 00:36:32.720
-but like a bigger idea of it.
-
-
-00:36:32.720 --> 00:36:33.560
-Interesting.
-
-
-00:36:33.560 --> 00:36:35.200
-All right, well, very, very cool.
-
-
-00:36:35.200 --> 00:36:37.520
-I think you guys are doing such neat stuff.
-
-
-00:36:37.520 --> 00:36:39.180
-And you know, really,
-
-
-00:36:39.180 --> 00:36:41.800
-when you see these hyperscale clouds,
-
-
-00:36:41.800 --> 00:36:44.120
-I think a lot of what people see
-
-
-00:36:44.120 --> 00:36:47.120
-is the insane dashboard of choices.
-
-
-00:36:47.120 --> 00:36:49.160
-Like do I do routing?
-
-
-00:36:49.160 --> 00:36:50.040
-Do I do firewalls?
-
-
-00:36:50.040 --> 00:36:52.120
-Do I do VPCs?
-
-
-00:36:52.120 --> 00:36:54.080
-Do I do like paths, IaaS?
-
-
-00:36:54.080 --> 00:36:54.920
-What do I do?
-
-
-00:36:54.920 --> 00:36:57.480
-But oftentimes don't really think about like,
-
-
-00:36:57.480 --> 00:36:59.520
-well, you're getting a slice of this giant server
-
-
-00:36:59.520 --> 00:37:02.320
-and you know, maybe someday he'll live under the ocean
-
-
-00:37:02.320 --> 00:37:03.200
-or whatever, right?
-
-
-00:37:03.200 --> 00:37:05.120
-So it was really cool to get that look.
-
-
-00:37:05.120 --> 00:37:07.000
-- What you're seeing is the cloud,
-
-
-00:37:07.000 --> 00:37:08.480
-it started with a few basic building blocks
-
-
-00:37:08.480 --> 00:37:11.480
-and then we started to explore lots of different directions
-
-
-00:37:11.480 --> 00:37:14.200
-of creating lots of different PaaS services
-
-
-00:37:14.200 --> 00:37:15.840
-and PaaS services for compute
-
-
-00:37:15.840 --> 00:37:17.520
-and then different data offerings.
-
-
-00:37:17.520 --> 00:37:20.360
-I think the space, again, coming to the workload,
-
-
-00:37:20.360 --> 00:37:23.400
-you get this, is it high, do you need key value store?
-
-
-00:37:23.400 --> 00:37:24.760
-Do you need a vectorized database?
-
-
-00:37:24.760 --> 00:37:26.880
-Do you need, and do you need any of those
-
-
-00:37:26.880 --> 00:37:28.840
-to be extreme performance?
-
-
-00:37:28.840 --> 00:37:30.320
-'Cause then if you need extreme performance,
-
-
-00:37:30.320 --> 00:37:34.280
-go for the design for purpose vectorized database.
-
-
-00:37:34.280 --> 00:37:37.000
-If you want key value with vectorization,
-
-
-00:37:37.000 --> 00:37:38.760
-but it's okay if the vectorization
-
-
-00:37:38.760 --> 00:37:41.520
-isn't the fastest possible, you know,
-
-
-00:37:41.520 --> 00:37:43.200
-you can go use this other offer.
-
-
-00:37:43.200 --> 00:37:47.120
-So that's why the list of options has continued to expand
-
-
-00:37:47.120 --> 00:37:49.520
-is just because every workload says,
-
-
-00:37:49.520 --> 00:37:51.600
-I need this and that's the most important thing to me.
-
-
-00:37:51.600 --> 00:37:53.080
-And the other one says, no, I need this,
-
-
-00:37:53.080 --> 00:37:54.040
-that's the most important thing.
-
-
-00:37:54.040 --> 00:37:55.360
-And others are like, I don't care.
-
-
-00:37:55.360 --> 00:37:58.920
-- As it becomes the mainframe of the world, right?
-
-
-00:37:58.920 --> 00:38:00.680
-There's a lot of different types of apps running on it.
-
-
-00:38:00.680 --> 00:38:02.320
-- Yeah. - Yeah, awesome.
-
-
-00:38:02.320 --> 00:38:03.680
-All right, Mark, final call to action.
-
-
-00:38:03.680 --> 00:38:05.800
-People maybe wanna learn more about some of the stuff
-
-
-00:38:05.800 --> 00:38:07.200
-we saw here, see some pictures,
-
-
-00:38:07.200 --> 00:38:09.120
-but, or maybe also just do more with Azure.
-
-
-00:38:09.120 --> 00:38:09.960
-What do you say?
-
-
-00:38:09.960 --> 00:38:10.800
-- A couple of things.
-
-
-00:38:10.800 --> 00:38:13.000
-One is, I've been doing a series of Azure innovation talks
-
-
-00:38:13.000 --> 00:38:14.440
-at Build and Ignite sessions.
-
-
-00:38:14.440 --> 00:38:15.760
-So go back to the last Build
-
-
-00:38:15.760 --> 00:38:17.760
-and you'll see the most recent one of those.
-
-
-00:38:17.760 --> 00:38:19.680
-And then at this Ignite, I'm doing one
-
-
-00:38:19.680 --> 00:38:22.440
-that's just looking at AI related innovation.
-
-
-00:38:22.440 --> 00:38:25.560
-That's on Friday, tomorrow here at Ignite,
-
-
-00:38:25.560 --> 00:38:27.520
-and it'll be available on demand.
-
-
-00:38:27.520 --> 00:38:28.880
-- Yeah, I'll grab the links to some of those
-
-
-00:38:28.880 --> 00:38:30.120
-and put them in the show notes for people.
-
-
-00:38:30.120 --> 00:38:30.960
-- Excellent.
-
-
-00:38:30.960 --> 00:38:31.800
-- Well, thanks so much for being on the show.
-
-
-00:38:31.800 --> 00:38:32.640
-- All right, thanks for having me, Michael.
-
-
-00:38:32.640 --> 00:38:34.040
-- Yeah, it's great.
-
-
-00:38:34.040 --> 00:38:37.320
-This has been another episode of Talk Python to Me.
-
-
-00:38:37.320 --> 00:38:38.760
-Thank you to our sponsors.
-
-
-00:38:38.760 --> 00:38:40.120
-Be sure to check out what they're offering.
-
-
-00:38:40.120 --> 00:38:41.760
-It really helps support the show.
-
-
-00:38:41.760 --> 00:38:45.360
-This episode is sponsored by Posit Connect
-
-
-00:38:45.360 --> 00:38:46.880
-from the makers of Shiny.
-
-
-00:38:46.880 --> 00:38:49.320
-Publish, share, and deploy all of your data projects
-
-
-00:38:49.320 --> 00:38:51.360
-that you're creating using Python.
-
-
-00:38:51.360 --> 00:38:55.360
-Streamlet, Dash, Shiny, Bokeh, FastAPI, Flask, Quatro,
-
-
-00:38:55.360 --> 00:38:58.160
-Reports, Dashboards, and APIs.
-
-
-00:38:58.160 --> 00:39:00.000
-Posit Connect supports all of them.
-
-
-00:39:00.000 --> 00:39:01.480
-Try Posit Connect for free
-
-
-00:39:01.480 --> 00:39:05.720
-by going to talkpython.fm/posit, P-O-S-I-T.
-
-
-00:39:05.720 --> 00:39:10.560
-Are you ready to level up your Python career?
-
-
-00:39:10.560 --> 00:39:12.960
-And could you use a little bit of personal
-
-
-00:39:12.960 --> 00:39:15.560
-and individualized guidance to do so?
-
-
-00:39:15.560 --> 00:39:19.080
-Check out the PyBytes Python Developer Mindset Program
-
-
-00:39:19.080 --> 00:39:22.080
-at talkpython.fm/pdm.
-
-
-00:39:22.080 --> 00:39:24.760
-Want to level up your Python?
-
-
-00:39:24.760 --> 00:39:26.540
-We have one of the largest catalogs
-
-
-00:39:26.540 --> 00:39:28.880
-of Python video courses over at Talk Python.
-
-
-00:39:28.880 --> 00:39:30.960
-Our content ranges from true beginners
-
-
-00:39:30.960 --> 00:39:33.920
-to deeply advanced topics like memory and async.
-
-
-00:39:33.920 --> 00:39:36.600
-And best of all, there's not a subscription in sight.
-
-
-00:39:36.600 --> 00:39:39.800
-Check it out for yourself at training.talkpython.fm.
-
-
-00:39:39.800 --> 00:39:41.420
-Be sure to subscribe to the show,
-
-
-00:39:41.420 --> 00:39:44.400
-open your favorite podcast app, and search for Python.
-
-
-00:39:44.400 --> 00:39:45.800
-We should be right at the top.
-
-
-00:39:45.800 --> 00:39:48.680
-You can also find the iTunes feed at /iTunes,
-
-
-00:39:48.680 --> 00:39:50.860
-the Google Play feed at /play,
-
-
-00:39:50.860 --> 00:39:55.320
-and the Direct RSS feed at /rss on talkpython.fm.
-
-
-00:39:55.320 --> 00:39:57.920
-We're live streaming most of our recordings these days.
-
-
-00:39:57.920 --> 00:39:59.060
-If you want to be part of the show
-
-
-00:39:59.060 --> 00:40:01.320
-and have your comments featured on the air,
-
-
-00:40:01.320 --> 00:40:03.200
-be sure to subscribe to our YouTube channel
-
-
-00:40:03.200 --> 00:40:06.440
-at talkpython.fm/youtube.
-
-
-00:40:06.440 --> 00:40:07.840
-This is your host, Michael Kennedy.
-
-
-00:40:07.840 --> 00:40:09.000
-Thanks so much for listening.
-
-
-00:40:09.000 --> 00:40:10.240
-I really appreciate it.
-
-
-00:40:10.240 --> 00:40:12.720
-Now get out there and write some Python code.
-
-
-00:40:12.720 --> 00:40:15.300
-(upbeat music)
-
-
-00:40:30.780 --> 00:40:32.780
+00:42:22.080 --> 00:42:24.080
 [MUSIC]
 
