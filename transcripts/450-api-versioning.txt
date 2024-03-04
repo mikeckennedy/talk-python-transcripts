@@ -1,0 +1,1998 @@
+00:00:00 You've built an awesome set of APIs, and now you have a wide array of devices
+
+00:00:04 and clients using them.
+
+00:00:05 Congratulations.
+
+00:00:07 Then you need to upgrade an endpoint or make a change that is meaningful in some way.
+
+00:00:12 Now what?
+
+00:00:13 That's the conversation I dive into over the next hour with Stanislav Samiv.
+
+00:00:17 We're talking about versioning APIs on this, the 450th episode of Talk Python to Me,
+
+00:00:23 recorded January 8th, 2024.
+
+00:00:25 (upbeat music)
+
+00:00:31 Welcome to Talk Python to Me, a weekly podcast on Python.
+
+00:00:43 This is your host, Michael Kennedy.
+
+00:00:45 Follow me on Mastodon, where I'm @mkennedy, and follow the podcast using @talkpython,
+
+00:00:50 both on fosstodon.org.
+
+00:00:52 Keep up with the show and listen to over seven years of past episodes at talkpython.fm.
+
+00:00:58 We've started streaming most of our episodes live on YouTube.
+
+00:01:01 Subscribe to our YouTube channel over at talkpython.fm/youtube to get notified about upcoming shows
+
+00:01:07 and be part of that episode.
+
+00:01:08 This episode is sponsored by Neo4j.
+
+00:01:13 It's time to stop asking relational databases to do more than they were made for
+
+00:01:18 and simplify complex data models with graphs.
+
+00:01:21 Check out the sample FastAPI project and see what Neo4j, a native graph database,
+
+00:01:27 can do for you.
+
+00:01:28 Find out more at talkpython.fm/neo4j.
+
+00:01:32 And it's brought to you by Sentry.
+
+00:01:35 Don't let those errors go unnoticed.
+
+00:01:37 Use Sentry like we do here at Talk Python.
+
+00:01:39 Sign up at talkpython.fm/sentry.
+
+00:01:42 Stanislav, welcome to Talk Python to Me.
+
+00:01:46 It's great to have you here.
+
+00:01:47 - It's good to be here.
+
+00:01:48 - Yeah, it's good to have you here.
+
+00:01:49 I wonder what version we're gonna end up shipping of this episode.
+
+00:01:53 (laughing)
+
+00:01:55 - That's a good question. - We're gonna talk about API versions.
+
+00:01:57 API versions, API versions.
+
+00:01:59 - It's good to have many of them, you know?
+
+00:02:00 - Yeah, it's one of those problems that, you know, as soon as you create an API
+
+00:02:05 and people start to use it, they don't wanna keep rewriting their code.
+
+00:02:09 But you need to evolve your API over time as it gets new features, as maybe more importantly, you realize,
+
+00:02:16 like, oh, that was a bad choice.
+
+00:02:18 How do you fix this, right?
+
+00:02:19 So that's kind of the theme of this episode.
+
+00:02:22 We're gonna talk about concrete tools that you can use to add versioning
+
+00:02:28 to various API frameworks in Python and some of the ideas behind it.
+
+00:02:32 So, gonna be a ton of fun.
+
+00:02:34 Let's start, though, with your story.
+
+00:02:37 Tell us a bit about yourself.
+
+00:02:38 - Previously, I have been a backend engineer for six or even seven years now.
+
+00:02:44 But recently, I have shifted into infrastructure.
+
+00:02:48 Right now, I'm a platform engineering tech lead at Monite.
+
+00:02:52 What I do is I make architectural decisions, I mentor the teams, I help the teams with Python-specific questions.
+
+00:03:01 But mostly, I build Python-specific infrastructure, and my main job is making our business teams happy.
+
+00:03:07 I try to do that in my open-source work as well.
+
+00:03:11 I like to make my own open-source projects.
+
+00:03:13 I like to contribute to big projects, small projects.
+
+00:03:16 It's all over the place.
+
+00:03:17 And we're going to be mentioning one of them today.
+
+00:03:19 - Yeah, you build a really cool library that we're gonna talk about, and that'll be a lot of fun.
+
+00:03:23 It looks really useful.
+
+00:03:24 And some other third-party ones as well.
+
+00:03:27 So, I wanted to ask you a little bit about what is the difference between
+
+00:03:30 being a backend software developer, which I think a lot of people get the sense of,
+
+00:03:35 like building APIs, building the backend, at least, aspect of websites and so on,
+
+00:03:41 versus, say, building infrastructure in Python.
+
+00:03:44 Like, what are these two worlds?
+
+00:03:45 How are they the same?
+
+00:03:46 How are they different?
+
+00:03:46 - So, when you're building them, especially when you're building products,
+
+00:03:49 it's very similar.
+
+00:03:51 However, in backend, there is already a lot of infrastructure around you.
+
+00:03:56 There is already a lot of people who do portions of your job.
+
+00:04:01 So, like, there are people who can sell your product.
+
+00:04:04 There are people who are thinking about how to move it forward, how to evolve it.
+
+00:04:08 There are people who are designing it, thinking about it.
+
+00:04:12 But when you're a platform engineer, you gotta do all of that yourself.
+
+00:04:16 And also, one big portion of any library framework or anything else, any developer tools development,
+
+00:04:23 is the fact that, unlike an API, well, a web API, a REST API, which has a very strict sort of interface
+
+00:04:33 where the developer wouldn't be able to use it in a million ways, a library, especially in a language
+
+00:04:39 as introspectable as Python, the developers can do crazy things with your stuff.
+
+00:04:43 So, you gotta think forward for all of these use cases, and you gotta be sure that you don't expose
+
+00:04:50 extra private interfaces, because once you do expose them, it won't be nice to break them in the future.
+
+00:04:56 - I guess it's a little more restricted with APIs than it is with handing out packages, right?
+
+00:05:01 'Cause people, they can just dive into the packages and do whatever you want.
+
+00:05:05 And the API is more or less limited by what the website's willing to process, right?
+
+00:05:10 - Yep. - On the flip side, you have code on the internet, and anytime you have code on the internet,
+
+00:05:16 that's always a little stressful, right?
+
+00:05:17 Just like, whatever's out there, it's incredible if you have a website, you pull up the logs,
+
+00:05:23 how much abuse your website is taking constantly.
+
+00:05:26 - True. (Gene laughs)
+
+00:05:27 The great thing about building packages is that you're not worried about what happens with them after,
+
+00:05:31 you just give 'em, and then if it breaks, it's not you, it's not on your servers, hopefully.
+
+00:05:38 But also, as I mentioned, you gotta both be its designer, you gotta sell it,
+
+00:05:43 you gotta people do that, you gotta document it.
+
+00:05:45 You gotta, as a platform engineer, you do all of the parts that backend engineers
+
+00:05:50 are distracted away from, or at least in most bigger companies, distracted away from.
+
+00:05:55 - Yeah, super interesting.
+
+00:05:56 All right, let's talk about, I guess, one more thing for your introduction before we move on.
+
+00:06:02 You've worked on quite a few interesting projects here, so maybe give us just a little bit of background
+
+00:06:07 on some of your open-source work.
+
+00:06:09 - I'll just talk about, I guess, the most popular ones.
+
+00:06:12 The coolest one was PathWalk.
+
+00:06:14 If you remember, in Python, there is oswalk, but then in Python 3.12, I added PathWalk.
+
+00:06:20 I have also added the type-ins for that into TypeShed, I think some other things,
+
+00:06:24 and I am, I think, top 10 contributor of Tortoise ORM, the asynchronous ORM that claims to be the fastest,
+
+00:06:33 or at least one of the fastest in Python.
+
+00:06:36 And a few smaller projects, which I don't think there is anything particularly fun to talk about there.
+
+00:06:43 It's just mostly bug fixes and small features.
+
+00:06:46 But then my other projects, the ones that I maintain, are way cooler.
+
+00:06:50 For example, Bidentic Duality enables you to have multiple versions of your Bidentic models
+
+00:06:57 for almost free in terms of performance and without any code generation.
+
+00:07:02 And CADWIN, the project we're going to be discussing today, implements, I guess, the fullest
+
+00:07:08 and most sophisticated API versioning paradigm there is at this point.
+
+00:07:12 - Excellent, yeah.
+
+00:07:13 - A lot of cool stuff. - Bidentic Duality looks, yeah, Bidentic Duality looks really, really cool.
+
+00:07:17 So a lot of neat stuff here.
+
+00:07:19 A lot of different ways people might know about you.
+
+00:07:21 So yeah, CADWIN's the one we're gonna be focusing on for here.
+
+00:07:25 So let's start with talking about APIs.
+
+00:07:29 You talked about API-first companies, what's that?
+
+00:07:32 - API-first company, just like any other term that gets popular, is a buzzword, obviously.
+
+00:07:39 But the truth behind it is an API-first company is any company whose main product is an API
+
+00:07:47 and the SDKs associated with it.
+
+00:07:50 And as a result, API-first company has to document their API really thoroughly,
+
+00:07:55 think about their API, both the internal one and the external one, and take great care of that because it's their main product.
+
+00:08:03 We have a lot of API-first companies right now, but with every year, new industries are joining.
+
+00:08:10 And if you ever heard of open banking, things like that, banks are going to join us soon.
+
+00:08:16 In some countries, they already have.
+
+00:08:17 And Monite is doing similar things and tries to bring that innovation, that open banking,
+
+00:08:24 and that API-first approach into banking.
+
+00:08:27 - Yeah, so the company you work for, Monite, they build, you all build APIs
+
+00:08:32 to basically facilitate other people doing invoicing and bill pay in their apps, is that correct?
+
+00:08:38 - Yeah, you could call us a B2B2B company 'cause essentially many banks, many marketplaces
+
+00:08:45 are very outdated in terms of how they handle invoicing and payments.
+
+00:08:50 And we try to take all of that, combine that, and offer that as a white label product to them.
+
+00:08:56 So we do this for them, they integrate with us once, and then they forget it was ever a problem.
+
+00:09:03 They just give our product as their straight to their clients.
+
+00:09:06 - Yeah, that's excellent.
+
+00:09:08 So this seems like kind of in that category of API-first.
+
+00:09:12 - Oh, yes. - Yeah, okay.
+
+00:09:14 It's cool that you have concrete experience with it, right, of course.
+
+00:09:18 Give us some of the laws.
+
+00:09:20 We coordinated a little bit beforehand and there's some interesting laws for designing good APIs.
+
+00:09:26 Like one of them is the reverse Conway maneuver, which to me sounds like a jujitsu sort of move
+
+00:09:33 that you might try to pull.
+
+00:09:34 What is this? - Oh, yes.
+
+00:09:35 So when you are designing any system, you gotta think about the way it's going to end up
+
+00:09:42 and the laws that are going to govern them.
+
+00:09:45 And Conway's law is one of the main laws that do that.
+
+00:09:48 To explain that to people in simple terms, if you have four teams designing a compiler,
+
+00:09:53 you're going to have a four-pass compiler.
+
+00:09:56 Essentially, the way you set up communications within your company, the way you set up your teams,
+
+00:10:01 your structure is going to be reflected in your product and you can't do anything about it.
+
+00:10:06 You can spend money, you can coordinate people, but at some point, Conway's law is going to affect you
+
+00:10:12 and it's gonna be harsh.
+
+00:10:14 So one of the ways to go around it is to first think of an interface that you wanna provide
+
+00:10:20 and it applies to anything, not just APIs.
+
+00:10:22 API is just a really good example of that.
+
+00:10:24 And then design your company and the communications within your company,
+
+00:10:29 the teams within your company, to reflect the interfaces that you wanna get in the end.
+
+00:10:35 And that's reverse Conway maneuver.
+
+00:10:36 - Okay, because your code and your APIs and all those things are gonna reflect
+
+00:10:40 your company's structure and culture.
+
+00:10:42 So instead of having that being implicit, make it more explicit by saying,
+
+00:10:47 well, this is the endpoint that we want, the end result that we want, how do we work that backwards to end up
+
+00:10:53 structuring teams or whatever to get this, right?
+
+00:10:55 - Precisely, yes.
+
+00:10:56 - Yeah, it is a little bit like jujitsu.
+
+00:10:58 - But there are more laws that do that.
+
+00:11:02 Of course, there is REST, which I guess not really laws, but principles.
+
+00:11:07 Which most people, or at least most companies I saw, don't really like to follow it to the letter.
+
+00:11:13 But if you do follow REST, if you try to make your API as available as you can
+
+00:11:22 and as standardized as you can, then it's much easier for new people, especially junior developers to learn.
+
+00:11:28 And then that makes it much easier for your clients to integrate with you, which is great.
+
+00:11:33 There are also a few, I guess, more advanced things.
+
+00:11:37 For example, when you are designing an API, when you're doing microservices
+
+00:11:41 and when you have many services talking to each other, which in the end provide your final product
+
+00:11:47 to your customers, a good idea is to omit any internal APIs and make all of your APIs,
+
+00:11:53 or at least the majority of your APIs external.
+
+00:11:56 That is also one of the things about API-first.
+
+00:12:00 Once all of your APIs are external, it means that your clients will be able to build a product
+
+00:12:06 that is of similar quality to yours.
+
+00:12:08 We're using your APIs, using your data, which provides them with infinite capabilities of using you,
+
+00:12:14 which is great.
+
+00:12:15 - Yeah, that is great.
+
+00:12:16 It's certainly frustrating when you see, it's not on the API level, but you see things in like the iOS platform
+
+00:12:23 or in Windows or wherever, you're like, "Why can't I do this?" These are private things that either Apple or Microsoft
+
+00:12:30 or whoever are keeping to themselves and clearly are important for building apps,
+
+00:12:34 but you can't use them.
+
+00:12:36 So you're suggesting that by having basically whatever APIs you need, I guess there's probably limits.
+
+00:12:42 You don't wanna expose, say, your HR API if you're not an HR company.
+
+00:12:47 But in general, having your APIs just be all public, it probably makes them better as well
+
+00:12:52 because they just get so many more use cases.
+
+00:12:54 They get treated with things like versioning and stuff more seriously.
+
+00:12:58 - Exactly. - Excellent.
+
+00:12:59 - It's a complex topic that could span, we could discuss it for hours.
+
+00:13:03 Which parts of your API do you make public?
+
+00:13:06 Which parts of your API do you start versioning?
+
+00:13:09 And if you're combining your APIs using a gateway or a federation, it's a long story,
+
+00:13:16 but I guess with a federation, you wouldn't really make it public.
+
+00:13:18 - Sure. Let's dive into that a little bit.
+
+00:13:20 Let's talk about API versioning.
+
+00:13:22 We know what versioning is in Python.
+
+00:13:25 We have lock files, we pin the version, we might say we're using Pydantic 2.0.5 or whatever it is,
+
+00:13:34 and that leaves the Pydantic team free to do whatever they want, and we can trust that our code
+
+00:13:40 is gonna stay the way it stayed.
+
+00:13:41 I guess API versioning is that, but for web endpoints rather than software
+
+00:13:46 links to packages, right?
+
+00:13:47 - It's a little different though in some regards.
+
+00:13:50 For example, when you're packaging your, I don't know, software and you just send it to clients,
+
+00:13:56 thing is you need to have versions for every single thing.
+
+00:13:59 For example, if we are doing a bug fix and we need to ship that to our clients,
+
+00:14:03 that is going to be a separate version.
+
+00:14:05 But in web, when you're hosting it on a server and your clients just make requests to your servers,
+
+00:14:11 you don't need that.
+
+00:14:12 You don't need to ship bug fixes as separate versions.
+
+00:14:15 You can just ship them because they're not going to break anything for your clients
+
+00:14:19 and your clients will be able to automatically get them.
+
+00:14:21 Same goes for minor versions.
+
+00:14:23 Minor versions that just add features don't really need to be for a version on APIs.
+
+00:14:28 That leaves us with just major versions, which is why many companies like Stripe at Monite
+
+00:14:34 use dates for their versions because we don't really need all of the power of semantic versioning.
+
+00:14:41 - Yeah, yeah, sure.
+
+00:14:42 More calendar versioning, because all you really need to say is, this one is different than before, right?
+
+00:14:47 It doesn't--
+
+00:14:48 Stripe does a lot of interesting things.
+
+00:14:50 We're going to talk a little bit about what they're up to.
+
+00:14:54 But you're right.
+
+00:14:55 When I think about APIs that I've created, sometimes I've had other versions, right?
+
+00:15:01 One of the main areas is in the apps that we have, or it's a URL work it does,
+
+00:15:08 in the apps for consuming the courses, right?
+
+00:15:10 We had two completely different versions of the app.
+
+00:15:14 One got completely rewrote it.
+
+00:15:17 And many of the API endpoints were just fine.
+
+00:15:20 We could just use them over, and it didn't have to change anything.
+
+00:15:23 But three or four were like, you know, this really would be better if it was different.
+
+00:15:27 And so added like a slash V2 or something in there, right?
+
+00:15:32 But really, really limited.
+
+00:15:33 So the thing that's interesting though, that you point out here is like,
+
+00:15:36 until that happened, I'd shipped many, many versions of that API.
+
+00:15:41 And long as the schema didn't change, I didn't bother even specifying that it had a version, right?
+
+00:15:47 It was just like slash course, my courses or whatever it is, right?
+
+00:15:51 Like just give those to me.
+
+00:15:52 And long as it kept giving the courses back, it was good.
+
+00:15:54 - That's the thing.
+
+00:15:55 As long as you extend stuff, it's going to be fine.
+
+00:15:59 But as you mentioned in the beginning, you can't really do that forever.
+
+00:16:02 At some point, you're going to make wrong design decisions.
+
+00:16:06 At some point, even if you did everything perfectly, you know, your product is just going to evolve.
+
+00:16:11 It's just going to evolve.
+
+00:16:12 And then you'll need to use old endpoints that alter or, you know, get old data
+
+00:16:18 and extend them in some breaking ways.
+
+00:16:21 Of course, there are ways around it.
+
+00:16:22 You can use API evolution.
+
+00:16:24 You can just, you know, add fields constantly and duplicate the old functionality.
+
+00:16:29 But after a few of such versions, your API will look terrible, which is why we use versioning.
+
+00:16:34 And which is why when your company's main product is an API, when you are an API first company,
+
+00:16:41 you can't do anything without versioning.
+
+00:16:44 You can live for a short period of time.
+
+00:16:46 For example, a pre-Series A company, I don't think should deal with versioning.
+
+00:16:51 But then after Series A, after you gather, I don't know, 15, 20 clients,
+
+00:16:56 it will be really hard to survive without versioning.
+
+00:16:59 - Yeah, and it's a really quick and easy way to make loyal customers angry
+
+00:17:05 by making changes to your API that just start breaking code.
+
+00:17:08 - Even if you wait for your clients, even if you, you know, warn them, it's still not nice when you're trying to use some API
+
+00:17:14 and then every three months or every month, it breaks everything.
+
+00:17:18 You know, you wouldn't like that.
+
+00:17:19 - Yeah, exactly.
+
+00:17:20 - Even with a warning.
+
+00:17:21 - You put in all the work to do the integration.
+
+00:17:23 You got it working, you tested it.
+
+00:17:25 Your job is, your product is not the integration.
+
+00:17:28 The integration facilitates what you're trying to build.
+
+00:17:30 And every time you got to go back and rewrite that stuff, it's not great.
+
+00:17:34 I was working, I have MailChimp for our newsletter, marketing side of stuff, the courses,
+
+00:17:40 and use them for a long time.
+
+00:17:42 And I got a message like, "Hey, we're retiring this API you're using." And their API is dreadful.
+
+00:17:49 Like their Python library API is dreadful.
+
+00:17:52 It's like star args, star star KW args, you better pass the right things,
+
+00:17:56 but there's no enforcement or instruction about what goes in there, right?
+
+00:18:00 And so some random dictionary that was going in there was no longer right and had to be like recreated.
+
+00:18:05 So they just decided, you know, we're gonna just take different stuff and we're just gonna shut down that endpoint.
+
+00:18:10 And when they did, all of the aspects of my website just started breaking.
+
+00:18:16 Like it wasn't crashing, but just anything around, "Hey, put me on your newsletter."
+
+00:18:19 Like, nope, you couldn't be on the newsletter 'cause it, you know, people started sending me message,
+
+00:18:23 "Michael, I'm trying to sign up to be on the newsletter, "but it just keeps saying that something went wrong
+
+00:18:28 "with our site, we're sorry." I'm like, "Oh boy, go look." And they just turned off that endpoint.
+
+00:18:33 And it was just like, nope, not doing that anymore.
+
+00:18:36 And it was super frustrating.
+
+00:18:37 It took me eight hours to rewrite it because like I said, there was no real guidance on like,
+
+00:18:43 "Oh, you just pass the dictionary." Like, well, what goes in the dictionary?
+
+00:18:46 You know, it was like some word of one of the keys change.
+
+00:18:49 I was so, it just took forever, it was frustrating.
+
+00:18:51 So what we're gonna talk about here is a lot about how do you not do, how do you not pull a MailChimp?
+
+00:18:59 How do you set it up so that your code keeps running?
+
+00:19:02 You know, the reason why they did that is they're like, "Well, we feel like we wrote it wrong before.
+
+00:19:06 "We wanna fix those to make it better, "but we don't wanna maintain two versions."
+
+00:19:11 That's probably the heart of it.
+
+00:19:12 - And that's a sane idea.
+
+00:19:13 - It is, until you have half a million users of the old API.
+
+00:19:18 And how many of those, like, so for me, yeah, I was frustrated.
+
+00:19:20 Yeah, I'm like, "All right, well, "I had plans today for constructive work,
+
+00:19:23 "but I didn't go rewrite what I did four years ago.
+
+00:19:26 "And then I'll do something again tomorrow." But okay, that's like a pretty good outcome.
+
+00:19:30 A more common outcome is probably, I hired a consultant to build me an app
+
+00:19:35 and integrate MailChimp, and they're gone.
+
+00:19:38 And now my thing that I built a year ago doesn't even work.
+
+00:19:41 And I don't have the skills.
+
+00:19:43 I gotta go hire somebody again to dig back in there and fix it, right?
+
+00:19:46 Like, that would be really frustrating.
+
+00:19:48 - Yeah, that's crazy.
+
+00:19:49 And it could be devastating to some clients, especially if the changes are huge,
+
+00:19:54 especially if it's not just a single endpoint, or if there is only one endpoint
+
+00:19:58 and it does a lot of things, then, oh my God, it's scary.
+
+00:20:02 - It is, it is.
+
+00:20:05 This portion of Talk Python to Me is brought to you by Neo4j.
+
+00:20:09 Do you know Neo4j?
+
+00:20:10 Neo4j is a native graph database.
+
+00:20:13 And if the slowest part of your data access patterns involves computing relationships,
+
+00:20:18 why not use a database that stores those relationships directly in the database,
+
+00:20:23 unlike your typical relational one?
+
+00:20:25 A graph database lets you model the data the way it looks in the real world,
+
+00:20:29 instead of forcing it into rows and columns.
+
+00:20:32 It's time to stop asking a relational database to do more than they were made for
+
+00:20:36 and simplify complex data models with graphs.
+
+00:20:40 If you haven't used a graph database before, you might be wondering about common use cases.
+
+00:20:44 You know, what's it for?
+
+00:20:45 Here are just a few.
+
+00:20:47 Detecting fraud, enhancing AI, managing supply chains, gaining a 360 degree view of your data,
+
+00:20:54 and anywhere else you have highly connected data.
+
+00:20:57 To use Neo4j from Python, it's a simple pip install Neo4j.
+
+00:21:03 And to help you get started, their docs include a sample web app demonstrating how to use it both from Flask and FastAPI.
+
+00:21:10 Find it in their docs or search GitHub for Neo4j movies application quick start.
+
+00:21:15 Developers are solving some of the world's biggest problems with graphs.
+
+00:21:19 Now it's your turn.
+
+00:21:20 Visit talkpython.fm/neo4j to get started.
+
+00:21:25 That's talkpython.fm/neo, the number four, and the letter J.
+
+00:21:30 Thank you to Neo4j for supporting Talk Python to Me.
+
+00:21:33 Before we move on to maybe some of the approaches, Alex, Alexia out in the audience says,
+
+00:21:40 "One more law.
+
+00:21:41 "Hiram's law is also great.
+
+00:21:43 "With sufficient number of users of an API, "it does not matter what you promise in the contract.
+
+00:21:48 "All observable behaviors of your system "will be depended on by somebody."
+
+00:21:53 - It is one of my favorite laws about any system.
+
+00:21:56 - That's true.
+
+00:21:58 - It is very true, and it's a scary law, you know, because at some point, you'll have to version everything,
+
+00:22:03 which is why it's a good idea to make things, you know, I guess, to describe all the behaviors
+
+00:22:10 and to try to handle all of the possible behaviors early so that you know what is going to become a part of it.
+
+00:22:18 Because at some point, you'll just not be able to stop it, and then you break something that was never intended to work
+
+00:22:25 and then 100 of your users are like, "Oh, we were using that.
+
+00:22:28 "It wasn't a bug, it was a feature for us." (laughing)
+
+00:22:31 - Yeah, we needed that.
+
+00:22:33 We found that's the only way we could use it, yeah, for sure.
+
+00:22:36 All right, let's talk about some of the techniques you've put together, a nice thing,
+
+00:22:39 you know, like how to maintain hundreds of API versions and survive.
+
+00:22:43 So what are some of the ways in which people version APIs?
+
+00:22:46 - First of all, it's really hard to really figure out how people do this and how to do it,
+
+00:22:53 because 90% of the time when you're going to be researching API versioning, what you're going to see is people
+
+00:22:59 having tough decisions between putting it into a header or putting it into a path.
+
+00:23:03 But then when you ask, "Well, how do you version?" Nobody really has an answer.
+
+00:23:08 Well, there are a few ways.
+
+00:23:09 First of all, you can go from the lowest level and version everything, including your database.
+
+00:23:15 You just make a separate copy of your app, you can host it on a separate server,
+
+00:23:19 even a separate Kubernetes namespace and forget about it.
+
+00:23:23 And you have two completely separate apps and now you need to have double the people
+
+00:23:29 for the maintenance, or at least a smaller separate team to maintain the second product.
+
+00:23:34 This approach is really nice if you have a product that cannot break, like there needs to be zero possibility
+
+00:23:40 of that breaking.
+
+00:23:41 If you are on a nuclear power plant, you'll probably do that.
+
+00:23:46 You can't have the old one broken and the new one working, but it's the most expensive approach, obviously.
+
+00:23:53 You can, however, limit that.
+
+00:23:55 You can start versioning just the application, but not the database.
+
+00:23:59 Okay, now we have the same thing, a separate branch in our code, a separate, not in our code, in our repository,
+
+00:24:06 a separate Kubernetes namespace, whatever, but now it's still expensive.
+
+00:24:11 It's still a whole separate copy of everything you have built.
+
+00:24:14 And now you have to make sure that the new one or the old one doesn't break the database
+
+00:24:19 because the database might have changed, but one of the versions of code might not know about that.
+
+00:24:25 And then you realize that you can go here.
+
+00:24:28 - Yeah, the database aspect of it sounds especially tricky, especially a relational database with super strong schemas.
+
+00:24:35 Like, you know what?
+
+00:24:37 That used to be a VAR char, and now it's an int.
+
+00:24:40 And so, nope, it's just not gonna work, right?
+
+00:24:43 There's really little flexibility.
+
+00:24:45 So even if you run the two things in parallel, then you almost have to have two databases,
+
+00:24:50 and then like a mill points out, and then you have to sync the databases,
+
+00:24:55 and like, it's non-trivial.
+
+00:24:56 - Oh, yes, and then you start realizing, okay, why do I need a separate branch
+
+00:25:00 and a separate namespace?
+
+00:25:01 Let's just keep them within the same app, because as long as you have separate paths for this,
+
+00:25:08 even you can build separate swaggers from them, you can have them within the same branch,
+
+00:25:13 within the same repository, just in different directories, and you can just copy all of your code.
+
+00:25:18 And now I call that versioning by suffering, because you think, oh, I'm going to version less this time.
+
+00:25:24 You know, now I'm not versioning the database.
+
+00:25:26 Now it's not a separate branch.
+
+00:25:27 It's gonna be much easier to make fixes in both places.
+
+00:25:31 But now you have to support both of the code bases.
+
+00:25:35 And once you update anything, any of the related resources, for example, the database models,
+
+00:25:40 you have to update them twice.
+
+00:25:42 If you update any of the dependencies, you have to update them twice.
+
+00:25:45 And that can get painful.
+
+00:25:47 And after a while, if you have more than two of these versions, you're going to be asking yourself,
+
+00:25:52 okay, what is the difference between these versions?
+
+00:25:56 And if you weren't careful with documentation and code review, oh, you're in for a treat.
+
+00:26:01 - Yeah. - But that's just the beginning.
+
+00:26:02 You can version much less.
+
+00:26:04 Now, instead of the whole directories, you can version just separate endpoints.
+
+00:26:09 And I think that's the way that I recommend for everyone.
+
+00:26:12 Everyone who is doing API versioning, who wants to be with the cool kids,
+
+00:26:16 I recommend this approach.
+
+00:26:18 As long as you are a small company or an individual and you want something really simple, that's a good way.
+
+00:26:24 You just copy a single endpoint that you have changed, create another schema for that,
+
+00:26:29 and then create another branch in your business logic, or maybe even no branch.
+
+00:26:33 That's even better, using the same business logic.
+
+00:26:36 But then at some point, once you want to support many versions or your versions become too different,
+
+00:26:43 that's where you get a problem.
+
+00:26:44 Because now all of a sudden you have all of these, oh, I have this endpoint in this version,
+
+00:26:49 that endpoint in that version.
+
+00:26:50 Oh, it's gonna be bad, really bad.
+
+00:26:53 Again. - We've been talking like there's the old version and the new version,
+
+00:26:55 but in practice, somebody starts to depend on the new version, and then you evolve the new version,
+
+00:27:00 and it just, it combinatorially explodes and it's out of control, yeah?
+
+00:27:05 - Precisely.
+
+00:27:06 It's gonna be really bad for your developers.
+
+00:27:08 Your clients are going to be fine with it.
+
+00:27:09 Your developers are going to hate you.
+
+00:27:11 Although not as bad as with the previous approach.
+
+00:27:14 Now, the next one you get to is you start thinking, okay, what if instead of duplicating all of that stuff,
+
+00:27:22 I am just going to change the schemas?
+
+00:27:25 So, okay, if I do need to rename my endpoint, I am going to duplicate it.
+
+00:27:28 But most of the time you're not.
+
+00:27:30 Most of the time you're just changing some field in some schema.
+
+00:27:32 You're renaming it, you're extending it, changing its type, stuff like that.
+
+00:27:36 That's like 90% of your use cases.
+
+00:27:38 Okay, what if we just change the schemas and then have some serializers?
+
+00:27:42 For example, Django, what is it?
+
+00:27:45 Django DRF loves that.
+
+00:27:47 They love the serializers and reserializers, and you can just have each,
+
+00:27:52 we have five versions, and version one serializes into version five, version two serializes into version five,
+
+00:27:57 yada, yada, yada.
+
+00:27:58 And so our client sends us a request, we reserialize it into the correct version,
+
+00:28:03 then we return a response, we use the same business logic, and then we serialize it back into each version.
+
+00:28:09 Great.
+
+00:28:10 Now, we have solved all the problems of the previous approaches.
+
+00:28:13 Now, you need to realize that when you're doing something like this, you are in a little bit of danger
+
+00:28:19 of creating bugs in the new versions, and these bugs cascading to the old versions,
+
+00:28:25 which hopefully you have tests to handle that.
+
+00:28:27 But at least your clients are happy because you can support versions for a long time,
+
+00:28:32 and your developers are happy because the burden of support is now on the serializers.
+
+00:28:38 But you still have to support these serializers.
+
+00:28:40 It's still a lot of stuff, you still have to put every field in there, and take care of any problems that happen.
+
+00:28:48 And each new version will change basically all of your serializers.
+
+00:28:52 A little bit, yes, but you won't be able to support 20 versions like that.
+
+00:28:56 It's going to be crazy.
+
+00:28:57 And now that's where we get to the final approaches, the approaches that I guess
+
+00:29:03 the most sophisticated in the industry.
+
+00:29:05 If you are making a backend for frontend, for your own frontend, then you can just use GraphQL.
+
+00:29:11 GraphQL basically requires no versioning, and that's one of the benefits of it.
+
+00:29:16 I would recommend that.
+
+00:29:18 If you have developers that are good with GraphQL, that's great, you can omit versioning altogether.
+
+00:29:24 But if you're not, if it's a public API, then that's where Stripe's approach comes.
+
+00:29:29 I think they were the first ones to publish an article about that.
+
+00:29:33 It was Brander Leach, the author of this article, he has supported API versioning at Stripe for a while,
+
+00:29:38 and he has helped us with building our API versioning approach.
+
+00:29:43 Essentially what Stripe did is said, "Okay, let's imagine that our developers
+
+00:29:48 "are only supporting one version, the latest one, "just like with serializers.
+
+00:29:52 "But instead of serializing every version to the latest one, "let's say that each version knows how to serialize
+
+00:29:59 "into the next version." - Kind of like database migrations.
+
+00:30:02 - Let's say that I return response from the latest version.
+
+00:30:05 This response, or at least they call them, I think, version gates.
+
+00:30:10 These version gates, the version gate for fifth version, knows how to convert back my response back
+
+00:30:15 into the fourth version.
+
+00:30:17 The version gate for the fourth version knows how to convert it back into the third version.
+
+00:30:21 And all of a sudden, you get simple version gates, because if it's just field renaming in a single version,
+
+00:30:28 then it's just a single line, they're really simple.
+
+00:30:30 But at the same time, they're immutable, because these version gates, they're not describing the whole schema.
+
+00:30:36 They're describing the difference between two versions.
+
+00:30:39 And because we know that we don't wanna change the old version, we want the old version to work,
+
+00:30:45 which is why the difference between version two and version three is going to stay.
+
+00:30:49 It's not going to change, which is why these converters are also immutable,
+
+00:30:53 which means that you don't need to spend much time supporting them.
+
+00:30:57 - Right, once you get, if you're on version three and you get the transition from one to two set,
+
+00:31:01 like that's not gonna change ever, right?
+
+00:31:03 - Precisely.
+
+00:31:04 Well, at some point you need it for optimizations or for returning extra data,
+
+00:31:09 but it's such a rare use case that I haven't seen it so far.
+
+00:31:13 And I hope that I won't.
+
+00:31:15 - So this is Stripe's approach.
+
+00:31:16 And one of the things that's really interesting that Stripe does and is laid out in this article
+
+00:31:20 that you're bringing to the table here is, they also implicitly assign you a version
+
+00:31:26 when you first make a call, which was really interesting.
+
+00:31:30 I use Stripe and I didn't realize that when I've made calls into Stripe that the first time you make a call,
+
+00:31:36 it pins you somewhere like on your user account on their side, pins you to that version of the API.
+
+00:31:42 And you never know you're on a different, you're on a particular version,
+
+00:31:46 but they keep you on that version.
+
+00:31:47 That's wild.
+
+00:31:48 - That's great.
+
+00:31:49 Imagine you log in into Stripe, you make a call, and then every time you open a documentation in your account
+
+00:31:56 you're going to see your version.
+
+00:31:57 Every time you make a call, you're going to get response from your version.
+
+00:32:00 And then because they keep versions for years, for example, we are using, I think,
+
+00:32:06 three or four year old version of Stripe's API and they still keep it.
+
+00:32:10 According to this article, they keep all of their versions, all since the company's beginning.
+
+00:32:16 I'm not sure how true that is.
+
+00:32:18 - It's 2011.
+
+00:32:19 - They keep years worth of versions.
+
+00:32:20 That is very true.
+
+00:32:21 - Now you might see that as a negative.
+
+00:32:23 Like you might think, well, I'm pinned to this version.
+
+00:32:25 Like how do I escape the old version if I want the new version?
+
+00:32:28 But you can pass it in a header or there's other ways to say, I explicitly choose something else.
+
+00:32:34 But by default, you're just, you're living in the past.
+
+00:32:36 - That's really cool.
+
+00:32:37 You integrate and then you live in the past for as long as you want.
+
+00:32:40 The thing is, yes, you can change it using a header.
+
+00:32:44 Monite has a similar structure.
+
+00:32:46 You can also change it in your partner's portal and you can also, or I guess developer's portal,
+
+00:32:53 and you can also specify, for example, if you receive webhooks from Stripe,
+
+00:32:56 you can specify, okay, I want this webhook of this version and that webhook of that version.
+
+00:33:00 - That's cool, yeah.
+
+00:33:01 - It's a really neat interface that if you don't wanna think about versioning,
+
+00:33:05 you don't, you forget about it.
+
+00:33:07 But the second you want to, the second you wanna have the latest API, they give you all the tools to work with it nicely.
+
+00:33:14 And that's the thing.
+
+00:33:15 This approach allows you to keep years worth of versions or maybe even decades worth of versions, actually,
+
+00:33:22 without your developers getting overburdened because there is still a single version
+
+00:33:26 of the business logic.
+
+00:33:28 They work on a single version of Schemas and they just need to make sure
+
+00:33:31 that when they release a new version, they write a converter for it.
+
+00:33:34 And your clients are also happy because they never need to switch.
+
+00:33:37 - It sounds really nice.
+
+00:33:38 I suspect there's not complete ability to just ignore the old versions because maybe you want, in your new version,
+
+00:33:46 you're gonna imagine this piece of data doesn't even exist and we're gonna remove it from the database.
+
+00:33:51 But if it needs to be there for the old ones, there's probably some level of,
+
+00:33:55 you're constrained a little bit, but it sounds a lot better.
+
+00:33:57 - You're still constrained, but remember, API versioning, if we translate it,
+
+00:34:03 application programming interface versioning, we're not versioning the app.
+
+00:34:07 We're versioning the interface to the app.
+
+00:34:09 - Yeah, so a lot of times it's like, what fields are we passing or something, right?
+
+00:34:13 - If you are trying to change the data between versions, if the data is different, entirely different, I mean,
+
+00:34:19 then you're probably not doing API versioning.
+
+00:34:21 Then you probably should be calling it application versioning.
+
+00:34:25 And actually Stripe has, I guess, a hack for that too.
+
+00:34:30 If you take a look at their API, they still have a V1, but that's the thing.
+
+00:34:33 They don't use this V1.
+
+00:34:35 They use date-based versioning that is in the headers and their settings.
+
+00:34:39 But the V1 is precisely for this situation.
+
+00:34:42 If someday they will need to have something else, if someday they will need to break everything
+
+00:34:48 and change the data required or any other crazy changes, they will be able to do it using that V1.
+
+00:34:55 - Yeah, it's just there in case.
+
+00:34:56 - Exactly.
+
+00:34:57 - Cool, all right, well, let's talk about your project.
+
+00:34:59 Let's talk about your project that makes this possible in Python because the Stripe examples,
+
+00:35:04 I believe this is Ruby that they all have here, right?
+
+00:35:06 - It is really nice to read until you try to understand it, until you try to understand what it actually does.
+
+00:35:12 And it's crazy.
+
+00:35:13 - I know, when I was reading this today, I was like, you know, I'm pretty glad
+
+00:35:17 that I'm not writing Ruby right now.
+
+00:35:18 Okay, all right, let's talk about Python though.
+
+00:35:21 You've got a project called CAD1 that takes the Stripe philosophy and applies it to versioning
+
+00:35:28 for the most popular API framework for Python, FastAPI.
+
+00:35:33 Tell us about it.
+
+00:35:34 - Here's the thing, when I started developing it, we were using versioning by suffering.
+
+00:35:39 So we were using directory copies and none of us really enjoyed it.
+
+00:35:43 So there needed to be a solution.
+
+00:35:45 And I went to Stripe, I went to other companies, I spoke with them, I tried to understand the nitty gritty details.
+
+00:35:53 As I mentioned, Brander Leach extended us huge help when he, I guess, described how he thinks
+
+00:36:00 about API versioning right now.
+
+00:36:02 And I built it.
+
+00:36:03 The first version was just like Stripe.
+
+00:36:05 It was exactly what Stripe did to the letter.
+
+00:36:08 But then at some point, we started applying it at Monite and I realized, wow, Stripe had a lot of legacy.
+
+00:36:15 So they didn't implement some things.
+
+00:36:17 For example, in Stripe's article, you can see that they're not using any schema validation
+
+00:36:23 or at least how do I describe it?
+
+00:36:25 Their business logic just receives a hash map, a dictionary.
+
+00:36:30 It's not statically typed, but FastAPI uses Bidentics.
+
+00:36:33 So it's a bit more complex than that.
+
+00:36:35 Okay, we added support for that.
+
+00:36:38 It's a bit more complex.
+
+00:36:39 It's a bit more, I guess, sophisticated now.
+
+00:36:42 But then I also realized that Stripe, they don't migrate requests.
+
+00:36:46 They only migrate responses because emigration of a request is usually not just a breaking change,
+
+00:36:53 it's a change in a business logic.
+
+00:36:55 Because when you return a response, you can just return the whole thing and then just play around with it.
+
+00:36:59 But when you are changing the request, your business logic also needs to change.
+
+00:37:04 And that's what they did.
+
+00:37:06 They have extra ifs and extra levels of business logic to handle that.
+
+00:37:10 Well, apparently it's not necessary.
+
+00:37:11 Apparently requests are also migratable.
+
+00:37:14 And that's the second feature that greatly distinguishes us from Stripe.
+
+00:37:20 This thing can statically, well, by statically, I mean, it co-generates your schema
+
+00:37:26 so that you can see everything before you run your app.
+
+00:37:31 This thing can migrate both requests and responses, and it supports everything that Stripe does.
+
+00:37:37 And we have pretty big plans for extending it.
+
+00:37:40 And as an added bonus, we also have a pretty big documentation.
+
+00:37:46 Well, not compared to Django or FastAPI.
+
+00:37:48 Django is older than me and FastAPI, it's pretty amazing in terms of its documentation.
+
+00:37:55 Sebastian Ramirez is an expert of making tutorials.
+
+00:37:58 And if you take a look at our reference documentation to the left and our, how do you describe it,
+
+00:38:03 recipes documentation, they basically describe to you every single use case that you could have
+
+00:38:11 with API versioning, every single problem that you could solve with it.
+
+00:38:15 And then we try to apply our approach to it.
+
+00:38:20 So it's not just the framework, it's all the ways you could use the framework.
+
+00:38:24 Someday, hopefully we will also extend it beyond FastAPI and Bidantic.
+
+00:38:29 And we also have sections for theory for people who are not Pythonistas,
+
+00:38:34 who just wanna learn how to do API versioning, but failed to find any resources.
+
+00:38:39 So Katwin also becomes this, I guess, hub for API versioning resources and anything related to them.
+
+00:38:46 - It seems like it would probably be pretty easy to adapt to anything that uses Pydantic
+
+00:38:51 for its data exchange.
+
+00:38:52 - Oh, yes.
+
+00:38:53 - Yeah, so like, for example, in Flask, Flask doesn't do the model binding type stuff
+
+00:38:58 on the endpoint, but you can just take the input data and just star star it into a Pydantic model.
+
+00:39:04 And then, you know, now you're in Pydantic world, right?
+
+00:39:06 So it sounds like maybe something along those lines might be a good bridge.
+
+00:39:10 - There's a lot of magic involved in trying to interface with FastAPI simply due to its internal complexity.
+
+00:39:17 - Right.
+
+00:39:18 This portion of Talk Python to Me is brought to you by Sentry.
+
+00:39:22 You know Sentry for their error tracking service, but did you know you can take that all the way
+
+00:39:27 through your multi-tiered and distributed app with their distributed tracing feature?
+
+00:39:31 Distributed tracing is a debugging technique that involves tracking requests of your system,
+
+00:39:37 starting from the very beginning, like a user action, all the way to the backend, database,
+
+00:39:41 and third-party services.
+
+00:39:43 This can help you identify if the cause of an error in one project is due to the error in another.
+
+00:39:48 Every system can benefit from distributed tracing, but they're especially useful for microservices.
+
+00:39:53 In this architecture, logs won't give you the full picture, so you can't debug every request in full
+
+00:39:58 just by reading the logs.
+
+00:40:00 Distributed tracing with a platform like Sentry gives you a visual overview about which services
+
+00:40:05 were called during the execution of certain requests.
+
+00:40:08 Aside from debugging and visualizing your architecture, distributed tracing also helps you identify
+
+00:40:13 performance bottlenecks.
+
+00:40:15 Through a visual like a Gantt chart, you can see if a particular span in your stack
+
+00:40:19 took longer than expected, and how it could be causing slowdowns in other parts of your app.
+
+00:40:24 Learn more and see some examples in the tracing section at docs.sentry.io.
+
+00:40:29 To take advantage of all the features of the Sentry platform, just create your free account.
+
+00:40:33 And for all of you Talk Python listeners, use the code Talk Python, all one word,
+
+00:40:38 and you'll activate a free month of their premium paid features.
+
+00:40:42 Get started today at talkpython.fm/sentry-trace.
+
+00:40:46 That link is in your podcast player show notes and the episode page.
+
+00:40:50 Thank you to Sentry for supporting Talk Python To Me.
+
+00:40:53 So some good questions, but I think they'll be somewhat answered if we just maybe talk us through your tutorial here.
+
+00:41:02 Like how do we use Kadwin and how does it manifest?
+
+00:41:06 How does it work at runtime?
+
+00:41:07 Stuff like that.
+
+00:41:08 - First, before using Kadwin, you know, you write your regular app, but then you just structure it a little bit differently.
+
+00:41:13 When you are versioning, you need a directory that you will consider versioned.
+
+00:41:19 So, and this directory will be duplicated for every version.
+
+00:41:23 No worries, you're not going to support the version code.
+
+00:41:26 It's going to be code generation all the way through.
+
+00:41:29 And you can use it to generate connectors for your application, or you could use it to generate schemas or enums,
+
+00:41:36 you know, the different version of them and anything else related to them.
+
+00:41:40 So you pick such a directory, you call it latest as for your latest version.
+
+00:41:44 Then you define a single version bundle.
+
+00:41:48 If you go a little bit down, you will see somewhere in here after defining versions.
+
+00:41:53 Yes, we define our version bundle with a single version, whichever version it is for you,
+
+00:41:58 whichever date it is for you.
+
+00:42:01 And then you run code generation.
+
+00:42:03 It generates a directory that simply imports from your latest, and that's where you can start doing the magic.
+
+00:42:10 Now you just use our versioned app.
+
+00:42:13 The, if you take a look, we have a versioned API router.
+
+00:42:17 Then you use the Kadwin versioned app.
+
+00:42:20 You generate version routers, and then it's going to generate a really nice swagger for them.
+
+00:42:27 If you open it somewhere, I think, yep, this one.
+
+00:42:30 So now your dashboard, the one on docs, is not the swagger page, but the dashboard of all your versions.
+
+00:42:37 And that's it.
+
+00:42:37 After that, you can simply repeat the steps above.
+
+00:42:41 So you write a migration, write that converter that describes the difference
+
+00:42:46 between the versions.
+
+00:42:47 We have it somewhere there.
+
+00:42:49 If we had an address as a string and we want to change it to a list, we say, okay, schema, base user,
+
+00:42:55 field addresses didn't exist.
+
+00:42:57 - You have a user object, which is a pedantic model.
+
+00:43:00 The user object in version, the initial version, just had a field called address, which was a string.
+
+00:43:06 But you said, you know what?
+
+00:43:07 People might have multiple addresses that they live at.
+
+00:43:10 So let's make it a list of strings and make it address as, right?
+
+00:43:15 Which seems like a minor change, but clearly that's going to be a major problem
+
+00:43:19 for the things that assume there's an address and it's no longer there, right?
+
+00:43:22 So you create this version change derived class that has a upgrade downgrade basically feature, right?
+
+00:43:30 - You simply describe how do you migrate your schemas?
+
+00:43:32 How do you change your schema classes, your pedantic models?
+
+00:43:36 And then you describe how you convert your requests and response, and that's it.
+
+00:43:41 This class is the only thing you write for the new versions.
+
+00:43:44 Then you run code generation, run your app.
+
+00:43:46 That's it.
+
+00:43:47 Everything works.
+
+00:43:48 - Yeah, that's super cool.
+
+00:43:49 So couple of questions that were, or comments that are interesting here is,
+
+00:43:53 Emil asks, is it like database migrations?
+
+00:43:57 And Mike Fila points out, it's really, really similar to like Alembic, right?
+
+00:44:01 You say, generate me the changes.
+
+00:44:02 Alembic is a little different in that it looks at the two different database schemas
+
+00:44:06 and tries to actually write the migration code to do the DDL changes.
+
+00:44:11 But in principle, it's like, every time there's a version change, there's some bit of code that is generated that will run.
+
+00:44:18 And then the other one is about, how does this affect performance?
+
+00:44:21 And I guess the only real performance change is like, there'll be a couple of steps to the serialization,
+
+00:44:27 but they're often small.
+
+00:44:28 Like in this case, the new version takes the old data and says, well, we're just gonna have a list
+
+00:44:32 with one address.
+
+00:44:33 So we're gonna stick the one address into the list of addresses and vice versa.
+
+00:44:38 You just set the address field to be the first thing in the address list.
+
+00:44:41 And like, that's a really low amount of code overhead to go back.
+
+00:44:45 And hopefully people are moving towards the new versions eventually, you know, that kind of thing, right?
+
+00:44:50 But if they don't, then this code just runs to transform the dictionaries that goes back to them, right?
+
+00:44:55 - Imagine you have like Stripe, I don't know, 13 years worth of versions.
+
+00:45:00 Now, if you are a successful company, and if you are alive, you are probably a successful company after 13 years,
+
+00:45:06 you know, if you're a successful company, that most of your clients will probably be newer ones.
+
+00:45:12 The longer you exist, the more clients you have, and the more clients you have,
+
+00:45:15 the more, you know, newer clients you have, the newer API versions they will use.
+
+00:45:19 - Even if they're old clients, they might decide to, they might rewrite their own app and get a new version,
+
+00:45:25 right?
+
+00:45:25 Like they could upgrade their code 'cause their code's gonna be 13 years old
+
+00:45:29 or 12 years old at this point, right?
+
+00:45:31 They need to change too.
+
+00:45:32 - At some point, yes, your old client might, you know, from the very first version might request something
+
+00:45:38 and then we'll go through all converters.
+
+00:45:40 Well, not all, all converters that are related to the specific request and response,
+
+00:45:45 and that is probably going to be in the tens, not even in the hundreds, even after 13 years.
+
+00:45:50 But your clients from the latest versions, or even from the middle versions, will not suffer that.
+
+00:45:56 So the majority of your clients will actually see almost no performance difference.
+
+00:46:01 And even your old clients, even your clients for 13 years old will probably,
+
+00:46:06 even if they do see a performance difference, it's not going to be multiple orders,
+
+00:46:10 it's not going to be 2X, 3X, it's probably going to be maybe 20%, maybe even 10%, depending on how slow your app is.
+
+00:46:17 And that's considering how many years have passed is crazy fast.
+
+00:46:22 - Yeah, absolutely.
+
+00:46:23 That's very cool.
+
+00:46:24 So what about the URL?
+
+00:46:27 What about the end point?
+
+00:46:28 How much do consumers of your API have to actually think about, I'm using this version or that version?
+
+00:46:36 Is it passed as a, is the version passed as a header, it's a query string, part of the URL?
+
+00:46:41 - The version is passed as a header and Cadwin by default requires it to be.
+
+00:46:47 But if you have some developer portal, if you want to store your version in some database,
+
+00:46:52 then even though it's a little more advanced, you can write yourself your own middleware
+
+00:46:58 that will check if the client already has a version and then pick that version
+
+00:47:02 and put it into the context var and it's possible.
+
+00:47:06 So by default, you're going to have, no, no, no, middlewares are the more advanced sections,
+
+00:47:13 not in the tutorial.
+
+00:47:14 - There's this other one we're gonna talk about in a section has just an example of all,
+
+00:47:17 you basically just in fast API, when you create the app, like app equals fast API,
+
+00:47:23 you just say middleware equals a list of classes that implement these behaviors.
+
+00:47:28 So what you're suggesting is like, you just create a class and you pass it in at fast API startup.
+
+00:47:33 And it just goes, is there a version being passed to me?
+
+00:47:36 If not, let's see who the user is based on their API key, pull that from a database
+
+00:47:41 and maybe just set that header right there before the request and then let it fly, right?
+
+00:47:45 Something like that.
+
+00:47:46 - Yep, and then your API will essentially be Stripe-like where your client won't need to
+
+00:47:50 think about versioning at all.
+
+00:47:51 But by default, of course, the clients need to always pass it with a header,
+
+00:47:56 which might sound like something really unnecessary and hard for the clients.
+
+00:48:01 But if you imagine that you're writing code, it's exceptionally easy to just put it into your,
+
+00:48:06 I don't know, requests or HTTPS client and forget about it, you know?
+
+00:48:11 - It is pretty easy.
+
+00:48:12 If you're consuming APIs in the fashion that we're talking about, you're probably already putting an API key
+
+00:48:19 or some kind of thing into the header as well, right?
+
+00:48:23 Like, so you're already messing with the header anyway.
+
+00:48:26 Just put another value in there.
+
+00:48:27 - Precisely.
+
+00:48:27 - All right, so right now this is a fast API thing, but you're considering opening it up to other areas,
+
+00:48:34 other platforms, other web frameworks?
+
+00:48:36 - It has a, what is it called?
+
+00:48:39 Milestone for that, which I am planning to extend with tasks, with plans.
+
+00:48:44 First, you know, it's like with Pydantic, you know, at some point it separated the core
+
+00:48:49 when it was moving to Pydantic 2, and that's one of the plans for Kadwin, you know?
+
+00:48:53 Separate the core without breaking the public interfaces.
+
+00:48:57 And then at some point, use this core to build more Kadwins, you know?
+
+00:49:01 Kadwin Django, Kadwin Flask, whatever.
+
+00:49:03 Or it doesn't even have to be a part of Kadwin.
+
+00:49:06 The approach is there, so anyone can use it.
+
+00:49:09 Because 99% of complexity in implementing Kadwin was actually figuring out these patterns
+
+00:49:16 and understanding how to do it.
+
+00:49:18 Because unlike a web app, unlike, I don't know, many apps that we develop daily,
+
+00:49:24 it doesn't, these things haven't been done.
+
+00:49:27 People have migrated stuff, but it was mostly, you know, oh, change this dictionary without a proper DSL
+
+00:49:34 or without code generation, you know, without the niceties that would make your IDs happy
+
+00:49:41 and that would make, you know, autocompletion happy.
+
+00:49:44 - Yeah, you are a contributor to TypeShed, which is awesome.
+
+00:49:48 So you must care about, you know, conveying the type information of the different versions
+
+00:49:55 and stuff like that.
+
+00:49:56 That's tricky, right?
+
+00:49:57 And of course, working on FastAPI and Pydantic, those are very type, oh,
+
+00:50:01 and the shirt says TypeHints for life, I love it.
+
+00:50:03 I don't have any cool slogan on mine, I just have gray stripes, but I should, very cool.
+
+00:50:09 So yeah, wanna speak to the TypeHint, type information aspect of this whole thing?
+
+00:50:13 - Essentially, as I mentioned, Stripe did it using, you know, simply dictionaries
+
+00:50:19 and it was mostly untyped.
+
+00:50:22 As probably many people know, Stripe, after having so many problems with scalability
+
+00:50:28 in terms of like the team scalability and problems with typing, they have decided to adopt Sorbet,
+
+00:50:36 well, not adopt, create Sorbet, which is essentially a type checker.
+
+00:50:41 It's like a type checker and DSL for Ruby for TypeHints, which is really nice.
+
+00:50:47 It has both the runtime component and a static component as far as I remember,
+
+00:50:52 but they still, most of the time, work with untyped code, which essentially can lead to many errors.
+
+00:50:57 Kadwin tries to make sure that you still work with your schemas, you still know which schema you work with,
+
+00:51:03 it's always the latest.
+
+00:51:05 And Kadwin tries to make sure that you're not going to have any type errors
+
+00:51:11 if you don't want to, and you're going to have all of the niceties of having this dynamic request response conversion thing.
+
+00:51:19 So we're trying to take the best of both worlds, have you support very little code,
+
+00:51:23 but like make sure that you can type hint everything without any issue and you're not going to have problems
+
+00:51:29 and your type checker is going to check everything for you.
+
+00:51:31 And your, I don't know, VS code is going to see which fields something has, which type something has.
+
+00:51:37 - Yeah, excellent.
+
+00:51:37 One of the big problems with like all the runtime modifications, like one way you could have done this is that app startup,
+
+00:51:44 it could look at all of those things and it could just dynamically generate
+
+00:51:49 all the different versions and all the things, you know, using meta programming,
+
+00:51:54 but then the editors hate that.
+
+00:51:55 - Yeah, it does that with the endpoints because endpoints are not your editors,
+
+00:52:01 they don't care about endpoints.
+
+00:52:03 You never call your endpoint from your code.
+
+00:52:06 No, you usually call the business logic from it, which is why I decided to do it in runtime.
+
+00:52:10 You don't really need it.
+
+00:52:11 But for Schemas, yes, for Schemas, having them generated and then having people guessing
+
+00:52:16 and then having their IDs just put everything in red, that is horrible.
+
+00:52:21 I wouldn't want anyone to have that.
+
+00:52:23 - Yeah, yeah, I don't like it either.
+
+00:52:24 Not at all.
+
+00:52:25 It's right up there with the star, star, star KW orgs.
+
+00:52:28 Have a good time guessing in my world.
+
+00:52:31 - I don't like either of them.
+
+00:52:33 Awesome, all right.
+
+00:52:34 Well, let's just maybe touch real quickly on a couple of other choices that are out here.
+
+00:52:39 You know, Kadwin looks awesome, but we also have, for example, we have from Dean Way,
+
+00:52:44 we have fast API versioning, which has a very different philosophy.
+
+00:52:47 It has kind of the V1, the V2 style that you might maintain multiple versions of.
+
+00:52:54 You wanna just maybe speak to your thoughts on this one real quick and people can take that if they like this style.
+
+00:52:59 - I think it's either the first or the most popular.
+
+00:53:01 It's definitely the most popular, but I think it might even be the first library in fast API
+
+00:53:06 to implement versioning, implement proper versioning.
+
+00:53:09 It has a few issues.
+
+00:53:10 First of all, it only, as far as I remember, it is mostly duplication based,
+
+00:53:15 so it doesn't automate anything for you, which is a good thing if you know what you're doing
+
+00:53:19 and you're not going to have a lot of versions.
+
+00:53:21 But if you have 10 or 20 versions, if you wanna keep them for a long time,
+
+00:53:27 this is the endpoint copying approach that I mentioned, that with time is going to kill you,
+
+00:53:33 which is a problem here.
+
+00:53:35 The second problem is that it, as far as I understand, kind of recommends semantic versioning,
+
+00:53:41 though it doesn't bind you to it.
+
+00:53:43 You can use dates, though you will have to make sure that they're dates yourself,
+
+00:53:47 and you can use just simple integers.
+
+00:53:50 So you're not bound by semantic versioning, but it has a few examples with that.
+
+00:53:55 Aside from these two, it's an amazing library, and for anyone who just wants to version a small app,
+
+00:54:01 just add a single version that is going to be, the old version is going to be deleted in like two months,
+
+00:54:06 use that, use FastAPI versioning.
+
+00:54:08 It's an amazing library and you don't need anything else.
+
+00:54:12 CADWIN is for use cases where you need to keep a larger number of versions,
+
+00:54:18 or if the changes between your versions are much trickier.
+
+00:54:21 - Yeah, like this might be pretty good for my example I talked about with the courses app that we built, right?
+
+00:54:27 We literally have two versions.
+
+00:54:28 It's been around since 2018, and there's two versions.
+
+00:54:31 You know, like that would be a decorator, and I'm probably good to go.
+
+00:54:35 I don't need to think too much about it.
+
+00:54:36 - Precisely.
+
+00:54:37 No code generation, no nothing.
+
+00:54:39 You just put it in and you go.
+
+00:54:41 - Another one, if you're a Flask person, you could have Flask Rebar, which seems to have a real similar philosophy
+
+00:54:49 to what you just described, but it works for Flask.
+
+00:54:52 I feel like it's a little more complex than that.
+
+00:54:56 It is also the parent point.
+
+00:54:59 So it also allows you to duplicate single endpoints.
+
+00:55:02 It also allows you to do arbitrary prefixes.
+
+00:55:05 So you can have integers, you can have dates, you can have, you know, whatever.
+
+00:55:09 - Old, new, whatever.
+
+00:55:11 - Yeah, old, new.
+
+00:55:12 I guess some people do that.
+
+00:55:14 - If you want.
+
+00:55:16 - Yeah, latest, latest.
+
+00:55:17 - Yeah, yeah.
+
+00:55:18 Latest, really latest, final.
+
+00:55:19 - Like a new folder, new folder.
+
+00:55:21 - Yes, exactly.
+
+00:55:22 - But yeah, it's really similar.
+
+00:55:26 And I guess-
+
+00:55:26 - They probably use zipping up folders for version control as well.
+
+00:55:29 I'm just naming them by the date.
+
+00:55:31 Final, final, final.
+
+00:55:32 - Let's not use, let's not use Git.
+
+00:55:34 Let's just copy them.
+
+00:55:36 As for versioning, that's like a really good metaphor.
+
+00:55:38 If you are a person that just needs another version of their Google Doc, you wouldn't use Git.
+
+00:55:44 Well, unless you use Git for everything else.
+
+00:55:46 And same here.
+
+00:55:47 You don't need a huge combine for using Flask.
+
+00:55:52 And Flask usually, at least in my experience, tries to build simpler APIs.
+
+00:55:56 And you wouldn't use, well, most companies that do API first don't use Flask.
+
+00:56:02 They try to do, you know, Django DRF or FastAPI, which is why this library seems like a perfect choice
+
+00:56:09 for that.
+
+00:56:09 - Yeah, indeed.
+
+00:56:10 It seems really nice.
+
+00:56:11 One of the things that, we were speaking of duplication, one of the things that they just jumped right into
+
+00:56:16 to demonstrate here, and I imagine the FastAPI version one as well could do it,
+
+00:56:22 but there's one endpoint that doesn't change.
+
+00:56:25 And there's one that is different.
+
+00:56:27 So they copy the one that's different, but for the one that doesn't change,
+
+00:56:29 they just put a V1 and a V2 decorator on that one.
+
+00:56:33 And it remains unchanged basically, right?
+
+00:56:35 - Kadwin tries to escape this kind of verbosity.
+
+00:56:39 And essentially you have all endpoints everywhere.
+
+00:56:41 And if you wanna, you know, omit some endpoint or change some endpoint or add some endpoint into the new version,
+
+00:56:47 you just add a version change and say, oh, this endpoint didn't exist in the old version.
+
+00:56:53 That's it.
+
+00:56:54 - Very cool.
+
+00:56:54 Yeah, because if you had 20 of these, you'd have 20 decorators in the little function, right?
+
+00:56:59 That's where it starts to get.
+
+00:56:59 - Not a huge issue for Flask.
+
+00:57:01 I haven't seen anyone building, I don't know, 50 or 200 endpoints apps with Flask.
+
+00:57:08 I'm sure people do that, but I think it's the minority.
+
+00:57:10 - Other side of the fence, Django REST framework, DRF.
+
+00:57:13 You already mentioned them a little bit.
+
+00:57:15 And so Django, they already have like versioning built into the framework itself, right?
+
+00:57:21 - They have versioning interfaces built into.
+
+00:57:23 So like, it's not, they're not implementing versioning for you, but they give you all the tools
+
+00:57:29 to implement your own versioning.
+
+00:57:30 - Yeah, okay.
+
+00:57:31 So they kind of have the building blocks for it.
+
+00:57:33 Excellent. - Exactly.
+
+00:57:34 - All right.
+
+00:57:35 Well, I think we're pretty much out of time, but thank you for being here.
+
+00:57:39 This has been really interesting.
+
+00:57:40 - Oh, it was for me as well.
+
+00:57:41 Thank you for having me here.
+
+00:57:42 - Yeah, you've given everyone a lot to think about.
+
+00:57:44 You know, before we wrap it up, two quick things, you know, notable PyPI package.
+
+00:57:49 I mean, we've already given Kadwin a shout out.
+
+00:57:51 Anything else that like, oh, I came across this and it was super cool.
+
+00:57:55 Maybe it deserves a little bit of a shout out.
+
+00:57:57 Anything that like you use a lot that you would recommend?
+
+00:57:59 - For us in our company, we started using one more package of mine.
+
+00:58:04 It's called ByteTest fixture classes.
+
+00:58:06 - Okay. - Essentially, when you are building groups of fixtures that create some objects for you,
+
+00:58:12 for you to use in your tests, and then all of a sudden one of your tests
+
+00:58:16 needs an object that's a little different, you know, just a little bit, and then everything just falls apart.
+
+00:58:21 - Yeah.
+
+00:58:22 - A factory fixture pattern that you can see in ByteTest allows you to, you know, make a function within a function
+
+00:58:29 and one of them is a fixture and that's all cool and nice, but then it's not typed.
+
+00:58:35 You can use, you know, the callable syntax and then you're not going to have
+
+00:58:39 the keyword arguments there.
+
+00:58:41 And otherwise you can write a protocol and it's a lot of code.
+
+00:58:45 What ByteTest fixture classes does is it allows you to type everything there.
+
+00:58:50 So you write the same amount of code, but it's all typed and now you have,
+
+00:58:55 you can have groups of fixture classes building on top of each other, which is a nice pattern to have,
+
+00:59:01 but a really bad pattern to abuse.
+
+00:59:03 - Very cool.
+
+00:59:04 All right, well, nice, nice recommendation.
+
+00:59:06 People can check that out.
+
+00:59:07 Emil, our audience already says, "Amazing thing, I'm already using it." So final call to action, people have APIs,
+
+00:59:15 they've listened to us talk for an hour and they're like, "Oh, we should be versioning our APIs.
+
+00:59:20 "We probably should be doing something here." What do you recommend people do?
+
+00:59:24 How do they get started?
+
+00:59:25 How do they go further?
+
+00:59:26 - So first you need to decide whether your use case is simple.
+
+00:59:30 How many versions are you going to support?
+
+00:59:31 If you're not planning to support more than two versions or if you are supporting versions
+
+00:59:36 only for your internal microservices or only for your front end, then consider using the simple tools.
+
+00:59:44 Consider using the FastAPI versioning, you know, Flask, Raybar, things like that.
+
+00:59:49 But then once you realize that you need to support versions for months and you need three or more versions
+
+00:59:56 and you're providing your versions as a public, you know, to the public,
+
+01:00:01 then I advise moving straight into CADWIN or CADWIN-like frameworks.
+
+01:00:06 If you use FastAPI, you can just use CADWIN.
+
+01:00:08 It has a bit of a learning curve, but within making one version, you will realize just how simple it is.
+
+01:00:14 And if you're not using CADWIN, that's fine as well.
+
+01:00:17 I have all of the resources that I used to build it and all of the resources, you know,
+
+01:00:23 describing different ways of API versioning there in the repository in the theory section.
+
+01:00:28 So you can just read that.
+
+01:00:30 And even if you don't like that approach, we describe everything else there.
+
+01:00:34 So you'll be able to pick the one you like.
+
+01:00:36 But my personal recommendation, don't pick the directories.
+
+01:00:40 They're painful.
+
+01:00:41 - Awesome. Really good advice.
+
+01:00:43 Super cool project.
+
+01:00:44 So thank you for being here Stanislav.
+
+01:00:47 And talk to you later.
+
+01:00:48 - Talk to you later.
+
+01:00:49 - This has been another episode of "Talk Python to Me." Thank you to our sponsors.
+
+01:00:54 Be sure to check out what they're offering.
+
+01:00:55 It really helps support the show.
+
+01:00:57 It's time to stop asking relational databases to do more than they were made for
+
+01:01:03 and simplify complex data models with graphs.
+
+01:01:06 Check out the sample fast API project and see what Neo4j, a native graph database, can do for you.
+
+01:01:13 Find out more at talkpython.fm/neo4j.
+
+01:01:17 Take some stress out of your life.
+
+01:01:20 Get notified immediately about errors and performance issues in your web
+
+01:01:25 or mobile applications with Sentry.
+
+01:01:26 Just visit talkpython.fm/sentry and get started for free.
+
+01:01:31 And be sure to use the promo code, talkpython, all one word.
+
+01:01:36 Want to level up your Python?
+
+01:01:37 We have one of the largest catalogs of Python video courses over at Talk Python.
+
+01:01:41 Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+01:01:46 And best of all, there's not a subscription in sight.
+
+01:01:49 Check it out for yourself at training.talkpython.fm.
+
+01:01:52 Be sure to subscribe to the show.
+
+01:01:54 Open your favorite podcast app and search for Python.
+
+01:01:57 We should be right at the top.
+
+01:01:58 You can also find the iTunes feed at /iTunes, the Google Play feed at /play,
+
+01:02:03 and the direct RSS feed at /rss on talkpython.fm.
+
+01:02:08 We're live streaming most of our recordings these days.
+
+01:02:10 If you want to be part of the show and have your comments featured on the air,
+
+01:02:14 be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+01:02:19 This is your host, Michael Kennedy.
+
+01:02:20 Thanks so much for listening.
+
+01:02:21 I really appreciate it.
+
+01:02:22 Now get out there and write some Python code.
+
+01:02:25 (upbeat music)
+
+01:02:43 Thank you for watching.
+
