@@ -1,0 +1,1454 @@
+00:00:00 It's an exciting time for the capabilities of Python.
+
+00:00:02 We have the faster CPython initiative going strong, the recent async work, the adoption of typing, and on this episode, we discuss a new isolation and parallelization capability coming to Python through sub-interpreters.
+
+00:00:16 We have Eric Snow who spearheaded the work to get them added to Python 3.12 and is working on the Python API for them in 3.11, along with Anthony Shaw, who's been pushing the boundaries of what you can already do with sub-interpreters.
+
+00:00:30 This is Talk Python to Me, episode 446, recorded December 5th, 2023.
+
+00:00:36 [MUSIC]
+
+00:00:51 Welcome to Talk Python to Me, a weekly podcast on Python.
+
+00:00:54 This is your host, Michael Kennedy.
+
+00:00:56 Follow me on Mastodon, where I'm @mkennedy, and follow the podcast using @talkpython, both on fosstodon.org.
+
+00:01:03 Keep up with the show and listen to over seven years of past episodes at talkpython.fm.
+
+00:01:08 We've started streaming most of our episodes live on YouTube.
+
+00:01:12 Subscribe to our YouTube channel over at talkpython.fm/youtube to get notified about upcoming shows and be part of that episode.
+
+00:01:20 This episode is sponsored by PyBytes Developer Mindset Program.
+
+00:01:24 PyBytes core mission is to help you break the vicious cycle of tutorial paralysis through developing real-world applications.
+
+00:01:31 The PyBytes Developer Mindset Program will help you build the confidence you need to become a highly effective developer.
+
+00:01:37 It's brought to you by Sentry.
+
+00:01:39 Don't let those errors go unnoticed.
+
+00:01:42 Use Sentry. Get started at talkpython.fm/sentry.
+
+00:01:46 Anthony, Eric, hello, and welcome to Talk Python to Me.
+
+00:01:49 >> Great.
+
+00:01:50 >> Hey guys. It's really good to have you both here.
+
+00:01:52 You both have been on the show before, which is awesome.
+
+00:01:55 Eric, we've talked about several interpreters before, but they were a dream almost at the time.
+
+00:02:02 >> That's right.
+
+00:02:02 >> Now, they feel pretty real.
+
+00:02:04 >> That's right. It's been a long time coming.
+
+00:02:07 I think the last time we talked, I've always been hopeful, but it seems like it was getting closer.
+
+00:02:12 With 3.12, we were able to land PerinterpreterGill, which was the last piece, the foundational part I wanted to do.
+
+00:02:20 A lot of cleanup, a lot of work that had to get done, but that last piece got in for 3.12.
+
+00:02:25 >> Excellent. So good.
+
+00:02:27 Maybe let's just do a quick check-in with you all.
+
+00:02:30 It's been a while.
+
+00:02:32 Anthony, start with you, I guess.
+
+00:02:34 Quick intro for people who don't know you, although I don't know how that's possible, and then just what you've been up to.
+
+00:02:39 >> Yeah. I'm Anthony Shaw.
+
+00:02:41 I work at Microsoft.
+
+00:02:42 I lead the Python advocacy team, and I do lots of Python stuff open source.
+
+00:02:49 Testing things, building tools, blogging, building projects, sharing things.
+
+00:02:55 >> You have a book, something about the inside of Python?
+
+00:02:58 >> Yeah. I forgot about that.
+
+00:03:00 Yeah. There's a book called CPython Internals, which is a book all about the Python compiler and how it works.
+
+00:03:06 >> You suppressed the memory of writing it?
+
+00:03:07 Like it was too traumatic, it's down there.
+
+00:03:09 >> Yeah. I keep forgetting.
+
+00:03:12 Yeah. That book was for 3.9, and people keep asking me if I'm going to update it for 3.13, maybe because things keep changing.
+
+00:03:22 >> Yeah.
+
+00:03:23 >> Things have been changing at a more rapid pace than they were a few years ago as well, so that maybe makes it more challenging.
+
+00:03:30 Yeah. Recently, I've been doing some more research as well.
+
+00:03:35 So I just finished my master's a few months ago, and I started my PhD, and I'm looking at parallelism in Python as one of the topics.
+
+00:03:43 So I've been quite involved in sub-interpreters, and the free threading project, and some other stuff as well.
+
+00:03:50 >> Awesome. Congratulations on the master's degree.
+
+00:03:52 That's really great.
+
+00:03:53 >> Thanks.
+
+00:03:54 >> I didn't realize you're going further. So Eric.
+
+00:03:57 >> Eric Snow. So I've been working on Python as a core developer for over 10 years now, but I've been participating for even longer than that, and it's been good.
+
+00:04:09 I've worked on a variety of things, a lot of stuff down in the core runtime of CPython.
+
+00:04:16 I've been working on this, trying to find a solution for multi-core Python really since 2014.
+
+00:04:23 >> Yeah.
+
+00:04:23 >> So I've been ever so slowly working towards that goal, and we've made it with 3.12, and there's more work to do.
+
+00:04:32 But that's a lot of the stuff that I've been working on.
+
+00:04:34 I'm at Microsoft, but don't work with Anthony a whole lot.
+
+00:04:39 I work on the Python performance team with Guido, and Brent Booger, and Mark Shannon here at CutTrail and we're just working generally to make Python faster.
+
+00:04:50 So my part of that has involved subinterpreters.
+
+00:04:53 >> Awesome.
+
+00:04:53 >> Interestingly enough, it's only really this year that I've been able to work on all the subinterpreter stuff full-time.
+
+00:05:02 Before that, I was working mostly on other stuff.
+
+00:05:04 So this year has been a good year for me.
+
+00:05:07 >> Yeah, I would say that must be really exciting to get the, "You know what, why don't you just do that?
+
+00:05:12 That'd be awesome for us."  Yeah, it's been awesome.
+
+00:05:15 >> Well, maybe since you're on the team, let's do a quick check-in on Faster CPython.
+
+00:05:20 It's made a mega difference over the last couple of releases.
+
+00:05:23 >> Yeah, it's interesting.
+
+00:05:25 Mark Shannon definitely has a vision.
+
+00:05:28 He's developed a plan as of years ago, but we finally were able to put him in a position where he could do something about it, and we've all been pitching in.
+
+00:05:40 A lot of it has to do with just applying some of the general ideas that are out there regarding dynamic languages and optimization.
+
+00:05:48 Things have been applied to other things like HHVM or various of the JavaScript runtimes.
+
+00:05:55 A lot of adaptive specialization, a few other techniques.
+
+00:06:04 A lot of that stuff we're able to get in for 3.11.
+
+00:06:09 In 3.12, there wasn't quite as much impactful stuff.
+
+00:06:13 It was we're gearing up to effectively add a JIT into CPython, and that's required a lot of behind-the-scenes work to get things in the right places.
+
+00:06:25 We're somewhat targeting 3.13 for that.
+
+00:06:30 Right now, I think where things are at, we're break-even performance-wise, but there's a lot of stuff that we can do.
+
+00:06:40 A lot of optimization work that really hasn't even been done yet that will take that performance improvement up pretty drastically.
+
+00:06:48 It's hard to say where we're going to be, but for 3.13, it's looking pretty good for at least some performance improvement because of the JITing and optimization work.
+
+00:07:00 >> That's exciting. We have no real JIT at the moment, right?
+
+00:07:04 >> Not in CPython.
+
+00:07:05 >> Yeah. I mean, I know there's Numba and different things.
+
+00:07:08 >> Yeah, it is best.
+
+00:07:09 >> I know. Well, that's actually super exciting because I feel like that could be another big boost potentially.
+
+00:07:16 With the JIT, you come to all sorts of things like inlining of small methods and optimization based on type information.
+
+00:07:23 >> Yeah. All that stuff.
+
+00:07:25 One of the most exciting parts for me is that a lot of this work, not long after I joined the team, so two and a half years ago, somewhere in there, pretty early on, we started reaching out to other folks, other projects that were interested in performance and performance of Python code.
+
+00:07:46 We've worked pretty hard to collaborate with them.
+
+00:07:50 Like the team over at Meta, they have a lot of interest in making sure Python is very efficient.
+
+00:07:58 We've actually worked pretty closely with them, and they're able to take advantage of a lot of the work that we've done, which is great.
+
+00:08:05 >> Yeah. There seems to be some synergy between the Cinder team and the faster CPython team.
+
+00:08:10 Awesome. But let's focus on a part that is there, but not really utilized very much yet, which is the sub-interpreter.
+
+00:08:20 Back on, when is this, 2019?
+
+00:08:24 Eric, I had you on and we talked about, can sub-interpreters free us from Python's GIL?
+
+00:08:29 Then since then, this has been accepted, but it's Anthony's fault that we're here.
+
+00:08:36 Because Anthony posted over on Mastodon, "Hey, here's a new blog post, me running Python parallel applications with sub-interpreters.
+
+00:08:43 How about we use Flask and FastAPI and sub-interpreters and make that go fast?" That sounded more available in the Python level than I realized the sub-interpreter stuff was.
+
+00:08:56 That's super exciting, both of you.
+
+00:08:58 >> Yeah. It's been fun to play with it and try and build applications on it and stuff like that.
+
+00:09:03 Working with Eric probably over the last couple of months on things that we've discovered in that process.
+
+00:09:10 Especially with C extensions.
+
+00:09:13 >> Daytime?
+
+00:09:14 >> Yeah, that's one.
+
+00:09:16 With C extensions, and I think that some of those challenges are going to be the same with free threading as well.
+
+00:09:24 It's how C extensions have state where they put it, whether that's thread safe.
+
+00:09:31 As soon as you open up the possibility of having multiple gills in one process, then what challenges does that create?
+
+00:09:40 >> Absolutely. Well, I guess maybe some nomenclature first, not no-gill Python or sub-interpreter free-threaded.
+
+00:09:48 Is that what we're calling it? What's the name?
+
+00:09:50 How do we speak about this?
+
+00:09:52 >> It's not quite settled, but I think a lot of people have taken to referring to it as free-threaded.
+
+00:09:59 >> I can go with that. It sounds pretty good.
+
+00:10:00 >> People still talk about no-gill, but free-threaded is probably the best bet.
+
+00:10:04 >> Are you describing what it does and why you care, or are you describing the implementation?
+
+00:10:09 The implementation is it has no-gil, so it can be free-threaded, or it has sub-interpreters, so it can be free-threaded.
+
+00:10:15 But really what you want is the free-threaded part.
+
+00:10:17 You don't care actually about the gil too much.
+
+00:10:20 >> It's interesting with sub-interpreters, it really isn't necessarily a free-threaded model.
+
+00:10:26 It's free-threaded only in the part at which you're moving between interpreters.
+
+00:10:34 You only have to care about it when you're interacting between interpreters.
+
+00:10:37 The rest of the time, you don't have to worry about it.
+
+00:10:39 >> I think that with the no-gil, what we think of as free-threading work, everything is unsafe.
+
+00:10:48 >> For people who don't know, the no-gil stuff is what's coming out of the Sender team and from Sam Gross.
+
+00:10:52 That was also approved, but with the biggest caveat I've ever seen on an approved cup.
+
+00:10:56 >> Yeah.
+
+00:10:57 >> We approve this, we also reserve the right to completely undo it and not approve it anymore.
+
+00:11:02 But it's also a compiler flag that is an optional off by default situation.
+
+00:11:07 Should be interesting.
+
+00:11:08 >> Yeah, we can maybe compare and contrast them a bit later as well.
+
+00:11:12 >> Yeah, absolutely. Well, let's start with what is an interpreter?
+
+00:11:16 Then how do we get to sub-interpreters and then what work did you have to do?
+
+00:11:20 I heard there was a few global variables that are being shared.
+
+00:11:23 >> Yeah.
+
+00:11:24 >> Maybe let's give people a quick rundown of what is this and how is it, this new feature in 3.12 changing things.
+
+00:11:31 >> Yeah. Sub-interpreters in a Python process, when you run Python, all of everything that happens, all the machinery that's running your Python code is running with a certain amount of global state.
+
+00:11:45 Historically, you can think of it as across the whole process.
+
+00:11:50 You've got a bunch of global state.
+
+00:11:52 If you look at all the stuff like in the sys module, sys.modules or sys.whatever, all those things are shared across the whole runtime.
+
+00:12:03 If you have different threads, for instance, running it, they all share that stuff even though you're going to have different code running in each thread.
+
+00:12:10 All of that runtime state is everything that Python needs in order to run.
+
+00:12:16 But what's interesting is that the vast majority of it, you can think of as the actual interpreter.
+
+00:12:23 That state, if we treat it as isolated and we're very careful about it, then we can have multiple of them.
+
+00:12:30 That means that when your Python code runs, that it can run with a different set of this global state, different modules imported, different things going on, different threads that are unrelated and really don't affect each other at all.
+
+00:12:45 Then with that in mind, you can take it one step farther and say, well, let's completely isolate those and not even have them share a gil.
+
+00:12:55 Then at that point, that's where the magic happens.
+
+00:12:59 That's my first goal in this whole project was to get to that point.
+
+00:13:05 Because once you get there, then it opens up a lot of possibilities when it comes to concurrency and parallelism.
+
+00:13:12 >> Then Anthony can start running with his blog posts and showing off things.
+
+00:13:16 >> Yeah.
+
+00:13:17 >> Absolutely. This portion of Talk Python to Me is brought to you by the PyBytes Python Developer Mindset Program.
+
+00:13:27 It's run by my two friends and frequent guests, Bob Delderbos and Julian Sequeira.
+
+00:13:32 Instead of me telling you about it, let's hear them describe their program.
+
+00:13:36 >> In a world where AI, machine learning, and large language models are revolutionizing how we live and work, Python stands at the forefront.
+
+00:13:46 Don't get left behind in this technological evolution.
+
+00:13:50 >> Tutorial paralysis, that's a thing of the past.
+
+00:13:54 With PyBytes coaching, you move beyond endless tutorials to become an efficient, skilled Python developer.
+
+00:14:00 We focus on practical real-world skills that prepare you for the future of tech.
+
+00:14:05 >> Join us at PyBytes and step into a world where Python isn't just a language, but a key to unlocking endless possibilities in the tech landscape.
+
+00:14:15 Check out our 12-week PDM program and embark on a journey to Python mastery.
+
+00:14:20 The future is Python, and with PyBytes, you're one step ahead.
+
+00:14:25 >> Apply for the Python Developer Mindset today.
+
+00:14:28 It's quick and free to apply.
+
+00:14:31 The link is in your podcast player show notes.
+
+00:14:33 Thanks to PyBytes for sponsoring the show.
+
+00:14:36 One thing I don't know the answer to, but might be interesting is Python has a memory management story in front of the operating system, virtual memory that's assigned to the process with pools, arenas, blocks, those kinds of things.
+
+00:14:51 What's that look like with regard to sub-interpreters?
+
+00:14:54 So each sub-interpreter have its own chunk or set of those for the memory it allocates, or is it still a shared one thing per process?
+
+00:15:03 >> It's per interpreter.
+
+00:15:05 This is something that was very global.
+
+00:15:08 Like you pointed out earlier, this whole project was all about taking all sorts of global state that was actually stored in C global variables all over the place, and pulling those in together into one place and moving those down from the process global state down into each interpreter.
+
+00:15:28 So one of those things was all of the allocator state that we have for objects.
+
+00:15:34 Python has this idea of different levels of allocators.
+
+00:15:39 The object allocator is what's used heavily for Python objects, of course, but some other state as well.
+
+00:15:45 The object allocator is the part that has all the arenas and everything like you're saying.
+
+00:15:52 >> Yeah.
+
+00:15:52 >> So part of what I did before we could make the GIL per interpreter, we had to make the allocator state per interpreter.
+
+00:16:00 >> Well, the reason I think that it's interesting asking about it, it's one because of the GIL obviously, but the other one is, it seems to me like these sub-interpreters could be used for a little bit of stability or isolation to run some code.
+
+00:16:13 When that line exits, I want the memory free, I want modules unloaded, I want it to go back to the way it was.
+
+00:16:20 You know what I mean? Whereas normally in Python, even if the memory becomes free, it's still got some of that like, well, we allocate this stuff, now we're holding it to refill it, and then you don't un-import modules.
+
+00:16:31 But modules can be pretty intense actually, if they start allocating a bunch of stuff themselves and so on.
+
+00:16:38 What do you guys think about this as an idea, as an aspect of it?
+
+00:16:41 >> Yeah, there's one example I've been coming across recently, and this is a pattern.
+
+00:16:46 I think it's a bit of an anti-pattern actually, but some Python packages, they store some state information in the module level.
+
+00:16:56 So an example is a SDK that I've been working with, which has just been rewritten to stop it from doing this.
+
+00:17:03 But you would put the API key of the SDK, you would import it, so you'd import X, and then do like X.APIKey equals.
+
+00:17:13 So it basically stores the API key in the module object, which is fine if you've imported the module once and you're using it once.
+
+00:17:24 But what you see is that if you put that in a web application, it just assumes that everyone uses the same key.
+
+00:17:32 So you can't import that module, and then connect to it with different API keys, like you'd have different users or something.
+
+00:17:40 >> So you've got some kind of multi-tenancy, where they would say, enter their ChatGPT, open AI key, and then they could work on behalf of that.
+
+00:17:51 That potentially something like that, right?
+
+00:17:52 >> Yeah, exactly. So that's like an API example, but there are other examples where, let's say you're loading data or something, and it stores some temporary information somewhere in a class attribute, or even like a module attribute like that.
+
+00:18:06 Then if you've got one piece of code loading data, and then in another thread in a web app, or just in another thread generally, you're reading another piece of data and they're sharing state somehow, and you've got no isolation.
+
+00:18:20 Some of that is due to the way that people have written the Python code, or the extension code, has been built around, oh, we'll just put this information here, and they haven't really thought about the isolation.
+
+00:18:34 Sometimes it's because on the C level especially, that because the GIL was always there, they've never had to worry about it.
+
+00:18:42 So you could just have a counter for example, or there's an object which is a dictionary that is a cache of something.
+
+00:18:51 You just put that as a static variable, and you just read and write from it.
+
+00:18:56 You've never had to worry about thread safety because the GIL was there to protect you.
+
+00:19:00 You probably shouldn't have built it that way, but it didn't really matter because it worked.
+
+00:19:05 >> What about this, Anthony?
+
+00:19:06 What if we can write it on one line, it'll probably be safe.
+
+00:19:10 If we can fit it just one line of Python code, it'll be okay?
+
+00:19:13 >> Yeah.
+
+00:19:15 >> Dictionary.add, what's wrong there?
+
+00:19:17 Dictionary.get, it's fine.
+
+00:19:19 >> Yeah. So yeah, what we're saying, within sub-interpreters, I think what's the concept that people will need to understand is where the isolation is, because there are different models for running parallel code.
+
+00:19:33 At the moment, we've got coroutines, which is asynchronous, so it can run concurrently.
+
+00:19:40 So that's if you do a sync in a way or if you use the old coroutine decorator.
+
+00:19:45 You've also got things like generators, which are concurrent pattern.
+
+00:19:50 You've got threads that you can create.
+
+00:19:53 All of those live within the same interpreter, and they share the same information.
+
+00:19:59 So if you create a thread, inside that thread, you can read a variable from outside of that thread, and it doesn't complain.
+
+00:20:08 You don't need to create a lock at the moment, although in some situations, you probably should.
+
+00:20:14 You don't need to re-import modules and stuff like that, which can be fine.
+
+00:20:20 Then at the other extreme, you've got multiprocessing, which is a module in the standard library that allows you to create extra Python processes, and then gives you an API to talk to them and share information between them.
+
+00:20:33 That's the other extreme, which is the ultimate level of isolation.
+
+00:20:40 You've got a whole separate Python process.
+
+00:20:42 But instead of interacting with it via the command line, you've got this nicer API where you can almost treat it like it's in the same process as the one you're running from.
+
+00:20:53 >> It's kind of magical actually that you get a return value from a process, for example.
+
+00:20:59 >> But the thing is, if you pull back the covers a little bit, then how it sends information to the other Python process involves a lot of pickles, and it's not particularly efficient.
+
+00:21:11 Also, a Python process has a lot of extra stuff that you maybe necessarily didn't even need.
+
+00:21:18 You get all this isolation from having it, but you have to import all the modules again, you have to create the arenas again, all the memory allocation, you have to do all the startup process again, which takes a lot of times, like at least 200 milliseconds.
+
+00:21:31 >> Parsing the Python code again, at least the PYC.
+
+00:21:34 >> Yeah, exactly. You basically created a whole separate Python.
+
+00:21:39 If you do that just to run a small chunk of code, then it's not probably the best model at all.
+
+00:21:45 >> Yeah. You have a nice graph as well that shows the rate as you add more work and you need more parallelism.
+
+00:21:52 We'll get to that, I'm sure.
+
+00:21:54 One thing that struck me coming to Python from other languages like C, C++, C#, there's very little locks and events, threading, coordinating stuff in Python.
+
+00:22:06 I think that there's probably a ton of Python code that actually is not actually thread safe, but people get away with it because the context switching is so coarse grained.
+
+00:22:17 You say, well, the GIL's there, so you only run one instruction at a time, but this temporary invalid state you entered to as part of your code running, took money out of this account and then I'm going to put it into that account.
+
+00:22:29 Those are multiple Python lines and there's nothing saying they couldn't get interrupted between one to the other and then things are busted.
+
+00:22:36 I feel there's some concern about adding this concurrency, like, "Oh, we're going to have to worry about it." You probably should be worrying about it now.
+
+00:22:43 Not as much necessarily, but I feel like people are getting away with it because it's so rare, but it's a non-zero possibility. What do you guys think?
+
+00:22:52 >> Yeah. Those are real concerns.
+
+00:22:55 There's been lots of discussion with the no-GIL work about really what matters, what we need to care about, really what impact it's going to have.
+
+00:23:06 It's probably going to have some impact on people with Python code, but it'll especially have impact on people that maintain extension modules.
+
+00:23:16 But it really is all the pain that comes with free threading.
+
+00:23:22 That's what it introduces with the benefits as well, of course.
+
+00:23:28 But what's interesting, I'd like to think of sub-interpreters provide the same facility, but they force you to be explicit about what gets shared, and they force you to do it in a thread-safe way.
+
+00:23:43 You can't do it without thread safety, and so it's not an issue.
+
+00:23:48 It doesn't hurt that people really haven't used sub-interpreters extensively up till now, whereas threads are something that's been around for quite a while.
+
+00:23:58 >> Yeah, it has been.
+
+00:23:59 Well, sub-interpreters have traditionally just been a thing you can do from C extensions, or the C API, which really limits them from being used in just a standard, I'm working on my web app, so let's just throw in a couple of sub-interpreters.
+
+00:24:14 3.13, is that when we're looking at having a Python-level API for creating and interacting with?
+
+00:24:20 >> Yeah, I've been working on a pep for that, pep 554, recently created a new pep to replace that one, which is pep 734.
+
+00:24:31 That's the one. That's the one that I'm targeting for 3.13.
+
+00:24:36 It's pretty straightforward, create interpreters and look at them and with an interpreter, run some code, pretty basic stuff.
+
+00:24:47 Then also, because sub-interpreters aren't quite so useful, if you can't cooperate between them, there's also a queue type that you push stuff on and you pop stuff off and just pretty basic.
+
+00:25:00 >> So you could write something like a weight, q.popper or something like that. Excellent.
+
+00:25:06 >> Yeah.
+
+00:25:06 >> Yeah, this is really cool.
+
+00:25:08 The other thing that I wanted to talk about here, looks like you already have it in the pep, which is excellent.
+
+00:25:13 Somehow I missed that before, is that we have thread pool executors, we have multi-processing pool executors, and this would be an interpreter pool executor.
+
+00:25:23 What's the thinking there?
+
+00:25:25 >> People are already familiar with using concurrent futures.
+
+00:25:28 So if we can present the same API for sub-interpreters, it makes it really easy because you can set it up with multi-processing or threads and switch it over to one of the other pool types without a lot of fuss.
+
+00:25:41 >> Right. Basically, with a clever import statement, you could take it right from whatever import, like multi-processing pool executor as pool executor or interpreter pool executor as pool executor and then the rest of the code could stay potentially.
+
+00:25:54 >> Yeah.
+
+00:25:55 >> What about the communication?
+
+00:25:57 It's got to be a basic situation because there are assumptions.
+
+00:26:01 >> Yeah. It should work mostly the same way that you already use it with threads and multi-processing.
+
+00:26:09 But we'll see. There's some limitations with sub-interpreters currently that I'm sure we'll work on solving as we can.
+
+00:26:17 So we'll see.
+
+00:26:19 It may not be quite as efficient as I'd like at first with the interpreter pool executor, because we'll probably end up doing some pickling stuff like multi-processing does.
+
+00:26:28 Although I expect it'll be a little more efficient.
+
+00:26:31 >> This portion of Talk Python to me is brought to you by Sentry.
+
+00:26:35 You know Sentry for their air monitoring service, the one that we use right here at Talk Python.
+
+00:26:39 But this time, I want to tell you about a new and free workshop.
+
+00:26:43 Haming the Kraken, managing a Python monorepo with Sentry.
+
+00:26:47 Join Salma Alam Nayyar, Senior Developer Advocate at Sentry, and David Winterbottom, Head of Engineering at Kraken Technologies, for an inside look into how he and his team develop, deploy, and maintain a rapidly evolving Python monorepo with over 4 million lines of code that powers the Kraken utility platform.
+
+00:27:08 In this workshop, David will share how his department of 500 developers, who deploy around 200 times a day, use Sentry to reduce noise, prioritize issues, and maintain code quality without relying on a dedicated Q&A team.
+
+00:27:21 You'll learn how to find and fix root causes of crashes, ways to prioritize the most urgent crashes and errors, and tips to streamline your workflow.
+
+00:27:30 Join them for free on Tuesday, February 27th, 2024 at 2 a.m. civic time.
+
+00:27:35 Just visit talkpython.fm/sentry-monorepo.
+
+00:27:40 That link is in your podcast player show notes.
+
+00:27:42 2 a.m. might be a little early here in the U.S., but go ahead and sign up anyway if you're a U.S. listener, 'cause I'm sure they'll email you about a follow-up recording as well.
+
+00:27:52 Thank you to Sentry for supporting this episode.
+
+00:27:54 I was gonna save this for later, but I think maybe it's worth talking about now.
+
+00:27:59 So first of all, Anthony, you wrote a lot about, and have actually had some recent influence on, what you can pass across, say, the starting code and then the running interpreter that's kind of like the sub-interpreter doing extra work.
+
+00:28:10 Wanna talk about what data exchange there is?
+
+00:28:13 - Yeah, so when you're using any of these models, multiprocessing, sub-interpreters, or threading, I guess you've got three things to worry about.
+
+00:28:23 One is how do you create it in the first place?
+
+00:28:26 So how do you create a process?
+
+00:28:28 How do you create an interpreter?
+
+00:28:29 How do you create a thread?
+
+00:28:31 The second thing is how do you send data to it?
+
+00:28:33 'Cause normally, the reason you've created them is 'cause you need it to do some work.
+
+00:28:38 So you've got the code, which is when you spawn it, when you create it.
+
+00:28:43 The code that you want it to run, but that code needs some sort of input, and that's probably gonna be Python objects.
+
+00:28:49 It might be reading files, for example, or listening to a network socket, so it might be getting its input from somewhere else.
+
+00:28:57 But typically, you need to give it parameters.
+
+00:29:00 Now, the way that works in multiprocessing is mostly reliant on pickle.
+
+00:29:05 So if you start a process and you give it some data, either as a parameter or you create a queue, and you send data down the queue or the pipe, for example, it pickles the data.
+
+00:29:20 So you can put a Python object in.
+
+00:29:22 It uses the pickle module.
+
+00:29:24 It converts that into a byte string, and then it basically converts the byte string on the other end back into objects.
+
+00:29:30 That's got its limitations because not everything can be pickled.
+
+00:29:34 And also, some objects, especially if you've got an object which has got objects in it, and it's deeply nested, or you've got a big, complicated dictionary or something that's got all these strange types in it which can't necessarily be rehydrated from just from a byte string.
+
+00:29:52 An alternative, actually, I do want to point out, 'cause for people who come across this issue quite a lot, there's another package called Dill on PyPI.
+
+00:30:02 So if you think of pickle, think of DIIL.
+
+00:30:06 DILL is very similar to pickle.
+
+00:30:08 It has the same interface, but it can pickle slightly more exotic objects than pickle can.
+
+00:30:14 So often, if you find that you've tried to pickle something, you try to share it with a process or a subinterpreter, and it comes back and says, "This can't be pickled," you can try dill and see if that works.
+
+00:30:27 So yeah, that's the typical way of doing it, is that you would pickle an object, and then on the other end, you would basically unpickle it back into another object.
+
+00:30:38 The downside of that is that it's pretty slow.
+
+00:30:40 It's equivalent, like if you use the JSON module in Python, it's kind of similar, I guess, to converting something into JSON and then converting it from JSON back into a dictionary on the other end.
+
+00:30:52 Like, it's not a super efficient way of doing it.
+
+00:30:56 So subinterpreters have another mechanism, and I haven't read PEP 734 yet. (laughs)
+
+00:31:03 So I don't know how much of this is in the new PEP, Eric, or if it's in the queue, but there's a--
+
+00:31:10 - It's much the same.
+
+00:31:11 - Okay, it's much the same.
+
+00:31:12 So there's another mechanism with subinterpreters, because they share the same process, whereas multiprocessing doesn't, they're separate processes.
+
+00:31:22 Because they share the same process, you can basically put some data in a memory space, which can be read from a separate interpreter.
+
+00:31:30 Now you need to be, well, Python needs to be really careful.
+
+00:31:33 You don't need to worry too much about it, 'cause that complexity's done for you.
+
+00:31:38 But there are certain types of objects that you can put in as parameters.
+
+00:31:41 You can send either as startup variables for your subinterpreter, or you can send via a pipe, basically, backwards and forwards between the interpreters.
+
+00:31:52 And these are essentially all the immutable types for Python, which is string, unicode strings, byte strings, bool, none, integer, float, and tuples.
+
+00:32:05 And you can do tuples of tuples as well.
+
+00:32:07 - And it seems like the tuple part had something that you added recently, right?
+
+00:32:13 It says, "I implemented tuple sharing just last week." - Yeah, that's in now.
+
+00:32:18 I really wanted to use it, so I thought, well, instead of keep, I kept complaining that it wasn't there, so I thought instead of complaining, I might as well talk to Eric and work out how to implement it.
+
+00:32:29 - Yeah, that's awesome.
+
+00:32:30 - But yeah, you can't share dictionaries, that's one thing.
+
+00:32:31 - Yeah, exactly.
+
+00:32:32 So one thing that I thought that might be awesome, are you familiar with message spec?
+
+00:32:36 You guys seen message spec?
+
+00:32:37 It's like Pydantic in the sense that you create a class with types, but the parsing performance is quite a bit, like much, much faster, 80 times faster than Pydantic, 10 times faster than Marshiro and C-Adders and so on, and faster still even than say JSON or UJSON.
+
+00:32:58 So maybe it makes sense to use this, turn it into its serialization format bytes, send the bytes over and then pull it back, I don't know.
+
+00:33:04 Might give you a nice structured way.
+
+00:33:05 - Yeah, you can share byte strings.
+
+00:33:07 So you can stick something into pickle, you can use like message spec or something like that to serialize something into a byte string and then receive it on the other end and rehydrate it.
+
+00:33:18 - Or even Pydantic, like Pydantic is awesome as well.
+
+00:33:20 Just, this is meant to be super fast with a little bit of less behavior, right?
+
+00:33:24 - Yeah, so this is a kind of a design thing.
+
+00:33:27 I think people need to consider when they're like, great, I can run everything in parallel now.
+
+00:33:32 But you have to kind of unwind and think about how you've designed your application.
+
+00:33:36 Like at which point do you fork off the work?
+
+00:33:41 And how do you split the data?
+
+00:33:44 You can't just kind of go into it assuming, oh, we'll just have a pool of workers and we've kind of got this shared area of data that everybody just reads from.
+
+00:33:53 - Yeah, I'll pass it a pointer to a million entry list and I'll just run with it.
+
+00:33:57 - Yeah, 'cause I mean, in any language, you're gonna get issues if you do that.
+
+00:34:02 Even if you've got shared memory and it's easier to read and write to different spaces, you're gonna get issues with locking.
+
+00:34:08 And I think it's also important with free threading.
+
+00:34:10 If you read the spec or kind of follow what's happening with free threading, it's not like the GILs disappeared.
+
+00:34:18 The GILs been replaced with other locks.
+
+00:34:20 So there are still going to be locks.
+
+00:34:24 You can't just have no locks.
+
+00:34:26 If you've got things running in parallel.
+
+00:34:27 - Especially cross threads, right?
+
+00:34:27 Like it moves some of the reference counting stuff into like, well, it's fast on the default thread, the same thread, but if it goes to another, it has to kick in another more thread safe case that potentially is slower and so on.
+
+00:34:39 - Yeah.
+
+00:34:40 So yeah, the really important thing with sub-interpreters is that they have their own, well, have their own GIL.
+
+00:34:45 So each one has its own lock.
+
+00:34:48 So they can run fully in parallel just as they could with multi-processing.
+
+00:34:52 So I feel like a closer comparison with sub-interpreters is multi-processing.
+
+00:34:57 - Yeah, absolutely.
+
+00:34:58 - 'Cause they basically run fully in parallel.
+
+00:35:01 If you start four of them and you have four cores, each core is gonna be busy doing work.
+
+00:35:05 You start them, you give them data, you can interact with them whilst they're running.
+
+00:35:11 And then when they're finished, they can close and they can be destroyed and cleaned up.
+
+00:35:17 So it's much closer to multi-processing, but the big, kind of the big difference is that the overhead both on the memory and CPU side of things is much smaller.
+
+00:35:27 Separate processes with multi-processing are pretty heavyweight, they're big workers.
+
+00:35:33 And then the other thing that's pretty significant is the time it takes to start one.
+
+00:35:38 So starting a process with multi-processing takes quite a lot of time and it's significantly, I think it's like 20 or 30 times faster to start a sub-interpreter.
+
+00:35:48 - You have a bunch of graphs for it somewhere.
+
+00:35:51 There we go.
+
+00:35:52 - Yeah.
+
+00:35:52 - So I scrolled past it, there we go.
+
+00:35:54 It's not exactly the same, but kind of captures a lot of it there.
+
+00:35:59 So one thing that I think is exciting, Eric, is the interpreter pool, sub-interpreter pool, because a lot of the difference between the threading and the sub-interpreter performance is that startup of the new arenas and like importing the standard library, all that kind of stuff that still is gonna happen.
+
+00:36:17 But once those things are loaded up in the process, they could be handed work easily, right?
+
+00:36:21 And so if you've got a pool of, you know, like say that you have 10 cores, you've got 10 of them just chilling or however many, you know, you've sort of done enough work to like do in parallel, then you could have them laying around and just send like, okay, now I want you to run this function.
+
+00:36:34 And now I want you to run this.
+
+00:36:35 And that one means go call that API and then process it.
+
+00:36:38 And I think you could get the difference between threading and sub-interpreters a lot lower by having them kind of reused basically.
+
+00:36:45 - Yep, absolutely.
+
+00:36:46 - Yeah.
+
+00:36:47 - There's some of the, the key difference I think is mostly that when you have mutable data, whereas with threads, you can share it.
+
+00:36:57 So threads can kind of talk to each other through the data that they share with each other.
+
+00:37:02 Whereas with sub-interpreters, there are a lot of restrictions and I expect we'll work on that to an extent, but it's also part of the programming model.
+
+00:37:11 And like Anthony was saying, if you really want to take advantage of parallelism, you need to think about it.
+
+00:37:17 You need to actually be careful about your data and how you're splitting up your work.
+
+00:37:22 - I think there's gonna be design patterns that we come to know or conventions we come to know, like, let's suppose I need some calculation and I'm gonna use it in a for loop.
+
+00:37:31 You don't run the calculation if it's the same over and over every time through the loop, you run it and then you use the result, right?
+
+00:37:37 So in this, a similar thing here would be like, well, if you're gonna process a bunch of data and the data comes from a say a database, don't do the query and hand it all the records, just tell it, go get that data from the database.
+
+00:37:49 That way it's already serialized in the right process and there's not this cross serialization through either pickling or whatever mechanism you come up with, right?
+
+00:37:58 But like, try to think about when you get the data, can you delay it until it's in the sub process and our sub interpreter rather and so on, right?
+
+00:38:06 - Yeah, definitely.
+
+00:38:07 One interesting thing is that PEP 734, I've included memory view as one of the types that's supported.
+
+00:38:16 So basically you can take a memory view of any kind of object that influence the buffer protocol.
+
+00:38:23 So like NumPy arrays and stuff like that and pass that memory view through to another interpreter and you can use it and it doesn't make a copy or anything.
+
+00:38:32 It actually uses the same underlying data.
+
+00:38:35 They actually get shared.
+
+00:38:36 - Oh, that's interesting.
+
+00:38:37 - Yeah, so there's, and I think there's even more room for that with other types, but we're starting small.
+
+00:38:45 But the key thing there is that, like you're saying, I mean, with coming up with different models and patterns and libraries, I'm sure they'll come up as people feel out really what's the easiest way to take advantage of these features.
+
+00:39:03 And that's the sort of thing that will apply not just to general free-threaded like no-gil, but also sub-interpreters.
+
+00:39:11 - Definitely, it's gonna be exciting.
+
+00:39:12 So I guess I wanna move on and talk about working with this in Python and the stuff that you've done, Anthony, but maybe a quick comment from the audience is Jazzy asked, "Is this built on top of a queue, which is built on top of linked lists?" Because I'm building this and my research led me to these data structures.
+
+00:39:29 I guess that's the communication across sub-interpreter, cross-interpreter communication.
+
+00:39:34 - Yeah, with sub-interpreters, like in PEPS 734, it's a queue implements the same interfaces as the queue from the queue module.
+
+00:39:42 But there's no reason why people couldn't implement whatever data structure they want for communicating between sub-interpreters.
+
+00:39:50 And then that data structure is in charge of preserving thread safety and so forth.
+
+00:39:55 - Yep, excellent.
+
+00:39:56 Yeah, it's not a standard queue.
+
+00:39:57 It's like a concurrent queue or something along those lines.
+
+00:40:00 - Yeah. - Yeah.
+
+00:40:01 All right, so all of this we've been talking about here is we're looking at this cool interpreter pool executor stuff that's in draft format, Anthony, for 3.13.
+
+00:40:12 And somehow I'm looking at this running Python parallel applications and sub-interpreters that you wrote.
+
+00:40:18 (Anthony laughs)
+
+00:40:19 What's going on here?
+
+00:40:20 How do you do this magic?
+
+00:40:21 - You need to know the secret password.
+
+00:40:24 So in Python-- - Right there, yeah.
+
+00:40:27 - In Python 3.12, the C API for creating sub-interpreters was included.
+
+00:40:36 And a lot of the mechanism for creating sub-interpreters was included.
+
+00:40:42 So there's also a, in CPython, there's a standard library, which I think everybody kind of knows.
+
+00:40:50 And then there are some hidden modules, which are mostly used for testing.
+
+00:40:56 So not all of them get bundled, I think, in the distribution.
+
+00:41:00 I think a lot of the test modules get taken out.
+
+00:41:03 But there are some hidden modules you can use for testing, 'cause a lot of the test suite for CPython has to test C APIs, and nobody really wants to write unit tests in C.
+
+00:41:14 So they write the tests in Python, and then they kind of create these modules that basically just call the C functions.
+
+00:41:21 And so you can get the test coverage and do the testing from Python code.
+
+00:41:25 So I guess, what was from PEP6, I can't remember, I look at too many PEP6, Eric will probably know.
+
+00:41:34 What is now PEP734?
+
+00:41:38 - But the Python interface to create subinterpreters, a version of that was included in 3.12.
+
+00:41:45 So you can import this module called _xx_subinterpreters.
+
+00:41:49 And it's called _xx 'cause it kind of indicates that it's experimental and it's underscore 'cause you probably shouldn't be using it.
+
+00:41:58 - It's not safe for work to me.
+
+00:41:59 I mean, I don't know.
+
+00:42:01 - But it provides a good way of people actually testing this stuff and seeing what happens if I import my C extension from a subinterpreter.
+
+00:42:13 So that's kind of some of what I've been doing is looking at, okay, what can we try and do in parallel?
+
+00:42:20 And this blog post, I wanted to try a WSGI or an ASGI web app.
+
+00:42:28 And the typical pattern that you have at the moment, and I guess how a lot of people would be using parallel code, but without really realizing it, is when you deploy a web app for Django Flask or FastAPI, you can't have one GIL per web server because if you've got one GIL per web server, you can only have one user per website, which is not great.
+
+00:42:54 So the way that most web servers implement this is that they have a pool of workers.
+
+00:42:59 G-Unicorn does that by spawning Python processes and then using the multiprocessing module.
+
+00:43:07 So it basically creates multiple Python processes all listening to the same socket.
+
+00:43:12 And then when a web request comes in, one of them takes that request.
+
+00:43:17 It also then inside that has a thread pool.
+
+00:43:19 So even basically a thread pool is better for concurrent code.
+
+00:43:25 So G-Unicorn normally is used in a multi-worker, multi-thread model.
+
+00:43:30 That's how we kind of talk about it.
+
+00:43:32 So you'd have the number of workers that you have CPU cores, and then inside that you'd have multiple threads.
+
+00:43:40 So it kind of means you can handle more requests at a time.
+
+00:43:43 If you've got eight cores, you can handle at least eight requests at a time.
+
+00:43:48 However, because most web code can be concurrent on the backend, like you're making a database query or you're reading some stuff from a file like that, that doesn't necessarily need to hold the GIL.
+
+00:44:00 So you can run it concurrently, which is why you have multiple threads.
+
+00:44:05 So even if you've only got eight CPU cores, you can actually handle 16 or 32 web requests at once because some of them will be waiting for the database server to finish running at SQL query or the API that it called to actually reply.
+
+00:44:20 So what I wanted to do with this experiment was to look at the multi-worker, multi-thread model for web apps and say, okay, could the worker be a sub-interpreter and what difference would that make?
+
+00:44:35 So instead of using multi-processing for the workers, could I use sub-interpreters for the workers?
+
+00:44:41 So even though the Python interface in 3.12 was experimental, it basically wanted to adapt Hypercorn, which is a web server for ASCII and WSGI apps in Python, wanted to adapt Hypercorn and basically start Hypercorn workers from a sub-interpreter pool and then seeing if I can run Django, Flask, and FastAPI in a sub-interpreter.
+
+00:45:04 So a single process, single Python process, but running across multiple cores and listening to web requests and basically running and serving web requests with multiple gills.
+
+00:45:15 So that was the task.
+
+00:45:16 - So in the article, you said you had started with a G-Unicorn and they just made too many assumptions about the web workers being truly sub-processes, but Hypercorn was a better fit, you said.
+
+00:45:28 - Yeah, it was easier to implement this experiment in Hypercorn.
+
+00:45:33 It had like a single entry point because when you start an interpreter, when you start a sub-interpreter, you need to import the modules that you want to use.
+
+00:45:42 You can't just say, run this function over here.
+
+00:45:46 You can, but if that function relies on something else that you've imported, you need to import that from the new sub-interpreter.
+
+00:45:53 So what I did with this experiment was basically start a sub-interpreter that imports Hypercorn, listens to the sockets, and then is ready to serve web requests.
+
+00:46:04 - Interesting, okay.
+
+00:46:05 And at a minimum, you got it working, right?
+
+00:46:07 - Yeah, it did a hello world.
+
+00:46:09 So we got that working.
+
+00:46:13 So I was, yeah, pleased with that.
+
+00:46:15 And then kind of started doing some more testing of it.
+
+00:46:19 So, you know, how many concurrent requests can I make at once?
+
+00:46:22 How does it handle that?
+
+00:46:23 What does my CPU core load look like?
+
+00:46:26 Is it distributing it well?
+
+00:46:27 And then kind of some of the questions are, you know, how do you share data between the sub-interpreters?
+
+00:46:35 So the minimum I had to do was each sub-interpreter needs to know which web socket should I be listening to?
+
+00:46:42 So like which network socket, once I've started, what port is it running on?
+
+00:46:46 And is it running on multiple ports?
+
+00:46:49 And which one should I listen to?
+
+00:46:50 So yeah, that's the first thing I had to do.
+
+00:46:52 - Nice.
+
+00:46:53 Can we just tell people real quick about just like, what are the commands like at the Python level that you look at in order to create an interpreter, run some code on it and so on?
+
+00:47:02 What's this weird world look like?
+
+00:47:04 - Derek, do you wanna cover that?
+
+00:47:06 - Yeah, there is a whole lot.
+
+00:47:08 I mean, if we talk about PEP 734, you have an interpreters module with a create function in it that returns you an interpreter object.
+
+00:47:18 And then once you have the interpreter object, you'll have, it has a function called run, or a method, interpreter object also has a method called exec.
+
+00:47:28 I'm trying to remember what it is.
+
+00:47:30 Exec sync, because it's synchronous with the current thread.
+
+00:47:34 And whereas exec run will create a new thread for you and run things in that there.
+
+00:47:40 So there's kind of different use cases.
+
+00:47:42 But it's basically the same thing.
+
+00:47:43 You have some code, currently supports, you give it a string with all your code on it, like you load it from a file or something.
+
+00:47:53 Basically, it's a script.
+
+00:47:55 It's gonna run in that subinterpreter.
+
+00:47:57 Alternately, you can give it a function.
+
+00:48:00 And as long as that function isn't a closure, doesn't have any arguments and stuff like that.
+
+00:48:05 So it's just like really basic, basically a script.
+
+00:48:09 If you got something like that, you can also pass that through, and then it runs it.
+
+00:48:14 And that's just about it.
+
+00:48:16 If you wanna get some results back, you're gonna have to manually pass them back kind of like you do with threads.
+
+00:48:21 But that's something people already understand pretty well.
+
+00:48:24 - Right, and create one of those channels, and then you just wait for it to exit and then read from the channel, something like that.
+
+00:48:29 Yeah, and so there's a way to say things like just run.
+
+00:48:33 And there's also a way to say, create an interpreter, and then you could use the interpreter to do things.
+
+00:48:38 And that lets you only pay the process like startup cost ones, right?
+
+00:48:44 - Yeah, yeah, and you can also, you can call that the run multiple times.
+
+00:48:49 And each time it kind of adds on to what ran before.
+
+00:48:52 So if you run some code that modifies things or import some modules and that sort of thing, those will still be there the next time you run some code in that interpreter, which is nice 'cause then if you got some startup stuff that you need to do one time, you can do that ahead of time right after you create the interpreter.
+
+00:49:10 But then in kind of your loop in your worker, then you run again and all that stuff is ready to go.
+
+00:49:16 - Oh, that's interesting.
+
+00:49:17 'Cause when I think about say my web apps, a lot of them talk to MongoDB and use Beanie and you go to Beanie and you tell it to like create a connection or a MongoDB client pool and it does all that stuff and then you just ambiently talk to it.
+
+00:49:31 Like go to that, you know, kind of like Django or whatever.
+
+00:49:33 Go to that class and do a query on it.
+
+00:49:35 You could run that startup code like once potentially and have that pool just hanging around for subsequent work.
+
+00:49:41 Nice.
+
+00:49:42 All right, let's see some more stuff.
+
+00:49:44 So you said you got it working pretty well, Anthony.
+
+00:49:48 And you said one of the challenges was trying to get it to shut down, right?
+
+00:49:51 - Mm.
+
+00:49:52 - Yeah.
+
+00:49:53 - Yeah, so in Python, when you start a Python process, you can press Control + C to quit, which is a keyboard interrupt.
+
+00:50:01 That kind of sends the interrupt in that process.
+
+00:50:06 All of these web servers have got like a mechanism for cleanly shutting down.
+
+00:50:12 'Cause you don't wanna just, if you press Control + C, you don't wanna just terminate the processes.
+
+00:50:17 'Cause when you write an ASCII app in particular, you can have like events that you can do.
+
+00:50:22 So people who've done FastAPI probably know the like the on events decorator that you can put and say when my app starts up, create a database connection pool and when it shuts down, then go and clean up all this stuff.
+
+00:50:35 So if the web servers decided to shut down for whatever reason, whether you've pressed Control + C or it just decided to close for whatever reason, it needs to tell all the workers to shut down cleanly.
+
+00:50:48 So signals, like the signals module doesn't work between sub-interpreters because it kind of, it sits in the interpreter state from what I understand.
+
+00:51:01 So what I did was basically use a channel so that the main worker, like the coordinator, when that had a shutdown request, it would send a message to all of the sub-interpreters to say, okay, can you stop now?
+
+00:51:15 And then it would kick off a job, basically tell Hypercorn in this case, to shut down cleanly, call any shutdown functions that you might have and then log a message to say that it's shutting down as well because the other thing is with web servers, if it just terminated immediately and then you looked at your logs and you were like, okay, why did the website suddenly stop working?
+
+00:51:38 And there was no log entries.
+
+00:51:39 It just went from I'm handling requests to just absolute silence.
+
+00:51:45 That also wouldn't be very helpful.
+
+00:51:47 So it needs to write log messages, it needs to call like shutdown functions and stuff.
+
+00:51:51 So what I did was, and this is, I guess, where it's kind of a bit of a turtles all the way down, but inside the sub-interpreter, I start another thread because if you have a polar, which listens to a signal on a channel, that's a blocking operation.
+
+00:52:09 So at the bottom of my sub-interpreter code, I've got, okay, run Hypercorn.
+
+00:52:15 So it's gonna run, it's gonna listen to Socket's web requests, but I need to also be able to run concurrently in the sub-interpreter, a loop which listens to the communication channel and sees if a shutdown request has been sent.
+
+00:52:30 So this is kind of maybe an implementation detail of how interpreters work in Python, but interpreters have threads as well.
+
+00:52:39 So you can start threads inside interpreters.
+
+00:52:42 So similar to what I said with g-unicorn and Hypercorn, how you got multi-worker, multi-thread, like each worker has its own threads.
+
+00:52:50 In Python, interpreters have the threads.
+
+00:52:53 So you can start a sub-interpreter and then inside that sub-interpreter, you can also start multiple threads and you can do coroutines and all that kind of stuff as well.
+
+00:53:04 So basically what I did is to start a sub-interpreter which also starts a thread and that thread listens to the communication channel and then waits for a shutdown request.
+
+00:53:12 - Right, tells Hypercorn, all right, you're done.
+
+00:53:16 We're out of here.
+
+00:53:17 Yeah, okay, interesting.
+
+00:53:18 Here's a interesting question from the audience, from Chris as well.
+
+00:53:22 It says, "We talked about the global kind of startup, "like if you run that once, it'll already be set.
+
+00:53:27 "And does that make code somewhat non-deterministic "in the sub-interpreter?" I mean, if you explicitly work with it, no.
+
+00:53:34 But if you're doing the pool, like which one do you get?
+
+00:53:36 Is it initialized or not?
+
+00:53:38 Eric, do you have an idea of a startup function that runs in the interpreter pool executor type thing or is it just they get doled out and they run what they run?
+
+00:53:48 - With concurrent features, it's already kind of a pattern.
+
+00:53:54 You have an initialized function that you can call that'll do the right thing and then you have your task that the worker's actually running.
+
+00:54:04 I don't know.
+
+00:54:09 I wouldn't say it's non-deterministic unless you have no control over it.
+
+00:54:14 I mean, if you wanna make sure that state progresses in an expected way, then you're gonna run your own sub-interpreters, right?
+
+00:54:23 But if you have no control over the sub-interpreters, you're just like handing off to some library that's using sub-interpreters.
+
+00:54:28 I would think it'd be somewhat not quite so important about whether it's deterministic or not.
+
+00:54:35 I mean, each time it runs, there are a variety of things.
+
+00:54:41 The whole thing could be kind of reset or you could make sure that anything that runs it, any part of your code that runs is careful to keep its state self-contained and therefore you preserve determinist behavior that way.
+
+00:54:58 - What I do a lot is I'll write code that'll say, if this is already initialized, don't do it again.
+
+00:55:05 So I talked about the database connection thing.
+
+00:55:07 If somebody were to call it twice, it'll say, well, looks like the connection's already not none, so we're good.
+
+00:55:13 You could just always run the startup code with one of these short circuit things that says, hey, it looks like on this interpreter, this is already done, we're good.
+
+00:55:21 But that would probably handle a good chunk of it right there.
+
+00:55:26 But we're back to this thing that Anthony said, right?
+
+00:55:28 Like we're gonna learn some new programming patterns potentially, yeah, quite interesting.
+
+00:55:33 So we talked at the beginning about how sub-interpreters have their own memory and their own module loads and all those kinds of things.
+
+00:55:40 And that might be potentially interesting for isolation.
+
+00:55:42 Also kind of tying back to Chris's comment here, this isolation is pretty interesting for testing, right, Anthony, like my test?
+
+00:55:51 So another thing you've been up to is working with trying to run pytest sessions in sub-interpreters.
+
+00:55:56 Tell people about that.
+
+00:55:57 - Yeah, so I started off with a web worker.
+
+00:56:01 One of the things I hit with a web worker was that I couldn't start Django applications and realized the reason was the, so the date/time module.
+
+00:56:13 So the C, the Python standard library, some of the modules are implemented in Python, some of them are implemented in C, but some of them are a combination of both.
+
+00:56:23 So some modules you import in the standard library have like a C part that's been implemented in C for performance reasons typically, or 'cause it needs some special operating system API that you can't access from Python.
+
+00:56:36 And then the front end is Python.
+
+00:56:38 So there is a list basically of standard library modules that are written in C that had some sort of global state.
+
+00:56:48 And then the core developers have been going down that list and fixing them up so that they can be imported from a sub-interpreter, or just marking them as not compatible with sub-interpreters.
+
+00:57:01 One such example was the Readline module that Eric and I were kind of working on last week and the week before.
+
+00:57:09 Readline is used for, I guess, listening to user input.
+
+00:57:13 So if you run the input built-in, Readline is one of the utilities it uses to listen to keyboard input.
+
+00:57:21 If you start, let's say you started five sub-interpreters at the same time and all of them did a Readline listen for input, like what would you expect the behavior to be?
+
+00:57:30 Which when you type in the keyboard, which-- - Yeah, exactly.
+
+00:57:33 - Yeah, where would you expect the letters to come out?
+
+00:57:35 So it kind of poses an interesting question.
+
+00:57:38 So Readline is not compatible with sub-interpreters, but we discovered like it was actually sharing a global state.
+
+00:57:46 So when it initialized, it would install like a callback.
+
+00:57:50 And what that meant was that even though it said it's not compatible, if you started multiple, it's in sub-interpreters that imported Readline, it would crash Python itself.
+
+00:58:00 The DateTime module is another one that needs fixing.
+
+00:58:05 It installs a bunch of global state.
+
+00:58:08 So yeah, DateTime was another one.
+
+00:58:10 So what I wanted to do is to try and test some other C extensions that I had.
+
+00:58:16 And just basically write a pytest extension, or pytest plugin, I guess, which you've got an existing pytest suite, but you want to run all of that in a sub-interpreter.
+
+00:58:28 And the goal of this is really that you're developing a C extension, you've written a test suite already for pytest, and you want to run that inside a sub-interpreter.
+
+00:58:41 So I'm looking at this from a couple of different angles, but I want to really try and use sub-interpreters in other ways, import some C extensions that have never even considered the idea of sub-interpreters and just see how they respond to it.
+
+00:58:54 Like Readline was a good example.
+
+00:58:57 Like, I think it was a, this won't work, but the fact that it crashed is bad.
+
+00:59:02 - How is it going to crash, right?
+
+00:59:03 Like what's happening there?
+
+00:59:05 - Yeah, so it should have kind of just said, this is not compatible.
+
+00:59:09 And then I was kind of uncovered a, and this is all super experimental as well.
+
+00:59:14 So like, this is not, you know, you've had to import the underscore XX module to even try this.
+
+00:59:21 So yeah, there's Readline, DateTime was another one.
+
+00:59:26 And so I put this sort of pytest extension together so that I could run some existing test suites inside sub-interpreters.
+
+00:59:33 And then the next thing that I looked at doing was, CPython has a huge test suite.
+
+00:59:42 So basically how all of Python itself is tested, the parser, the compiler, the evaluation loop, all of the standard library modules have got pretty good test coverage.
+
+00:59:55 So like when you compile Python from source or you make changes on GitHub, like it runs the test suite to make sure that your changes didn't break anything.
+
+01:00:04 Now, the next thing I kind of wanted to look at was, okay, can we, to try and kind of get ahead of the curve really on sub-interpreter adoption.
+
+01:00:15 So in 3.13, when PEP 734 lands, can we try and test all of the standard library inside a sub-interpreter and see if it has any other weird behaviors?
+
+01:00:26 And this test will probably apply to free threading as well, to be honest, because I think anything that you're doing like this, you're importing these C extensions, which always assumed that there was a big gill in place.
+
+01:00:41 If you take away that assumption, then you get these strange behaviors.
+
+01:00:44 So yeah, the next thing I've been working on is basically running the CPython test suite inside sub-interpreters and then seeing what kind of weird behaviors pop up.
+
+01:00:55 - I think it's a great idea 'cause obviously CPython is gonna need to run code in a sub-interpreter, run our code, right?
+
+01:01:00 So at a minimum, the framework, interpreter, all the runtime bits, that should all hang together, right?
+
+01:01:06 - Yeah, there are some modules that doesn't make sense to run in sub-interpreters, Readline was an example.
+
+01:01:11 - Some TKinterp maybe.
+
+01:01:14 - Yeah, yeah, possibly.
+
+01:01:15 - Maybe not actually, I don't know.
+
+01:01:18 - Yeah, if you think about like, if you got, when you're doing GUI programming, right, you're gonna have kind of your core stuff running the main thread, right?
+
+01:01:27 And then you hand off, you may have sub-threads doing some other work, but the core of the application, think of it as running in the main thread.
+
+01:01:36 - Yeah, absolutely.
+
+01:01:37 - I think of applications in that way.
+
+01:01:38 And there are certain things that you do in Python, standard library modules that really only make sense with that main thread.
+
+01:01:46 So supporting those in sub-interpreters isn't quite as meaningful.
+
+01:01:51 - Yeah, I can't remember all the details, but I feel like there's some parts of Windows itself, some UI frameworks there that required that you access them on the main program thread, not on some background thread as well, 'cause it'd freak things out.
+
+01:02:05 So it seems like not unusable.
+
+01:02:07 - Yeah, same is true.
+
+01:02:08 Like the signal module, I remember at exit, a few others.
+
+01:02:12 - Excellent.
+
+01:02:13 All right, well, I guess let's, we're getting short on time.
+
+01:02:15 Let's wrap it up with this.
+
+01:02:17 So the big thing to keep an eye on really here is PEP 734, because that's when this would land, this, you're no longer with the underscore XX sub-interpreter and you're just working with the interpreter's sub-module.
+
+01:02:32 - Yeah, 313.
+
+01:02:33 - Yeah, so right now it's in draft.
+
+01:02:35 Like what's it looking like?
+
+01:02:37 If it'll be in 313, it'll be in 313 alpha something, some beta something.
+
+01:02:42 Like when is this gonna start looking like a thing that is ready for people to play with?
+
+01:02:46 - So I, yeah, this PEP, I went through and did a massive cleanup of PEP 554, which is why I made a new PEP for it, and simplified a lot of things, clarified a lot of points, had lots of good feedback from people, and ended up with what I think is a good API, but it was a little different in some ways.
+
+01:03:07 So I've had the implementation for PEP 554 mostly done and ready to go for years.
+
+01:03:13 And so it was a matter, it's been a matter of now that I have this updated PEP up, going back to the implementation, tweaking it to match, and then making sure everything still feels right.
+
+01:03:26 Try and use it in a few cases, and if everything looks good, then go ahead and I'll start a discussion on that.
+
+01:03:33 I'm hoping within the next week or two to start up a round of discussion about this PEP, and hopefully we won't have a whole lot of back and forth so I can get this over to the steering councils in the near future.
+
+01:03:46 - Well, the hard work has been done already, right?
+
+01:03:48 The C layer is there and it's accepted and it's in there.
+
+01:03:53 Now it's just a matter of what's the right way to look at it from Python, right?
+
+01:03:56 - And one thing to keep in mind is that I'm planning on backporting the module to Python 3.12 just so that we have a printer per gallon 3.12, so it'd be nice if people could really take advantage of it.
+
+01:04:10 - I see, so for that one, we'd have to pip install it or would it be added as?
+
+01:04:14 - Yeah, pip install.
+
+01:04:15 - Okay.
+
+01:04:16 - I probably won't support before 3.12.
+
+01:04:19 Subinterpreters have been around for decades, but only through the C API.
+
+01:04:23 But that said, I doubt I'll backport this module past 3.12.
+
+01:04:29 So just 3.12 and up.
+
+01:04:30 - And that's more than I expected anyway, so that's pretty cool.
+
+01:04:33 All right, final thoughts, you guys, what do you wanna tell people about this stuff?
+
+01:04:38 - Personally, I'm excited for where everything's going.
+
+01:04:41 It's taken a while, but I think we're getting to a good place.
+
+01:04:46 It's interesting with all the discussion about no-gil, it's easy to think, oh, then why do we need subinterpreters?
+
+01:04:51 Or if we have subinterpreters, why do we need no-gil?
+
+01:04:54 But they're kind of different needs, they're meeting.
+
+01:04:57 The most interesting thing for me is that what's good for no-gil is good for subinterpreters and vice versa.
+
+01:05:04 That no-gil probably really wouldn't be possible without a lot of the work that we've done to make a per-interpreter gil possible.
+
+01:05:13 So I think that's one of the neat things, that the future's looking bright for Python multi-core.
+
+01:05:20 And I'm excited to see where people go with all these things that we're adding.
+
+01:05:24 - Anthony, when's the subinterpreter programming design patterns book coming out?
+
+01:05:29 - Yeah, my thoughts are, I will, there's a, subinterpreters are mentioned in my book actually, when it was like Python 3.9, I think.
+
+01:05:40 'Cause it was possible then, but it's changed quite a lot since.
+
+01:05:45 I guess some thoughts to leave people with, I think if you're a maintainer of a Python package or a C extension module in a Python package, there's gonna be a lot more exotic scenarios for you to test coming in the next year or so.
+
+01:06:03 And some of those uncover things that you might've done or just kind of relied on the gill with global state, where that's not really desirable anymore and you're gonna get bugs down the line.
+
+01:06:18 So I think with any of that stuff as a package maintainer, you want to test as many scenarios as you can so that you can catch bugs and fix them before your users find them.
+
+01:06:27 So if you are a package maintainer, there's definitely some things that you can start to look at now to test in that's available in 3.12, 3.13 alpha two is at least probably the one I've tried to be honest.
+
+01:06:40 And if you're a developer, not necessarily a maintainer, then I think this is a good time to start reading up on like parallel programming and how you need to design parallel programs.
+
+01:06:54 And that those kinds of concepts are the same across all languages and Python would be no different.
+
+01:07:01 We just have different mechanisms for starting parallel work and joining it back together.
+
+01:07:06 But if you're interested in this and you want to run more code in parallel, and there's definitely some stuff to read and some stuff to learn about in terms of signals, pipes, queues, sharing data, how you have locks and where you should put them, how deadlocks can occur, things like that.
+
+01:07:27 So all of that stuff is the same in Python as anywhere else.
+
+01:07:29 We just have different mechanisms for doing it.
+
+01:07:32 - All right, well, people have some research work and I guess a really, really quick final question, Eric, and then we'll wrap this up.
+
+01:07:39 Following up on what Anthony said, like test your stuff, make sure it works in a sub-interpreter.
+
+01:07:43 If for some reason you're like, my code will not work in a sub-interpreter and I'm not ready yet, is there a way to determine that your code is being run in a sub-interpreter rather than regularly from your Python code?
+
+01:07:54 - Yeah, if you have an extension module that supports sub-interpreters, then you will have updated your module to use what's called multi-phase init.
+
+01:08:05 And that's something that shouldn't be too hard to look up.
+
+01:08:09 I think I talked about it in the pep.
+
+01:08:11 If you implement multi-phase init, then you've already done most of the work to support a sub-interpreter.
+
+01:08:17 The, if you haven't, then your module can't be imported in a sub-interpreter.
+
+01:08:24 It'll actually fail with an import error if you try and import it in a sub-interpreter or at least a sub-interpreter that has its own GIL.
+
+01:08:31 There are ways to create sub-interpreters that still share a GIL and that sort of thing.
+
+01:08:35 But you just won't be able to import it at all.
+
+01:08:39 So like the readline module can't be imported in sub-interpreters.
+
+01:08:44 The issue that Anthony ran into is kind of a subtle side effect of the check that we're doing.
+
+01:08:52 So, but really it boils down to if you don't implement multi-phase init, then you won't be able to import the module.
+
+01:09:00 You'll just get an importer.
+
+01:09:02 So that's, I mean, it makes it kind of straightforward.
+
+01:09:05 - Yeah, sounds good.
+
+01:09:06 More opt-in than opt-out.
+
+01:09:08 - Yep. - Right on.
+
+01:09:08 All right, guys, thank you both for coming back on the show and awesome work.
+
+01:09:13 This is looking close to the finish line and exciting.
+
+01:09:16 - Thanks, Michael. - Yep, see y'all.
+
+01:09:18 - This has been another episode of "Talk Python to Me." Thank you to our sponsors.
+
+01:09:23 Be sure to check out what they're offering.
+
+01:09:24 It really helps support the show.
+
+01:09:26 Are you ready to level up your Python career?
+
+01:09:29 And could you use a little bit of personal and individualized guidance to do so?
+
+01:09:34 Check out the PyBytes Python Developer Mindset program at talkpython.fm/pdm.
+
+01:09:42 Take some stress out of your life.
+
+01:09:43 Get notified immediately about errors and performance issues in your web or mobile applications with Sentry.
+
+01:09:49 Just visit talkpython.fm/sentry and get started for free.
+
+01:09:54 And be sure to use the promo code talkpython, all one word.
+
+01:09:58 Want to level up your Python?
+
+01:10:00 We have one of the largest catalogs of Python video courses over at Talk Python.
+
+01:10:04 Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+01:10:09 And best of all, there's not a subscription in sight.
+
+01:10:11 Check it out for yourself at training.talkpython.fm.
+
+01:10:15 Be sure to subscribe to the show.
+
+01:10:16 Open your favorite podcast app and search for Python.
+
+01:10:19 We should be right at the top.
+
+01:10:21 You can also find the iTunes feed at /iTunes, the Google Play feed at /play, and the Direct RSS feed at /rss on talkpython.fm.
+
+01:10:30 We're live streaming most of our recordings these days.
+
+01:10:33 If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+01:10:41 This is your host, Michael Kennedy.
+
+01:10:43 Thanks so much for listening.
+
+01:10:44 I really appreciate it.
+
+01:10:45 Now get out there and write some Python code.
+
+01:10:48 (upbeat music)
+
+01:11:04 [MUSIC]
+
