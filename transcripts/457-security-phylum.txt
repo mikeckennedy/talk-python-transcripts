@@ -1,0 +1,1444 @@
+00:00:00 We've spoken previously about security and software supply chains, and we're back at it
+
+00:00:04 on this episode. We're diving in again with Charlie Coggins. Charlie works at a software
+
+00:00:09 supply chain company and is on the episode to give us an insider's look and a defender's
+
+00:00:15 perspective on how to keep our Python apps and infrastructure safe. This is Talk Python to Me,
+
+00:00:21 episode 457, recorded January 24th, 2024. Welcome to Talk Python to Me, a weekly podcast on Python.
+
+00:00:43 This is your host, Michael Kennedy. Follow me on Mastodon, where I'm @mkennedy, and follow the
+
+00:00:48 podcast using @talkpython, both on mastodon.org. Keep up with the show and listen to over seven
+
+00:00:54 years of past episodes at talkpython.fm. We've started streaming most of our episodes live on
+
+00:01:00 YouTube. Subscribe to our YouTube channel over at talkpython.fm/youtube to get notified about
+
+00:01:06 upcoming shows and be part of that episode. This episode is brought to you by Sentry. Don't let
+
+00:01:12 those errors go unnoticed. Use Sentry like we do here at Talk Python. Sign up at talkpython.fm/sentry.
+
+00:01:20 And it's brought to you by MailTrap, an email delivery platform that developers love. Use their
+
+00:01:25 email sandbox to inspect and debug emails in staging, dev, and QA environments before sending
+
+00:01:31 them to recipients in production. Try MailTrap for free at talkpython.fm/mailtrap. Hey, Charlie,
+
+00:01:38 welcome to Talk Python and Me. Hi, Michael. Great to have you here. We have corresponded back and
+
+00:01:44 forth about security things. And now, are you here to scare us? Is that what's going to happen?
+
+00:01:49 It's going to seem that way. There are threats everywhere, especially when you start looking.
+
+00:01:55 And that's the problem. You look, you'll find them. If you're not looking, you might get
+
+00:02:00 affected without even knowing it. Yeah, but that's true. But we're also going to come with
+
+00:02:05 some tools and techniques and tips on how to avoid security problems with your Python code.
+
+00:02:11 Yes, absolutely. Yeah. I think it's especially concerning. That certainly catches my attention
+
+00:02:18 that if you mess with somebody's software, like the software builders, the developers,
+
+00:02:25 it gets shipped to however many users are on the other side of that equation, right? It's not like
+
+00:02:30 I just took over some teenager's gaming PC and now what can I do? It's like, I took over, name
+
+00:02:37 your big web app, and now we're going to start shipping some stuff around. All right. That's
+
+00:02:42 where the multiplicative aspect of this gets more concerning than just standard personal computer
+
+00:02:49 safety, right? Oh, absolutely. A single developer can have very broad impacts. Maybe they publish
+
+00:02:58 one package, but that one package could be included in hundreds, thousands of other packages as a
+
+00:03:04 dependency. And then everyone using those packages could be affected. Whether the code is good and
+
+00:03:11 works as intended or poorly written and has bugs and vulnerabilities. Yeah. It's malicious.
+
+00:03:16 It's not to say there's any chance of there being a problem with Pydantic, but just to make your
+
+00:03:21 point, if you go to like Pydantic or request or something like that, a lot of these have
+
+00:03:26 used by projects, right? And this Pydantic is used by 315,000 people, not people, software
+
+00:03:34 projects that themselves have users, right? And so that's the kind of stuff that I'm thinking
+
+00:03:39 about when I said that multiplicative effect, right? It's a big multiplier, not just a couple.
+
+00:03:44 Oh yeah. Yeah, for sure. Yeah. Now, before we dive into our main topic, of course,
+
+00:03:49 tell people a bit about yourself. All right. Well, my name is Charles Coggins. I usually go by
+
+00:03:54 Charlie and I'm a Python developer. I'm a software developer, but not through the traditional sense.
+
+00:04:01 I don't have a computer science degree. I didn't come to this straight out of school. I got my
+
+00:04:08 first taste of programming long enough ago, back in the '80s, in 1987. My dad got a computer for
+
+00:04:16 us and I was messing around on there with some games, always with games, right? When at the time
+
+00:04:24 it was basic, it was this bowling game that my brother and I would play. And I saw that I could
+
+00:04:29 look at the code, I could look at the source. And I went in there and modified it a bit to make it
+
+00:04:34 so that I would always win whenever I played them. But then-
+
+00:04:38 How long did it take him to catch on?
+
+00:04:40 Oh, he figured out pretty quickly. And he was in there too, changing ball speed and how often he
+
+00:04:46 could get a gutter or make him get a gutter. But yeah, I took a class or two in high school and
+
+00:04:53 college, but I was an electrical engineering major and then went to work for the government
+
+00:04:59 doing something that wasn't even really that. So I spent 10 years working for the government before
+
+00:05:07 they stood up the US Cyber Command and decided or figured out that they needed to hire 6,000 new
+
+00:05:17 developers to fill the positions. And there weren't that many available in the industry,
+
+00:05:23 let alone those who could pass the clearances and work in that environment. So they looked to
+
+00:05:29 people already working in the government and I raised my hand. I said, "Yes, yes, I want to
+
+00:05:33 cross-train. I'll be a developer." And so they trained me.
+
+00:05:38 What did they teach you for language in that program?
+
+00:05:41 We started with C, C++, and then there was some Python. So I went through a couple of boot camps
+
+00:05:49 and a lot of self-learning, self-teaching. Python's the one that really clicked for me.
+
+00:05:54 It just made sense in my head.
+
+00:05:56 Yeah, of course. If you're learning to do cybersecurity stuff, you know, a lot of times
+
+00:06:01 I'd be happy to tell people like, "Ah, you don't really need to learn C or Rust or Java." If you
+
+00:06:07 just know Python, you're probably 90% of the time golden. But if you're trying to do cybersecurity,
+
+00:06:14 a lot of times it's about the machine level stuff, right? Understanding things like C and
+
+00:06:19 pointers and buffer overflows and all of that kind of stuff is where you actually kind of need to be.
+
+00:06:24 And they taught us all that as well. In fact, we learned assembly language as well,
+
+00:06:29 and that one really didn't fit in my brain.
+
+00:06:32 You're like, "I want to become an assembly language programmer." I mean, yeah, that's a whole different breed.
+
+00:06:41 Yeah, it sure is. And it used to be, I remember when I first got into programming, I was doing
+
+00:06:48 some C, C++, and inline assembly was something people would do a lot to optimize. A lot like
+
+00:06:54 people might do Cython or Numba or something like that to make Python fast. Like, "We'll find this
+
+00:06:59 little part and we'll rewrite it in this way." And be like, "We're just going to do inline
+
+00:07:02 assembly." I'm like, "That just doesn't seem like worthwhile. I don't need that much performance.
+
+00:07:08 We're going to not do that." Fun. So now you're working at Phylum. Is it Python-focused or just software security?
+
+00:07:20 It's not Python-focused. In fact, the company primarily develops with Rust, as you were
+
+00:07:28 mentioning. We've got some excellent Rust developers at our company, and I think that's
+
+00:07:35 what's attracted a lot of them is that that is the primary language we use. But we also have some
+
+00:07:42 developments in Python. And when I came on board, I got assigned to work on our integrations.
+
+00:07:48 So like GitHub integrations, GitLab, pre-commit hooks, things like that. And so I was able to
+
+00:07:58 kind of architect it the way I thought best. And because I love Python, I made it all in Python and
+
+00:08:04 exposed it through Docker containers.
+
+00:08:07 Are you doing direct integration with Rust, like Py03? Or is it more just issuing commands out?
+
+00:08:18 The Rust elements that our company works on, like our API, the command line interface,
+
+00:08:24 a lot of the backend, it's just written straight Rust. And then the Python is just plain Python.
+
+00:08:30 There's no interface between the two, really.
+
+00:08:33 Yeah. Okay. Consuming APIs and Docker containers and stuff like that.
+
+00:08:38 Right, right, right. Although I am interested in the Py03, and I think there's room to
+
+00:08:44 bridge the two languages at our company.
+
+00:08:48 I mean, for sure, people are adopting Rust for the performance foundations of Python.
+
+00:08:54 It's pretty interesting.
+
+00:08:57 Yeah, yeah. I've been at the company almost two years now. I keep saying it's what I'm
+
+00:09:03 going to learn next, is Rust. And I felt like I would just kind of absorb it by going through
+
+00:09:08 code reviews and the people on my team. It hasn't happened yet. I can kind of understand what's
+
+00:09:13 going on by reading it, but I just, yeah, I need to jump in.
+
+00:09:16 Deaf in, deaf, okay, got it. Those are the same. Okay, got it.
+
+00:09:19 Yeah, yeah.
+
+00:09:20 No, it's interesting. Okay. Well, we're not here to talk about Rust, although I do think
+
+00:09:26 it's becoming one of those things that is sort of, I don't know, if you need to be a little
+
+00:09:31 one level deeper in the Python space, that used to be C, and now it's, I think it's pretty solidly
+
+00:09:37 moving to be Rust, right? There's a lot of popular things, gigantic, for example, I pulled up earlier, where that's the foundation,
+
+00:09:44 but that also seems to be where the momentum is.
+
+00:09:46 Yeah. The oxidation of Python libraries is a real thing. I mean, look at Ruff.
+
+00:09:52 Yeah. Ruff. I just heard about how Granium, I think it was, which is a new, similar to
+
+00:10:02 G-Unicorn and MicroWizky is a Rust-based async server. It goes on and on.
+
+00:10:10 This portion of Talk Python to Me is brought to you by OpenTelemetry support at Sentry.
+
+00:10:15 In the previous two episodes, you heard how we use Sentry's error monitoring at Talk Python,
+
+00:10:21 and how distributed tracing connects errors, performance and slowdowns and more
+
+00:10:26 across services and tiers. But you may be thinking, our company uses OpenTelemetry,
+
+00:10:31 so it doesn't make sense for us to switch to Sentry. After all, OpenTelemetry is a standard,
+
+00:10:37 and you've already adopted it, right? Well, did you know, with just a couple of lines of code,
+
+00:10:42 you can connect OpenTelemetry's monitoring and reporting to Sentry's backend. OpenTelemetry
+
+00:10:48 does not come with a backend to store your data, analytics on top of that data, a UI,
+
+00:10:53 or error monitoring. And that's exactly what you get when you integrate Sentry with your
+
+00:10:58 OpenTelemetry setup. Don't fly blind, fix and monitor code faster with Sentry. Integrate your
+
+00:11:04 OpenTelemetry systems with Sentry and see what you've been missing. Create your Sentry account
+
+00:11:09 at talkpython.fm/sentry-telemetry. And when you sign up, use the code TALKPYTHON, all caps,
+
+00:11:16 no spaces. It's good for two free months of Sentry's business plan, which will give you
+
+00:11:21 20 times as many monthly events as well as other features. My thanks to Sentry for supporting
+
+00:11:26 Talk Python to me. All right, well, let's talk about software security, though. You know, like,
+
+00:11:33 we touched on it a little bit with the multiplicative aspect of like why software
+
+00:11:37 developers should care. But maybe let's start with some ways in which viruses might get on
+
+00:11:44 your computer from a software perspective. Not from like, "Oh, you know, I found this cool app
+
+00:11:49 on BitTorrent and normally it's paid, but this one's free." It's like, "Hmm, maybe don't install
+
+00:11:53 that." But, you know, not that kind of advice, right? But, you know, specifically for software
+
+00:11:58 developers. Right, right. So for software developers, I think the primary
+
+00:12:03 vector, you know, for malicious code running in your environment or really any developer
+
+00:12:10 environment along the way, it doesn't just have to be your system. It could be your CI/CD servers
+
+00:12:15 and your runners. It's going to be software dependencies, third-party code, right?
+
+00:12:21 Code from strangers on the internet, right? That's really what it boils down to.
+
+00:12:26 They just, Charlie, they're just here to help out. They're just giving you the code to help out.
+
+00:12:32 They have no bad intentions. Right, right. Except for that one. That one over there, don't take it.
+
+00:12:37 Yeah. And it's hard to tell, you know, what's good, what's bad. And I think we all rely on
+
+00:12:48 third-party code. I mean, I think it's a rare company, rare project that writes everything
+
+00:12:54 from scratch on their own without any dependencies. So that's a vector for sure, is allowing code from
+
+00:13:04 strangers on the internet to run. I think like the name of the game, right, for attackers and
+
+00:13:11 threat actors is arbitrary code execution. Like that's the key phrase, arbitrary code execution.
+
+00:13:17 If I can get arbitrary code execution with this vulnerability, then I've won. I can attack your
+
+00:13:23 score of nine or above. So right there. Yeah, exactly. And that's for vulnerabilities. That's
+
+00:13:29 just, you know, poorly written code or code with bugs. But forget about vulnerabilities. I mean,
+
+00:13:35 if you're an attacker, you're a threat actor, you've already got the perfect means to run
+
+00:13:40 arbitrary code, to gain arbitrary code execution on a developer system. That's with third-party
+
+00:13:46 dependencies. Open source software is just the perfect target for writing malware.
+
+00:13:53 You're slipping malware into packages.
+
+00:13:56 Now, when people hear this, we've talked about it enough. It actually came as quite a surprise
+
+00:14:01 a few years ago. People theoretically knew that it could happen, but that it was happening is that
+
+00:14:07 packages on package stores like PyPI and NPM and so on got published vulnerabilities that people
+
+00:14:14 could then install and make part of theirs. But there's a whole software supply chain, right?
+
+00:14:19 Maybe talk us through some of the different elements that make that up. Only one of which
+
+00:14:23 is these libraries, right? That's right. That's right. So the software supply chain is, it's
+
+00:14:29 really, it's using third-party code securely, as well as securing the end-to-end development process.
+
+00:14:35 So that process is, you know, very broadly broken into three phases. You've got the source phase,
+
+00:14:43 that's, you know, source control management systems, and then actual, actually coding,
+
+00:14:49 developers coding on their systems, you know, committing to repositories.
+
+00:14:54 Yeah. You know, you mentioned the dependencies like pip install this or that. There's also,
+
+00:15:02 for many of the really popular IDs and editors, there's a whole massive array of variants,
+
+00:15:09 levels of trusted plugins or extensions, right? As well.
+
+00:15:14 That's right. Yeah. Like Visual Studio Code. That's what I use for my IDE. You know, it's got
+
+00:15:19 an extensive extension ecosystem. Just about anything you want to do. I get a little pop-up
+
+00:15:27 when I open a new project and it says, "Oh, I recognize you're using a YAML file. Do you want
+
+00:15:31 to download this extension that will lint YAML files?" Right? Like, there's an extension for that.
+
+00:15:35 Yeah. I got one for CVEs. It was like rainbow CSV syntax highlighter. So then I'm like,
+
+00:15:42 "You know what? That's not really made by a trusted company. It's probably fine.
+
+00:15:47 But I don't need my CSV files highlighted so much so that I'm willing to just like run
+
+00:15:54 arbitrary code from a stranger on the internet." That's right.
+
+00:15:58 Right. And, you know, I use both PyCharm and VS Code and they both, especially PyCharm, has sort of a warning that says, "This is untrusted. It's a third-party
+
+00:16:08 thing. Are you sure you want it?" Like, you know, that's a pretty light warning.
+
+00:16:12 And also they're not the same, right? Is it installed by a million people
+
+00:16:17 used every day or is it for you the fourth person to use it? And it hasn't, you know,
+
+00:16:22 had the experience of people going, "Why is it called opening a network socket? What's it doing?"
+
+00:16:28 You know, something like that.
+
+00:16:31 Yeah. Yeah. That's another entry point that you got to be careful about.
+
+00:16:36 All right. Well, I cut you off. We're only in like square one of maybe nine.
+
+00:16:40 Yeah. Yeah. Square one, source code, and then there's the build phase. That's where
+
+00:16:47 you take the code, you take the commits that have gone into source control,
+
+00:16:50 and you build something with it, right? This usually happens in, you know, your CI/CD systems,
+
+00:16:57 GitHub, GitHub's and GitLabs of the world. And it's at that point where, you know,
+
+00:17:05 your third-party dependencies get included and wrapped up into your artifacts, right?
+
+00:17:12 Which brings us to the third stage of the software supply chain, which is the package and deploy
+
+00:17:20 phase. That's where you're creating your artifacts and making them available to the world to use.
+
+00:17:28 Could be anything. It could be a wheel for a library that other parts of your company use
+
+00:17:33 to build software. It could be some app you ship. It could actually be a website, an API,
+
+00:17:39 who knows, right?
+
+00:17:40 Yeah. A Docker container. Yeah.
+
+00:17:43 Yeah. Yeah, exactly.
+
+00:17:44 And then by the time you get to that, you know, the end of the supply chain and, you know,
+
+00:17:50 the products or the packaged product that people are going to see and use and work with,
+
+00:17:57 you know, you've baked in so many elements at that point, you know, from your third-party
+
+00:18:02 dependencies to, you know, any other external resources that are getting called. So there's
+
+00:18:13 lots of points along the way that it's possible to...
+
+00:18:16 And one of the things that can be sneaky is, you know, it doesn't happen that often in Python,
+
+00:18:23 but you're shipping like a Windows or a Mac app. There's a digital signature roof of,
+
+00:18:29 we're going to sign this with our trusted certificate. So it doesn't even give you
+
+00:18:33 any warnings. Like, look, this is, it's signed by the company. It is trusted. Here you go.
+
+00:18:38 Pick it. Right. And somewhere upstream from that, there's an issue like with packages or other
+
+00:18:45 things. Well, that issue is now that that problem is signed and verified as well.
+
+00:18:50 Yeah. Yeah. You know, so you mentioned code signing, the research team at our company,
+
+00:18:57 I mean, they're amazing, amazing group there. They're always finding new and novel attacks.
+
+00:19:03 And when they found just this past week, involved something kind of cool where the attacker had
+
+00:19:11 bundled up a valid Microsoft binary, had been signed by Microsoft, but they bundled it with
+
+00:19:19 the DLL that was malicious. It was named something to be expected. Right. So when you run the
+
+00:19:27 executable on the binary, you know, you could see that there's this Microsoft signs application
+
+00:19:35 looking for permissions, looking to continue. And you think, oh yeah, great. Signed by Microsoft,
+
+00:19:39 no problem. But then it uses this technique called like DLL search order hijacking
+
+00:19:47 technique. Right. So if you have a DLL that's being called by the application more locally
+
+00:19:53 than not, it's looking for the same directory. Yeah. It'll look like looking for the name of
+
+00:20:00 the DLL in the same directory first, basically is what's happening. Right. Right. It shipped
+
+00:20:06 their bad DLL with a good binary. So you pick something in system 32 that's got like a real
+
+00:20:13 common name, like VC runtime, whatever, dot DLL, or, you know, some of the standard ones,
+
+00:20:20 but then you completely reprogram it and stick it in there with that app. Or maybe not completely
+
+00:20:25 because you need the app to not crash, but you give it some extra boost when it does something.
+
+00:20:30 Right. Yeah. Yeah. In this case, they had just copied all the files needed for execution into
+
+00:20:36 a new directory, including the known good binary, the known bad DLL, and then, you know,
+
+00:20:42 it had everything it needed in that directory to run. And it looked like it was legitimate.
+
+00:20:45 Right. A lot of the OS dependent, a lot of these OS checks are on the executable,
+
+00:20:51 the system libraries that they use. Right. Right. Right. You'll see like this, this executable is
+
+00:20:56 downloaded from the internet to show you want to run it. Like that doesn't say this executable,
+
+00:21:01 which you trust is maybe possibly using a library that you downloaded. Like it doesn't say that.
+
+00:21:06 Right. Yeah. Cause we could never get work done if there was that level of checking all over the
+
+00:21:11 place. This is an updated somewhere. This portion of talk Python to me is brought to you by MailTrap.
+
+00:21:19 We're going to keep this super short. So please pay attention or you'll miss it. MailTrap is an
+
+00:21:23 email delivery platform that developers love. An email sending solution with industry best analytics,
+
+00:21:29 SMTP, and email APIs and SDKs for major programming languages with 24/7 human support. What makes
+
+00:21:36 them unique is their email sandbox. Use email sandbox to inspect and debug emails in staging
+
+00:21:42 dev and QA environments before sending them to recipients in production. Try MailTrap for free
+
+00:21:48 at talkpython.fm/mailtrap. That's kind of the space that we're talking about, right? We've got
+
+00:21:56 editors, we've got libraries that you use, CI/CD pipelines, containers are super interesting as
+
+00:22:04 well, and all the tools to go with those. So let's talk through some of the posts that you've
+
+00:22:10 written and also just selected about some of these things and maybe starting to the front of that
+
+00:22:15 list there with lock files. Yeah. Okay. So yes, I wrote a blog post. I guess it's looking at the
+
+00:22:23 date on your screen. It looks like it was over a year ago now. And probably seems like yesterday,
+
+00:22:28 but no. Yeah, that's right. 2022 it was. So I'm sure the landscape has changed since then a bit,
+
+00:22:34 and maybe there's some new players out there. But yeah, I think one thing you can do as a
+
+00:22:41 developer, a big one I would recommend is use lock files for your dependencies, right? And
+
+00:22:50 what's a lock file? Well, it's the fully resolved set of dependencies that are used
+
+00:22:59 by your application, your package. And if nothing else, you should know what's going into your code,
+
+00:23:09 right? Not just your direct code. Yeah, exactly. That's a bit of a challenge, right? And I think
+
+00:23:17 I'll admit when I first got into Python, I didn't do this that well. And to me, it felt like probably
+
+00:23:23 the biggest issue I might run into is instability in my app, right? Like for example, if I don't
+
+00:23:28 pin a dependency, some new thing comes out, I reinstall it on a new computer, maybe it gets an
+
+00:23:34 upgraded version, and there's some library that doesn't work, right? I mean, there's been certainly
+
+00:23:38 popular libraries that just said, we're having a major version change and we're fixing the mistakes
+
+00:23:43 we made 10 years ago, and these three functions are changing or whatever, right? That would break
+
+00:23:48 it. But it could also be there's now a malicious version of library X, that's version two. But if
+
+00:23:55 you pinned it on version one, even though it's bad, you're still not getting the bad one, at least
+
+00:24:00 for a while, right? Absolutely, yes. So I think I gotta look it up. I always forget. PEP 665.
+
+00:24:09 Okay. Yeah, PEP 665. It's a rejected PEP, unfortunately, but it was written by Brett
+
+00:24:16 Cannon, some others. I know you've had Brett on the show a number of times. I love the stuff he
+
+00:24:22 does. He really understands all of this. And it's kind of a shame this was rejected, but this PEP
+
+00:24:27 tried to create a standard lock file format for Python. And if you look into the PEP a little
+
+00:24:38 bit, there's some motivation about why you'd want to do this and four big reasons. And the third one
+
+00:24:43 is one I really key on, which is that lock files allow for reproducibility. And reproducibility is
+
+00:24:50 just more secure. I'm quoting here from the PEP, it says, "When you control exactly what files are
+
+00:24:55 installed, you can make sure no malicious actor is attempting to slip nefarious code into your
+
+00:25:00 application, i.e. some supply chain attacks. By using a lock file, which always leads to
+
+00:25:05 reproducible installs, we can avoid certain risks entirely." And I mean, that's the name of the game.
+
+00:25:12 That's what our company focuses on, which is avoiding those risks by ensuring you know which
+
+00:25:21 dependencies you're using and you're knowing that those dependencies are benign or good,
+
+00:25:26 doing no harm.
+
+00:25:27 Even if there's something that happens, usually it's going to happen to a popular library because
+
+00:25:34 you're using it, hence probably other people are using it other than type of squatting,
+
+00:25:39 which we can talk about. But if you pin your dependencies, chances are these things only
+
+00:25:46 stick around for a little while. It's not like, "Oh, they discovered it had been there for eight
+
+00:25:49 months." It's like, "Oh my gosh, we heard about it. A few people got it and then we got rid of it."
+
+00:25:54 Right?
+
+00:25:55 Yes.
+
+00:25:55 The folks at PyPA are pretty excellent. So it's to some degree a timing issue as well.
+
+00:26:00 Yes. Vulnerabilities are different, right? That's what a lot of people focus on. A lot of the
+
+00:26:06 tooling exists to discover vulnerabilities in your dependencies, which is good to know about those,
+
+00:26:13 but those exist for a long time, right? You have CVEs for known vulnerabilities and they end up in
+
+00:26:19 these databases and they're there for years. And if you're using old dependencies or maybe
+
+00:26:25 transitive dependencies are using old ones and you're stuck on it, then you're going to be
+
+00:26:30 exposed to those vulnerabilities. But what's different about-
+
+00:26:32 Examples. Sorry. Examples of those include the WebP library not too long ago, right? That was
+
+00:26:39 baked into Python and then also OpenSSL, right? So people discovered issues in those. Those are
+
+00:26:45 baked into different aspects of Python or some of the libraries. And it's like, well, all of a
+
+00:26:50 sudden there's this fire drill, which is different than somebody going, "I'm going to sneak a thing
+
+00:26:54 into the library system." Right. And then it is a timing matter. So malicious dependencies, that's a whole other story. Because if a malicious package is discovered,
+
+00:27:05 there's not a CVE created for it. The package is just taken off of the registry. You report it to
+
+00:27:11 good people at PyPI and they'll review the submission and take it down. I've done a few
+
+00:27:17 of those myself and they're really fast, but there's still a window of time where
+
+00:27:24 that malicious package, that malicious dependency is up and available. And that's-
+
+00:27:29 Yeah. I do think pinning your dependency-
+
+00:27:31 Often all that's needed.
+
+00:27:32 Yeah, exactly. I do think having a pinned dependency there is worthwhile. Because if you
+
+00:27:36 make a commit, your CI runs, et cetera, et cetera, right? The chances that you just bump the version
+
+00:27:42 to this malicious thing is pretty low. Yeah, exactly. So yeah. And having version
+
+00:27:48 ranges is not enough. You need to have explicit versions.
+
+00:27:53 Let's talk more about these lock files then.
+
+00:27:55 There's actually a bunch of choices these days. And Brett's pep tried to make it less of a choice.
+
+00:28:03 Say, "Well, it doesn't matter if you use hatch or pip or poetry or whatever, the outcome is the same."
+
+00:28:09 And for reasons that I haven't learned enough about, I don't know why that didn't work. But
+
+00:28:14 let's talk about what's out there now. Because there's a couple options at this point.
+
+00:28:19 Sure. I think the... Yeah. So most Python developers are going to be most familiar with
+
+00:28:24 pip, right? That's the standard. And pip has requirements files. And they're unique in the
+
+00:28:36 lock file world because they can be named anything, right? Most other lock files have a defined name.
+
+00:28:43 We're talking about Rust earlier. They're the gold standard for a lot of this stuff. And
+
+00:28:48 they're very clear. They have cargo.lock. That's their lock file. You can't name it anything else.
+
+00:28:53 Its contents are well-defined. It is what it is. But in Python with pip,
+
+00:28:58 I mean, you could name it whatever you want. You know, dev requirements.txt. You could name it
+
+00:29:04 cargo.lock, but it can contain Python dependencies in it.
+
+00:29:08 Surprise. I'm not Rust.
+
+00:29:10 Basically, you can just put more or less arbitrary commands that are sent to pip
+
+00:29:16 in any text file, right? Which is more or less what it is. Yeah.
+
+00:29:19 Yeah. Any command line option you can feed the pip, you can put in a requirements file.
+
+00:29:25 It's cool because you can import by saying -r some other file.
+
+00:29:30 Yes. Yes.
+
+00:29:31 But it's also not...
+
+00:29:32 Get the hierarchy that way.
+
+00:29:33 Yeah. Yeah.
+
+00:29:34 So there are some tools available to turn those loose requirements files,
+
+00:29:42 the pip requirements files, into strict lock files, right? Where every entry is
+
+00:29:49 pinned to a specific version. And pip itself can do it with the pip freeze command.
+
+00:29:54 So that's the one most people know about. But that one's kind of not so great because it only
+
+00:30:01 freezes the packages for the environment that you ran pip freeze in. And maybe you're trying to
+
+00:30:08 publish your lock file for users of a different platform or system.
+
+00:30:13 The other thing that I don't like about it is you want to put just the things you actually
+
+00:30:17 use into your requirements file. Like I'm using HTTPX and Pydantic. That's it. But what it really
+
+00:30:24 installs when you run that is the transitive closure of all those things, which is fine.
+
+00:30:29 But you're not necessarily expressing that with just your requirements.txt, right?
+
+00:30:35 Right. Yeah. Yeah. Your two packages could balloon to 100 dependencies. And that's not uncommon. It's
+
+00:30:43 not even that bad. Like in the JavaScript ecosystem, the same handful of top level
+
+00:30:49 dependencies could have two orders of magnitude explosion where you end up with thousands.
+
+00:30:53 There's a really... Oh, gosh. I can't find it. You know what? I think it's on... I think I put
+
+00:30:59 it on the Python bites. But there's a really funny... I want to be able to pull this up for
+
+00:31:02 people so they can find it. There's a funny, funny thing that somebody did. Well, for some
+
+00:31:09 definition of funny. They put... Somebody created an npm package called everything.
+
+00:31:16 Yes. I saw this.
+
+00:31:19 Everything becomes too much. The npm package chaos of 2024. An npm user named PatrickJS
+
+00:31:26 launched a troll campaign with a package called everything, which depends on every package in npm.
+
+00:31:32 Yeah. Yeah. I think it's the npm's the largest package registry out there. So, it's already
+
+00:31:38 massive. I remember your early episodes, you would recount how many packages were on PyPI.
+
+00:31:46 I don't even know. Are we past half a million?
+
+00:31:49 Well, yeah. I remember it was a big deal. It got up to 100,000. And now it's probably,
+
+00:31:53 what? 400,000? 500,000?
+
+00:31:55 508,509 by rounding. Yeah. Half a million. Congratulations, world. Amazing.
+
+00:32:03 I just added two new ones last week. So, I guess I made a huge difference in that number.
+
+00:32:08 Nice.
+
+00:32:10 Yeah. So, basically, the PyP is awesome and it does a bunch of great stuff. And one of the
+
+00:32:14 things I really like about working with PyP is I don't need to teach people anything if they want
+
+00:32:19 to work with my project. I don't need to teach them like, "Oh, I know you love poetry, but I'm
+
+00:32:24 using a combination of the Hatch build backend with PDM." You're like, "What? I don't even know
+
+00:32:29 what those are." There's a lot of ways in which you work that are brought in with a lot of these
+
+00:32:36 tools here. So, PyP is kind of like, it just kind of works, right?
+
+00:32:39 Yes.
+
+00:32:40 But having this transitive closure managed is not part of what it does, but it's super important
+
+00:32:46 because if I need to upgrade something, I can't just change my version number in my requirements
+
+00:32:51 because that doesn't affect its dependency possibly, right? It depends on what it said.
+
+00:32:55 So, I'm a huge fan of PyP tools. This is actually what I do most of the time.
+
+00:32:59 Yes. PyP tools is another one. It's great. I think it has this PyP compile
+
+00:33:07 command that will take as an input, I think, just about any Python manifest type that's out there.
+
+00:33:15 So, you can do setup.py, requirements.txt. I'm forgetting the other ones.
+
+00:33:23 The pipenv.loc maybe.
+
+00:33:27 Setup.cfg, pyproject.toml. It just recognizes all the different ways people could express
+
+00:33:36 their loose requirements, the manifest files. Yeah. So, yeah.
+
+00:33:41 Yeah. I really like it. And you can say, "PyP compile upgrade," and it'll look at all the
+
+00:33:47 dependencies and upgrade them all as high as they can go. But what's nice about that is,
+
+00:33:51 you'll be working for a while, then you choose, "Well, let me just do a refresh on the dependencies
+
+00:33:56 right now and repin them and see how that works," and then just carry on with your business for a
+
+00:34:00 while, right? And it'll manage that transitive closure as well with actually a really nice
+
+00:34:06 lock file where it describes, "These are all the things in the lock file." And the reason that,
+
+00:34:10 for example, in your blog post, you say, "They're certified, this version," and it's there because
+
+00:34:14 you asked for it and because request needs it. If you're like, "Why is this in my virtual
+
+00:34:19 environment? Why do I have this weird thing that I don't know?" It'll tell you, "Here's why it's
+
+00:34:23 there." Yeah. Yeah. One of the downsides, though, I think pip tools has this issue. I know pip does,
+
+00:34:30 is that in determining that transitive dependency resolution, it is very possible,
+
+00:34:39 in fact, it usually happens that you have arbitrary code execution on your system, right?
+
+00:34:43 If you start with the two top-level dependencies, like you mentioned, and it lists dependencies,
+
+00:34:48 well, then it'll pull those in and it acquires the metadata from the wheel if that exists.
+
+00:34:54 But if it doesn't, it'll build the package just to get the metadata file,
+
+00:34:58 just to figure out which dependencies that needs. And so you end up-
+
+00:35:01 Are you saying I should set up a Docker container to execute this?
+
+00:35:06 Yeah. That's kind of what's happening.
+
+00:35:07 Maybe I should. Yeah.
+
+00:35:08 Yeah. Running in a sandbox is another option, right? That's what my company, Phylum, that's one
+
+00:35:18 of the solutions we offer. We have extensions for our CLI where you can wrap pip by just calling
+
+00:35:26 Phylum pip, and then everything runs in a sandbox. So that's another solution.
+
+00:35:31 Yeah. Yeah. Yeah. Because I mean, pip is a funny one because they even have a command line option
+
+00:35:37 called dry run, tac-tac dry run, which you would think, "Oh, nothing's going to happen on my
+
+00:35:42 system." It's just-
+
+00:35:43 Separate running code from strangers on the internet.
+
+00:35:45 But it does. Yes. Dry run, even using dry run for pip install and pip download commands
+
+00:35:52 will or has the possibility of downloading and running arbitrary code from strangers on the
+
+00:35:57 internet. Yeah.
+
+00:35:59 If we had, oh, like wheels came along far after pip, right? And we've got the source distributions
+
+00:36:05 and setup.py and all that kind of stuff. And so if wheels existed from day one, it very well
+
+00:36:11 may be the case that this is not a problem, right? But what is pip supposed to do? It has to
+
+00:36:16 evaluate this dynamic thing to figure out what it wants in a sense.
+
+00:36:18 Yes. Yes. Yeah. Yeah. Wheels are great because they have a metadata file in there that clearly
+
+00:36:26 lays out what the dependencies are. And there's no arbitrary code running when you install a wheel.
+
+00:36:32 It's just extracting and copying. A wheel is just a zip file. You extract that zip file and then
+
+00:36:39 copy the contents to various locations. But yes, as you said, because we've had source distributions,
+
+00:36:46 tarballs, and then even eggs before that, and probably never going to fully get rid of those,
+
+00:36:54 it just takes one. One dependency anywhere in your chain that is only distributed as a source
+
+00:37:00 distribution before now you're downloading and building a package just to get metadata to
+
+00:37:07 continue.
+
+00:37:07 And maybe you didn't actually choose that, right? It's the dependency of a dependency
+
+00:37:11 of a dependency.
+
+00:37:12 Absolutely. Yeah. Yeah. That's, yeah. Yeah. People often respond to some of the findings our company
+
+00:37:22 has where we'll post these malicious packages with all sorts of crazy names. And people will
+
+00:37:27 respond to say, why would I install that? Why would I ever install this random package that
+
+00:37:35 no one's heard of? It's like, well, you wouldn't. But it could be included in the transit dependencies.
+
+00:37:43 Right? If it gets added to a slightly more legitimate package or worked up the chain that
+
+00:37:50 way, then yes, eventually you'll be running it unknowingly.
+
+00:37:55 Yeah. I think there's two important things we should talk about this before we move on,
+
+00:37:58 because there are some interesting ways in which you might unknowingly, you might even try to do
+
+00:38:03 the right thing and you might actually shoot yourself in the foot by doing so. So number one,
+
+00:38:09 these super strict lock files are awesome when you're building an application. I want to ship
+
+00:38:15 talk, Python training out. It's got a strict API as it runs on this version. It uses that
+
+00:38:19 version of Pydantic, that version of Beanie and whatever. I want that to be fixed, fixed,
+
+00:38:25 zero flexibility until I decide to maybe a pip compile update or whatever I want a new one.
+
+00:38:30 However, if I was building a library that someone else was using, I would do them many headaches
+
+00:38:36 and a disservice to say, I depend on Pydantic 2.7.0. You're like, well, my other library needs
+
+00:38:44 Pydantic 8.8 and I can't use it and your library together. So you need the, it's a different story
+
+00:38:51 when you're building a library that others are going to consume than it is when you're building
+
+00:38:55 an application. And there was some disagreement, I guess, about the recommendation of pipenv for a
+
+00:39:01 while. And it's because I believe the pipenv is really focused on the application side. And it,
+
+00:39:06 I don't think it was made super clear that maybe it doesn't make as much sense for libraries.
+
+00:39:10 Right. So you want to speak to that a little? Yeah. Yeah. I'm an advocate for lock files for
+
+00:39:15 everyone. Right. Applications for sure, but also libraries and their developers. Right. Cause
+
+00:39:21 if when you distribute a library, sure. Loose dependencies is probably the way to go there.
+
+00:39:31 But library developers, people who want to contribute to your projects, the developers themselves, maybe you work on a team, having a lock file alongside
+
+00:39:42 your library is still going to be useful. Right. Like, yeah. Cause that way you can say everyone,
+
+00:39:47 if somebody makes a change or they report a bug or whatever, they're not bringing in a change from a
+
+00:39:52 different version of a dependency or like maybe something changed. Right. Yes. Yes. Yeah. And
+
+00:39:58 then, and it, plus it still allows you to start from a known good spot. And then maybe, maybe if
+
+00:40:06 you know you want to get the latest, then you can do it in a controlled environment,
+
+00:40:13 like a sandbox or maybe a CI in a throwaway runner that has no access to any secrets or
+
+00:40:22 sensitive. I hadn't really thought about having a specific requirements lock file type of thing
+
+00:40:30 for the libraries that I've been working on for the developers. Right. For people who want to
+
+00:40:34 contribute because it's just been like a loose requirement so that people that built against it
+
+00:40:40 aren't pinned into some very specific thing. But yeah, that makes a lot of sense. I think.
+
+00:40:43 Yeah. There's a, there's a link in that blog posts. It's kind of dated now, but it's from
+
+00:40:48 the folks who built yarn, you know, JavaScript ecosystem, but they had, they say it a lot more
+
+00:40:54 eloquently than I can. Yeah. That's the one. Lock files should be committed. On all projects. Yeah.
+
+00:41:00 It's, I mean, it's a bit old now, but they, they go down the lists and spell it out a lot more
+
+00:41:05 clearly than me about why libraries even can benefit from, from publishing a lock file.
+
+00:41:12 Yeah. People can check that out. That's cool. Yeah. And Java, that's the JavaScript package
+
+00:41:16 manager. So in JavaScript years, like a hundred years or something, it's been a couple of years.
+
+00:41:19 That's right.
+
+00:41:20 You got dog years, you got JavaScript years, JavaScript years just tick by like second,
+
+00:41:25 the second hand. Yeah. Yeah. All right. Cool. So I see we're making great progress here. Our
+
+00:41:30 list of things to talk about here. I've gone through three and I like 15 left. We'll have
+
+00:41:35 plenty of time. So yeah, let's see. So another one, another pep I think we're talking about
+
+00:41:44 here is 517, a build system, independent format for source trees. I have no idea what this is.
+
+00:41:50 What is this?
+
+00:41:51 Yeah. Pep 517 and 518 kind of go together. This is, this was like the transition away from
+
+00:41:58 setup.py towards pyproject.toml. 518 is the one that specifies pyproject.toml
+
+00:42:04 kind of things that go in it. And then 517 is all about build systems and build backends.
+
+00:42:13 So like in your pyproject.toml and your build system key, you'll often see things like poetry
+
+00:42:23 core or flit or hatchling or these kinds of things. And so it's 517 is specifying what it means to be
+
+00:42:31 one of those build backends. It's really just defining two mandatory hooks. What does it mean
+
+00:42:38 to build wheel and build sdist? There's three optional hooks as well. And I think there's even
+
+00:42:44 another pep that followed on from this that talks about building editable packages or-
+
+00:42:49 Right. The dash E equivalence.
+
+00:42:54 Yeah. Yeah, exactly. But really it just boils down to defining a way to build a wheel and build a source distribution.
+
+00:43:02 Yeah. And this is part of what opened up all the different choices we now have for package
+
+00:43:08 management and things like that, right? Because now there's a common way they can all work together.
+
+00:43:14 A little bit like WSGI.
+
+00:43:15 Yes. Yeah.
+
+00:43:16 Yeah. I've been using hatchling for my build backend recently and it's been working real
+
+00:43:19 nicely.
+
+00:43:20 Okay. Yeah. I was just looking at hatchling the other day and they've got- Yeah. Yeah.
+
+00:43:27 They're one of the build backends that offers build hooks, which- So prior to pyproject.toml
+
+00:43:38 and wheels and bdus_wheels and you go back to the source distributions and your setup.py files,
+
+00:43:45 where it's just Python code. You can be doing anything in your setup.py file,
+
+00:43:52 which runs when you install the package. Well, now we're starting to see methods to do the same
+
+00:43:58 thing in these more modern packaging or build backend. So like hatch has their
+
+00:44:02 build hooks, build system hooks where you can point it to, I think, yeah, just Python code and
+
+00:44:11 have it run as part of the build.
+
+00:44:14 Yeah. At least it only runs at build time, not install time. Right?
+
+00:44:21 I'm looking at the documentation now. Yeah. This is still new to me, but there might be
+
+00:44:25 hooks for install as well.
+
+00:44:28 Okay. While you're thinking about it, one of the things, I got a couple of questions I want to
+
+00:44:34 highlight from the audience here, but also one of the things that I think maybe was considered,
+
+00:44:41 I have no awareness of this, but if it wasn't, it would be excellent is what if the people at pip
+
+00:44:47 just pre-computed all that metadata from, at least for the common platforms that you would get,
+
+00:44:54 that pip needs to download, run setup.py and then throw it away just to get that data.
+
+00:44:59 Like for Mac, Windows, and Linux, if it would just go, okay, we're just going to, as you upload it,
+
+00:45:05 it would just kick off a job that does that on those three platforms and puts it in a JSON blob.
+
+00:45:09 It seems like that would be worthwhile.
+
+00:45:12 I'm fairly certain there's discussions already around that type of a solution and maybe even a
+
+00:45:18 pep for proposal for it, but yeah, getting away from having to build a package just to get metadata.
+
+00:45:24 You got packages that are downloaded billions of times with a B, it's insane.
+
+00:45:31 And if somebody could do that three times instead of a billion times, it would make it work faster and it would also make it safe. Right? I think it'd be great.
+
+00:45:40 All right. A couple of questions here. This one. So Tony on the audience says,
+
+00:45:47 pip compiles great for finding your transitive dependencies. One interesting thing that they've
+
+00:45:53 done is package up code with pants build, which supports locks files just to look through what
+
+00:45:58 code gets packaged up. Is this anything you've explored?
+
+00:46:01 I've heard of pants. I haven't looked into it myself yet.
+
+00:46:06 Okay. Yeah. So just use it like, okay, you're going to have to build this thing and give me
+
+00:46:11 a little manifest and whatnot. And then we can just look at that. That's cool. And then Tamir
+
+00:46:15 says, do you have a solution for taking already locked dependencies with you when you start a new
+
+00:46:20 app? I'm guessing, you know, maybe, yeah, I don't know. I guess maybe you've already got a project
+
+00:46:26 you're working on and you want to say like, I want this project to use that. Probably you could
+
+00:46:29 just copy the lock file. Right? Yeah. Yeah. If you, I mean, if you really, I mean, really,
+
+00:46:35 you're going to, if you start a new project or new application, you're going to, you're going
+
+00:46:39 to have new manifest file, you know, pyproject.toml, maybe you have the same dependencies,
+
+00:46:44 the top level dependencies or not, but the, the fully resolved set of dependencies that makes up
+
+00:46:50 your lock file that, that can very easily be different. So I'm not exactly sure how you just
+
+00:46:56 poured over one to another. One more bit from Tony. And this is something that I now remember
+
+00:47:02 from pants is this, if it just looks through your code and if you use the import statement,
+
+00:47:07 regardless of whether you've put it in your requirements files, it'll figure out what
+
+00:47:12 your requirements files should have been. If you were a bad developer, basically,
+
+00:47:16 that's cool. Just to see what it uses. Yeah. Nice. All right. On to the next thing,
+
+00:47:22 specify in pep 5 1 8, specifying minimum build system requirements for Python projects.
+
+00:47:28 Yeah. This is pyproject.toml. This is the, this is the, the pep for that.
+
+00:47:33 There's not much to it other than to say that they've settled on that name,
+
+00:47:38 rejected a bunch of other possibilities. And then they've got the, you know, the,
+
+00:47:42 the few entries that are required, like for your, your finding your build system.
+
+00:47:46 Yeah. You don't have to have a pyproject.toml for Python, but if you're building a Python library
+
+00:47:54 and you don't want to use setup.py, then you're much better off having a pyproject.toml, right?
+
+00:47:59 Yes. Yeah. Yeah. It's more in the library side that it, I mean, it's not that you can't use it
+
+00:48:03 on an application, but it's more required on the library side. Yeah. That's the thing. All right.
+
+00:48:09 So let's talk about some of the ways in which your packages might go wrong. We've already
+
+00:48:14 talked about typosquatting and we also talked about everything that's different. Yeah. But yeah,
+
+00:48:20 new typosquatting is, it is tricky. I think it's pretty well understood at this, this point,
+
+00:48:25 but maybe just tell people real quick to cover that base, you know?
+
+00:48:29 Sure. Type of typosquatting is, is, you know, publishing a package with a name that's similar,
+
+00:48:35 but not the same as, as a, as a existing known good package. Right. So like, instead of requests,
+
+00:48:43 maybe you, you get request without the S or, you know, one that gets me, cause I,
+
+00:48:49 cause I make the type of all the time was, is the cryptography package. Like, like if I, you know,
+
+00:48:54 if I put you on the spot, would you know how to spell cryptography? I always get the first couple
+
+00:48:59 of letters, you know, jumbled up a bit and, and there have been malicious packages published and
+
+00:49:04 then taken down with, with you know, spelled C-R-P-Y instead of C-R-Y-P, cryptography. Right.
+
+00:49:13 Yeah. But, but the idea is that, you know you, you can overlook a package cause it looks like a,
+
+00:49:21 it looks like a good one. It's not necessarily that you're going to, you're going to install
+
+00:49:25 it because you type it wrong. Although that is, that is, you know, one technique, right?
+
+00:49:30 The drive by installs where someone just bat fingers the package name. But really having a
+
+00:49:38 typo squatted package is going to allow these threat actors to be a little more stealthy
+
+00:49:44 in their inclusion of that package in, in legitimate code reviews and commits and
+
+00:49:50 dependencies of dependencies. Right. And so the other, the other thing that goes with
+
+00:49:55 typo squatting, I don't know if I had a link for you there yet is, is star jacking. So
+
+00:50:00 a lot of times if you're going to typo squat on a known good package, okay, there it is.
+
+00:50:07 You know, these, these, these threat actors, they just, they just straight up copy the known
+
+00:50:13 good project, right. It's just clone the repository and then change the package name.
+
+00:50:19 And, and then when they, when they post the package to PyPI, for instance, the metadata
+
+00:50:27 that goes with the package still exists, right. So on PyPI for a given package, you can see on
+
+00:50:34 the left-hand side, it shows like some, some statistics. If, if the URL was given to like a
+
+00:50:42 GitHub hosted project, for instance, it'll go in there and tell you how many stars.
+
+00:50:48 Right, right, right. That's actually a signal that it seems like it should be good, right. It'll have.
+
+00:50:54 Yeah. That's what star jacking is doing is just copying the metadata of a known good package.
+
+00:51:02 So that on first look, yeah, there you go. You can see.
+
+00:51:05 I did pull that pytest and it says statistics, GitHub statistics, 11,000 stars,
+
+00:51:11 2000 forks. Okay. This is legit. Let's install it.
+
+00:51:13 Right. So I could go clone pytest repository right now, change the name to pytest spelled P-I-T-E-S-T.
+
+00:51:20 And then, and then push the math version of testing. Yeah. And you're going to get these
+
+00:51:25 same statistics and you're going to get the same maintainers that you see if you scroll down a
+
+00:51:29 little bit in the, the metadata. Yeah. So you get the maintainers list, all of that metadata that
+
+00:51:37 you, you, you enter in your pyproject.toml or setup.py file gets read here on PyPI and just,
+
+00:51:45 just publish. So you can, you can fake people out, right?
+
+00:51:48 Yeah. That's actually really, okay. Well, there's a new terrifying thing that I hadn't thought about.
+
+00:51:52 Yeah. Yeah. So, so star jacking and typosquatting where you just take a known good package, clone
+
+00:51:58 it, and then maybe you, you make a change to you know, existing function, you know, the function
+
+00:52:04 does what it's supposed to do, but it also does some other stuff like ship off secrets from your,
+
+00:52:09 your CI server or you know, It could lay dormant and wait for some sort of production environment
+
+00:52:16 and grab some SSH keys or something terrible. Yeah. Yeah. Yeah. That's, that's, that's the
+
+00:52:21 other, the other dependency confusion. Okay. That's the next one you've got up.
+
+00:52:26 Yeah. This is the one we kind of talked, it's similar to what we talked about before with,
+
+00:52:30 I can't remember, but I said, there's, there's, we're going to come back to this. So here,
+
+00:52:34 here it is again, this is a dependency confusion where if you get the wrong version or the wrong
+
+00:52:40 name, it could actually, you try to be safe by having a white listed list or say, well, it's,
+
+00:52:46 it's, so this is one where it's the same, same package name, different source of where you
+
+00:52:52 acquire that package. So this is you'll, these attacks are mostly like companies, enterprises,
+
+00:52:59 yeah. Yeah. So it's an artifactory and we, we only put our stuff there and we're,
+
+00:53:07 we're going to call it like, you know, international company underscore data access.
+
+00:53:12 That's right. And, and it's, and it's, and it's tricky because if you don't know, like if you
+
+00:53:17 don't have your build system set up in a way, and then your CI server set up in a way to install
+
+00:53:23 your dependencies in the proper order, like excluding public registries first, and only
+
+00:53:28 looking for packages in your private registry, then it's very easy, especially with pip, which
+
+00:53:34 defaults to looking on PyPI, the public registry first, and then only falling back to your, your
+
+00:53:40 extra index URL specifications. Secondly, that if you, if someone had the knowledge or just guessed
+
+00:53:49 at the package name that you had published on your internal registry, and then they made their
+
+00:53:54 own package, the same name, but put it on PyPI, that's the one that's going to get installed.
+
+00:53:58 And there was like a whole series of, you know, bug bounties that were claimed over this back a
+
+00:54:06 few years ago, because people just went around, you know, guessing at internal package names,
+
+00:54:11 or maybe they used to work there or new people. Yeah. Yeah. Yeah.
+
+00:54:14 Just to share your requirements at TXT with me. Right. Right. Right. Right.
+
+00:54:19 You know, it's, it's kind of, it's extra sneaky because it only affects people. It only affects
+
+00:54:28 people who are going out of their way to be more secure, right? They're going out of their way to
+
+00:54:33 say, we're only going to, we're going to actually set up a whole server and we're going to whitelist
+
+00:54:38 a bunch of stuff. You can only ask for the names of the things on this server and, ah, you know.
+
+00:54:43 Yes. And that, that might still work if you limit it to your internal registry only, or a mirror,
+
+00:54:50 perhaps, of, of the, the public registries.
+
+00:54:53 What do you think about that? It's pretty easy to create your own internal copy,
+
+00:54:59 download a bunch of extra ones and mirror them locally and say like, these are the ones that are pre-approved at our company. Nothing else.
+
+00:55:06 Yeah. Yeah. I, I, I've worked in a environment where that's exactly what we did. And,
+
+00:55:12 I think there is merit to that. You just have to know that anything you're mirroring
+
+00:55:17 to the trusted internal network is in fact secure. You know?
+
+00:55:21 Yeah. Yeah, for sure. I think, you know, it doesn't really make sense except for a few,
+
+00:55:27 very rare cases to say you cannot use external dependencies.
+
+00:55:31 Right. Right.
+
+00:55:32 You're just saying what we want is to not build software, but while the rest of the world does,
+
+00:55:36 you know, because that's part of the magic. We just saw there's over half a million libraries
+
+00:55:42 you can choose from. When you say we have zero of those, you're really, really constraining
+
+00:55:47 the type of software and the velocity at which you can build.
+
+00:55:51 Yeah. Yeah. It reminds me of, there's that line, you know, like, why, why do you rob banks?
+
+00:55:58 Because they have the money.
+
+00:56:00 Because that's where the money is. Right. It's like, well, why do attackers,
+
+00:56:03 why are attackers going after open source software now? Like, well, that's, that's where
+
+00:56:08 it's easiest to get arbitrary code to run. That's where developers are. That's what.
+
+00:56:13 That's what to be fair though. It's not only, it's not only right. There's SolarWinds,
+
+00:56:17 which really had almost nothing to do with open source, but it had to do with CI/CD systems and
+
+00:56:22 other sneakiness. Right. Yeah. Yeah. And got into places that, you know, instead of getting into
+
+00:56:28 libraries, you get into the build system and you just give it a little extra, a little extra include
+
+00:56:32 tag there, bringing that deal out. Like you said, right. So dependency and confusion is sneaky
+
+00:56:39 because you're asking for a local version off a local server. It doesn't exist on PyPI, but if it
+
+00:56:44 could be made to exist on PyPI, all of a sudden that gets installed. That's potentially, that's
+
+00:56:49 not good.
+
+00:56:50 Potentially. Yeah. Yeah. It's, it's, that's, that's how it works in all the, in all the default
+
+00:56:54 cases. And it's, it's pretty tricky actually to, to exclude, to do it in the correct order and
+
+00:56:59 exclude those public registries.
+
+00:57:01 Yeah. What's what I do to help this is I just, I just run the UUID command to get one of those
+
+00:57:08 16 digit arbitrary X things. And I just name all my libraries that, and so it's like, oh, you have
+
+00:57:13 the F3DC. That's the API one. That's right. That's that, right. No one is going to do this.
+
+00:57:21 It's such a safe space. I tell you. All right. Onto the next one.
+
+00:57:26 That, that would work.
+
+00:57:27 Expired author domains. This is super sneaky.
+
+00:57:32 Yeah. Yeah. So this is one, you know, it, it might be less of a factor now. I think,
+
+00:57:41 I think it was just earlier this month that PyPI enforced two factor authentication for
+
+00:57:47 all their users. But a lot of sites and, you know, even PyPI, I think before this month,
+
+00:57:57 have, you know, password reset features where if, if you lose access to your account or you
+
+00:58:03 forget your password, just, you know, send me an email, reset your password. But it's,
+
+00:58:08 it's, it's very possible that people, you know, years ago submitted a package. They,
+
+00:58:14 they don't maintain it anymore. They submitted it under an old email account that has expired.
+
+00:58:20 Right. Maybe they had some domain. Yeah. Special doesn't work that well for Gmail or Outlook.
+
+00:58:26 You had a custom domain and as would be awesome. Have your own, you know,
+
+00:58:33 Michael@talkpython.fm that kind of thing. Yeah. Yeah. Say you, you win the lottery and,
+
+00:58:39 and you know, decide to put your job. Yeah. Then you let your domain expire and
+
+00:58:44 well, maybe there's still a linkage for the talk Python domain to PyPI. And then I go and
+
+00:58:51 buy that domain and, you know, request password server. Yeah. Yeah. And then now I, now I can
+
+00:58:58 publish new versions of the packages there. Yeah. Yeah. It's not good. Yeah. Yeah. So I don't really
+
+00:59:06 know what to do about that one, but there's an amazing, amazing joke that I found on Mastodon.
+
+00:59:10 Somebody posted, sit here. It's a two big red buttons. Think Ren and Stimpy or whatever. And
+
+00:59:19 one of the red buttons says, admit to yourself that your dream is dead. The other one says,
+
+00:59:23 pay $12 for domain renewal. Right. I mean, it's funny, but there's plenty of people who will get
+
+00:59:30 a domain and I totally go. And then it's like, you know what? I haven't done anything with that
+
+00:59:34 for like five years. I'm not paying another 12 bucks, but if they had set up an account under
+
+00:59:38 that, right, this is what you're talking about. Yeah. Yeah, exactly. Yep. That's why you got to
+
+00:59:44 buy your domains for that a hundred year renewal period. Exactly. Take out that loan. You get your
+
+00:59:51 domain. All right. We're getting short on time here. I want to, let me, let's just go through.
+
+00:59:57 I'll just list off a few real quick. Maybe we do lighten round. Okay. Okay. Unverifiable dependency.
+
+01:00:02 Okay. These are for specifying dependencies that are not necessarily published to PyPI, right? So
+
+01:00:11 that maybe you're pointing to a GitHub repository. You know, pip calls these VCS project URLs. You
+
+01:00:19 know, if you, if you look in there, their help output. Yeah. It's like pip installed Git plus
+
+01:00:24 HTTP to a thing that has a project. And that, and that thing, it can point to a repository.
+
+01:00:30 Maybe it points to a tag. Maybe it points to a branch. None of that is stable, right? Like you,
+
+01:00:37 the tag could change out from under you or the code that's related to that tag could change
+
+01:00:43 out from under you. The code at the branch you're pointing to could change while the name remains
+
+01:00:48 the same. So, you know, those are, those are, those are risky for that reason, right? If you're
+
+01:00:52 not pinning to a very specific version or a very specific hash, right. If you're going to point to
+
+01:00:57 a repository or a Git URL. Yeah. Make sure it's true. I've gotten to feel a lot of times like
+
+01:01:02 the hash is maybe a little bit redundant given the immutability of PyPI. But if you're pointing
+
+01:01:07 at something like this, then maybe all of a sudden you really do want that. For sure. Yeah. Okay.
+
+01:01:12 Repo jacking. Yeah. This is similar to the expired author domain, right? So if someone was,
+
+01:01:21 you know, pointing to one of those Git dependencies, a VCS project URL as pip calls it,
+
+01:01:27 and you know, that account went dormant or expired, relinquished, whatever,
+
+01:01:33 and someone else took it over, then yeah, they can now, they can now dictate what's there. Yeah.
+
+01:01:40 Yeah, exactly. People are requiring. All right. And then maybe last bit, get a chance to talk a
+
+01:01:46 bit about your Phylum CI project. I do want to point out really quick though, that Phylum was
+
+01:01:53 a sponsor of the show a while ago, but this is not a sponsored episode. This is just, you and I had
+
+01:01:58 been talking prior to that actually, and decided to like put the show together. So just to be clear,
+
+01:02:03 but let's talk about this, what this project you guys got anyway. Yeah. Yeah. So you can pip install
+
+01:02:09 Phylum right now, or like I prefer PipX, PipX install Phylum. Yeah. I love PipX. It's awesome.
+
+01:02:16 Yeah, me too. Yeah. I think I heard about it from you actually.
+
+01:02:19 So the circle goes. Yeah. Yes. Yes. So this package, it does two main things. One is it can,
+
+01:02:27 it'll expose us to entry points. One of them is called Phylum init, and that'll get you the Phylum
+
+01:02:34 command line interface written in Rust, but installed with Python. It'll get you the Phylum
+
+01:02:44 CLI locally. And then the other one is, it's called Phylum CI. That's just a catch all entry
+
+01:02:50 point. The thing that gets exposed through our Docker container to handle almost all of our
+
+01:02:55 integrations. So if you want to monitor your PRs on GitHub, for instance, we've got an integration
+
+01:03:03 for that. So the idea is basically that I could set this up in GitHub, a PR comes in, I could set
+
+01:03:08 up an action, Phylum will scan it for known mischievousness and make that part of the PR,
+
+01:03:16 or maybe even block it out, right? Yeah, exactly. It'll fail your build if you don't pass your
+
+01:03:21 default policy or established policy on any of your given lock files or manifests. We deal with
+
+01:03:28 manifests as well. And you mentioned GitHub. So even with GitHub, we went a step further. We have
+
+01:03:33 an app as well. So you don't even have to modify a workflow. You could just install a GitHub app and
+
+01:03:38 automatically monitor your repositories. But a lot of the other ecosystems don't have that. So we
+
+01:03:47 just provide Docker containers. I love the Docker container. So you use Docker run against your code
+
+01:03:54 or whatever. Yeah. And then there's even a pre-commit hook we expose as well. Nice.
+
+01:04:04 I genuinely don't know the answer to this question. Does this cost money?
+
+01:04:08 No. Anyone can sign up for free. There's a community edition where you can have up to
+
+01:04:16 five projects. Okay, cool. You guys have to eat. There must be some way you charge for something.
+
+01:04:21 Oh, exactly. Yeah. So there's the paid version, right? Which, you know, unlimited projects,
+
+01:04:26 you get access to group-based management. You know, there's a few extra features. It's a
+
+01:04:31 freemium model. A little more of a Teams, enterprise-y angle. Yeah. But for this audience,
+
+01:04:36 I would love if everyone just went that little extra step of securing their open source software
+
+01:04:44 and go with the free option. I'm not trying to sell you anything here. Just
+
+01:04:47 monitor your manifest, your lock files, make sure that you remain secure and not exposing
+
+01:04:56 your secrets. Because that's what we're finding now, is that developers are the new high-value
+
+01:05:01 targets. That's what attackers want to go after because we know that developers,
+
+01:05:06 they have the secrets. They've got the keys. We write the code that then gets run on the
+
+01:05:12 production server inside the firewalls. Yeah. We have all the access, all the secrets, all the
+
+01:05:19 keys. So, you know, if you can find a way to get arbitrary code from strangers to run on developer
+
+01:05:26 systems, you're going to have a much better chance. We have a good time. Yeah. We have a good time.
+
+01:05:30 I thought I mean having a bad time. Right. Yeah. Doing bad things. Okay. Let's not do that.
+
+01:05:37 Awesome. Well, excellent work. I think probably we'll kind of just leave it there. We're pretty
+
+01:05:40 much out of time for the rest of the stuff, but close it out for us, Charlie. People are, maybe
+
+01:05:46 both have a few new tools to work with, but also techniques, but maybe also a little freaked out.
+
+01:05:51 What do you tell them? I recommend everyone to restrict their use of dependencies to lock files.
+
+01:05:56 And then carefully gate, regard the inclusion of new lock files or updates of existing ones,
+
+01:06:04 or sorry, dependencies in those lock files with careful analysis. Don't allow arbitrary code to
+
+01:06:10 run anywhere in your development process and give filing a try. You know, we've got the free
+
+01:06:14 community edition. We will provide that analysis and ensure that you don't have malware running on
+
+01:06:20 your system through bad dependencies. Awesome. All right. Well, it's been very interesting and
+
+01:06:25 a lot of new things to think about. So thanks for being here. Thank you, Michael. Yep. See you later.
+
+01:06:29 This has been another episode of Talk Python to Me. Thank you to our sponsors. Be sure to check
+
+01:06:35 out what they're offering. It really helps support the show. Take some stress out of your life. Get
+
+01:06:40 notified immediately about errors and performance issues in your web or mobile applications with
+
+01:06:45 Sentry. Just visit talkpython.fm/sentry and get started for free. And be sure to use the promo
+
+01:06:52 code Talk Python, all one word. MailTrap, an email delivery platform that developers love. Use their
+
+01:06:59 email sandbox to inspect and debug emails in staging, dev, and QA environments before sending
+
+01:07:04 them to recipients in production. Try MailTrap for free at talkpython.fm/mailtrap. Want to level
+
+01:07:11 up your Python? We have one of the largest catalogs of Python video courses over at Talk Python.
+
+01:07:16 Our content ranges from true beginners to deeply advanced topics like memory and async. And best
+
+01:07:21 of all, there's not a subscription in sight. Check it out for yourself at training.talkpython.fm.
+
+01:07:26 Be sure to subscribe to the show. Open your favorite podcast app and search for Python.
+
+01:07:31 We should be right at the top. You can also find the iTunes feed at /iTunes, the Google Play feed
+
+01:07:36 at /play, and the Direct RSS feed at /rss on talkpython.fm. We're live streaming most of
+
+01:07:43 our recordings these days. If you want to be part of the show and have your comments featured on the
+
+01:07:48 air, be sure to subscribe to our YouTube channel at talkpython.fm/youtube. This is your host,
+
+01:07:54 Michael Kennedy. Thanks so much for listening. I really appreciate it. Now get out there and
+
+01:07:58 write some Python code. [Music]
+
+01:08:14 [Music]
+
+01:08:19 [ better right now ]
+
