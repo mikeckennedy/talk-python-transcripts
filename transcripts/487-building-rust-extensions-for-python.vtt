@@ -1,0 +1,2915 @@
+WEBVTT
+
+00:00:00.001 --> 00:00:02.680
+There have been a lot of changes in the low-level Python space these days.
+
+00:00:02.680 --> 00:00:09.400
+The biggest has to be how many projects have rewritten core performance-sensitive sections in Rust,
+
+00:00:09.400 --> 00:00:14.640
+or even the wholesale adoption of Rust for newer projects such as UV and Ruff.
+
+00:00:14.640 --> 00:00:20.960
+On this episode, we dive into the tools and workflow needed to build these portions of Python apps in Rust
+
+00:00:20.960 --> 00:00:23.020
+with David Seddon and Samuel Colvin.
+
+00:00:23.020 --> 00:00:28.760
+This is Talk Python to Me, episode 487, recorded November 21st, 2024.
+
+00:00:28.760 --> 00:00:30.780
+Are you ready for your host?
+
+00:00:30.780 --> 00:00:31.620
+There he is.
+
+00:00:31.620 --> 00:00:35.060
+You're listening to Michael Kennedy on Talk Python to Me.
+
+00:00:35.060 --> 00:00:38.820
+Live from Portland, Oregon, and this segment was made with Python.
+
+00:00:38.820 --> 00:00:44.820
+Welcome to Talk Python to Me, a weekly podcast on Python.
+
+00:00:44.820 --> 00:00:47.040
+This is your host, Michael Kennedy.
+
+00:00:47.040 --> 00:00:52.380
+Follow me on Mastodon, where I'm @mkennedy, and follow the podcast using @talkpython,
+
+00:00:52.380 --> 00:00:55.400
+both accounts over at fosstodon.org.
+
+00:00:55.500 --> 00:01:00.300
+And keep up with the show and listen to over nine years of episodes at talkpython.fm.
+
+00:01:00.300 --> 00:01:04.880
+If you want to be part of our live episodes, you can find the live streams over on YouTube.
+
+00:01:04.880 --> 00:01:11.140
+Subscribe to our YouTube channel over at talkpython.fm/youtube and get notified about upcoming shows.
+
+00:01:11.860 --> 00:01:15.860
+This episode is sponsored by Posit Connect from the makers of Shiny.
+
+00:01:15.860 --> 00:01:20.380
+Publish, share, and deploy all of your data projects that you're creating using Python.
+
+00:01:20.380 --> 00:01:27.060
+Streamlit, Dash, Shiny, Bokeh, FastAPI, Flask, Quarto, Reports, Dashboards, and APIs.
+
+00:01:27.060 --> 00:01:29.460
+Posit Connect supports all of them.
+
+00:01:29.460 --> 00:01:35.120
+Try Posit Connect for free by going to talkpython.fm/Posit, P-O-S-I-T.
+
+00:01:35.500 --> 00:01:39.460
+And it's brought to you by the Data Citizens Dialogues podcast from Colibra.
+
+00:01:39.460 --> 00:01:46.400
+If you're ready for a deeper dive into the latest hot topics and data, listen to an episode at talkpython.fm/citizens.
+
+00:01:46.400 --> 00:01:50.300
+Everyone, it's the week of Thanksgiving in the United States.
+
+00:01:50.300 --> 00:01:51.080
+You know what that means.
+
+00:01:51.080 --> 00:01:53.280
+Black Friday sales galore.
+
+00:01:53.280 --> 00:01:56.860
+Of course, we're having Black Friday sales at Talk Python as well.
+
+00:01:57.220 --> 00:02:02.360
+All of our courses are on sale from between 18% to 50% off through our Everything Bundle.
+
+00:02:02.360 --> 00:02:09.540
+Get huge discounts on the Everything Bundle by visiting talkpython.fm/Black Friday.
+
+00:02:09.540 --> 00:02:11.220
+But be sure to hurry.
+
+00:02:11.220 --> 00:02:13.900
+This deal ends next week after Monday.
+
+00:02:13.900 --> 00:02:17.780
+So act now if you've been looking at taking a couple of our courses.
+
+00:02:17.780 --> 00:02:20.440
+The price is about two courses for the entire library.
+
+00:02:20.440 --> 00:02:22.140
+So you probably want to jump on that.
+
+00:02:22.140 --> 00:02:25.060
+And thank you to everyone who's taken some of our courses.
+
+00:02:25.060 --> 00:02:26.500
+It really helps support the show.
+
+00:02:26.860 --> 00:02:28.080
+Let's jump into that interview.
+
+00:02:28.080 --> 00:02:30.780
+David, Samuel, welcome to Talk Python.
+
+00:02:30.780 --> 00:02:32.240
+Thank you very much for having me.
+
+00:02:32.240 --> 00:02:33.200
+Thank you for having me.
+
+00:02:33.200 --> 00:02:33.520
+Yeah.
+
+00:02:33.520 --> 00:02:34.640
+Good to have you, David.
+
+00:02:34.640 --> 00:02:36.880
+And Samuel, it's always good to have you back on the show.
+
+00:02:36.880 --> 00:02:40.240
+So we're going to talk about Rust.
+
+00:02:40.240 --> 00:02:49.840
+Some really cool experiences that David had building a linter that works on a ridiculous number of different projects and packages.
+
+00:02:49.840 --> 00:02:54.000
+And Samuel, Rust is obviously core to Pydantic.
+
+00:02:54.000 --> 00:02:57.420
+And I want to talk a bit about Pydantic and how you guys have used Rust as well.
+
+00:02:57.420 --> 00:02:58.240
+Should be a good time.
+
+00:02:58.240 --> 00:02:58.560
+Yeah.
+
+00:02:58.560 --> 00:02:59.540
+Looking forward to it.
+
+00:02:59.540 --> 00:03:00.540
+And thanks for having me on.
+
+00:03:00.540 --> 00:03:02.400
+I've been listening to this podcast for years.
+
+00:03:02.400 --> 00:03:05.180
+So it's very nice finally to be talking.
+
+00:03:05.180 --> 00:03:06.240
+It's a little like open source.
+
+00:03:06.240 --> 00:03:07.480
+You get to help create it, you know?
+
+00:03:07.480 --> 00:03:08.000
+Exactly.
+
+00:03:09.220 --> 00:03:09.720
+All right.
+
+00:03:09.720 --> 00:03:10.840
+Let's do quick introductions.
+
+00:03:10.840 --> 00:03:13.820
+I know, Samuel, you almost don't need introductions.
+
+00:03:13.820 --> 00:03:15.180
+Pydantic is so popular.
+
+00:03:15.180 --> 00:03:17.900
+However, I'm sure there's a couple people out there.
+
+00:03:17.900 --> 00:03:30.620
+Before I let you introduce yourself and stuff just quickly, you have the honor, distinguished or maybe otherwise, of actually participating in the loudest Talk Python episode ever.
+
+00:03:31.060 --> 00:03:35.060
+Do you remember that forklift that was driving around behind us?
+
+00:03:35.060 --> 00:03:36.380
+It was dystopian, wasn't it?
+
+00:03:36.380 --> 00:03:39.000
+It was the end of PyCon two years ago.
+
+00:03:39.000 --> 00:03:40.240
+And we started doing the podcast.
+
+00:03:40.240 --> 00:03:43.120
+And then they started taking down the PyCon around us.
+
+00:03:43.120 --> 00:03:44.000
+And there was this forklift.
+
+00:03:44.000 --> 00:03:45.860
+It felt like slight jeopardy.
+
+00:03:45.860 --> 00:03:47.080
+But it was good.
+
+00:03:47.180 --> 00:03:53.620
+It certainly was a concentration test to have the forklift driving right behind us, beeping as loud as I could.
+
+00:03:53.620 --> 00:03:53.960
+It was amazing.
+
+00:03:53.960 --> 00:03:54.240
+All right.
+
+00:03:54.240 --> 00:03:57.660
+Tell people about yourself and Pydantic and stuff.
+
+00:03:57.660 --> 00:04:01.480
+So I started Pydantic back in 2017 as a side project.
+
+00:04:01.480 --> 00:04:02.680
+And I toodled along.
+
+00:04:02.680 --> 00:04:05.820
+And then 2021, it somehow, something happened.
+
+00:04:05.820 --> 00:04:08.240
+And the rate of downloads just started to increase a lot.
+
+00:04:08.240 --> 00:04:10.320
+I started working on it full time in 2022.
+
+00:04:10.320 --> 00:04:13.040
+Decided to do this rebuild of the core in Rust.
+
+00:04:13.040 --> 00:04:17.920
+Because while I was really proud of how much people were using Pydantic, I wasn't particularly proud of its internals.
+
+00:04:17.920 --> 00:04:24.620
+I had done a bit of Rust, a bit of a couple of other projects that wrap Rust to produce Python packages.
+
+00:04:24.620 --> 00:04:26.680
+But nothing on the scale of Pydantic.
+
+00:04:26.680 --> 00:04:30.500
+And then eight months into this three-month project, I was halfway through.
+
+00:04:30.500 --> 00:04:34.080
+And Sequoia very kindly got in touch and offered to invest.
+
+00:04:34.080 --> 00:04:36.100
+And so I started a company around Pydantic.
+
+00:04:36.100 --> 00:04:40.700
+And so, yeah, we released Pydantic V2, the rewrite, middle of last year.
+
+00:04:41.440 --> 00:04:45.920
+And, yeah, adoption of Pydantic, as I'm pleased to say, continues to grow.
+
+00:04:45.920 --> 00:04:49.060
+We had, I think, 307 million downloads in October.
+
+00:04:49.060 --> 00:04:52.680
+And now we're obviously building commercial stuff, Logfire in particular.
+
+00:04:52.680 --> 00:04:55.100
+But we also do a bit more Rust in Python.
+
+00:04:55.100 --> 00:05:00.420
+So we have Jitter, which is our very fast Rust-based JSON parser, which is available both.
+
+00:05:00.420 --> 00:05:02.580
+It's used in Pydantic and is a separate package.
+
+00:05:02.580 --> 00:05:07.860
+So, yeah, that's a kind of summary of my interaction with Rust and Python over the last kind of five, six years.
+
+00:05:07.860 --> 00:05:08.660
+Amazing.
+
+00:05:09.040 --> 00:05:17.600
+Yeah, and it was that move, that pending move or partial move to Rust that actually was the basis of that forklift episode.
+
+00:05:17.600 --> 00:05:20.740
+David, hello.
+
+00:05:20.740 --> 00:05:21.460
+Hi.
+
+00:05:21.460 --> 00:05:24.680
+Yeah, so I am based in London, like Samuel.
+
+00:05:24.920 --> 00:05:30.860
+I work on a product called Kraken that is not anything to do with cryptocurrency or gin.
+
+00:05:30.860 --> 00:05:32.100
+I think there's a gin.
+
+00:05:32.100 --> 00:05:33.980
+Or Git clients.
+
+00:05:33.980 --> 00:05:37.320
+It's actually, it came out of a company called Octopus Energy.
+
+00:05:37.320 --> 00:05:40.980
+And it's, Octopus Energy is a renewable energy company.
+
+00:05:41.480 --> 00:05:47.320
+And Kraken is basically a big Django monolith that we used at Octopus Energy.
+
+00:05:47.320 --> 00:05:49.380
+And it worked really well.
+
+00:05:49.380 --> 00:05:55.260
+And Octopus Energy over the last eight years has grown to be the second biggest energy company in the UK.
+
+00:05:55.720 --> 00:06:04.240
+And so what we've been doing is using Kraken throughout the world on lots of different, in lots of different countries and lots of different energy companies.
+
+00:06:04.240 --> 00:06:07.340
+And I think the interesting thing about it is it's absolutely massive.
+
+00:06:07.340 --> 00:06:13.080
+It's, I just counted it today, eight and a half million lines of code for one Django packet.
+
+00:06:13.080 --> 00:06:13.840
+That is nuts.
+
+00:06:13.840 --> 00:06:18.120
+I was going to have you elaborate because you said I work on a large Django monolith.
+
+00:06:18.120 --> 00:06:20.100
+Like, it's really large.
+
+00:06:20.100 --> 00:06:20.960
+That's amazing.
+
+00:06:21.140 --> 00:06:23.960
+Sometimes I wonder, has there ever been a bigger one?
+
+00:06:23.960 --> 00:06:24.980
+I don't know.
+
+00:06:24.980 --> 00:06:27.180
+I should probably ask on Hacker News or something.
+
+00:06:27.180 --> 00:06:27.620
+Yeah.
+
+00:06:27.620 --> 00:06:28.360
+Only GitHub knows.
+
+00:06:28.360 --> 00:06:29.120
+It's big.
+
+00:06:29.120 --> 00:06:32.420
+And it's also, there's quite a lot of people working on it at once.
+
+00:06:32.420 --> 00:06:35.400
+There's, like, I just looked at last week.
+
+00:06:35.400 --> 00:06:42.200
+There were over 400 authors of pull requests in one week, all merging stuff together onto the same Python packet.
+
+00:06:42.200 --> 00:06:44.340
+And you'd think it wouldn't work.
+
+00:06:44.340 --> 00:06:45.680
+I would have said it wouldn't work.
+
+00:06:45.680 --> 00:06:49.640
+It turns out, actually, you can run an energy company on that basis.
+
+00:06:49.640 --> 00:06:50.980
+You're a huge energy company.
+
+00:06:51.080 --> 00:06:52.420
+You must have a ton of repositories.
+
+00:06:52.420 --> 00:06:53.280
+Yeah, we got one.
+
+00:06:53.280 --> 00:06:57.320
+There are some others, to be honest, but mostly it's one big one.
+
+00:06:57.320 --> 00:06:58.320
+Can I ask a question?
+
+00:06:58.320 --> 00:07:03.200
+Is that continuously deployed or how is that managed in terms of deploys?
+
+00:07:03.200 --> 00:07:07.220
+Actually, each energy company, there are nearly 30 energy companies.
+
+00:07:07.220 --> 00:07:10.800
+Each energy company gets their own separate installation.
+
+00:07:10.800 --> 00:07:16.840
+And every time anyone merges, pretty much, we push it out to all of the energy companies.
+
+00:07:17.380 --> 00:07:22.640
+You know, it's on the basis that really, if we break something, then we can fix it quickly as well.
+
+00:07:22.640 --> 00:07:29.000
+And also, in the domain of energy, how often do you actually log in to your energy account?
+
+00:07:29.000 --> 00:07:32.140
+You know, are you going to be on the phone saying, where's my bill?
+
+00:07:32.720 --> 00:07:39.600
+We can get away with that kind of thing, which maybe we couldn't do that if it was, I don't know, a payments gateway or something like that.
+
+00:07:39.600 --> 00:07:44.960
+Or if you built a package that shipped over PyPI to hundreds of millions of people.
+
+00:07:44.960 --> 00:07:45.480
+Yeah.
+
+00:07:45.480 --> 00:07:51.540
+We released Pydantic 2.10 yesterday, and we've definitely got quite a few issues back.
+
+00:07:51.540 --> 00:07:53.320
+So we definitely break stuff too.
+
+00:07:53.320 --> 00:07:55.120
+Don't, for a second, think we don't break anything.
+
+00:07:55.120 --> 00:07:58.700
+We don't mind the things that are unintentionally broken because we can go and fix them.
+
+00:07:58.700 --> 00:08:00.140
+It's when we change an API.
+
+00:08:00.140 --> 00:08:08.300
+That's the painful thing for us rather than actually, weirdly, bugs are in some sense, like, less severe than, like, getting the wrong API.
+
+00:08:08.300 --> 00:08:13.660
+Yeah, that's got to be really tricky to say, you know, we need to add, we need to add a parameter to this function.
+
+00:08:13.660 --> 00:08:19.080
+Or the whole one to two switch, you deprecated quite a few methods and stuff as well.
+
+00:08:19.080 --> 00:08:25.320
+In some sense, deprecated methods and parameters are relatively easy because someone's, you know, it's relatively clear to see what's happened.
+
+00:08:25.320 --> 00:08:27.780
+It's when it's, like, subtle changes in behavior.
+
+00:08:27.780 --> 00:08:35.340
+Like, do you apply an, like, integer constraint before or after a function that wraps the integer validation?
+
+00:08:35.340 --> 00:08:40.000
+Like, things like that, if you decide to change it because you're like, well, this is marginally more correct.
+
+00:08:40.000 --> 00:08:43.460
+Is it worth making it marginally more correct for a lot of people spending a lot of time?
+
+00:08:43.460 --> 00:08:44.740
+Very, very confused.
+
+00:08:44.740 --> 00:08:48.640
+That can definitely generate some open issues on the issue tracker.
+
+00:08:48.640 --> 00:08:50.020
+Also, the parsing.
+
+00:08:50.020 --> 00:08:52.600
+I think you all changed the rules about the parsing, right?
+
+00:08:52.620 --> 00:08:59.660
+One of the pieces of magic of Pydantic is you had a list and you said it was a list of integers, but it happened to be strings that could be converted to integers.
+
+00:08:59.660 --> 00:09:00.980
+It would just become a list of integers.
+
+00:09:00.980 --> 00:09:05.960
+But I feel like you changed the strictness or looseness of that behavior at one point, right?
+
+00:09:05.960 --> 00:09:08.220
+Yeah, we made it a little bit more strict in places.
+
+00:09:08.220 --> 00:09:17.820
+We said things like you can't coerce an integer to a string because basically, like, the original semantics of Pydantic was like, we'll just call integer on the thing and see if it's an int.
+
+00:09:17.820 --> 00:09:19.760
+And that mostly worked.
+
+00:09:19.760 --> 00:09:21.340
+We'll call list on something and see if it's a list.
+
+00:09:21.340 --> 00:09:25.740
+Problem is with string, you can call string on everything and you'll get back a string, right?
+
+00:09:25.740 --> 00:09:28.800
+So it's no longer a valid test of is it a string to call string on it.
+
+00:09:28.800 --> 00:09:29.720
+What time did this happen?
+
+00:09:29.720 --> 00:09:33.020
+It happened at angle bracket class datetime dot datetime dot.
+
+00:09:33.020 --> 00:09:38.320
+And that's another thing because no one writes their unit tests for the weird edge cases of what's valid.
+
+00:09:38.320 --> 00:09:46.320
+But then if you're a bank and one bank is sending you strings for a number or numbers for a string and you change it, like, we change how it works, that's problematic.
+
+00:09:46.700 --> 00:09:50.760
+But luckily, the banks don't pay us anything in sponsorship, so I don't mind breaking it for banks as a rule.
+
+00:09:50.760 --> 00:09:54.700
+These are the bootstrapped, struggling small businesses.
+
+00:09:54.700 --> 00:09:58.760
+They're not ready, these banks, to have enough money to support open source.
+
+00:09:58.760 --> 00:10:01.900
+We're just trying to persuade them to use Logfire right now, so I'll stop being rude about banks.
+
+00:10:01.900 --> 00:10:03.260
+Yes, no, of course.
+
+00:10:03.260 --> 00:10:06.080
+Well, it's a really tricky balance, right?
+
+00:10:06.080 --> 00:10:09.560
+To get those folks to open their checkbooks and pay for it, right?
+
+00:10:09.680 --> 00:10:14.300
+They don't have charity usually in their bylines or whatever.
+
+00:10:14.300 --> 00:10:15.580
+What they're supposed to be doing, right?
+
+00:10:15.580 --> 00:10:20.740
+But with something like Logfire, they can say, well, here's a service that we can use.
+
+00:10:20.740 --> 00:10:25.860
+And by using it, we might be able to support Pydantic and the other things that are important to us.
+
+00:10:25.860 --> 00:10:27.240
+So I think that's great.
+
+00:10:27.240 --> 00:10:30.300
+Tell people just real quickly about Logfire out there.
+
+00:10:30.680 --> 00:10:31.100
+Yeah, absolutely.
+
+00:10:31.100 --> 00:10:36.300
+So Logfire is an observability platform built, obviously, by the team behind Pydantic.
+
+00:10:36.300 --> 00:10:44.880
+And if you go to Logfire along the top, I suppose the two things that make it different from some of the stuff that's come before is Logfire is built on open telemetry.
+
+00:10:44.880 --> 00:10:50.240
+So on open standards that mean that, yeah, the rails of where the data is being transferred are on an open standard.
+
+00:10:50.240 --> 00:10:56.820
+And if you decide you didn't want to use the Logfire platform anymore, you can send that data to anything else that supports open telemetry.
+
+00:10:57.240 --> 00:11:10.240
+But unlike lots of other companies in our space, instead of using open telemetry as an excuse to abandon the SDK space and just say, use the horrible open telemetry SDK directly, we have the Logfire package, which tries to make that super nice and easy to use.
+
+00:11:10.240 --> 00:11:15.020
+And then the other big change we have, I think there'll be an example maybe further on down the page.
+
+00:11:15.020 --> 00:11:18.240
+But maybe there isn't one right there.
+
+00:11:18.240 --> 00:11:20.560
+But we allow you to write SQL directly against your data.
+
+00:11:20.560 --> 00:11:21.880
+Oh, interesting.
+
+00:11:21.880 --> 00:11:25.180
+So instead of having to use kind of ClickOps to go around and do surveys.
+
+00:11:25.420 --> 00:11:29.080
+So if you look here, right, you can go and like write SQL to query your data.
+
+00:11:29.080 --> 00:11:38.760
+And so although we're still early, there are things you can do in Logfire that you cannot and never been able to do in like one of the big incumbents like Datadog because it's just SQL.
+
+00:11:38.760 --> 00:11:42.980
+And it's obviously much easier to learn for you, much easier for LLMs to write.
+
+00:11:42.980 --> 00:11:49.360
+So we have the like plausible chance in the future that you could basically chat with Logfire and say, what's wrong with my app?
+
+00:11:49.360 --> 00:11:56.000
+And the agent can go off and run SQL to investigate things in a way that is much harder if you have your own dialect.
+
+00:11:56.000 --> 00:12:01.080
+But allowing people to write SQL against data of the scale is a monumentally difficult challenge.
+
+00:12:01.620 --> 00:12:07.260
+And one of the things we struggle with a lot, but we think it's useful enough for developers that we like put the time in.
+
+00:12:07.260 --> 00:12:11.060
+So you can write any SQL you want, except for please only do the ones that have indexes.
+
+00:12:11.060 --> 00:12:13.180
+So our new database is data fusion.
+
+00:12:13.180 --> 00:12:14.360
+So there are no indexes.
+
+00:12:14.360 --> 00:12:18.180
+But yeah, if you do, there are queries you can do now that just like eat memory.
+
+00:12:18.180 --> 00:12:21.040
+And we have to find ways around them.
+
+00:12:21.060 --> 00:12:29.340
+And that's actually the hardest bit is like, whether intentionally or not, there are people, you know, there is SQL you can write, which is enormously like heavy to go and compute.
+
+00:12:29.340 --> 00:12:35.500
+And so we have to be able to find ways to like process that without taking down other customers, I suppose, is the point.
+
+00:12:35.500 --> 00:12:37.720
+You don't want to do a denial of service on yourself.
+
+00:12:37.720 --> 00:12:38.020
+Right.
+
+00:12:38.020 --> 00:12:45.220
+I mean, the definition of DOS is that like the effort required to DOS is significantly lower than the effort required to process it.
+
+00:12:45.220 --> 00:12:45.400
+Right.
+
+00:12:45.400 --> 00:12:47.820
+And writing SQL is the ultimate example of that.
+
+00:12:47.820 --> 00:12:49.880
+Yeah, it absolutely is.
+
+00:12:49.880 --> 00:12:50.400
+Okay.
+
+00:12:50.700 --> 00:12:58.380
+Well, that's a really interesting idea to have SQL there rather than like, let's just click around our UI until we get an answer and those sorts of things.
+
+00:12:58.380 --> 00:12:59.840
+Well, you've got some dashboards on that page.
+
+00:12:59.840 --> 00:13:05.720
+But the idea is like, sure, we'll go and give you a nice dashboard for HTTP traffic and like response codes.
+
+00:13:05.720 --> 00:13:06.960
+I think it's the next one down.
+
+00:13:06.960 --> 00:13:12.640
+But if you want to go and edit that, like the point is that you can basically next one after that.
+
+00:13:12.640 --> 00:13:17.280
+The point is you can go and customize that however you like by just editing the SQL if you so wish.
+
+00:13:17.280 --> 00:13:19.240
+So it's like it's trying to same with alerts.
+
+00:13:19.380 --> 00:13:21.740
+So we have, I guess you would say, century style alerting.
+
+00:13:21.740 --> 00:13:24.880
+But again, that's all configurable because in the end, it's just SQL that you can go and edit.
+
+00:13:24.880 --> 00:13:25.440
+Congratulations.
+
+00:13:25.720 --> 00:13:32.100
+I know many people were curious about when they heard that, hey, Pydantic starting a company.
+
+00:13:32.100 --> 00:13:32.660
+They have funding.
+
+00:13:32.660 --> 00:13:35.560
+It's like, what are they going to exactly going to do with that?
+
+00:13:35.560 --> 00:13:40.540
+And maybe a lot of people were worried just, hey, it now costs money to just use the library, right?
+
+00:13:40.700 --> 00:13:47.700
+I don't think anyone ever thought it would have been a good idea to literally have like Pydantic Pro where you had to have some API key to install Pydantic.
+
+00:13:47.700 --> 00:13:54.240
+But it could definitely have been what most open source companies do is they have like open source project as a service.
+
+00:13:54.240 --> 00:13:58.340
+And then they start, if not taking out features, then adding new features to the paid version.
+
+00:13:58.340 --> 00:14:03.720
+And I was super keen that Pydantic continued to be successful as an open source project.
+
+00:14:03.940 --> 00:14:09.460
+And so we did the slightly weird thing about building something, which is in a different space from what we're known for.
+
+00:14:09.460 --> 00:14:10.920
+And that definitely has its challenges.
+
+00:14:10.920 --> 00:14:13.560
+But I think it's overall, I think it's the right decision.
+
+00:14:13.560 --> 00:14:13.940
+Awesome.
+
+00:14:13.940 --> 00:14:15.060
+Well, congratulations.
+
+00:14:15.060 --> 00:14:17.340
+Beautiful looking project service here and so on.
+
+00:14:17.340 --> 00:14:22.120
+And I think maybe one of the big pieces of the news here, and that's not the one, although that is awesome.
+
+00:14:22.120 --> 00:14:23.680
+That's where we're going.
+
+00:14:23.680 --> 00:14:25.020
+Is this jitter?
+
+00:14:25.020 --> 00:14:25.760
+What is this jitter?
+
+00:14:25.760 --> 00:14:28.000
+David, are you familiar with this jitter?
+
+00:14:28.000 --> 00:14:28.900
+I've heard of it.
+
+00:14:28.900 --> 00:14:29.600
+Okay.
+
+00:14:29.600 --> 00:14:30.080
+Yeah.
+
+00:14:30.080 --> 00:14:32.260
+Because parsing JSON is super important.
+
+00:14:32.260 --> 00:14:33.280
+Tell us about this.
+
+00:14:33.280 --> 00:14:35.540
+So parsing JSON is a big thing.
+
+00:14:35.540 --> 00:14:44.020
+And when I first built Pydantic version 2 with the Rust core, we're using Serdi, which is the kind of default parsing library in Rust.
+
+00:14:44.020 --> 00:14:51.680
+The problem is that Serdi wants to parse the entire JSON object before it returns you some representation of that.
+
+00:14:51.680 --> 00:14:56.920
+And jitter came out of this idea that we could do parsing as we do validation.
+
+00:14:56.920 --> 00:14:59.000
+So imagine you have a list of integers.
+
+00:14:59.700 --> 00:15:11.240
+Instead of what you would traditionally do is you would parse the JSON, you would allocate some vector of all of the values in that list, each of which would have to be itself a like, you know, here are the different types you might get in JSON because you don't know what it's going to be up front.
+
+00:15:11.600 --> 00:15:14.700
+And then once you finish doing that, you can then go and do validation on that.
+
+00:15:14.700 --> 00:15:18.340
+And jitter, the idea is it's an iterative JSON parser, hence the name.
+
+00:15:18.340 --> 00:15:27.460
+You can effectively get, if you think of it in Python parlance as like a iterable that gives you back each individual element of the JSON as you go along.
+
+00:15:27.460 --> 00:15:35.200
+The truth is right now inside Pydantic core, we're still using this JSON value, which is Jitter's variant of doing the whole parsing first.
+
+00:15:35.480 --> 00:15:38.340
+There are a few optimizations that we get to get away with.
+
+00:15:38.340 --> 00:15:58.040
+So there are some really neat things in JSON, like if your strings, for example, John Doe, you're showing on the screen there, does not include any escape sequences like backslash N or Unicode sequences, then you can pass a pointer to that range of the underlying JSON object as a string instead of having to allocate that string.
+
+00:15:58.140 --> 00:16:09.080
+So we do some like clever optimizations like that, but the plan in a future version of Pydantic, either as a opt-in feature in v2 or as v3, is to be able to do the iterative parsing.
+
+00:16:09.080 --> 00:16:18.820
+What's crazy about Jitter is, well, one, once we start to work on this, we've actually got to the point where Jitter is full on faster than SERDI in any use case, even if you're not doing the iterative thing.
+
+00:16:18.820 --> 00:16:27.680
+But also this iterative JSON parsing thing is exactly what you want when you want to allow people to query JSON in a way like JSONB in Postgres.
+
+00:16:27.900 --> 00:16:34.560
+And so we went and used Jitter to implement JSON querying inside DataFusion when we moved our database to DataFusion.
+
+00:16:34.560 --> 00:16:44.920
+And it was just like, very luckily, yeah, it happens to be exactly the right concept you need for like, for querying JSON, where you want to iterate over looking for the like string foo, and then stop as soon as you find it.
+
+00:16:44.920 --> 00:16:49.240
+So the code samples you got on the repo here, got a lot of semicolons in them.
+
+00:16:49.240 --> 00:16:51.920
+Is there a, is it interoperable with Python as well?
+
+00:16:51.920 --> 00:16:53.600
+Or is it just a Rust level thing?
+
+00:16:53.600 --> 00:16:56.260
+If you go up, actually, it's a, it's a, this is a monorepo.
+
+00:16:56.360 --> 00:17:02.060
+So if you go up into source into crates, which is, so this is, you have a bunch of different crates in here.
+
+00:17:02.060 --> 00:17:07.560
+But if you look at Jitter Python, and I think if you go down, you'll see an example of calling Jitter directly from Python.
+
+00:17:07.560 --> 00:17:07.920
+Awesome.
+
+00:17:08.080 --> 00:17:18.800
+The reason we released this as a Python package was a large AI company who I don't know if they wanted me to name them, basically were using Pydantic V1 so heavily, but they needed some of the functionality of Jitter.
+
+00:17:18.800 --> 00:17:26.340
+And so they basically begged us to release this as a separate package so that they could, they could use Jitter themselves before they upgraded to Pydantic V2.
+
+00:17:26.340 --> 00:17:28.780
+In fact, the OpenAI SDK uses Jitter.
+
+00:17:28.780 --> 00:17:31.100
+So I think that is public information who it might be.
+
+00:17:32.040 --> 00:17:40.960
+This portion of Talk Python to Me is brought to you by Posit, the makers of Shiny, formerly RStudio, and especially Shiny for Python.
+
+00:17:40.960 --> 00:17:42.860
+Let me ask you a question.
+
+00:17:42.860 --> 00:17:44.560
+Are you building awesome things?
+
+00:17:44.560 --> 00:17:45.640
+Of course you are.
+
+00:17:45.640 --> 00:17:47.200
+You're a developer or a data scientist.
+
+00:17:47.200 --> 00:17:48.120
+That's what we do.
+
+00:17:48.120 --> 00:17:50.240
+And you should check out Posit Connect.
+
+00:17:50.580 --> 00:17:57.140
+Posit Connect is a way for you to publish, share, and deploy all the data products that you're building using Python.
+
+00:17:57.140 --> 00:18:00.300
+People ask me the same question all the time.
+
+00:18:00.300 --> 00:18:03.460
+Michael, I have some cool data science project or notebook that I built.
+
+00:18:03.460 --> 00:18:06.760
+How do I share it with my users, stakeholders, teammates?
+
+00:18:06.760 --> 00:18:11.580
+Do I need to learn FastAPI or Flask or maybe Vue or React.js?
+
+00:18:11.580 --> 00:18:12.800
+Hold on now.
+
+00:18:12.800 --> 00:18:17.580
+Those are cool technologies, and I'm sure you'd benefit from them, but maybe stay focused on the data project?
+
+00:18:17.580 --> 00:18:20.060
+Let Posit Connect handle that side of things?
+
+00:18:20.220 --> 00:18:24.800
+With Posit Connect, you can rapidly and securely deploy the things you build in Python.
+
+00:18:24.800 --> 00:18:31.240
+Streamlit, Dash, Shiny, Bokeh, FastAPI, Flask, Quarto, Ports, Dashboards, and APIs.
+
+00:18:31.240 --> 00:18:33.540
+Posit Connect supports all of them.
+
+00:18:33.540 --> 00:18:39.360
+And Posit Connect comes with all the bells and whistles to satisfy IT and other enterprise requirements.
+
+00:18:39.360 --> 00:18:43.660
+Make deployment the easiest step in your workflow with Posit Connect.
+
+00:18:43.660 --> 00:18:48.900
+For a limited time, you can try Posit Connect for free for three months by going to talkpython.fm.
+
+00:18:49.860 --> 00:18:53.540
+That's talkpython.fm/P-O-S-I-T.
+
+00:18:53.540 --> 00:18:55.400
+The link is in your podcast player show notes.
+
+00:18:55.400 --> 00:18:58.660
+Thank you to the team at Posit for supporting Talk Python.
+
+00:19:00.880 --> 00:19:05.800
+But yeah, the other interesting thing that came out, which again, I'm ashamed to say I had no idea would be useful.
+
+00:19:05.800 --> 00:19:18.800
+This idea of iteratively parsing JSON until you stop effectively turns out to be incredibly helpful in LLMs, where, as you see on screen here, you can basically parse an incomplete JSON string.
+
+00:19:18.800 --> 00:19:28.320
+And obviously, because LLMs stream you the response, you can use this to effectively do validation as you receive structured responses.
+
+00:19:28.320 --> 00:19:32.100
+Work on a JSON stream instead of a JSON response.
+
+00:19:32.260 --> 00:19:37.080
+I'm being surprised by how, like, the legs that this has had, which I wasn't expecting when we first started it.
+
+00:19:37.080 --> 00:19:47.480
+But yeah, the nice bit is it's all the input, the actual JSON parsing is Rust, but then we have the logic to, yeah, basically access that from Python, both in this package and in PyLantic core.
+
+00:19:47.480 --> 00:19:52.480
+Well, you sent me over to this cargo section, or the crate section, rather.
+
+00:19:52.480 --> 00:19:58.600
+And looking here, I see the cargo.toml, pyproject.toml, some source.
+
+00:19:58.600 --> 00:20:02.540
+I think this might be, in the source, we've got some Rust.
+
+00:20:02.540 --> 00:20:09.020
+I think that this might be, David, a good way to start leading into working with Rust.
+
+00:20:09.020 --> 00:20:13.860
+And, you know, this is kind of the destination of your whole presentation you gave at PyCon Italy, right?
+
+00:20:14.080 --> 00:20:20.340
+We've sort of alluded to it already, but Python and Rust can interoperate, which is an amazing fact.
+
+00:20:20.340 --> 00:20:27.600
+I think it's so easy to think, oh, well, within a particular application, you know, you're stuck with the programming language that you've picked.
+
+00:20:27.600 --> 00:20:36.280
+But actually, Python was really designed originally, from what I understand, to be a kind of glue language between different C programs and things like that.
+
+00:20:36.360 --> 00:20:49.160
+So actually, what you can do is you can use that design to use Rust to compile what are called extension modules, which are used in lots of other bits of Python, say, NumPy or something like that.
+
+00:20:49.160 --> 00:20:52.560
+Or even maybe less obvious ones like SQLAlchemy and other places.
+
+00:20:52.560 --> 00:20:56.820
+There's optional speedup C extension type things, right?
+
+00:20:57.080 --> 00:20:59.240
+Yeah, absolutely. And in the standard library, of course.
+
+00:20:59.240 --> 00:21:04.460
+But you're not writing C or you're not writing, I think NumPy might even have Fortran.
+
+00:21:04.460 --> 00:21:05.780
+You're writing Rust.
+
+00:21:05.780 --> 00:21:12.100
+You're ending up with something that's the same as you might have done with a different lower level language.
+
+00:21:12.100 --> 00:21:20.520
+And that allows you to use Python for all of the nice stuff like domain modeling and that thing we're all familiar with.
+
+00:21:20.520 --> 00:21:23.140
+And the reason we like Python is we can be very productive with it.
+
+00:21:23.140 --> 00:21:28.100
+But just occasionally you hit something with Python where it's basically slow.
+
+00:21:28.100 --> 00:21:32.540
+There's a high level language there and those abstractions are coming at a cost.
+
+00:21:32.540 --> 00:21:34.940
+You know, we talk about the GIL as well.
+
+00:21:34.940 --> 00:21:39.360
+You know, the GIL gets in the way of using all of the CPUs on our machine.
+
+00:21:39.360 --> 00:21:42.000
+But that's not the case for extension modules.
+
+00:21:42.000 --> 00:21:44.160
+They can leave the GIL behind if you want.
+
+00:21:44.160 --> 00:21:51.980
+So you can actually, by writing these extension modules, get more out of Python than you might have thought.
+
+00:21:51.980 --> 00:21:58.740
+And Rust is a pretty new language that's learned a lot of lessons from older languages.
+
+00:21:58.740 --> 00:22:01.700
+And I think it's really lovely.
+
+00:22:01.700 --> 00:22:04.440
+You feel like you're in the presence of greatness.
+
+00:22:04.440 --> 00:22:08.360
+I want to ask both of you this question before we get too far down this path.
+
+00:22:08.500 --> 00:22:15.420
+Python often is referred to as CPython because the runtime, the core is all built in C, not Python.
+
+00:22:15.420 --> 00:22:15.940
+Right.
+
+00:22:15.940 --> 00:22:21.300
+And the original interop story is around C extensions and CFFI and those kinds of things.
+
+00:22:21.300 --> 00:22:28.660
+So why not just pick C for Pydantic or for your linter, David?
+
+00:22:28.660 --> 00:22:30.760
+You know, everyone else is doing it.
+
+00:22:30.760 --> 00:22:31.800
+They had been doing it.
+
+00:22:31.800 --> 00:22:33.420
+Maybe sometimes it would be the right answer.
+
+00:22:33.420 --> 00:22:36.360
+But Rust is offering something very different.
+
+00:22:36.360 --> 00:22:39.900
+It's offering like a really nice developer ecosystem.
+
+00:22:39.900 --> 00:22:42.240
+All the tooling is brilliant.
+
+00:22:42.960 --> 00:22:46.320
+And also, I think security is a big thing.
+
+00:22:46.320 --> 00:22:50.360
+So many security problems come from mismanagement of pointers.
+
+00:22:50.360 --> 00:23:00.520
+Rust is designed so that the compiler won't let you make a certain kind of mistake that happens all over the place in C and C++.
+
+00:23:01.000 --> 00:23:03.080
+I'm putting it more simply than that.
+
+00:23:03.080 --> 00:23:04.620
+I'm not clever enough to write C.
+
+00:23:04.620 --> 00:23:08.420
+That's a void pointer pointer.
+
+00:23:08.420 --> 00:23:09.340
+What are we doing here?
+
+00:23:09.340 --> 00:23:15.540
+Good way of looking at it is that you can have the unsafe mode in Rust where you effectively lose those constraints.
+
+00:23:15.540 --> 00:23:18.820
+And sometimes there are the occasional place where you need to use it.
+
+00:23:18.820 --> 00:23:24.320
+When we do that inside Pydantic or myself or David Hewitt, who's a much better Rust developer than I am,
+
+00:23:24.320 --> 00:23:32.020
+we agonize for genuinely minutes at a time over how exact, whether or not it is really safe to write that one line of code as unsafe
+
+00:23:32.020 --> 00:23:35.680
+and whether there was any possible case in which it could lead to problems.
+
+00:23:35.680 --> 00:23:39.080
+If you write an app in C, every single line is unsafe.
+
+00:23:39.080 --> 00:23:40.080
+And if you write a...
+
+00:23:40.080 --> 00:23:45.200
+You're agonizing even over just a string, like an S print F equivalent.
+
+00:23:45.200 --> 00:23:51.740
+And it doesn't have to be eight and a half million lines of code for it to be incredibly hard to go through every single line of that.
+
+00:23:51.740 --> 00:23:54.860
+So I forget there's like 40,000 lines of code in Pydantic Core.
+
+00:23:54.860 --> 00:24:03.640
+It is inconceivable that we could have written that in C and have anywhere near the confidence we have with it written in Rust that it was memory safe.
+
+00:24:03.640 --> 00:24:07.800
+We have had one memory safety issue reported in Pydantic Core.
+
+00:24:08.080 --> 00:24:19.060
+And it was a side effect of something deep in Py03, which in turn was a result of like Greenlit doing something crazy that technically the guild didn't think you could do.
+
+00:24:19.060 --> 00:24:21.840
+I mean, that's the level of complexity.
+
+00:24:21.840 --> 00:24:24.760
+Another example is Jitter, which I showed you.
+
+00:24:24.760 --> 00:24:27.160
+We released Jitter a year ago now.
+
+00:24:27.160 --> 00:24:31.540
+It is the most downloaded JSON parser in Python other than the one in the standard library.
+
+00:24:31.880 --> 00:24:36.960
+No one has ever reported a bug in it in terms of it parsing stuff incorrectly, except for impartial mode, I think.
+
+00:24:36.960 --> 00:24:41.480
+Now, I said that someone will probably go and find one, but like it has been that just wouldn't happen in Python.
+
+00:24:41.480 --> 00:24:43.680
+You could not write that reliable.
+
+00:24:43.940 --> 00:24:51.600
+One of the ways it achieves this is by like really stopping you doing all the stuff that you would expect to be able to do.
+
+00:24:51.600 --> 00:25:03.460
+Whenever I sort of tell someone about Rust, I say, you know, if you have a string in Rust and you assign it to a variable, let's say X, and then you like store that X in Y.
+
+00:25:03.680 --> 00:25:07.960
+So you do Y equals X, then you can't use X anymore because it's gone.
+
+00:25:07.960 --> 00:25:18.060
+That seems very strange, you know, and it seems strange maybe as Python developers because we don't actually hardly ever, maybe never need to think about memory safety.
+
+00:25:18.060 --> 00:25:19.440
+You know, we've got that luxury.
+
+00:25:19.440 --> 00:25:22.860
+But once you go down lower level, you are starting to.
+
+00:25:23.300 --> 00:25:29.120
+And what's going on there with the kind of you can't have X and Y both pointing to that string.
+
+00:25:29.120 --> 00:25:34.700
+I mean, you can if you copy that memory so that there's then separate bits of memory in X and Y.
+
+00:25:34.700 --> 00:25:39.840
+But it's kind of making you think in detail about where is the memory for this program?
+
+00:25:39.840 --> 00:25:40.760
+Ownership, right?
+
+00:25:40.760 --> 00:25:42.640
+The ownership of who owns this.
+
+00:25:42.640 --> 00:25:44.760
+I can give you another good practical example.
+
+00:25:44.860 --> 00:26:02.040
+So I was saying earlier in the jitter case, we have this point where some strings, many strings, you can instead of having to copy the whole of the string out of the chunk of data within the original input of JSON, you can literally refer to that slice of data as a pointer.
+
+00:26:02.040 --> 00:26:04.880
+Literally say this is the string itself and you don't have to copy.
+
+00:26:04.880 --> 00:26:11.120
+But that means the type you get back for when you parse a string in jitter is what is called a cow in Rust.
+
+00:26:11.120 --> 00:26:17.020
+And it is either an owned string, e.g. when you've copied it, or it's a reference to the underlying chunk of the array.
+
+00:26:17.020 --> 00:26:28.140
+And so that gets quite difficult when you're actually writing code with that because you can't go and access that string after you've validated, after you've parsed the next token, because in theory that could have now changed.
+
+00:26:28.140 --> 00:26:34.780
+If you were writing that in C, you'd have to basically manually keep track of am I accessing that cow in the right place?
+
+00:26:35.140 --> 00:26:39.280
+Whereas in Rust, well, you wouldn't have a cow in C, but you could presumably have some similar construct.
+
+00:26:39.280 --> 00:26:40.940
+Rust basically takes care of that.
+
+00:26:40.940 --> 00:26:52.320
+As soon as you go and do another piece of validation, it immediately says, no, no, you can't even access that previous cow because the lifetime of it has now been used when you've called into the parser to get the next token.
+
+00:26:52.320 --> 00:26:56.240
+And so it's a very neat, it basically stops you from having to think about that.
+
+00:26:56.320 --> 00:27:04.880
+And that means you can actually do not more unsafe, but more complex things knowing that the borrower checker is going to save you in the end.
+
+00:27:04.880 --> 00:27:05.760
+You can try and do something.
+
+00:27:05.760 --> 00:27:07.680
+And if it doesn't work, the borrower checker will say it's not possible.
+
+00:27:07.680 --> 00:27:14.600
+And if the borrower checker says it is possible, you're safe to access that reference to a string that you passed like 50 lines of code higher up.
+
+00:27:14.600 --> 00:27:17.160
+It sounds like a paradigm shift, but also super valuable.
+
+00:27:17.160 --> 00:27:25.800
+So I know primarily Python people are listening, so this word might not make any sense, but is this a compile time check or is this a runtime check?
+
+00:27:25.800 --> 00:27:28.560
+We don't really think about compiling much in Python.
+
+00:27:28.840 --> 00:27:37.100
+We don't think about it, but you can think of import time when you do different stuff or you think about static typing when you go and run PyWrite over your code.
+
+00:27:37.100 --> 00:27:40.060
+And that is like very similar in some ways to compile time.
+
+00:27:40.060 --> 00:27:42.140
+It's also one of the big disadvantages of Rust.
+
+00:27:42.140 --> 00:27:44.200
+I mean, people think Rust is faster than Python.
+
+00:27:44.200 --> 00:27:54.520
+In many cases, if you write your script, it's a lot faster to run it in Python than it is in Rust because it'll take two seconds to run in Python or a few hundred milliseconds to run in Python and 10 seconds to compile in Rust.
+
+00:27:54.520 --> 00:28:00.720
+So it is not universally the case that the development cycle is faster in Rust.
+
+00:28:00.720 --> 00:28:02.680
+It depends how many times you run the code, right?
+
+00:28:02.680 --> 00:28:09.020
+If you're going to run it once or twice and you've got to create it to run it, well, you know, it maybe took you 10 minutes versus 20 minutes.
+
+00:28:09.020 --> 00:28:23.160
+And it speaks to another of the great powers of the Python ecosystem and of PyPI that we, the maintainers of Python packages built in Rust, can take care of compiling that Rust once, distribute all of the binaries.
+
+00:28:23.300 --> 00:28:25.660
+And then when people go and install it, we don't have to compile it.
+
+00:28:25.660 --> 00:28:30.220
+If you were using most other, if you were using cargo, you would have to take care.
+
+00:28:30.220 --> 00:28:38.380
+I mean, putting the controversy over Serti to one side for a minute, you would have to take care of compiling that code yourself every time you wanted to go and go and use it.
+
+00:28:38.380 --> 00:28:46.700
+Whereas actually PyPI does an amazing job of distributing compiled Rust for virtually every ecosystem, every architecture, and it just working when you install it.
+
+00:28:46.840 --> 00:28:47.080
+Absolutely.
+
+00:28:47.080 --> 00:28:57.300
+Something I just wanted to say about the memory management, like it is a compile time, but actually it also, you can also use reference counting and things like that.
+
+00:28:57.300 --> 00:28:58.300
+It's just opt-in.
+
+00:28:58.560 --> 00:29:04.060
+So there are lots of tools for allowing you to do runtime checking of things.
+
+00:29:04.060 --> 00:29:05.760
+And sometimes that's what you have to do.
+
+00:29:05.760 --> 00:29:12.040
+You're like, oh, I can't really do this just using stuff that's worked out before the program even runs.
+
+00:29:12.040 --> 00:29:14.280
+I do need to do it at runtime, but it's fine.
+
+00:29:14.380 --> 00:29:16.620
+I can do that for this particular data type.
+
+00:29:16.620 --> 00:29:20.400
+And then there's an API to do it, and it will come with other trade-offs.
+
+00:29:20.400 --> 00:29:29.140
+It's giving you that control, but it's giving you control over things which, if you've only ever programmed in Python, which, to be honest, pretty much, I mean, I used to do PHP a bit.
+
+00:29:29.140 --> 00:29:31.780
+My mind is soaked up in Python.
+
+00:29:31.780 --> 00:29:36.240
+And coming to Rust, it's like, oh, this is a completely different way of thinking.
+
+00:29:36.240 --> 00:29:38.720
+It's like the red pill in the matrix.
+
+00:29:38.720 --> 00:29:40.200
+You're like, what is this?
+
+00:29:40.200 --> 00:29:41.000
+Yeah.
+
+00:29:41.000 --> 00:29:42.300
+It's nice, though.
+
+00:29:43.340 --> 00:29:44.300
+It's hard.
+
+00:29:44.300 --> 00:29:45.160
+I'm not going to lie.
+
+00:29:45.160 --> 00:29:47.180
+I feel very confused a lot of the time.
+
+00:29:47.180 --> 00:29:49.900
+I suppose this is a time for the obligatory.
+
+00:29:49.900 --> 00:29:56.460
+The White House recommends the future software should be written in memory stuff languages such as Rust and Python.
+
+00:29:56.460 --> 00:29:59.440
+So, right, that's always nice to have around to think about.
+
+00:29:59.440 --> 00:30:05.720
+Whether or not that's an argument in favor of Rust or not, depending on your take on a particular White House, is another question altogether.
+
+00:30:05.720 --> 00:30:06.800
+But it's definitely a day support.
+
+00:30:06.800 --> 00:30:09.800
+I will draw your attention to the date of this.
+
+00:30:10.880 --> 00:30:16.760
+I'm interested to see what new leadership recommends next year.
+
+00:30:16.760 --> 00:30:19.380
+We'll see if they're like, assembly all the way.
+
+00:30:19.380 --> 00:30:19.980
+We've decided.
+
+00:30:19.980 --> 00:30:20.680
+No, okay.
+
+00:30:20.680 --> 00:30:24.020
+Let's carry on with your story, David.
+
+00:30:24.120 --> 00:30:31.440
+So, you wrote this thing called an import linter, which is kind of a unique, there's lots of linters in Python, right?
+
+00:30:31.440 --> 00:30:32.580
+There's PyFlake.
+
+00:30:32.580 --> 00:30:33.620
+There's Ruff.
+
+00:30:33.620 --> 00:30:36.420
+Another Rust success story, I suppose.
+
+00:30:36.420 --> 00:30:39.600
+But this one checks more architecturally, right?
+
+00:30:39.600 --> 00:30:43.800
+And you want to use this on your small little repo that you all are running over there.
+
+00:30:43.800 --> 00:30:45.400
+Tell us about that story.
+
+00:30:45.520 --> 00:30:55.100
+I wrote it for Kraken, but actually, I had the idea for it in a previous company on, you know, it was still a complex monolith, but nowhere near as big.
+
+00:30:55.100 --> 00:31:06.060
+And to be honest, I find even in quite small projects with just a handful of files, it's still useful to think about the architecture of those files.
+
+00:31:06.060 --> 00:31:11.540
+And I think, for me, architecture is ultimately about dependencies.
+
+00:31:11.540 --> 00:31:26.180
+And something that Python lets you do, which I don't think is very good, is that you can end up with lots of cross dependencies between different modules and packages within a particular Python project.
+
+00:31:26.180 --> 00:31:33.200
+So, for example, you know, I mean, we know that sometimes you get circular import errors, but this is something a bit wider than that.
+
+00:31:33.560 --> 00:31:43.980
+Possibly, if you've got two sibling sub packages, you might have one module which imports from something in one, in the other sibling package.
+
+00:31:43.980 --> 00:31:47.560
+And then there'd be like other modules that import the other way.
+
+00:31:47.560 --> 00:31:55.060
+And it won't stop Python from loading up, but there's a sort of, there's a circular dependency conceptually between those two packages.
+
+00:31:55.060 --> 00:31:55.860
+They're tightly coupled.
+
+00:31:55.860 --> 00:32:02.980
+And, you know, this is just one example of the kind of architectural rule you might want to impose on a project.
+
+00:32:03.180 --> 00:32:07.320
+Say, well, actually, I want there to be a dependency only one way.
+
+00:32:07.320 --> 00:32:11.020
+I want one of those packages to be kind of lower level and one of them to be higher level.
+
+00:32:11.020 --> 00:32:14.220
+Or maybe you'd have like five packages that are all siblings.
+
+00:32:14.220 --> 00:32:23.120
+And, you know, you call this layer, really, but where you maybe, you know, say, yeah, this can import all the ones below it, but nothing can import the ones above it.
+
+00:32:23.120 --> 00:32:25.360
+And you sort of think of them in a sort of stack.
+
+00:32:25.360 --> 00:32:26.260
+Here are the details.
+
+00:32:26.260 --> 00:32:27.740
+Here's the public interface.
+
+00:32:27.740 --> 00:32:29.540
+And then things use the public interface.
+
+00:32:29.540 --> 00:32:32.080
+They shouldn't reach down below and vice versa.
+
+00:32:32.280 --> 00:32:32.440
+Yeah.
+
+00:32:32.440 --> 00:32:34.640
+That's certainly one thing you can do with it.
+
+00:32:34.640 --> 00:32:39.960
+It's mostly focused on controlling dependencies between packages as a whole.
+
+00:32:39.960 --> 00:32:42.160
+You can also do it for individual modules.
+
+00:32:42.160 --> 00:32:47.320
+But so what it does is it uses imports as the proxy for a dependency.
+
+00:32:47.740 --> 00:32:52.680
+So it will statically analyze all of the imports in your module.
+
+00:32:52.680 --> 00:32:55.680
+And then it will build a directed graph.
+
+00:32:55.840 --> 00:33:05.520
+So you can then think of your module, think of your package as like every module is a node and a graph with arrows pointing between all of them.
+
+00:33:05.520 --> 00:33:06.780
+And the arrows are the imports.
+
+00:33:06.780 --> 00:33:09.340
+Sometimes you call them edges or whatever.
+
+00:33:09.760 --> 00:33:20.000
+What import linter allows you to do is to write contracts that are just in YAML or TOML, which just say, all right, these are the rules I want you to check when you run the linter.
+
+00:33:20.440 --> 00:33:25.640
+And it will then you can put it in CI and it will fail if someone adds an import the wrong way.
+
+00:33:25.640 --> 00:33:34.300
+And it's fascinating to see, like, if you have an idea for an architecture and then you put an import linter contract on and then discover all the places where you're breaking it.
+
+00:33:34.300 --> 00:33:37.660
+They're almost always quite interesting, interesting things.
+
+00:33:37.660 --> 00:33:40.040
+And you're like, yeah, actually, this is a bit of a problem.
+
+00:33:40.040 --> 00:33:43.080
+Like, it needs a bit of thought to kind of untangle it.
+
+00:33:43.080 --> 00:33:48.640
+It is genuinely, you know, some conceptual tangling that would simplify things if we didn't do it.
+
+00:33:48.640 --> 00:33:51.540
+Yeah, it's kind of a higher order code smell.
+
+00:33:51.540 --> 00:33:54.220
+People are familiar with this idea from refactoring a code smell.
+
+00:33:54.220 --> 00:33:58.280
+Like, it's not wrong in that it won't run, but you kind of turn your nose up at it.
+
+00:33:58.280 --> 00:33:59.920
+You go, oh, right.
+
+00:33:59.920 --> 00:34:03.200
+And this is that, but not at a, oh, it takes too many parameters.
+
+00:34:03.200 --> 00:34:05.380
+But like, why is it all tied together like this?
+
+00:34:05.380 --> 00:34:06.840
+Can we think about it better, right?
+
+00:34:06.840 --> 00:34:07.660
+Yeah, exactly.
+
+00:34:36.020 --> 00:34:41.300
+You'll get an amazing look inside how these organizations handle their data.
+
+00:34:41.300 --> 00:34:45.940
+you'll hear firsthand insights about the data conversations affecting all kinds of industries.
+
+00:34:45.940 --> 00:34:49.780
+With guests sharing unique stories from some of the world's largest companies,
+
+00:34:49.780 --> 00:34:53.380
+such as Adobe, Fidelity, Deloitte, Hewlett Packard, McDonald's,
+
+00:34:53.380 --> 00:34:54.940
+and even the United States Coast Guard,
+
+00:34:54.940 --> 00:34:58.340
+you'll get an amazing look inside how these organizations handle their data.
+
+00:34:58.340 --> 00:35:03.040
+My favorite episode is solving data discovery with a self-service approach.
+
+00:35:03.040 --> 00:35:08.980
+It's an interesting look inside creating a single source of truth for data inside an online university.
+
+00:35:09.480 --> 00:35:13.280
+Check them out and try an episode for yourself at talkpython.fm/citizens.
+
+00:35:13.280 --> 00:35:16.040
+That's talkpython.fm/citizens.
+
+00:35:16.040 --> 00:35:18.360
+The link is in your podcast player's show notes.
+
+00:35:18.360 --> 00:35:21.920
+Thank you to Data Citizens Dialogues podcast for supporting the show.
+
+00:35:21.920 --> 00:35:26.820
+You know, and you can do things like, say, all of these modules are independent, say,
+
+00:35:26.820 --> 00:35:29.020
+so they don't import anything from each other.
+
+00:35:29.020 --> 00:35:34.120
+I mean, this is like just my whole mentality for architecting Python packages,
+
+00:35:34.120 --> 00:35:35.860
+and I find it works really well.
+
+00:35:36.240 --> 00:35:43.600
+And I think the fact that we've got these rules in place is probably a big reason why we're still able to have 1,000 PRs a week,
+
+00:35:43.600 --> 00:35:46.680
+all happening in different time zones without that many faults.
+
+00:35:46.680 --> 00:35:48.900
+Because we've got, we've architected it.
+
+00:35:48.900 --> 00:35:55.000
+So say we know that there aren't any imports between, say, two energy companies or between two territories.
+
+00:35:56.000 --> 00:35:59.920
+You've got to install your competitor's version as well to use yours.
+
+00:35:59.920 --> 00:36:04.740
+It's allowing us to think about things as being more independent.
+
+00:36:04.740 --> 00:36:10.540
+And so like someone can make a change in, say, Spain, and it's not going to break something in Australia.
+
+00:36:10.540 --> 00:36:14.800
+Because you're pretty confident because they aren't importing anything from there.
+
+00:36:14.800 --> 00:36:21.400
+Does that mean, in theory, if you got this, that you could use this within, for example, CI to only run unit tests,
+
+00:36:21.400 --> 00:36:25.840
+systems that have changed all direct descendants of that package?
+
+00:36:25.840 --> 00:36:27.440
+Because I presume we've...
+
+00:36:27.440 --> 00:36:28.020
+We do do that.
+
+00:36:28.020 --> 00:36:28.280
+Perfect.
+
+00:36:28.280 --> 00:36:30.020
+Because we've got a lot of money on CI.
+
+00:36:30.020 --> 00:36:34.780
+And so we've had to invest quite a lot of money to, like, figure out how do we narrow down the tests.
+
+00:36:34.780 --> 00:36:35.800
+So, yeah.
+
+00:36:35.800 --> 00:36:36.560
+Yeah, that's awesome.
+
+00:36:36.560 --> 00:36:37.440
+That's a great observation.
+
+00:36:37.660 --> 00:36:42.360
+This is all based on an underlying library called Grimp, which is...
+
+00:36:42.360 --> 00:36:43.700
+I kind of broke the libraries up.
+
+00:36:43.700 --> 00:36:47.320
+It's a little bit like what you did, Samuel, with Pydantic and Pydantic Core.
+
+00:36:47.320 --> 00:36:49.080
+So ImportLintra is pure Python.
+
+00:36:49.080 --> 00:36:49.420
+Yeah.
+
+00:36:49.420 --> 00:36:53.320
+But it has a dependency, which is Grimp, which is...
+
+00:36:53.320 --> 00:36:55.520
+I mean, it's got Python and Rust in at the moment.
+
+00:36:55.520 --> 00:37:02.760
+But that is just a Python API for building a graph, and then you can explore the graph.
+
+00:37:02.760 --> 00:37:04.220
+And you can do things like...
+
+00:37:04.220 --> 00:37:09.360
+It's really quite a useful tool if you're just interested to know something about code base.
+
+00:37:09.360 --> 00:37:12.800
+You know, you can just type in, build me a graph of this package, say.
+
+00:37:12.800 --> 00:37:19.340
+And then you could say, tell me all of the downstream modules of this module.
+
+00:37:19.340 --> 00:37:22.400
+And then it will explore the whole graph and, like, give you a set of modules.
+
+00:37:22.400 --> 00:37:24.740
+Or tell me all the upstream modules of this.
+
+00:37:24.740 --> 00:37:26.980
+So you can tell what dependencies are.
+
+00:37:26.980 --> 00:37:31.440
+Or you can, like, do, you know, what's the shortest path between this module and this module.
+
+00:37:31.440 --> 00:37:32.360
+Makes a lot of sense.
+
+00:37:32.360 --> 00:37:32.600
+Yeah.
+
+00:37:32.740 --> 00:37:34.940
+Can you get it to do dependencies?
+
+00:37:34.940 --> 00:37:36.920
+The things you pip install?
+
+00:37:36.920 --> 00:37:37.860
+Oh, I see what you mean.
+
+00:37:37.860 --> 00:37:41.900
+Well, you can build the graph with multiple packages.
+
+00:37:41.900 --> 00:37:43.900
+I don't even know if that's really...
+
+00:37:43.900 --> 00:37:45.520
+Is that possible?
+
+00:37:45.520 --> 00:37:50.440
+Can you have two installable PyPI packages that depend on each other?
+
+00:37:50.440 --> 00:37:54.760
+I'm more wondering if I can use this to visualize, well, what parts of my app...
+
+00:37:54.760 --> 00:37:58.080
+So I know that I have this dependency and I have to have it to run.
+
+00:37:58.080 --> 00:38:01.440
+But what parts of my app are using that library?
+
+00:38:01.440 --> 00:38:03.960
+So if I wanted to change it or whatever, you know what I mean?
+
+00:38:03.960 --> 00:38:05.600
+You can build a tree from...
+
+00:38:05.600 --> 00:38:08.860
+There's a pip package for it or UV will give you a tree of dependencies.
+
+00:38:08.860 --> 00:38:12.640
+But that is based on what packages require what other packages to be installed.
+
+00:38:12.640 --> 00:38:15.380
+It doesn't actually say what's being imported from where.
+
+00:38:15.600 --> 00:38:22.900
+So if you have an issue with URL in 3, what is the actual graph of where URL in 3 is being imported
+
+00:38:22.900 --> 00:38:24.440
+rather than what packages depend on it?
+
+00:38:24.440 --> 00:38:28.660
+There's a flag when you build the graph, which is include external packages.
+
+00:38:28.660 --> 00:38:31.940
+And if you pass it, then it will include them.
+
+00:38:31.940 --> 00:38:33.300
+But it doesn't include them.
+
+00:38:33.500 --> 00:38:35.480
+It just includes the root name.
+
+00:38:35.480 --> 00:38:38.840
+If you wanted the whole thing, then you'd say, build me the graph of...
+
+00:38:38.840 --> 00:38:39.780
+I mean, that would work as well.
+
+00:38:39.780 --> 00:38:45.200
+But you could say, build me the graph of Django and Kraken, whatever.
+
+00:38:45.200 --> 00:38:45.640
+Yeah.
+
+00:38:45.640 --> 00:38:49.260
+Or you could say, build me the graph of Kraken with external packages.
+
+00:38:49.260 --> 00:38:50.800
+Then you'd just see...
+
+00:38:50.800 --> 00:38:54.280
+Django would just be a node in the graph, but it would just be one node.
+
+00:38:54.280 --> 00:38:55.280
+Yeah, that'd be great.
+
+00:38:55.280 --> 00:38:55.880
+Does that make sense?
+
+00:38:55.880 --> 00:38:59.160
+The story is this was working, but slow.
+
+00:38:59.160 --> 00:39:02.400
+As an example, one of our contracts, and we had lots of contracts,
+
+00:39:02.780 --> 00:39:05.300
+one contract was taking six minutes to check.
+
+00:39:05.300 --> 00:39:10.380
+The reason for this is because actually it is quite algorithmically expensive
+
+00:39:10.380 --> 00:39:14.460
+to check whether or not certain rules are being followed
+
+00:39:14.460 --> 00:39:17.740
+because it's not like just doing a kind of search.
+
+00:39:17.740 --> 00:39:20.400
+It's actually looking for indirect imports.
+
+00:39:20.400 --> 00:39:24.620
+So it kind of needs to explore the whole graph to see...
+
+00:39:24.620 --> 00:39:26.580
+It's like a pathfinding algorithm to sort of see,
+
+00:39:26.580 --> 00:39:30.240
+oh, well, do you end up here via this other thing that you didn't ask about?
+
+00:39:30.600 --> 00:39:31.280
+Yeah.
+
+00:39:31.280 --> 00:39:31.360
+Yeah.
+
+00:39:31.360 --> 00:39:33.520
+So certain things were taking a really long time,
+
+00:39:33.520 --> 00:39:38.360
+and that was costing us money because we run this hundreds,
+
+00:39:38.360 --> 00:39:41.180
+if not thousands of times a day, and it all adds up.
+
+00:39:41.180 --> 00:39:44.400
+And it also just slows down your pull request.
+
+00:39:44.400 --> 00:39:45.980
+You want to get to green quicker.
+
+00:39:46.380 --> 00:39:50.940
+So I had heard that Rust was interoperable with Python.
+
+00:39:50.940 --> 00:39:52.900
+I didn't really know anything about it.
+
+00:39:52.900 --> 00:39:59.320
+And I found this library called Py03, which is a Rust library.
+
+00:39:59.320 --> 00:40:01.840
+And it makes it...
+
+00:40:01.840 --> 00:40:04.160
+I'm not going to say easy, but it makes it...
+
+00:40:04.160 --> 00:40:04.560
+Easier.
+
+00:40:04.560 --> 00:40:09.340
+It makes it surprisingly easy to write Rust extension modules.
+
+00:40:09.340 --> 00:40:11.020
+It gives you sort of all the tooling in place.
+
+00:40:11.300 --> 00:40:14.860
+And I would say, you know, you're writing a lot less code than you would be
+
+00:40:14.860 --> 00:40:18.320
+if you're writing a C extension module, because it's sort of a nice...
+
+00:40:18.320 --> 00:40:23.560
+It's a really nice API for creating these interoperable compiled modules.
+
+00:40:23.980 --> 00:40:29.500
+So I started by just finding the function that was taking all the time
+
+00:40:29.500 --> 00:40:31.680
+and had millions and millions and millions of calls.
+
+00:40:31.680 --> 00:40:34.860
+I was like, why don't I just write that in Rust?
+
+00:40:34.860 --> 00:40:38.540
+And I kind of just sort of almost copied and pasted it over
+
+00:40:38.540 --> 00:40:41.460
+and cobbled together some pretty rubbish Rust
+
+00:40:41.460 --> 00:40:44.660
+that did basically exactly the same outcome.
+
+00:40:44.660 --> 00:40:47.180
+And it was a thousand times slower.
+
+00:40:47.180 --> 00:40:49.420
+Well done.
+
+00:40:49.420 --> 00:40:50.000
+Well done.
+
+00:40:50.620 --> 00:40:54.560
+There's a good reason for that, which is I just zoomed in too close.
+
+00:40:54.560 --> 00:40:57.720
+So because that function was called a lot of times,
+
+00:40:57.720 --> 00:41:00.640
+there is actually a cost in crossing the boundary.
+
+00:41:00.640 --> 00:41:04.900
+So I just had to step one level up and like wrap all of those calls
+
+00:41:04.900 --> 00:41:06.860
+for that function in Rust instead.
+
+00:41:06.860 --> 00:41:09.460
+So there's only one call from Python to Rust.
+
+00:41:09.460 --> 00:41:12.500
+And then suddenly, majorly quicker.
+
+00:41:12.500 --> 00:41:16.160
+I mean, I think that that particular problematic contract
+
+00:41:16.160 --> 00:41:18.640
+went from about six minutes to one minute.
+
+00:41:18.800 --> 00:41:22.840
+That is, to be honest, and that was brilliant, but that is not.
+
+00:41:22.840 --> 00:41:25.660
+That's just scratching the surface of how much quicker it could get.
+
+00:41:25.660 --> 00:41:29.620
+But still, a six times speed up for relatively little work
+
+00:41:29.620 --> 00:41:31.600
+and basically just writing the same algorithm,
+
+00:41:31.600 --> 00:41:35.120
+but with some curly brackets and a bit of head scratching.
+
+00:41:35.120 --> 00:41:38.120
+Like I was able to deliver something
+
+00:41:38.120 --> 00:41:40.660
+without having ever done anything in Rust.
+
+00:41:40.660 --> 00:41:44.480
+And it really made a difference, you know, and saved us lots of money.
+
+00:41:44.480 --> 00:41:44.980
+Yeah.
+
+00:41:44.980 --> 00:41:45.800
+So that was a...
+
+00:41:46.620 --> 00:41:47.940
+Now you're a Rust developer as well.
+
+00:41:47.940 --> 00:41:49.660
+Now I'm a Rust developer and I read through it.
+
+00:41:49.660 --> 00:41:52.340
+And I'm, you know, I want to move more of Grimp into Rust.
+
+00:41:52.340 --> 00:41:57.420
+Another example, even less work, was we had a problem with translations.
+
+00:41:57.420 --> 00:42:01.520
+So there's a kind of standard for doing translations called Fluent.
+
+00:42:01.520 --> 00:42:04.860
+And some of the listeners may have come across it.
+
+00:42:04.860 --> 00:42:07.820
+And there are libraries for it in all sorts of different languages,
+
+00:42:07.820 --> 00:42:09.240
+including Python and Rust.
+
+00:42:09.240 --> 00:42:16.480
+And we realized that it was responsible for almost all of the bootstrap time
+
+00:42:16.480 --> 00:42:18.600
+of our application in production,
+
+00:42:18.600 --> 00:42:22.120
+was loading and scanning these translation files.
+
+00:42:22.120 --> 00:42:24.120
+You know, it was pretty problematic.
+
+00:42:24.120 --> 00:42:26.160
+It was like really spiky as well.
+
+00:42:26.160 --> 00:42:30.400
+You can see sometimes it would spike to like nine minutes to turn on the application.
+
+00:42:30.400 --> 00:42:33.100
+And we knew it was all in this translations thing.
+
+00:42:33.100 --> 00:42:36.620
+And someone pointed out, look, there's a Rust library for this.
+
+00:42:36.620 --> 00:42:39.180
+So all we need to do is just link them up.
+
+00:42:39.360 --> 00:42:44.180
+And so they, it wasn't actually me, but they just wrote this Py03 crate.
+
+00:42:44.180 --> 00:42:46.600
+A crate is like a Rust library.
+
+00:42:46.600 --> 00:42:52.080
+You know, probably only about 10, 15 lines of code just glued the two things together.
+
+00:42:52.080 --> 00:42:54.960
+It was really like not very much work.
+
+00:42:54.960 --> 00:42:58.940
+And compile that, it just completely sorted the problem out.
+
+00:42:58.940 --> 00:43:01.800
+We went from eight minutes to 30 seconds.
+
+00:43:01.800 --> 00:43:06.500
+And, you know, of that, like the, you know, that 30 seconds is other stuff.
+
+00:43:06.680 --> 00:43:10.360
+You know, I think, I think it turned it from being something that took several minutes
+
+00:43:10.360 --> 00:43:13.500
+to being virtually instant for really hardly any work.
+
+00:43:13.500 --> 00:43:17.120
+And I think that that's a really good example of where as Python developers,
+
+00:43:17.120 --> 00:43:18.740
+we should be aware this is an option.
+
+00:43:18.740 --> 00:43:23.960
+If something's slow, you might just, I mean, Rust has so many good libraries.
+
+00:43:24.420 --> 00:43:27.620
+You might just be able to like to glue it up and job done.
+
+00:43:27.620 --> 00:43:32.580
+One thing I would add, the overhead of calling into Py03 has dropped a lot.
+
+00:43:32.580 --> 00:43:37.540
+I don't know how long ago that was you were trying, but I think it's, yeah, reduced significantly.
+
+00:43:37.540 --> 00:43:43.620
+So, I mean, I did quite a lot of the same work in PyNantic Core to avoid the overhead of calling into and out of it lots of times.
+
+00:43:43.700 --> 00:43:45.720
+And I think that's less of a thing now than it used to be.
+
+00:43:45.720 --> 00:43:46.360
+That's good to hear.
+
+00:43:46.360 --> 00:43:53.800
+One point I want to make is, I think that's really interesting, David, to say that, hey, there's this whole equivalent of PyPI called Cargo.
+
+00:43:53.800 --> 00:43:55.660
+Or you can get these libraries just like we can.
+
+00:43:55.660 --> 00:44:01.920
+I mean, sorry, that you install with Cargo, that you can get all these pre-built, pre-tested libraries
+
+00:44:01.920 --> 00:44:05.420
+and maybe just put a wrapper on them and do some amazing stuff.
+
+00:44:05.420 --> 00:44:11.040
+I just started using this web server at the Python layer called Granian.
+
+00:44:11.040 --> 00:44:14.240
+And you're like, well, how many people are working on it?
+
+00:44:14.240 --> 00:44:16.260
+It's got up to 3,000 stars now.
+
+00:44:16.260 --> 00:44:17.080
+Is that enough to trust?
+
+00:44:17.080 --> 00:44:21.960
+But if you really look at it, it's really using just Hyper, right?
+
+00:44:21.960 --> 00:44:29.740
+And Hyper is a library that, excuse me, that has got 14,000 GitHub stars, 400 contributors.
+
+00:44:30.240 --> 00:44:37.740
+And like, oh, you know, it's kind of this cool application is something of a wrapper around this really popular and well-known thing.
+
+00:44:37.740 --> 00:44:38.020
+Right.
+
+00:44:38.020 --> 00:44:39.800
+I think we'll see more of this kind of stuff.
+
+00:44:39.800 --> 00:44:45.540
+Giovanni, who works on this, is also working on Rloop, basically an alternative to UVloop.
+
+00:44:45.540 --> 00:44:46.120
+Yes.
+
+00:44:46.120 --> 00:44:48.020
+I don't know if that's in here as well.
+
+00:44:48.020 --> 00:44:55.740
+I maintain watch files, which is the file watching library used by UVicorn and some other things.
+
+00:44:56.280 --> 00:45:00.600
+And that is, again, wrapping a Rust library for getting fast system notifications.
+
+00:45:00.600 --> 00:45:06.800
+And also Rtoml, which is the fastest Toml parser in Python, which is, again, just wrapping the Rust library.
+
+00:45:06.800 --> 00:45:19.920
+So there are a number of places where you can get enormous performance improvements and indeed like fundamentally more reliable libraries because you're building in Rust when you're doing complex, particularly multi-threaded things by relying on Rust.
+
+00:45:19.920 --> 00:45:23.180
+These libraries seem to be very good quality and well thought through.
+
+00:45:23.180 --> 00:45:24.420
+That's been my experience.
+
+00:45:24.420 --> 00:45:31.360
+Somehow it attracts people that are very thorough because you can't really program in Rust unless you're thorough because you can't get an extra pile.
+
+00:45:31.820 --> 00:45:35.020
+I think it's hard to say Rust does have a bit of a problem with abandoned libraries.
+
+00:45:35.020 --> 00:45:43.840
+I think that is, I think if we didn't call it out, I know David, you and I were speaking at an event where there was one particular chap who had a bee in his bonnet about that exact issue.
+
+00:45:43.840 --> 00:45:49.680
+I think he was slightly overblown on it, but there is definitely an issue with some abandoned libraries in Rust.
+
+00:45:49.680 --> 00:45:52.860
+But like, I mean, same as true in Python in its own place.
+
+00:45:53.220 --> 00:45:57.660
+But you're right, there are also libraries that are abandoned and remaining incredibly good quality.
+
+00:45:57.660 --> 00:46:00.180
+So Jitter uses a library for parsing floats.
+
+00:46:00.180 --> 00:46:05.880
+I didn't know this, but the complexity of parsing floats from strings is an entire subject of academic interest.
+
+00:46:05.880 --> 00:46:11.880
+There are eight different algorithms for doing it with different performance, depending on whether or not it is the structure of the float.
+
+00:46:11.880 --> 00:46:17.020
+And there is a library that does this very well, and the library was abandoned, but it worked perfectly.
+
+00:46:17.020 --> 00:46:19.360
+And eventually the guy replied to my email and went and fixed it.
+
+00:46:19.360 --> 00:46:22.520
+So, I mean, the quality, yeah, the quality is very high in my experience.
+
+00:46:22.720 --> 00:46:23.500
+Yeah, I just can make the point.
+
+00:46:23.500 --> 00:46:27.180
+I think, you know, there's over half a million packages in PyPI as well.
+
+00:46:27.180 --> 00:46:31.200
+And I'm sure there's a non-trivial amount of them that people are no longer maintaining as well.
+
+00:46:31.200 --> 00:46:33.640
+Sometimes things are done, and sometimes they're abandoned.
+
+00:46:33.640 --> 00:46:35.300
+And it's hard to tell the difference, you know?
+
+00:46:35.300 --> 00:46:35.500
+Yeah.
+
+00:46:35.500 --> 00:46:38.040
+Like, no, I haven't updated it in two years because it's done.
+
+00:46:38.040 --> 00:46:40.360
+But also, also.
+
+00:46:40.360 --> 00:46:45.860
+It's hard to tell the difference until you're three weeks in, and you don't want to back out of using that library, and you realize that actually it's...
+
+00:46:45.860 --> 00:46:46.720
+It's actually not done.
+
+00:46:46.720 --> 00:46:47.520
+It's not done.
+
+00:46:47.520 --> 00:46:48.900
+But nobody wants to worry.
+
+00:46:48.900 --> 00:46:52.220
+All right, David, before we wrap this up, I would really like to have you talk about it.
+
+00:46:52.220 --> 00:46:57.900
+Have you talked us through sort of the toolchain workflow of, I've got this idea.
+
+00:46:57.900 --> 00:47:02.380
+I want to maybe, you know, rewrite it in Rust if you've spoken about it.
+
+00:47:02.380 --> 00:47:04.420
+What are the building blocks or the moving pieces?
+
+00:47:04.420 --> 00:47:05.340
+What do people need to know?
+
+00:47:05.340 --> 00:47:05.760
+Absolutely.
+
+00:47:06.000 --> 00:47:06.120
+Okay.
+
+00:47:06.120 --> 00:47:16.280
+So the things you need to know is, first of all, the thing you're going to create is an extension module, which is like a built compiled thing.
+
+00:47:16.280 --> 00:47:19.920
+And that is going to end up being a Python wheel.
+
+00:47:19.920 --> 00:47:28.460
+And what you want to do is when you release something on PyPI, you want to have wheels for all the different versions of Python and chip architectures and things.
+
+00:47:28.720 --> 00:47:31.460
+So that's kind of like some of the complexity.
+
+00:47:31.460 --> 00:47:33.240
+So that's kind of the end goal.
+
+00:47:33.240 --> 00:47:44.800
+We want to end up with these built versions of Python that are going to contain some Python code, but also some compiled things for, you know, macOS under Python 312 or whatever like that.
+
+00:47:44.800 --> 00:47:48.640
+So the way you start this, you need to install Rust on your computer.
+
+00:47:48.640 --> 00:47:52.480
+And the tool for that is actually called RustUp.
+
+00:47:52.480 --> 00:47:54.140
+This kind of confused me to start with.
+
+00:47:54.140 --> 00:47:55.620
+I didn't really understand what RustUp is.
+
+00:47:55.620 --> 00:47:58.640
+But RustUp is kind of like one level up.
+
+00:47:58.640 --> 00:48:02.640
+And it's maybe a bit like PyM if people have used that.
+
+00:48:02.640 --> 00:48:04.480
+But it sort of does a bit more than that.
+
+00:48:04.480 --> 00:48:13.220
+Maybe also a bit like UV these days where you can UV install Python based on what you asked for or just create a virtual environment and it'll just grab the tools you need to make that happen.
+
+00:48:13.220 --> 00:48:17.420
+I'd say that Cargo is closer to UV probably, which is the next thing I'll talk about.
+
+00:48:17.420 --> 00:48:30.140
+But RustUp is like one step up and it's like it's for managing the versions of Rust that are on your computer and the versions of Cargo that are on your computer, which are Cargo is the package manager for Rust.
+
+00:48:30.140 --> 00:48:35.200
+What you'll do, your first step is to go to the Rust website and install RustUp.
+
+00:48:35.200 --> 00:48:40.300
+And then hopefully at the command line, you'll be able to type Rust C and then you can compile a Rust file if you want to.
+
+00:48:40.500 --> 00:48:43.860
+But you don't actually need to do that because that's what you use Cargo for.
+
+00:48:43.860 --> 00:48:50.100
+So your main kind of thing that you're typing all the time when you're using Rust is Cargo and then some kind of command.
+
+00:48:50.100 --> 00:48:52.900
+So you've installed RustUp and you've got Cargo.
+
+00:48:52.900 --> 00:48:55.740
+Then what you'd want to do is create a project.
+
+00:48:55.740 --> 00:48:58.760
+And you can create a project using Cargo.
+
+00:48:58.760 --> 00:49:05.280
+You could do Cargo new and then it'll give you a whole file system structure and you'll be able to run it and run tests and all that.
+
+00:49:05.420 --> 00:49:10.240
+Very nice. And that is how you would install the latest version of Py03.
+
+00:49:10.240 --> 00:49:21.760
+So you would, I probably would just go over onto crates.io, which is the PyPI equivalent and look at what the version is of PyPI and then write it in a file.
+
+00:49:21.760 --> 00:49:24.680
+I think there is a Cargo command probably for adding it.
+
+00:49:24.680 --> 00:49:25.520
+How would you do it?
+
+00:49:25.520 --> 00:49:29.040
+But it's also worth saying that Maturin is a big part of the ecosystem.
+
+00:49:29.040 --> 00:49:33.380
+Jono, David, maybe you could introduce Maturin because I think that's about where that comes in.
+
+00:49:33.380 --> 00:49:37.300
+Cargo is the thing that Rust people will be using to compile these things.
+
+00:49:37.300 --> 00:49:43.320
+But you can't just use that on your own because you need the whole pip installing kind of side of things.
+
+00:49:43.320 --> 00:49:49.800
+So you can use Cargo and just create an extension module, but then you need to like give it the right name and copy it into the right place.
+
+00:49:49.800 --> 00:49:53.280
+So there's a bit of kind of gluing that needs to happen.
+
+00:49:53.280 --> 00:49:55.280
+And that is what Maturin is for.
+
+00:49:55.280 --> 00:49:56.960
+Why do we need two tools?
+
+00:49:56.960 --> 00:50:03.820
+Well, Cargo is the Rust side of things, but Maturin is actually just a pip installable Python package.
+
+00:50:03.820 --> 00:50:15.420
+So what you'll do is in the Python project that you want to Rustify, you will activate your virtual environment or whatever and then do pip install Maturin.
+
+00:50:15.420 --> 00:50:18.060
+And then you've got this tool for Maturin.
+
+00:50:18.060 --> 00:50:21.360
+And you could even do Maturin new project or something like that.
+
+00:50:21.360 --> 00:50:22.300
+I can't remember what the command is.
+
+00:50:22.300 --> 00:50:27.580
+What I had to do was I had a pre-existing project, so I couldn't just do it like that.
+
+00:50:27.580 --> 00:50:33.800
+But it might be quite a nice way to learn is to follow the Maturin docs to do a new project.
+
+00:50:33.800 --> 00:50:41.100
+And what Maturin allows you to do is I think you might edit your Rust code and then you would type Maturin develop.
+
+00:50:41.100 --> 00:50:47.840
+And then it would compile your Rust code, but it would kind of install it locally so that you can work with it.
+
+00:50:47.840 --> 00:50:52.340
+And then the final piece of this picture is how that gets onto PyPI.
+
+00:50:52.340 --> 00:50:54.640
+Maturin also gives you some tools for that.
+
+00:50:54.640 --> 00:51:03.040
+There's a command called generate CI, I think, which gives you, it just spits out YAML for whatever CI provider you want.
+
+00:51:03.040 --> 00:51:04.860
+And that's really helpful as well.
+
+00:51:04.860 --> 00:51:07.400
+I mean, that's a bit of a talk about verbally.
+
+00:51:07.400 --> 00:51:09.780
+I've given a talk of people.
+
+00:51:09.780 --> 00:51:21.040
+Yeah, well, I think one of the things you both have to deal with here is releasing a package, a wheel for this is not just, well, let's zip up the Python files and put them up there, right?
+
+00:51:21.040 --> 00:51:25.300
+You're compiling native code and that means you need variations, right?
+
+00:51:25.300 --> 00:51:33.460
+Yeah, I think Pydantic core releases 60 something different wheels to cover all different possible combinations of Python version and architecture.
+
+00:51:33.460 --> 00:51:35.360
+I would basically second what David was saying.
+
+00:51:35.360 --> 00:51:41.620
+Maturin in particular does an amazing job of smoothing out the kind of rough edges between Rust and Python.
+
+00:51:41.620 --> 00:51:45.460
+Rust has had a good, relatively good story on package management for some time.
+
+00:51:45.620 --> 00:51:57.760
+Python is just coming, but often when you're trying to do these things, it's the like trying to get one to speak to the other and working out what the hell is going wrong and what does that file need to be or that like sim link between some DLL and some other place.
+
+00:51:57.760 --> 00:52:07.540
+Maturin effectively gets rid of that whole challenge for you and just works and lets you work on it like you're, it's as easy as writing Python or Rust interacting with the two.
+
+00:52:07.540 --> 00:52:18.100
+Yeah, because cargo and Rust C will output Rust conventions, but Python wants C extension conventions naming like .so versus Dynlib and things like that, right?
+
+00:52:18.100 --> 00:52:19.740
+And getting the inputs right and yeah.
+
+00:52:19.820 --> 00:52:29.840
+So what your work, once you've sort of set it all up, your workflow looks like is if you haven't changed any of the Rust, then, you know, maybe like you run tests, you just run pytest or whatever.
+
+00:52:29.840 --> 00:52:36.140
+That will run tests against the compiled bit, assuming you're writing Python tests against that.
+
+00:52:36.140 --> 00:52:40.700
+But if you make a change to the Rust, then you do have to have an extra step of building it.
+
+00:52:40.700 --> 00:52:43.480
+So you type match your in, develop, and then it would build it.
+
+00:52:43.480 --> 00:52:44.980
+And then you could run pytest.
+
+00:52:44.980 --> 00:52:50.140
+Or you might recommend you do, actually, if you're working with Rust and you're not very experienced.
+
+00:52:50.140 --> 00:53:02.940
+I tend to have a test suite for Python, but also some tests in Rust because you get a much quicker feedback loop because you can type cargo test and that will compile it and run the test really quite quickly.
+
+00:53:02.940 --> 00:53:11.420
+One other thing I think is worth adding is that obviously if you have this binary that contains your Rust code, which is, you know, in the end, it becomes a module that you can import in Python.
+
+00:53:11.540 --> 00:53:14.840
+But by default, that is obviously opaque to type checkers.
+
+00:53:14.840 --> 00:53:19.700
+So things like IDEs and static type checking can't look inside there and see what your functions are.
+
+00:53:19.700 --> 00:53:26.700
+So you want to write a PYI file, which contains your definitions in like stub Python code effectively.
+
+00:53:26.700 --> 00:53:31.780
+The problem you then have is you end up with two separate definitions of what your functions have in them.
+
+00:53:31.820 --> 00:53:44.100
+And so there's a really neat tool, which I didn't know about until quite recently, but we use it in Pydantic Core, which mypy can basically type check that the PYI file stubs match the definitions inside the DLL.
+
+00:53:44.100 --> 00:53:54.060
+And so you can have like guarantees that when you've written in a PYI file, my function foobar takes A as a string and C as a list of bytes.
+
+00:53:54.060 --> 00:53:54.860
+That's really cool.
+
+00:53:54.860 --> 00:53:55.660
+I didn't know about that.
+
+00:53:55.660 --> 00:53:56.380
+Yeah, that's awesome.
+
+00:53:56.500 --> 00:53:57.260
+It fixes all together.
+
+00:53:57.260 --> 00:53:58.340
+Is it a mypy plugin?
+
+00:53:58.340 --> 00:54:04.500
+If you have a look at Pydantic Core, we run it in CI or in maybe even pre-commit so you can find it there.
+
+00:54:04.500 --> 00:54:05.300
+I couldn't remember.
+
+00:54:05.300 --> 00:54:11.900
+I discovered it because like so often with so many of us, I discovered it because it had a bug.
+
+00:54:11.900 --> 00:54:14.220
+And so it suddenly didn't do quite the right thing for me.
+
+00:54:14.220 --> 00:54:16.260
+But I mean, in general, it's been perfect until now.
+
+00:54:16.360 --> 00:54:18.880
+Yeah, it's plumbing until it doesn't work and then it's a flood.
+
+00:54:18.880 --> 00:54:19.840
+Bug-based discovery.
+
+00:54:19.840 --> 00:54:21.760
+Definitely a thing we've all practiced.
+
+00:54:21.760 --> 00:54:23.340
+Bug-driven development.
+
+00:54:23.340 --> 00:54:23.620
+Yeah.
+
+00:54:23.620 --> 00:54:23.960
+Okay.
+
+00:54:23.960 --> 00:54:38.700
+And if people want to check out these PYI files, there's a project called Type Shed on GitHub that whose job is to basically become these so-called stub files for a ridiculous number of projects that, you know, we're talking about things that are not going to get upgraded.
+
+00:54:38.700 --> 00:54:44.300
+Maybe they're never going to get typing put on them, but you can go and import one of these or whatever and get.
+
+00:54:44.400 --> 00:54:46.600
+But also lots of packages now have their own.
+
+00:54:46.600 --> 00:54:52.600
+Either they have types in them or they have a PYI file that defines the types either in the Python code or in PYI.
+
+00:54:52.600 --> 00:54:53.340
+That's really cool.
+
+00:54:53.340 --> 00:54:56.720
+I didn't realize about the tool there, though, that does the integration.
+
+00:54:56.720 --> 00:54:57.160
+That's awesome.
+
+00:54:57.160 --> 00:55:00.060
+I think presumably you can use it to generate your first PYI file.
+
+00:55:00.060 --> 00:55:04.160
+Then you go in and put your doc strings in, tweak things a bit, and then you run it in test mode.
+
+00:55:04.160 --> 00:55:04.660
+Oh, nice.
+
+00:55:04.660 --> 00:55:10.960
+Yeah, because that way use the true version, the Rust version, and just say generate what I need to make this work.
+
+00:55:10.960 --> 00:55:11.700
+That makes a lot of sense.
+
+00:55:11.700 --> 00:55:11.920
+Yeah.
+
+00:55:11.920 --> 00:55:12.260
+Awesome.
+
+00:55:12.640 --> 00:55:12.860
+All right.
+
+00:55:12.860 --> 00:55:16.040
+Well, gentlemen, we are just pretty much out of time.
+
+00:55:16.040 --> 00:55:16.860
+I guess.
+
+00:55:16.860 --> 00:55:21.620
+Let me ask you one more thing here, and I don't think I pulled it up.
+
+00:55:21.620 --> 00:55:24.600
+There's a new PEP called External Wheel Hosting.
+
+00:55:24.600 --> 00:55:25.720
+Have you all heard of this?
+
+00:55:25.720 --> 00:55:27.500
+I have not seen that particular.
+
+00:55:27.500 --> 00:55:28.760
+Is that for Wasm?
+
+00:55:28.760 --> 00:55:35.040
+I know I've been talking to Hood a fair bit about the challenges of uploading Wasm wheels.
+
+00:55:35.040 --> 00:55:38.280
+No, it has to do with more than it is five.
+
+00:55:38.280 --> 00:55:39.060
+Here we go.
+
+00:55:39.060 --> 00:55:40.000
+Copy link.
+
+00:55:40.000 --> 00:55:42.860
+It is 759.
+
+00:55:42.860 --> 00:55:47.720
+And the idea that if you could, the nomenclature here is ridiculous.
+
+00:55:47.720 --> 00:55:49.760
+It is in clever.
+
+00:55:50.240 --> 00:56:05.080
+So the idea is that, you know, each build of Pydantic puts 60 binary artifacts onto PyPI, and there's limitations on how large your projects can be and how large individual releases can be.
+
+00:56:05.080 --> 00:56:08.900
+This is especially problematic for machine learning stuff, right?
+
+00:56:09.200 --> 00:56:11.580
+And so the idea is, can we create a wheel stub?
+
+00:56:11.580 --> 00:56:12.960
+And what is a wheel stub called?
+
+00:56:12.960 --> 00:56:15.520
+It's like the wheel without the content.
+
+00:56:15.520 --> 00:56:19.980
+It's called a rim because wheels go on, you know, and there's all sorts of stuff like that here.
+
+00:56:19.980 --> 00:56:26.840
+But it contains a hash and then a location where the thing actually lives, right?
+
+00:56:26.840 --> 00:56:29.040
+So you mentioned OpenAI, for example.
+
+00:56:29.040 --> 00:56:32.400
+Maybe they have some huge thing they want you to download eventually.
+
+00:56:32.400 --> 00:56:36.520
+They could host it, and you just publish the rim, not the wheel.
+
+00:56:36.520 --> 00:56:38.600
+Do you know the story of why they're called wheels?
+
+00:56:38.860 --> 00:56:39.980
+This entertains me a lot.
+
+00:56:39.980 --> 00:56:40.820
+No, tell me.
+
+00:56:40.820 --> 00:56:43.620
+So they're called wheels because you have wheels of cheese.
+
+00:56:43.620 --> 00:56:55.580
+They're called wheels of cheese because the original PyPI was called the cheese shop, which in turn was called the cheese shop because there is a Monty Python sketch called the cheese shop where he goes in to buy cheese.
+
+00:56:55.580 --> 00:56:57.900
+And none of the cheeses he asked for are available.
+
+00:56:57.900 --> 00:57:03.920
+And it was called that as a way of taking the piss out of, I forget which other language.
+
+00:57:04.080 --> 00:57:11.720
+It might have been Ruby or PHP, how their original package registry had no packages in it like the cheese shops get in Monty Python.
+
+00:57:11.720 --> 00:57:13.160
+Oh, my gosh.
+
+00:57:13.320 --> 00:57:16.320
+It's like a lot of people who have been assisted to rims in 2024.
+
+00:57:16.320 --> 00:57:17.280
+That's incredible.
+
+00:57:17.280 --> 00:57:25.280
+Yeah, I did know the cheese shop equivalent there that that was part of it, but I didn't realize that it was the wheels of cheese.
+
+00:57:25.280 --> 00:57:25.760
+Okay.
+
+00:57:25.760 --> 00:57:26.200
+Incredible.
+
+00:57:26.560 --> 00:57:28.080
+There's a lot of Monty Python.
+
+00:57:28.080 --> 00:57:30.780
+You know, people that you look around everywhere.
+
+00:57:30.780 --> 00:57:32.580
+The logo is the snake, right?
+
+00:57:32.580 --> 00:57:35.800
+But the logo, the name is not Python the snake.
+
+00:57:35.800 --> 00:57:38.840
+It's Monty Python and that horrible bunny.
+
+00:57:38.840 --> 00:57:42.840
+If I write a book about Python, I'd want to have the knights who say me on the front.
+
+00:57:42.840 --> 00:57:43.960
+Yes.
+
+00:57:44.800 --> 00:57:46.900
+I want the bunny, the killer bunny.
+
+00:57:46.900 --> 00:57:48.880
+It's definitely a certain era of humor.
+
+00:57:48.880 --> 00:57:49.720
+I don't know.
+
+00:57:49.720 --> 00:57:51.700
+You know, it definitely dates Python in its way.
+
+00:57:51.700 --> 00:57:52.760
+And us, perhaps, I fear.
+
+00:57:52.760 --> 00:57:54.260
+Yeah, perhaps.
+
+00:57:54.260 --> 00:57:55.160
+Perhaps.
+
+00:57:55.160 --> 00:57:58.040
+I don't know what this gray hair is about, but we're going to go.
+
+00:57:58.040 --> 00:57:58.920
+All right, guys.
+
+00:57:58.920 --> 00:58:00.220
+Let's close this out.
+
+00:58:00.700 --> 00:58:08.120
+I'll give each of you a chance to just give us sort of a parting thought on integrating Rust and maybe thoughts and just Rust and Python together.
+
+00:58:08.120 --> 00:58:09.180
+I'll go, David.
+
+00:58:09.180 --> 00:58:13.780
+Only really to say I am a better programmer for having learned to write Rust as well as Python.
+
+00:58:13.780 --> 00:58:18.880
+And I fail to see the value in C anymore for new projects.
+
+00:58:18.880 --> 00:58:20.900
+I get why it exists for lots of existing ones.
+
+00:58:20.900 --> 00:58:24.400
+I'm not going to get into the issue of whether stuff should be rewritten in Rust.
+
+00:58:24.400 --> 00:58:35.760
+But I think if you're starting from scratch and you're trying to write something high performance, the experience of doing it in Rust is completely different from trying to do it in C or C++ or C Sharp or any of the other or Fortran or Julia or any of those other languages.
+
+00:58:35.760 --> 00:58:36.780
+Rust is awesome.
+
+00:58:36.780 --> 00:58:39.280
+So I'd really encourage people to give it a go.
+
+00:58:39.280 --> 00:58:42.900
+And when you're giving it a go, you might also give Logfire a quick go.
+
+00:58:42.900 --> 00:58:45.080
+We're releasing our Rust SDK fairly soon.
+
+00:58:45.080 --> 00:58:45.820
+We have Python already.
+
+00:58:45.820 --> 00:58:51.940
+So we're matching the Python Rust TypeScript ecosystem, which I think is the stack to build with today.
+
+00:58:51.940 --> 00:58:52.240
+Awesome.
+
+00:58:52.360 --> 00:58:58.900
+My parting thought would be like, if you give it a go, don't be surprised if you feel quite inadequate.
+
+00:58:58.900 --> 00:59:03.440
+It's really quite hard to sort of get your head around what's going on.
+
+00:59:03.440 --> 00:59:06.620
+And I feel very much still at the beginning of my journey.
+
+00:59:06.620 --> 00:59:16.720
+But nevertheless, I have actually managed to deliver some stuff which is valuable, even though, to be honest, I'm not particularly proud of the code I'm writing.
+
+00:59:16.720 --> 00:59:18.780
+It's like, you know, I'm a beginner again.
+
+00:59:18.980 --> 00:59:21.180
+And I just want to say, like, don't let that put you off.
+
+00:59:21.180 --> 00:59:26.640
+And if you're confused, you know, just keep on going and trying to get your head around it.
+
+00:59:26.640 --> 00:59:28.160
+It will make you a better programmer.
+
+00:59:28.160 --> 00:59:36.440
+The book that I've found the best for learning Rust is the Rust Programming Language, which is a free book on the Rust website.
+
+00:59:36.440 --> 00:59:36.720
+Right.
+
+00:59:36.720 --> 00:59:38.860
+Just click the learn button in the top, right?
+
+00:59:38.860 --> 00:59:39.520
+Yeah, exactly.
+
+00:59:39.520 --> 00:59:40.100
+Learn menu item.
+
+00:59:40.200 --> 00:59:40.860
+Yeah, awesome.
+
+00:59:40.860 --> 00:59:51.020
+Yeah, I'll also just add one quick thought as well to just follow up to what you said, David, is whenever you're switching programming languages and you've been programming for a while, you just, you feel inadequate.
+
+00:59:51.020 --> 00:59:53.880
+And you feel like, I was so good.
+
+00:59:53.880 --> 00:59:54.880
+I had it figured out.
+
+00:59:54.880 --> 00:59:56.520
+I could just sit down and do stuff.
+
+00:59:56.520 --> 01:00:00.480
+And now even how do I just read a file or just run a program?
+
+01:00:00.480 --> 01:00:01.980
+I'm lost all over again.
+
+01:00:01.980 --> 01:00:07.700
+But every time you do that, your prior experience still carries over way more than it initially feels like it does.
+
+01:00:07.700 --> 01:00:10.800
+And you're not throwing everything away and starting over.
+
+01:00:10.800 --> 01:00:13.440
+You're learning a neutral chain and then on you go.
+
+01:00:13.440 --> 01:00:14.000
+Absolutely.
+
+01:00:14.000 --> 01:00:17.440
+And particularly when it's so easy to call Python from Rust and vice versa.
+
+01:00:17.440 --> 01:00:20.820
+And so you can build applications that are like hybrid of the two.
+
+01:00:20.820 --> 01:00:21.220
+Absolutely.
+
+01:00:21.220 --> 01:00:21.740
+Yeah.
+
+01:00:21.740 --> 01:00:24.940
+Well, congratulations both on some awesome projects.
+
+01:00:24.940 --> 01:00:26.120
+And yeah, thanks.
+
+01:00:26.120 --> 01:00:27.260
+Thanks for being here as well.
+
+01:00:27.260 --> 01:00:27.600
+Bye, y'all.
+
+01:00:27.600 --> 01:00:28.320
+Thanks for having us.
+
+01:00:28.320 --> 01:00:29.060
+Thank you so much.
+
+01:00:30.180 --> 01:00:32.860
+This has been another episode of Talk Python to Me.
+
+01:00:32.860 --> 01:00:34.680
+Thank you to our sponsors.
+
+01:00:34.680 --> 01:00:36.300
+Be sure to check out what they're offering.
+
+01:00:36.300 --> 01:00:37.700
+It really helps support the show.
+
+01:00:37.700 --> 01:00:42.360
+This episode is sponsored by Posit Connect from the makers of Shiny.
+
+01:00:42.360 --> 01:00:46.880
+Publish, share, and deploy all of your data projects that you're creating using Python.
+
+01:00:46.880 --> 01:00:53.460
+Streamlit, Dash, Shiny, Bokeh, FastAPI, Flask, Quarto, Reports, Dashboards, and APIs.
+
+01:00:53.460 --> 01:00:55.840
+Posit Connect supports all of them.
+
+01:00:55.840 --> 01:01:00.160
+Try Posit Connect for free by going to talkpython.fm/Posit.
+
+01:01:00.160 --> 01:01:01.520
+P-O-S-I-T.
+
+01:01:01.520 --> 01:01:06.160
+This episode is brought to you by the Data Citizens Dialogues podcast from Colibra.
+
+01:01:06.160 --> 01:01:09.580
+If you're ready for a deeper dive into the latest hot topics and data,
+
+01:01:09.580 --> 01:01:13.120
+listen to an episode at talkpython.fm/citizens.
+
+01:01:13.120 --> 01:01:14.880
+Want to level up your Python?
+
+01:01:14.880 --> 01:01:18.920
+We have one of the largest catalogs of Python video courses over at Talk Python.
+
+01:01:18.920 --> 01:01:24.100
+Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+01:01:24.100 --> 01:01:26.780
+And best of all, there's not a subscription in sight.
+
+01:01:26.780 --> 01:01:29.660
+Check it out for yourself at training.talkpython.fm.
+
+01:01:30.040 --> 01:01:31.780
+Be sure to subscribe to the show.
+
+01:01:31.780 --> 01:01:34.560
+Open your favorite podcast app and search for Python.
+
+01:01:34.560 --> 01:01:35.880
+We should be right at the top.
+
+01:01:35.880 --> 01:01:41.040
+You can also find the iTunes feed at /itunes, the Google Play feed at /play,
+
+01:01:41.040 --> 01:01:45.240
+and the direct RSS feed at /rss on talkpython.fm.
+
+01:01:45.240 --> 01:01:48.200
+We're live streaming most of our recordings these days.
+
+01:01:48.200 --> 01:01:51.620
+If you want to be part of the show and have your comments featured on the air,
+
+01:01:51.620 --> 01:01:56.040
+be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+01:01:56.680 --> 01:01:58.100
+This is your host, Michael Kennedy.
+
+01:01:58.100 --> 01:01:59.380
+Thanks so much for listening.
+
+01:01:59.380 --> 01:02:00.540
+I really appreciate it.
+
+01:02:00.540 --> 01:02:02.460
+Now get out there and write some Python code.
+
+01:02:02.460 --> 01:02:02.840
+Thank you.
+
+01:02:02.840 --> 01:02:03.740
+Thank you.
+
+01:02:03.740 --> 01:02:04.740
+Thank you.
+
+01:02:06.740 --> 01:02:06.740
+Thank you.
+
+01:02:06.740 --> 01:02:07.740
+Thank you.
+
+01:02:07.740 --> 01:02:07.740
+Thank you.
+
+01:02:07.740 --> 01:02:08.740
+Thank you.
+
+01:02:19.740 --> 01:02:20.240
+you
+
+01:02:21.240 --> 01:02:23.240
+Thank you.
+
