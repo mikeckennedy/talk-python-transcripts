@@ -1,57 +1,2884 @@
-00:00:00 You've got your Python API or app running in a Docker container. Great. Are you ready to ship it to that hosted container service and head off to production? Not so fast? Have you considered how you'll manage evolving the dependencies and addressing security updates over time? Not just for the base OS, but for the installed packages, about your pip install dependencies. Are you running as root? You don't know. The answer is yes. We'll discuss these and many more issues with it Itamar Turner-Trauring on this episode. It's taught by me Episode 323, recorded June 14 2021.
+00:00:00 You've got your Python API or app running in a Docker container.
 
-00:00:48 Welcome to talk Python to me, a weekly podcast on Python, the language, the libraries, the ecosystem and the personalities. This is your host, Michael Kennedy. Follow me on Twitter, where I'm @mkennedy, and keep up with the show and listen to past episodes at talk python.fm and follow the show on Twitter via @talkpython. This episode is brought to you by SENTRY and LINODE . And the transcripts are brought to you by 'AssemblyAI', please check out what they're offering during their segments. It really helps support the show.
+00:00:03 Great.
 
-00:01:16 I'll have a quick announcement before we dive into the interview, over Talk Python Training, and we just released our latest course, Python powered chat apps with Twilio and SendGrid. Have you ever wanted to create a chat bot using Python in this course, we'll be building an ordering system for a tech savvy bakery. Our customers can place orders over WhatsApp and during the chat back and forth, we'll integrate data from our flask API, answering questions such as, what's the menu? What does that cost and so on. Then we'll integrate this into a suite back end that sends receipts as PDFs over emails, and allows our bakers to see new orders and then mark them as fulfilled and notify the customers when they're done. In short, it's cool tech and a super fun project. Oh, and one more thing, this course is free for everyone. If this six hour course sounds fun, just click the link in your podcast player show notes and jump into the course. Now on to the Docker best practices Itamar Welcome to talk python to me welcome back to talk python to me, it's been some time feels like a year or so I'm not sure exactly how long it's been. Last time we were on, we were talking about an entirely different topic. So you get to bits on the the mind map connective sort of relationship of topics here. We talked about Phil, and profiling data science. That was fun. Yeah, I sort of have found myself talking about a bunch of different subjects. And like, some people are interested in both some people are interested in the other. And Docker is the other thing I've spent a lot of time sort of researching and writing about. Yeah, it's, I think the data science profiling one was really interesting, because profiling has all these challenges. And much of it is more focused around profiling running applications or profiling code. That's all in Python. And so if you need to profile, like, say Fortran code or other weird, or a mix and match libraries, then that was sort of that that topic, right? Yeah. So feel as a memory profiler for Python, and the kind of specifically for batch processes like data science, scientific computing. And so if you're doing scientific computing, they'll there'll be a bunch of code in Fortran and C++ and RUST and, and so you want to access that memory, like sort of profile memory across all the languages you're using. Because if you've got some big glob of C code, Python thinks it's just a pointer. Tiny pointer. But it turns out to be huge. Guys, if people can check out that episode. They're interested. And yeah, just give us an update on what you've been doing. Since then, I've actually been trying to turn Phil into a sort of make an alternative version of it. You can run in production profilers often have performance overhead, it's a field take, like 40% performance off the night, trying to make something that will run with like 1% 2% overhead. So you can run on production and just always get reports by your memory usage for any job. So if it's like six hours, and it crashes, crashes, or just uses too much memory, go back. And look, oh, that would be fantastic. Yeah, we have that for like profiling in terms of performance. On some systems, you can plug them in, and they'll kind of give you real time. How is my app doing in terms of you know, here's where it's spending its time or it got slower? Maybe it's even just measuring like request response. But memory profiling typically been pretty intensive. Right. So that'd be cool. If you could get it down to that level. Yeah. And this is a very good pen, fulfill on this project and are very good pandemic projects. It's like, really, it's quite difficult to do and it's like, but it's something that is completely under my control. And we'll get to Docker and Docker is like, there's this giant ecosystem and they all have differing opinions about how to do things and like, everything settled broken around the edges of ours. Here. It's like
+00:00:03 Are you ready to ship it to that hosted container service and head off to production?
 
-00:05:00 I have a box. And it's a very complicated box, but it's under my control. And so I can use it. It's kind of relaxing environment or the world is not under my control.
+00:00:07 Not so fast.
 
-00:05:11 It's been a crazy time, hasn't it? Yeah. Yeah. I feel like we're getting used to it. It's odd. But you know, people just get used to whatever water they swim in eventually, I guess. Yeah. Let's talk about a darker a little bit. So hasn't been that long since I had. That's also want to shout out quick Episode 274 is when we talked about Philip, people want to go back and check that out. But I had Peter McKee from Docker. Over there, you come and talk about sort of what is Docker, you know, give us an update on Docker that company and like sort of set the stage for Python developers, right to kind of get going on the dev side and just start using Docker. So that was Episode 308. And that was fun. But then recently, you gave a talk at PyCon called 'zero to production ready', a best practices process for Docker packaging. And so I thought that was really interesting. And wanted to have you on the show. So we could dive into Docker best practices for Python. But also your focus is really on production, not necessarily development, right? Yeah. Maybe we start there, like, What does Docker look like for software development as a, I just need to make my stuff run. So I can code it and test it out versus I know, zero, downtime, Kubernetes, or whatever it is, you're trying to do type of thing. But one of those two worlds look like and maybe tell folks about when they should care about what are the advantages or whatever. Yeah, so what Docker gives you is a sort of package that contains all the files you need for the file system contains Python, it contains all the system libraries, you need to run your Python extensions and contains all your Python dependencies, contains all your code, and contains a script to launch your code. And so as a starting point, this is useful for development, because if you're, say, on macOS, or on Windows, and you're deploying to Linux, you can run something locally, that is the same on across different computers, even if you are on Linux, like my, I have one machine that's Fedora 33, I have another machine that's Ubuntu, like they're different in in a bunch of subtle and not so subtle ways. And so having a Docker container, when I'm developing, I can have a completely consistent environment. And then near that, that environment, when I want to then take that code and run in production, it'll be exactly the same there, right, I had somebody reach out to me a little while ago, and ask something to the effect of, I've got a bunch of different developers on my team, and I want to make sure that they all have the same version of Python in the same packages, right. And that's a legitimate thing that you might want to do, you might want to make sure that those are exactly the same. I think maybe, in general, there's probably more of a concern about that than an actual problem there. You know, a lot of times, either these things are going to basically work or they're going to utterly fail. I think one of the scenarios maybe where it matters more is data science, where there's slight changes in algorithms, which might lead to different, you know, ways you train the model, which might lead to different, like it could those kinds of changes, but say in like web apps, or UI apps or something like that, it's it's easy just gonna work, or it's gonna completely break that said, you know, this situation you're talking about with Docker for development, like kind of solves that, but to a much bigger degree, right, because you can specify in this image, we have exactly this version of Python compiled in this way, we have these libraries installed with this version, we have these environment variables set, and this subsystem of Linux installed as well, but not that other or you can completely control it way more than just I want the same version of Python, right. And you can then go further something like Docker compose, or composer to start up a little network of containers. And then it's very easy to say, okay, want to spin up Postgres or I want to spin up Redis. Whereas traditionally, this would be a pain in the ass with Docker and Docker compose, you can spin up a little all your dependency servers really easily, then even if you're not using Docker for your own code, you can use Docker for your service as you depend on to really easily spin them up, right? I need Redis running in this way, and then Postgres and that way, and I just need them all configured and to be able to talk so Docker compose up, right, something like that. Yeah, yeah. Yeah, Docker compose is a way to sort of run it on a network of services makes that really easily. Yeah, another big advantage before we get off of the development side of things, is onboarding new people and new hardware, right? If you've got something really complicated like that, and you get somebody on the team, instead of spending a lot of time trying to get their system put together in the right way. You just go saw Docker do this. And yeah, there's there's open source projects for like, you can serve the development environment that will also provide a dockerfile to just let you run some tests easily. Just because you're a ongoing, you're only submitting one patch. You want to run some like some tests.
+00:00:08 Have you considered how you'll manage evolving the dependencies and addressing security updates
 
-00:10:00 on it, you don't want to go the whole thing. So it's very nice. And they provide a way to run the code and Docker. Yeah, absolutely. That said, I don't generally do my development a Docker, I just just have virtual environments and enroll with that. So it's not always required a couple of thoughts from folks out in the livestream can KIm Van wyk Hey, Kim says Docker compose is an excellent way to make sure all the developers are using the same tools and versions, and it's just much easier to pass around a Yama file. Yeah, compose? Yes. Like, I remember when composer first came out and was called the fig, I think it was, it took Docker from saying really neat to something really useful. Yeah. Right. The promise of Docker is that I can have all these different, if I want to run like we just described, one, one Redis, I want to run maybe a celery back end, I want to run Postgres, and then my dev code is going to run and talk to all that, well, keeping those all up to date, you know, start making sure they all build those files, and they all run and maybe they run in the right order. But all of a sudden isn't fun anymore. But if you can create a compose file and just say, here's the set of containers that needs to work together, bring them all up in the right order, and make sure they're all up to date, got their recent build, and so on. Like that's a whole another level of the promise of containers. Yeah, also, I don't know. If you know anything about this, I'll maybe take a wild guess here. But Daniel Chen out in the livestream aisle says question, is there a Windows? Is there any difference between wsl two for the Docker back end compared to Hyper V, or is Hyper V more for backwards compatibility legacy support I, in general, not use Windows that much. But basically, there's two. Since you're running Linux, and Windows is not on Linux, you need to have some way of running Linux, in the past, the way you do that you would run a virtual machine. And that's what it does in macOS two, I believe windows subsystem for Linux is a way to transparently run Linux applications on Windows, and Docker supports it these days, I suspect it would be faster. But that's just a guess. So I don't have a good idea. That's my thought as well that they would be a little more integrated. Probably you could more easily do things like mount windows, file system folders from your Docker container. I didn't maybe you still can with the others, probably you can, but expect to be faster at least Yeah, yeah. It seems like if you want to run on Linux, you're probably probably closer. It's definitely more lightweight, Hyper V would be running a full on Linux VM, and then hosting Docker in that I'm pretty sure. Yeah. Cool. All right. Well, hopefully our guesses, Daniel are helpful for you. All right. Well, let's talk about your talk that you gave it in PyCon . I mean, giving talks today at conferences like we started the show off, like it's a weird world, right? I'm giving a talk and both doing a live stream podcast on a conference tomorrow at the Manning developer productivity conference. How can I do that? We record it, we publish it, and then we have a live q&a afterwards. So the presentation of my recording will be during the Python bytes recording tomorrow. But then the live interactive bit will be actually after So yeah, that's the commerce world we live in. And so PyCon this year was virtual, you put together a really nice presentation, sort of in this format. And yeah, like I said, I got a lot out of it. And I liked what you covered there. Yeah. And so the starting point is you have the service, now you want to run it in production. And this is a very dramatic departure from running things locally. Because locally, the thing you're prioritizing is basically our feedback loop, like your development feedback loop. Like, if you're a web developer, you do like you save your code, like can you reload the page to have the new stuff running other sort of applications as feedback loops, a little different, but your goal is just as quickly as possible to interact with your code. When you're in production, you have to worry about a whole bunch of other issues, because it's actually you have users who are going to be interacting with the software or the data it's emitting won't be used in the real world. It's no longer just something you're working on. It's a thing that actually has some, the output actually has some weights and meaning some importance, you have to approach in a different way. So some of the things that come to mind here would be downtime, in a perfect world zero downtime in a reasonable world, a couple of seconds of downtime in the world of some bizarre web companies that I cannot literally cannot understand eight hours of downtime, because we're deploying the new version of the site. So Sunday, it'll be down like, what I just literally, I got this a while a couple months ago for something I was using, there's going to be hours of downtime for a site, just due to his expose, he said to upgrade to the new version of the site, just like that should be a button folks. That should be not long. Anyway. One of the things is downtime, right? You want to focus on that. And you don't care about that at all. With development. I mean, you want it to be somewhat responsive, but it doesn't matter if it's down for a moment.
+00:00:13 over time?
 
-00:14:52 This portion of talk Python to me is brought to you by SENTRY. How would you like to remove a little stress from your life? Do you worry that users might be having 
+00:00:14 Not just for the base OS, but for the installed packages?
 
-00:15:00 difficulties or are encountering errors in your app right now? Would you even know it until they send that support email? How much better would it be to have the error and performance details immediately sent to you, including the call stack and values of local variables and the active user recorded in that report. With Sentry this is not only possible, it's simple. In fact, we use Sentry on all the talk Python and web properties, we've actually fixed a bug triggered by a user and had the upgrade ready to roll out as we got their support email, that was a great email to write back, we saw your error and have already rolled out the fix. Imagine their surprise, surprise and delight your users today, create your Sentry account at 'talkpython.fm/sentry'. And if you sign up with a code talk python 2021. It's good for two months of Sentries team plan, which will give you up to 20 times as many monthly events as well as other features. So just use that code talk Python 2021 as your promo code when you sign up.
+00:00:17 How about your pip installed dependencies?
 
-00:15:59 Another one that you made a big deal out of that matter is security. You don't want to be in the newspaper or the news website, front pages for leaking the largest data breach ever or something like that, right? Yeah, that's, that's embarrassing. Basically, once you're packaging for production, you're at the intersection of a whole bunch of processes. This is where it starts getting complicated if you're having your coding, and then you have this image, and then you might want to run some tests with it, maybe integration tests, you're going to deploy it. And then when you deploy it, you might be upgrading an existing package, existing server to server to batch process, things are a little different. So there's deployment, and then things might go wrong in production. And then you might have some sort of feedback mechanism. And maybe you're going to try to reproduce the bug locally. So all of these different technological organizational processes, have some interact in some way with your packaging. And so it basically makes it a lot more complicated. And then you add into it all the different technologies that are intersecting and packaging. There's a lot of details to get right. And it gets complicated very quickly. Yeah, another area that you want to get into has to do with making sure that you're running the latest version, but you're not necessarily every deployment, just grabbing the latest version. So you need some way to inject stability. And you need some way that that stability doesn't lock in, like computer vulnerabilities or, or any of those kinds of issues also allows it to keep growing, right? Yeah. And this is sort of a and one of the more significant examples, but an example of the bigger picture, which is packaging as a process. And so it's not just about writing some configuration files, it's going to interact with the way you write code, and it's a thing that's parts of it are going to continue over time. So you're not when you're packaging for production, you're not just writing a few config files and calling it a day, you are actually need to think about need to set up these ongoing processes for things like security updates. And for things like dependency updates, right? It's one thing to get it running on a cluster or container cluster, it's another to say, and here's how we're going to keep the software healthy and running over time. Right? Yeah, you need to sort of think through the implications of what you're doing. And it's not just a one off thing. It's an ongoing thing. Yeah, absolutely. All right. Let's dive into some of the details. So it turns out, I discovered today, as I was pulling up your website, that you've actually written a whole bunch of stuff about production , ready Docker packaging, and that you're actually working on a handbook, I end up doing this a lot as well, I end up I'll spend you know a month doing tons of research and examples and thinking about a course and like, oh, there's a couple of nice presentations or conference talks I could pull out of here. And yeah, it's it's a good way to do it. Right. So you've been thinking a lot about this, not just for this talk, but beyond, right? Yeah, I've sort of spending two years on it so far, like, there's like, three different products up there. I've done training, there's like a lot of articles these days, just adds up. And I've spent a lot of time looking into this, because it turns out, it's, I should say, I don't like Docker packaging. Okay, this isn't the thing I'm doing because I this is fun. It's not actually fun. It's kind of a pain. It's just, it's very useful. And it's very easy to get it wrong, or to miss things. And so what I've been trying to do is sit and say, here's this really useful thing, here are the details you need to get right. And now that I've written them down, you don't have to waste your time trying to figure this out, because much of it is not. It's really useful. But it's not like you don't feel like you're a better person for having figured this out. It's just it's the getting, it's an obstacle and I'm trying to get people past those obstacles they can use this useful technology. Yeah, well, there's a lot of stuff that you talk about that is not necessarily something that would be front of mind, like security, like how to manage the versioning over time and so on, but I think also it would be
+00:00:19 Are you running as root?
 
-00:20:00 quite satisfying to have you take something that's janky. And maybe it does have that like one hour banner on Sunday, we're going to be down from three to four, upgrading our site and, and be able to remove that and say, No, we just deploy a couple times a week. Now, we don't think about it, because it's git push, prod, and then wait 30 seconds, and then prod is now the new one, right? Yeah, I think that's a very good feeling. Yeah. And there's a bunch more you need to do that. Then when I talk about I'm talking about one piece, there's also the deployment process, and there's having good observability and logging, even just the packaging part of it. Like there's a lot of details to get right, that can make it a lot easier. Yeah. So the way you started the presentation, your first thought for this was that packaging, this whole Docker as production packages, your app and Docker for production is an iterative process. Yeah. And maybe also layers, right, like, so you said, you don't necessarily start with the whole while we want zero downtime you start with, can we make it run in Docker? Yeah. And you don't have to do it as an iterative process. Like, if you can manage to keep all this in your head, which honestly, I can't, there's too many details, you go, or if I were to start Docker rising, something, I would probably do a bunch of it in one go, because I remember some of it. But if you're doing this at your job, and you probably are, like someone's there's going to be an emergency, or someone's going to pull you over, there's gonna be a bug that you have to fix. And so you're getting pulled away at some point. And so what you'd like to do is build your packaging in a way where if you're interrupted, you have to stop you have to put on hold, you can put it aside and know you're a good stopping point. And you want to sort of prioritize in most important ways. So if you run out, you may just run out of time budget, like you have limited time and you want to do the highest priority things first, then if you ever have more time, you can Well it sounds like what you're describing is a little bit of what happened to the software development side of things when it went from waterfall to agile or waterfall to something better, right? So many projects used to say, well we're going to do is we're going to build it until we're gonna work on it for six months. And it's not going to be actually usable in any meaningful way until that six month point, and then maybe it drags on and it goes over budget and gets canceled. And there's just all sorts of you know, you get no user feedback, there's all these kinds of problems, trying to build software that way. So it doesn't surprise me that there would be lots of advantages to try and apply that same sort of iterative thinking, like, let's make sure that each step along the way, we have something that's useful and more useful than I was before. Yeah, it also, even if you know you have the time budget to do all of it. Having a good understanding of the priorities means you can focus on the really important things, they are like, large images are very visible. Because very you can look at an image and say, why is this two gigabyte like this is ridiculous. And then you can go into this rabbit hole of like trying to make your image smaller. And that's a fine thing to do. But if you deploy an image that's insecure, and nice and small, that's not the best trade off. Like, I would venture to say that your organization would not praise you, for your efforts, make it small, but rather, they would be pretty upset about the security problems, right? Yeah. And so like, security seems like a high priority, like automations, high priority. And the order you might actually do it in might be different slightly different depending on your particular domain you're working on. Right. But you want to think about it's a bit of a priority stack, right? Like what is most important to me, or what is most foundational to the whole this whole packaging and Docker process? Yeah. So you actually put up some six points, or that you thought or sort of stages, you're talking, get something working, that's just can you use Docker at all? Obviously, if it doesn't work, it's not going to be useful. And then number two, even before continuous integration, security, I can see that people would look overlook that. But that's not trivial, right? Yeah. And like security is sort of a never ending thing, like because you have to deal with security updates. But if you want to, like you don't need complete automation to like spin up a server somewhere and test something like if you're using Heroku, you can like push a Docker image Heroku and spin up a server, you can manually do a git push. Yeah, right push stuff, but and then try it out. But if it's talking to like a production database, it's not secure. That's the problem. And packaging is only one small part of security, and most of its gonna be application security, but it still comes into it. And it's still important, right, right. Little Bobby tables is still a problem, even if it's running in Docker. Yes.
+00:00:21 If you don't know, the answer is yes.
 
-00:24:31 That's right. Okay, so number two is security. And then number three is continuous integration. So making sure that like, when we check in code that it's tested in Docker, se, the tests are run that system, something of a Docker compose up type of thing happens and it's all good. Then correctness and debug ability. So correctness is obvious, right? It needs to work it needs to have fresh data can't have like stale caches and weird things like that. But debug abilities is interesting
+00:00:23 We'll discuss these and many more issues with Itamar Turner-Trowing on this episode.
 
-00:25:00 may be want to focus on that just a sec sure, so the idea is that like, once you have automated builds, you might start actually running things or production production for real. Or even if not, you're gonna have if you're building an image for every pull request, now you have a bunch of images. And so someone files a bug. How do you know what version of your code like? Which docker? Do they know which Docker image they were using? What version of the code it matches to? If something crashes? Like, are you going to get actual? Are you going to get logs that someone can report or not? If you don't go to the effort of exporting the volume that has where the logs get written? Every new deploy? gets a new, fresh set of logs? Yeah, so yeah, like logging to standard out, or standard error is the the other way you deal with logs and Docker, but you need to, like, put some minimal thought into, like, where my log is gonna go. Yeah. Another thing that gets really tricky around that kind of stuff, I feel has to do with the fact that there's just so many moving parts, a lot of times, you know, you've got your celery Docker container, you've got your Redis Docker container, you've got your Postgres Docker container, you've got your app, Docker container, you're doing micro services, like, Who knows how many? And then all of those things have logs? Do you use anything, any of the services that try to bring all those logs into one place? Not a huge amount of experience any particular one I have? Or I've built a system like that, which these days, I wouldn't recommend using, but it's more for display only credited for scientific computing. Yeah. But before the serve the log as a service, log aggregation as a service was a thing. Yeah, I've worked on like, airline reservation system, one of these. And this was a, like, eye opener for me being able to see logs going between five services as in like, multiple different protocols. So you could make debugging vastly simpler. Yeah. So I really, like anything I like to trace across services. Without tracing ID will make once you have more than one service will make your life much easier. However, I my recommendation is avoid micro services, unless your company has 500 people, or Yeah, something like that. It's an amazing architectural design pattern. When there, there needs to be autonomy for different parts of the application like this team works on the front end, little bits here. This team works on the user authentication and identity part API's. And but you know, looking at the most recent PSF JetBrains survey, that is not the number of employees, number of people on a team type of description for most Python developers. It's like a handful of folks. Yep. All working on a lot of it. Right? Yeah. And if you look at the companies are doing microservices successfully at scale, they will have a team of you know, three to five people working in one service. So if you have a team of five people, 20 services, you are doing, like 100 times more services per developer than the big companies. Yeah. And that's a lot of complexity you've just added to your life, and it is often unnecessary. Yeah, your let's, I'll pull up the survey. So I've done Python developer survey 2020 results, if you search in that for team, not team city, employment work working in a team versus working independently, but half the people work on a team. But if you look at the team size 75% are two to seven. Yeah, that should be one micro service. Yeah, really, micro services. And their applications are actually there distributed systems where you actually it makes sense to do more. But like any time you make something more distributed, you are adding vast amount of complexity. And so if you can avoid it, avoid it. Yeah, well, here's the way that I think about it, I think about microservices, they have a tons of value, and they move with the complexity of your application lives. So what you end up with is very simple, relatively simple, small, easy bits of code. But what you also end up with is a much more complex deployment, DevOps coordination story. So when I think about microservices, the farther you go towards micro services, the more you're taking the code complexity of a large app and architectural patterns and separation. And you're saying, well, we don't need any of that. Let's make it real simple. And we move that complexity to coordinating a bunch of services that are always up that are debuggable, across services, and versioned. And in all those things. And when I think about that, for me, I'm way better at software complexity than I am at deployment complexity. So I'm more successful not putting it where I don't have my experience or skill set, you know, it's actually software complexity too, because if you call a function, you're going to call a function. If you send a message to another service, it may never arrive and may be delayed arbitrarily. Yeah. And so like the the communication becomes and the reliability of the finger calling the switch from a function within the same process to remote service is a sort of huge increase and unpredictability and sources of error. That's a good point because as for many things that could go wrong with say calling some function or a class level funk method, not having that get called is not one of the
+00:00:28 It's Talk Python To Me.
 
-00:30:00 things you have to worry about. Yeah, you might crash because the file system isn't there isn't accessible. The database isn't there but it's not that you couldn't even call it right that's gonna happen. Yeah, before we move on, Kim says filebeat, LogStash, Prometheus and Portainer Oh portainer I've never heard that one can all help logs from Docker in various ways. Awesome. Good resources, check out. Okay. Last one on your quick hitlist before we dive into some of the details is faster builds and smaller images ethically skipped reproducible builds? Who needs reproducible? Yeah, let's go with reproducibility. Yeah. And so this is the static versus dynamic change of dependencies you talked about where, on the one hand, you really don't want every time you reinstall the application to get the latest dependencies, because a new version of Django comes out, you don't want your code to suddenly start running on it, because just because it came out, right, and maybe you're not aware, right, because you have the older version of Django, as you suggest, and you're working on it, you get push, it goes to ci, and then that, ideally, is going to like some sort of continuous delivery. And it's grabbed just the latest, which is not what you had, and then it runs with it. Like that could be bad news. Yeah, yeah, this happens a lot of like dev tools, and then like, like, I'm gonna go check if there's been a new release today. And that matters less. But when it's your actual production software, that's not Oh, I wasted 20 minutes figuring out a failed build, it's, my code is acting weird in production. Yeah, another hand, if you just freeze all your dependencies and never change them, then at some point, you're going to be running on a version of software from two or three or five years ago, like I've, the extreme cases, actually are organizations still running on Python2. And this is, becomes very problematic, because upgrades become more and more terrifying, the more you put them off, because it's not just like Django. It's like, if upgrade Python and Django and three other major libraries you depend on. And it's, it's like this project, it's a project that's not features or bug fixes or anything, that's just risk. But if you put it off more than more, so you need a process that's ongoing. So you need both in the short term to be make sure your builds are identical, reproducible, and long are mostly identical. And in the long term, you need the process to continuously update so that upgrades are not this terrifying thing. They're just a standard part of your development process. Yeah, I had Carlton anwil on from Chico chat A while ago talking about deployment. And we came up with the idea that there are basically two types of applications, there's ones that you're going to continue to add features to and you're going to care about. And you have a maybe a team dedicated to it. And for those, you never want to be that far from the latest thing, just like you described, the farther you get, the more frightening and the more potential problems you have, if you take on the latest, right? Because if if you're on Django 2 and it's Django four or five is out in some future world, you're like, well, we finally need to move to get that because the other ones gone fully and supported. Well, that's like you said as a project, if you're always kind of just in dev sort of rolling into later one and then deciding to roll that out like that's, that's a much smaller challenge so that those should absolutely stay there. Also, we talked about a set of apps, a type of app that falls into the please don't touch it. And if you do touch it, and break it is now your baby. It's some horrible legacy code, the person who created it probably doesn't work at the company anymore. Nobody really likes it. It's not important, but it it needs to be there. Like it's some internal app or something right? Like maybe those you're just freeze, freeze those in time. They're very likely not public facing or something. But certainly if you care about continuing to work on this thing and adding features to it, and it matters, then keep it not too far. That's the tension. You don't want to just constantly ship the latest thing is maybe that's a major release of some library, but at the same time, you don't want to freeze it.
+00:00:29 Episode 323, recorded June 14th, 2021.
 
-00:33:54 This portion of talk Python to me is sponsored by Linode. Visit talk python.fm/linode. To see why linode has been voted the top infrastructure as a service provider by both G2 and TrustRadius. From their award winning support, which is offered 24/7 , 365 to every level of user the ease of use and setup. It's clear why developers have been trusting Linode for projects both big and small since 2003. deploy your entire application stack with linode to one click app marketplace, or build it all from scratch and manage everything yourself with supported centralized tools like terraform. Linode offers the best price to performance value for all compute instances, including GPUs, as well as block storage Kubernetes, and their upcoming Bare Metal release. Linode makes cloud computing fast, simple and affordable, allowing you to focus on your projects, not your infrastructure. Visit talk python.fm/linode and sign up with your Google account, your GitHub account or your email address and you'll get $100 in credit, as talk python.fm/ linode or just click the link in your podcast player show.
+00:00:34 Welcome to Talk Python To Me, a weekly podcast on Python, the language, the libraries, the ecosystem,
 
-00:35:00 notes. And thank them for supporting talk Python.
+00:00:53 and the personalities.
 
-00:35:05 quick comment back to them. monolith holdings says can you speak to microservices versus monolith in particular, for ml applications? I think that's a little bit different. I have really thought of it from an ml perspective and got my decent a decent rule of thumb is, are you working on a web application where there's hundreds of developers working on that application? And the answer is yes, then someone in the organization is going to, like write micro services, anything smaller than that, like just don't think about it, it's like, there's an I tend to see, once you're small enough, I tend to see the same way about Kubernetes. Like, there is a lot of like, technologies for a company with 5000 people, or 500 people, or 50 people or five people or one person, each organizational size, you're gonna want different technologies, because different architectures, because most applications will have 500 developers or five developers, because you're really to specialize your ability to build infrastructure different. And so if it's a thing that an organization that has 1000s of developers working like, are you building Pinterest? Probably not. Then the technology choices Pinterest makes may not be relevant to Yeah, thinking maybe another consideration is how much is part of that functionality shared? Are you building an API that has some models that make some prediction that a whole bunch of your company and different apps and websites and such might need? And you know, maybe that's its own thing. But if it's only being shared, shared in one place, maybe not. There's an interesting article that was from 2019, might be worth people checking out, called Give me back my monolith from Craig Karstens. Anyway, it's, I'm not gonna go into it here. But it's kind of an interesting read, people can check that out if they want. All right. We talked about faster builds and small images now are there Tell us about that people who are new to Docker haven't done a lot with Docker, there's a lot of things you can do to result in a smaller, physically a smaller image size, right, a smaller file on disk, it's very easy to get a giant image in Docker, because the Docker image format is basically in many ways like Git history. So every time you make a change, it's not overwriting, it's adding. So there's a history there. The history is always there. So if you delete a file, it doesn't make that image any smaller. If it was added in the previous layer, right? If it was added a different layer. That's right, yeah, if you structure things, right, there's a bunch you can do to make your images smaller. And similarly, Docker has a bunch of features to allow you to like not have to run pip install every single time you rebuild your image, because the dependencies haven't changed. So it can just cache that those files for you. But you have to set it up, right? So does that and you can go from a half an hour balance to a one minute build. And depending on how you build your Docker image. So it's like Alpine Linux being my current favorite example, the maybe that's going to get fixed over the next year. One of the things that's super interesting about that, as well as the ordering, as well as the grouping of those commands can really matter. So for example, if the first thing that you do in your Docker file is to copy over your source code, then the next thing to do is to do an apt update, apt upgrade, then the next thing to do is to install all the dependencies, and so on and so on. Right. Every time any file that you're working on, even like unrelated CSS file changes, everything below that has to be rebuilt, right? Yeah. And if you make a point to say, well, let's reorder that. So the very last thing we do is copy our files over, then as you make changes, like you want, those other layers will just be up to date. And one cool trick that I've seen that you can make that even better is somewhere in that intermediate bit. You can even copy your requirements or pyproject.tomo file over and then install those and then copy the rest of your code over which looks like a stupid duplication. Like why are you just copy this one file, you already copied it in the next one, but you can cache that pip install pip compile step, make it faster. Yeah, by basically if you understand how Docker caching works, then you can sort of structure Docker file in the right way. And then it just you get caching. And then you need extra steps to get it working and ci, but you can get a much faster builds will work. The Fast thing is super clear. Tell us about smaller though, what are you really focused on for smaller. So some of it is just things where various packaging tools are optimized for development by default. So if you do pip install, and you do something like NumPy, this can be pretty good. Say, let's go. The big packages like things like TensorFlow, like these packages, and these packages are hundreds of megabytes, like they're just huge. So you download the package, and then it unpacks it and installs all the files. And then by default, pip will keep a copy of that downloaded file, and a directory, probably the intermediate build output, the wheel file you downloaded, potentially all that stuff. Yeah, let's keep a copy of that.
+00:00:54 This is your host, Michael Kennedy.
 
-00:40:00 Wheel file, the idea is like, you might be doing another virtual and have another two hours. And so when you do pip install this time, we can just doesn't have to download it, you can just use the cached version, and right for development, that's great. But for the Docker image, you are never going to call pip install again. So keeping this file is just like an extra 400 megabytes of this space. And so there's a command line option for pip install. It says, -- no cache, yeah, and then doesn't keep a copy. And now we are haven't used free to put a bunch of space. Adding could be fairly considerable. If you're doing certain, especially for data science tools are added up across all the dependencies and their transitive dependencies and so on. Right? Yeah, that's like, just not storing files you don't need, they're one of the mind shifts you got to get into to work with this stuff is you will never ever change the Docker configuration, right? It's not like, oh, there's updates to Linux. So I'm gonna go in and like apt update it, or there's an update to my requirements. So I'm going to reinstall the requirements, you recreate a new Docker image, and you throw away the old Docker image, right? So there's a lot of the things that are there to make that next step. Right, pip installing, again, work well, are just liabilities and negative effects on your Docker image, right? Yeah. Yeah, Docker images are sort of designed to be treated as immutable artifacts, which is sort of great. But also like, you're dealing with a whole bunch of tools that don't really have that assumption. And so you have to figure out ways to make those two conflicting goals work together. Yeah. Another interesting thing that Peter brought up Peter McKee, and the other episode we did not too long ago, was intermediate frameworks and all sorts of stuff, it doesn't apply super well to the Python space. But maybe there's certain aspects, especially in the data science side that might. So for example, if you're going to install, like the development setup for Python, not just the ability to run, but to do pip installs and do all sorts of things. The example he gave was, if you're going to have something that runs in go, Well, what are the steps you might install might do is like, well, we're gonna install the go compiler and all that business. And we're gonna compile the artifact and you try to run it like you create a separate container that will take the code and compile it and give you the binary just copy the binary without the compiler back in there. So maybe there's some techniques like that. I don't know. I mean, it's, I don't see it quite as well in Python, because we can't fully package it up as reliably. But yeah, so a common so this happens a bunch if you're compiling your own custom c extensions. Yeah. So one way you can do that is like, you can have a thing that generates wheels, and then like, you build your Docker images, download the compiled wheel. But if you want to do it in your Docker image, you're gonna have to install a compiler, but then you know, that compiler package is going to be in your final image. So it just makes your image bigger. You don't need GCC. And so you can use a multistage build, which is probably what he was describing. Yeah. So the one easy way to do that as you create a virtual and install all your code, and then you copy just the virtual and move into a new Docker image, I wish and then the new Docker image just has the resulting self contained virtual doesn't have any of the compilers needed to build it right. No matter what else might have been over there. Yeah, maybe you could even use something like packs if you really cared to like compile that or not to bundle that into a zip and then run that directly. I'm not sure. But possibly, Tim out there in the live stream says, --no cache dir has made my evening thanks. I never thought about it the intermediate files from pip only from apt path and also Docker on build option can help a bit with that scenario.
+00:00:55 Follow me on Twitter where I'm @mkennedy.
 
-00:43:36 Okay, I am deprecated on builds. But I could be misremembering, that would be too bad, because I just learned about it.
+00:00:58 And keep up with the show and listen to past episodes at talkpython.fm.
 
-00:43:44 Okay, those are the six things that you talk about in this iterative process, or this layered process like step one, your first deliverable or your first package this as Docker sprint, would be get something working in either the single container or the suite of containers from Docker compose. Step two, is make sure they're secure. Step three, getting them running in ci, step four, make sure that they're correct. And debuggable. Number five, is reproducibility with that balance of not exactly the latest but not super old and stale. And then finally, bass builds and small images. Yeah. And then along the way, there's a whole bunch of different things you can do, depending on what tools you're using, and like what your priorities are. And yeah, can maybe give some examples if we have time. Yeah, absolutely. We got a little bit of time I thought that'd be fun. So we could dive into just get something working, which is like I am I have
+00:01:01 And follow the show on Twitter via at Talk Python.
 
-00:44:36 a couple of lines in Docker like see Docker, simple. Yeah, let's face it. Yeah, you choose a base image, copy your code and run pip install and say, This is what I want you to run when you start up. For many applications. I'll do the trick. So I'm always wondering what is a good container base to start from? Right so you have this Python 3.9 slim Buster version as the base. Yeah, there's a bunch
+00:01:04 This episode is brought to you by Sentry and Linode.
 
-00:45:00 Different options, right? What do you what do you think? So the first thing is you want a, these are all based on Linux distributions typically. And so you want a Linux distribution, that's some sort of long term support where they, they are both guaranteeing backwards compatibility in terms of like binary API's, but also in terms of features, but they're also doing security at ports. So like Debian stable boon to long term support, Red Hat, enterprise, Linux, they all are going to give you this stability guarantee, they'll say, we'll give you a stable operating system with security updates to it. And so you want seconds based on one of those probably, and then you need to, you typically are going to want a up to date Python. And these distributions or sometimes like backport, new versions of Python. And so you can use that. So you can say I'm going to use like a Ubuntu long term. So they read your long term support from 2020. And like as Python 3.8, and maybe they just added 3.9, I'm not sure. So I'll send it to that effect. And then you can know where that or Docker maintains these things are the official in quotes Docker images for Python. And basically, they do they take Debian stable, and then they compile all the different versions of Python for it. So you can get 3.7 or 3.8, or 3.9, and 2.0, it comes out regardless of what's in Debian stable. So it's Debian stable plus an extra Python. So Python, colon 3.9, is Debian stable, plus 3.9. And they have two variants, one has a bunch of extra packages, and one has fewer, the fewer one fewer packages is the dash slim. And then the dash Buster is which version of Debian you're using. And the reason you don't have to specify that but like, maybe like, at the end of the year, maybe early next year, there's going to be a new version of Debian stable. And so you don't want overnight to go from Debian 10 to Debian 11, as your base image, probably, you would probably want to just at least do that consciously. Right? And so putting, saying dash Buster means I want to stick to Debian 10 buster, and for those who don't know, that'd be in Linux releases are based on Toy Story characters by so one of them, right, yeah. And I don't remember the next one is there's Debian unstable, which is named said, there's always Debian unstable. And it's always said they never release it. That's cool. Alright, so in this example, it's the Docker file says from Python, colon 3.9, dash slim dash buster, which means all the stuff that you described there, and then you copy your files over, you run pip install to run, install the dependencies, and then you just basically start your app as the entry point. And that is it, we got something working, this is probably an over simplification, there might be a data base there that also needs to start up and run its bits and so on. But yeah, that's pretty much it, right? It's pretty simple, typically pretty simple to just get everything's working, because it's gonna just install some packages, and then run this test, tell it to run the scripts when you run a container. Yeah, it's pretty much whatever you need to do to get a new machine setup to run this, do that in this file. And you're good to go. Yeah, and I guess, see and comment on the chat. And I should add that, as far as I can tell, Docker on build is not deprecated. But I'll get I'm not sure. So all right. All right. I love to look at it.
+00:01:08 And the transcripts are brought to you by Assembly AI.
 
-00:48:12 Sounds good. So getting it working is super straightforward. Yep. But getting something secure, is interesting. But let me go back, I think we might be skipping around a bit. But you're talking about having that version specified there of slim buster, I know how we'll get new dependencies for the Python code up there. And if there's some kind of security problem, what will probably happen is dependent on GitHub will send me a PR that says, Warning Warning, your version of web framework has such and such CVE, we've created a PR, you accept it, you push it back to the right branch that kicks off the whole process and everything goes again, right? stack keeps like the flow of the somewhat fresh code and dependencies going through your system. However, how do I keep that same thing happening for Linux? Right? Suppose Linux has some security vulnerability and the version that I've got, or I've got nginx running and it has something like that I need to update like, what is the trigger? That helps me know, like, what is the process that helps me know, oh, you need to even if this is a somewhat stable, stale project that we haven't touched for a month, you need to somehow go give it a kick to like force it to get the latest and do that again, because there's no auto apt upgrade. Running there. Yeah, so one thing to notice, some people assume that the idea that the official Python, or even official Debian or whatever the official base images from Docker, get security updates every time they come out. They don't, some of them get updated fairly frequently. Some of them like the Centos one, which I guess people are very swishing away from. But for a while it was a lot of people probably using it. The Centos base image will not be updated for months at a time. And so they are relying on and the Debian ones. Well, I've seen them like lag on security updates.
+00:01:10 Please check out what they're offering during their segments.
 
-00:50:00 by two weeks, so Debbie has released a new security update with a Docker image hasn't been updated, which is not ideal because you're telling all the hackers? Well, here's the problem that you can just go look for in systems that lag on getting their patches. Yeah. And so as someone who is creating a Docker image cannot rely on the base images to be up to date, you need to install security updates. When you build your Docker image, what's that look like? The step two is apt update, apt upgrade dash y or something like that. Yeah, apt get update and apt get minus y upgrade, you can add a few more command line options make your image smaller, but yeah, it's basically do an upgrade. But there's a problem Docker has really talked about has this caching thing, where if you rebuild an image, nothing's changed. Now, we'll just use a cache layer. So when you rebuild your image, if you are using caching to speed up builds, it will look at Docker apt get, look at the apt get update, apt get upgrade and say Moses unchanged, same command. And so we'll just use a cache layer. Yeah, and you absolutely will very likely be doing that. Because it is, it's like five minutes versus three seconds to restart and build and test your app. So everyone is going to be using the caching, maybe not CI CD. But everywhere else. I mean, you probably took a little one and CI/CD two. Yeah. And so the result is that if you are if you've set up caching, to speed things up that caching will ensure you don't get security updates. And so basically, what you want you have to do is just have this process where once a day or once a week or in response to CVS coming out, you rebuild your image from scratch without caching. So you can just say every night at 3am, when no one's working, we are going to rebuild our image from scratch without caching. And so our image will always have like the latest security updates. And then if you're in a system that has continuous deployment, you can then automatically deploy that. Wait, how do you make the little banner that says you're going to be down Sunday from three to five? Can you do that part? Just kidding. Yeah. So this is easier if you have a process that that you trust enough to do automatic deploys, like anytime you want. But you basically have to rebuild your image from scratch without caching, either whenever a security update comes out, or just on a regular basis and redeploy, if it's a server, because you have these immutable artifacts, that if you're running a VM, like you can just have like a cron job that installs security updates nightly, because unintended upgrades package and Debian for Docker images, you can do that. And so you have to rebuild from scratch with security updates, and then redeploy, and ongoing process. Oh, yeah, I'm glad you pointed out the caching, because it's not enough to go out and say, Oh, well, every once a day or once a week, we'll just do a Docker build. Oh, it's up to date? Actually, we're good. No, not so much.
+00:01:13 It really helps support the show.
 
-00:52:47 Yeah, yeah. That's why I brought this up. Because I think it's tricky. Like, there's a natural flow that like kicks that refresh cycle off for code, but not for the infrastructure itself. Unless you think about it, though. Yeah. So yeah, you need to you need to explicitly think about instead of his processes, either some way to get notified of CVS. Or you can probably if you have a bunch of registries have security scanners, they'll scan your images for security problems. And so you can run those in a schedule maybe honestly, the easiest though, is probably just do a forced rebuild 5am or something that will next time, every developer that comes in and runs the command Docker compose up gonna do a Docker build, it's gonna see the things how to date and it'll just trigger, let's get the fresh Yeah, yeah. And it turns on security scanners are also have some bad defaults. So you'll get there's a lot of security problems that are not really problems, like the upstream maintainer has closed it as won't fix, or it's not going to get fixed and Debian stable until the next release Debian stable and the Debian maintainer that basically have decided that is not worth fixing. And so there's nothing you can do. Most security scanners will flag those. And so you'll run a scanner, update image, it'll say you have 60 security vulnerabilities. But you if you turn on the flag that says only tell me about security vulnerabilities that I can actually fix that actually have updates from Debian and then you run that and say you're and they'll say you're fine. Right. And that is probably a much more realistic assessment of your risk, because it's like, there are bugs that are never going to be fixed. Because the G lipsy maintainers. have said, no one fix this is not our problem. It's not a real bug. Yeah, I suspect you could also get notified about things that like, are not observable, really. So Oh, there's a problem in this system. But we actually have a firewall blocking that port. And we have no interaction with it, right? It's like, how much do you worry about those kinds of things, you may as well upgrade and redeploy because maybe one day or firewall will fail, but like, there's a whole bunch of just like, utter noise if you don't configure your security scanner correctly. All right, wrapping up this bit of the topic, Kim says forced rebuild is a great for your own images based on Debian or otherwise you probably still need some kind of scanning. Yeah, if you're not able to build it yourself. Yep. Makes sense. All right. We got a little bit of time to touch on a couple of things. One of the areas stage
+00:01:16 Hi, all.
 
-00:55:00 Two was security, you always want different layers, I talked about a firewall, we're talking about security updates and patches. But there's layers of security one. And one of the very straightforward ones is you probably don't want to run this as root. And like certain systems will even warn you about this. So if I try to sudo brew something on my Mac, it'll complain like you should never ever run brew is root. What are you doing? Are you crazy, stop doing that thing. Micro whiskey might warn that you're running as root, if you look at the logs when you started up, so when I run Docker, and I just get that simple, get started one, what does that run us. So by default, Docker runs as root. Oh, okay, that kind of makes sense. Because all these system packages are designed to be installed this route. And so if you're going to install system packages, or install security upgrades, you have to be root by default. But as soon as you've you've switched to like installing your Python code, you should stop being root and create a new user and switch that user because otherwise your application will be running as root. And root inside a container is more restricted. But it's still not as restricted as a normal user. And different runtime systems might take more aggressive steps to restrict what you can do. And so sometimes it might be okay, but just a good best practice your you don't know where your things are going to run, things might change around, just don't run as root, what you're saying is basically, if you run as root in a Docker container, and somebody picks over your container, well, the worst thing they can do is like crash around inside of the container. It's not like they now have full access to the machine. But you know, maybe those rights are propagated onward like maybe they can do something else to I don't know, decrypt something that then gets them further in the network. Like there's, there's challenges that could happen, right? So it is much easier to escape a container and onto the host, if you're running as root, because you like in Linux, a security access is granted by these things called capabilities. And if your route, you have a little bit more capabilities, it gives you a larger attack surface on Linux kernel. And so if there's a bug in the Linux kernel, it's easier to take it over if your route, there are other things you can do to restrict all capabilities to containers, even if you're running as normal user. So like, if you're running the ping utility, for example, it gets a little bit of extra, it gets an extra capability often. So I can do a ping. And then if there's a bug in the ping command, then you can sort of you can insert code into it somehow, then it'll execute it with elevated privileges, and you can do more stuff. And so yeah, you don't want that. Yeah. And so he wants to like, write as normal user that will restrict the attack surface on the Linux kernel, like removing all capabilities, or restrict the attack surface even more, and you do these things. And for many applications, it won't really matter too much. But it's very, it's not a lot of work. And it's like a little bit more assurance that if someone does somehow take over the limited damage they can cause because it only be restricted to this container. Yeah. Okay. Good advice. Use the Add User Docker command. Very cool. And then let's see, what was the next one here? We talked about the security updates, like that's, that's a challenge. So what do I need to think about for continuous integration, automated builds, specifically with regard to Dockers that are anything special, like So first, it's just doing the actual work of automating it. So like, you really, it's really nice if every time you push your Git repository, every time you pull requests, it builds a Docker image for you. Because then like, you can test it, maybe you can write additional tests actually use a Docker image to do integration tests, that sort of thing. Yeah, for example, there was a really cool framework or library, I can't remember exactly what it is we talked about on Python byte, that instead of trying to mock out, say, your database, or as mostly databases, there's a Docker, there's like a testing library you can use that will bring up a Docker container running Mongo or Postgres or something, and then fill it with test data. And you just connect those things and say, yeah, you can talk to the database, you know, parents test data monitors. Well, yeah, testing with a real database is so much easier these days, it just be the default. Like you shouldn't be if you're didn't deploy with Postgres, you shouldn't test a SQLite, because, like, they're different enough that there'll be bugs that you're gonna miss. Yeah. And so once you have that automation, and like building for every pull request, you don't you start having this issue where you don't want the image you built for the future 123 branch to overwrite your production image. That would be awkward, but you would still like continuous integration to do its job and say, You checked into this thing. It was okay or not. Okay. Yeah, it's useful to have like images uploaded for every pull request that can download and replay out of it, but you don't want feature branches, images to interfere with your production image. One easy way to do that is to name your Docker images based on the git branch. So like, you can just use the git branch as the part after the call on the tab. So it can be like your image colon main, if it's the main branch or your image colon feature 123 . It's the feature 123 branch. Yeah, that works really well with like Git flow feature branch. Style
+00:01:16 I have a quick announcement before we dive into the interview.
 
-01:00:00 Programming as well, I create a an issue, then I create a branch named something along those lines, and I create a PR along those lines. And guess what? Here's the container that goes with that thing, right? Yeah. Yeah. So things like name your Docker image based on the git commit. So you can sort of go from git commit to corresponding Docker image really easily. Yeah. Yeah, that's really cool idea. I did find that package, by the way, in case people are interested, it's called test containers - Python. Anyway, it The idea is you just say, like with MySQL container, do your test. And it like literally creates a Docker container with your test date and all that stuff. So people can check that out? That's kind of cool. All right. Well, I'm getting a little bit short on time here. What else do you want to throw out? For people who are thinking about a lot of these best practices? Have? We touched on a lot of them, but I know there's, there's plenty more to go like, for example, faster builds, you talk about, say, pre compiling the Pyc files. That's more for that actually use slower builds, but it'll give you a faster startup. That's what I mean. Yeah, sorry, since this comes up a bunch. Alpine Linux is not a thing you want is often not a thing you want to use for your Docker base image. And the reason is, Alpine Linux is highly recommended for if you want small images, it's kind of nice because you install the installing the Alpine packages, somehow, I don't know what they do. But it's vastly faster than like installing Debian packages, and you get small images. And it's kind of nice. Problem is Alpine Linux uses a different standard C library than most Linux distributions. Most Linux distributions use lipsy. Alpine uses MUSCLE or muscle, I don't know how to pronounce it. And binary wheels are compiled by default on Linux for glib C. And so they are on if you install Python packages on Alpine Linux, you will not get binary wheels, you're gonna have to compile them from scratch. And so what happens is people say, Oh, I'm gonna use Alpine Linux, it's gonna make my images smaller. And they try to install, like a Postgres package, which is precompiled and doesn't work. They're like, okay, it's an python, solid compiler, and on solid Postgres headers, now you have this image that has compiler and Postgres headers in it, and you have to compile stuff. And like when you get to like data science, or scientific computing, and you're like compiling these massive packages that take a really long time to compile and not your builds are super slow, then you can do a whole bunch of work to then use a multistage builds that your image is small, and then you can use caching so that the builds are fast. And then, but or you can just use a different Linux distribution, then use binary wheels, don't cause yourself the challenges, do some alpha, but there is a PEP that I believe was accepted to start the process of building wheels for Alpine. And I've started seeing some packaging tools who started adding support. And so it may be that in a year or two, it'll be just like everyone builds binary wheels for like many Linux is the glitzy people might start building wheel binary wheels for Alpine. And when that happens, they'll be much less of an issue. Until then, avoid using Alpine Linux as your base image, you want to close it out with a PYC thing? Sure. So when you start up a Python program, it loads in your Python source files and then compiles them. And completion here is not really the same as compiling a C extension. It's basically a one to one translation that compiles into bytecode or writes models, PYC files, and then the next time you start, you can just load the PYC file and that make your application start up quickly. And so if you're doing some sort of like many applications, it doesn't matter. If you're doing like a serverless kind of thing where like you're, you want things to start really quickly, like having to compile the PYC is it's gonna add some startup time, I guess, any times where the container lifetime the life cycle is short, right? Let's say with a web app, you would start it and it would run for hours. And so it doesn't matter, right? Yeah. So it's like it took you another 20 milliseconds to start off, it's gonna be around for three days. But if you're doing like a serverless thing where like you, like 20 milliseconds might be a significant chunk of the latency of your service. So when you build your Docker image, you can pre compile your PYC files, and then they'll be in the image and you won't have your startup way faster. And the reason you have to actually think about this is that Docker images are immutable. So your container starts up and compiles and writes the Pisces, but those Pisces never make it to the original image. Every time you start the images has the same immutable artifact, unlike your local home directory. And so if you really want the fastest startup, you can make your image a bit larger and compile the PYC s. And basically, that becomes a step in your Docker build files to compile the PYC ahead of time. Yeah. Okay. Awesome. Great advice, many, many tips. I think we're gonna have to leave it there or getting basically running out of time. But yeah, really nice talk. I'll link to your talk that you did at PyCon and thanks for coming here and sharing the audio version with us. Thanks for inviting me. Of course. Before you get out of here, though, there's the final two questions. If you're going to write some Python code, what editor Do you use, I use spacemacs, which is kind of like they took Emacs and they configured it like 20 years. That's a good jumping 20 years in the future to the future. Like it's Emacs. But with all
+00:01:19 Over at Talk Python Training, we just released our latest course, Python-powered chat apps with Twilio and Syngrid.
 
-01:05:00 The things you need pre configured to actually have a nice development environment and it has vi bindings, Emacs bindings, I use the Emacs bindings especially like VM, you can use vi finings. Yeah, cool. their, their subtitle and sub subtitle is a community driven Emacs distribution, the best editors, neither Emacs nor vim. It's Emacs and vim. I honestly don't use it in bindings at all I'm using it for like, it does all the IDE stuff you want out of the box. So it's just, it's a much more modern experience. Okay, really cool. And then notable PyPI package, PyO3, which is a way to create Python extensions in RUST . I've used it to create most will sort of fill my memory profiler. So I wrapped some Rust library with it. It's really, really nice way to create fast, safe extensions for Python. And it comes there's a packaging call tool called Maturin, which was probably the nicest Python packaging experience I've ever had. Like, you add like three lines. If you add a pipe project line file, which is like relines, you add like a tiny bit of metadata. And now you can build wheels, and you can pip install, and it just works. And it's just amazingly smooth development experience. That's fantastic. Yeah. So basically, if you're going to write C extensions, maybe we can consider that and write them in Rust and use this off. Yeah, yeah, it's like Rust is like gives you the same performance that you would get from C or C++, but it's much safer. And as someone who used to write C++ long ago, like I, I learned it and then over the past couple years, and it's like, it is the language I always wanted C++ to be. Yeah, I hear you. I did a lot of C++ as well, was always bringing in these things like smart pointers and other stuff. It's like, Why does it have to be hard to just like, make this better. It's not a simple language. Because if you want performance, you need to do work and the way it has a very different paradigm, but it's really lovely language, you'll write much safer code. And pile three makes it really nice to write Python extensions. Yeah. Cool. Cool. And then I told him that there has an interesting comment. Is that like an isotope? I think it's a reference to like oxidization. Like, oh, three, but yeah, yeah. Could rasa and there's a lot of oxidizing happening? Yeah. Around pi. Iser. Yeah. There's my project. Yeah. Think about it. That's like a completely different project. But yeah, it's another rust fun packaging. Yeah, exactly. Very, very cool. All right, final call to action. People are interested in this. They want to go deeper. You've got some various things you can find on your website. 'Pythonspeed.com/docker'. Yep. Where do they go? What do you tell? Yeah, so we're going to 'Pythonspeed com/docker'. There's a whole bunch of free articles about various best practices. If you're specifically interested in the process, we covered today, there's a PyCon talk. But also, if you go to 'pythonspeed.com/docker' process, it's also linked on that page. It's like an introduction to Docker rising for production. It's basically a little mini book I wrote, that's about 10 pages. But it goes over this process that we talked about today and sort of pros and talks about sort of the decisions you have to make and how it integrates your organizational processes. Let's recall on that site, the slash Docker, thank you. It has a bunch of articles, and it has a very small scroll bar and a lot of stuff below it. So yeah, there's a lot of a lot of things going on. People can go check out for more resources there, right. Yeah. And I have a bunch of pip products if anyone just said about Docker packaging, from intro to much more details, one, if you use the code talk Python, you can get a 15% discount. Oh, fantastic. Awesome. Yeah. So be sure to do that. Thank you so much for being on the show and sharing a lot of your hard earned Docker experience. Yeah. Thanks for inviting me. You bet. great to talk to you. You too. Bye.
+00:01:25 Have you ever wanted to create a chatbot using Python?
 
-01:08:45 This has been another episode of talk Python to me. My guest in this episode, was it Itamar Turner-Trauring . It has been brought to you by Sentry, Linode & Assembly AI. Take some stress out of your life get notified immediately about errors in your web applications with Sentry just visit talkpython.fm/sentry and get started for free and use the promo code talkpython 2021. When you sign up, simplify your infrastructure and cut your cloud bills in half with Linode. Linux virtual machines develop, deploy and scale your modern applications faster and easier. Visit 'talkpython.fm/linode' and click the Create free account button to get started. Transcripts for this and all of our episodes are brought to you by AssemblyAI. Do you need a great automatic speech to text API get human level accuracy in just a few lines of code visit 'talkpython.fm/assemblyAI'. Want to level up your Python. We have one of the largest catalogs of Python video courses over at talk Python. Our content ranges from true beginners to deeply advanced topics like memory and async. And best of all, there's not a subscription insight. Check it out for yourself at 'training.talkpython.fm' Be sure to subscribe to the show. Open your favorite podcast app and search for Python. We should be right at the top. You can also find the iTunes feed
+00:01:29 In this course, we'll be building an ordering system for a tech-savvy bakery.
 
-01:10:00 at /itunes, the Google Play feed at /play, and the direct RSS feed at /rss on talkpython.fm. We're live streaming most of our recordings these days. If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at talkpython.fm/youtube. This is your host, Michael Kennedy. Thanks so much for listening. I really appreciate it. Now get out there and write some Python code.
+00:01:33 Our customers can place orders over WhatsApp.
+
+00:01:35 And during the chat back and forth, we'll integrate data from our Flask API, answering questions such as, what's the menu?
+
+00:01:42 What does that cost?
+
+00:01:44 And so on.
+
+00:01:44 Then we'll integrate this into a sweet backend that sends receipts as PDFs over emails and allows our bakers to see new orders and then mark them as fulfilled and notify the customers when they're done.
+
+00:01:56 In short, it's cool tech and a super fun project.
+
+00:01:59 Oh, and one more thing.
+
+00:02:01 This course is free for everyone.
+
+00:02:03 So if this six-hour course sounds fun, just click the link in your podcast player's show notes and jump into the course.
+
+00:02:08 Now, on to the Docker best practices.
+
+00:02:10 Itamar, welcome to Talk Python to Me.
+
+00:02:13 Welcome back to Talk Python to Me.
+
+00:02:14 It's been some time.
+
+00:02:16 Feels like a year or so.
+
+00:02:17 I'm not sure exactly how long it's been.
+
+00:02:19 Last time we were on, we were talking about an entirely different topic.
+
+00:02:24 So you get two bits on the mind map connective sort of relationship of topics here.
+
+00:02:30 We talked about fill and profiling data science.
+
+00:02:34 That was fun.
+
+00:02:34 Yeah.
+
+00:02:35 I sort of have found myself talking about a bunch of different subjects and like some people are interested in both.
+
+00:02:42 Some people are interested in the other.
+
+00:02:43 And Docker is the other thing I've spent a lot of time sort of researching and writing about.
+
+00:02:48 Yeah, it's I think the data science profiling one was really interesting because profiling has all these challenges and much of it is more focused around profiling running applications or profiling code that's all in Python.
+
+00:03:00 And so if you need to profile like, say, Fortran code or other weird sort of mix and match libraries, then that was sort of that topic, right?
+
+00:03:09 Yeah, so feel as a memory profiler for Python and the kind of and specifically for batch processes like data science, scientific computing.
+
+00:03:17 And so if you're doing scientific computing, they'll there'll be a bunch of code in Fortran and C++ and Rust.
+
+00:03:22 And so you want to access that memory, like sort of profile memory across all the languages you're using.
+
+00:03:30 Yeah, because if you've got some big glob of C code, Python thinks it's just a pointer, that little tiny pointer to some, but it turns out to be huge.
+
+00:03:37 Yeah, so people can check out that episode.
+
+00:03:39 They're interested.
+
+00:03:40 And yeah, just give us an update on what you've been doing since then.
+
+00:03:43 I've actually been trying to turn feel into a sort of make an alternative version of it that you can run in production.
+
+00:03:48 Profilers often have performance overheads of feel take like 40% performance off the top.
+
+00:03:54 Trying to make something that will run with like 1%, 2% overhead.
+
+00:03:58 So you can run on production and just always get reports about your memory usage for any job.
+
+00:04:03 So if it's like six hours in it, it crashes out of crashes or just uses too much memory, go back and look at that.
+
+00:04:10 Oh, that would be fantastic.
+
+00:04:11 We have that for like profiling in terms of performance.
+
+00:04:14 On some systems, you can plug them in and they'll kind of give you real time.
+
+00:04:19 How is my app doing in terms of, you know, here's where it's spending its time or it got slower.
+
+00:04:25 Maybe it's even just measuring like request response.
+
+00:04:28 But memory profiling has typically been pretty intensive, right?
+
+00:04:33 So that'd be cool if you could get it down to that level.
+
+00:04:35 Yeah, and this is a very good pen.
+
+00:04:39 Both Phil and this project are very good.
+
+00:04:41 Pandemic projects.
+
+00:04:42 It's like really, it's quite difficult to do.
+
+00:04:45 And it's like, but it's something that is sort of completely under my control.
+
+00:04:48 Like we'll get to Docker and Docker is like, there's this giant ecosystem and they all have
+
+00:04:53 differing opinions about how you do things.
+
+00:04:54 And like everything's so broken around the edges.
+
+00:04:57 Whereas here it's like, I have a box and it's a very complicated box, but it's under my control.
+
+00:05:04 And so I can do so.
+
+00:05:04 It's kind of relaxing in an environment where the world is not under my control.
+
+00:05:10 It's been a crazy time, hasn't it?
+
+00:05:13 Yeah.
+
+00:05:13 Yeah.
+
+00:05:13 I feel like we're getting used to it.
+
+00:05:15 It's odd, but you know, people just get used to whatever water they swim in eventually, I guess.
+
+00:05:20 Yeah.
+
+00:05:21 Yeah.
+
+00:05:21 Let's talk about Docker a little bit.
+
+00:05:24 So it hasn't been that long since I had, that's, I also want to shout out quick episode 274 is when
+
+00:05:31 we talked about Phil, people want to go back and check that out.
+
+00:05:33 But I had Peter McKee from Docker over there to come and talk about sort of what is Docker, you know, give us an update on Docker, the company and like sort of set the stage for Python developers, right?
+
+00:05:46 To kind of get going on the dev side and just start using Docker.
+
+00:05:49 So that was episode 308 and that was fun.
+
+00:05:51 But then recently you gave a talk at PyCon called Zero to Production Ready, a best practices process for Docker packaging.
+
+00:06:00 And so I thought that was really interesting and wanted to have you on the show so we could dive into Docker best practices for Python, but also your focus is really on production, not necessarily development, right?
+
+00:06:13 Yeah.
+
+00:06:13 Maybe we start there.
+
+00:06:14 Like what's Docker look like for software development as a, I just need to make my stuff run so I can code it and test it out versus, I don't know, zero downtime Kubernetes or whatever it is you're trying to do type of thing.
+
+00:06:26 What do those two worlds look like and maybe tell folks about when they should care about what are the advantages or whatever.
+
+00:06:32 Yeah.
+
+00:06:32 So what Docker gives you is a sort of package that contains all the files you need for the file system, contains Python.
+
+00:06:41 It contains all the system libraries you need to run your Python extensions.
+
+00:06:45 It contains all your Python dependencies, contains all your code and contains a script to launch your code.
+
+00:06:52 And so as a starting point, this is useful for development because if you're say on macOS or in Windows and you're deploying to Linux, you can run something locally that is the same on across different computers.
+
+00:07:05 Even if you are on Linux, like I have one machine that's Fedora 33, I have another machine that's Ubuntu, like they're different in a bunch of subtle and lots of subtle ways.
+
+00:07:17 And so by having a Docker container when I'm developing, I can have a completely consistent environment.
+
+00:07:24 And then know that that environment when I, when I then take that code and run in production, it'll be exactly the same there.
+
+00:07:29 Right.
+
+00:07:29 I had a, somebody reach out to me a little while ago and ask something to the effect of, I've got a bunch of different developers on my team and I want to make sure that they all have the same version of Python in the same packages.
+
+00:07:42 Right.
+
+00:07:42 And that's a legitimate thing that you might want to do.
+
+00:07:45 You might want to make sure that those are exactly the same.
+
+00:07:47 I think maybe in general, there's probably more of a concern about that than an actual problem there.
+
+00:07:54 You know, a lot of times either these things are going to basically work or they're going to utterly fail.
+
+00:07:58 I think one of the scenarios maybe where it matters more is data science, where there's slight changes in algorithms, which might lead to different, you know, ways.
+
+00:08:06 You train the model, which might lean to different, like it could, those kinds of changes, but say in like web apps or UI apps or something like that, it's, it's either just going to work or it's going to completely break.
+
+00:08:16 That said, you know, this situation you're talking about with Docker for development, like kind of solves that, but to a much bigger degree.
+
+00:08:23 Right.
+
+00:08:24 Cause you could specify in this image, we have exactly this version of Python compiled in this way.
+
+00:08:30 We have these libraries installed with this version.
+
+00:08:34 We have these environment variables set and this subsystem of Linux installed as well, but not that other way.
+
+00:08:41 You can completely control it way more than just, I want the same version of Python, right?
+
+00:08:45 And you can then go further with something like Docker compose or compose lets you start up a little network of containers.
+
+00:08:52 And then it's very easy to say, okay, I want to spin up Postgres or I want to spin up Redis.
+
+00:08:57 Whereas traditionally this would be a pain in the ass with Docker and Docker compose.
+
+00:09:01 You can spin up a little, all your dependency servers really easily.
+
+00:09:04 So then even if you're not using Docker for your own code, you can use Docker for the services
+
+00:09:09 you depend on to really easily spin them up.
+
+00:09:11 Right.
+
+00:09:11 I need Redis running in this way and I need Postgres in that way.
+
+00:09:15 And I just need them all configured and to be able to talk.
+
+00:09:18 So Docker compose up, right?
+
+00:09:20 Something like that.
+
+00:09:21 Yeah.
+
+00:09:21 Yeah.
+
+00:09:22 Docker compose is a way to sort of run a little network of services, makes that really easily.
+
+00:09:26 Yeah.
+
+00:09:27 Another big advantage before we get off of the development side of things is onboarding new
+
+00:09:32 people and new hardware, right?
+
+00:09:34 If you've got something really complicated like that and you get somebody on the team, instead
+
+00:09:38 of spending a lot of time trying to get their system put together in the right way, you just
+
+00:09:43 go, sell Docker, do this.
+
+00:09:45 Yeah.
+
+00:09:45 There's, there's open source projects where like you can set up the development environment
+
+00:09:49 that will also provide a Docker file to just let you run some tests easily, just because
+
+00:09:55 you're a ongoing, you're only submitting one patch.
+
+00:09:58 You want to run some, like some tests on it.
+
+00:10:00 You don't want to go the whole thing.
+
+00:10:02 So it's very nice when they provide a way to run the code in Docker.
+
+00:10:05 Yeah, absolutely.
+
+00:10:06 That said, I don't generally do my development in Docker.
+
+00:10:09 I just, just have virtual environments and roll with that.
+
+00:10:13 So it's not always required.
+
+00:10:14 A couple of thoughts from folks out in the live stream.
+
+00:10:16 Kim Van Wick.
+
+00:10:17 Hey Kim.
+
+00:10:18 Says Docker Compose is an excellent way to make sure all the developers are using the same
+
+00:10:22 tools and versions.
+
+00:10:23 And it's just much easier to pass around a YAML file.
+
+00:10:25 Yeah.
+
+00:10:26 Compose is like, I remember when Compose first came out and it was called Fig, I think.
+
+00:10:31 And it was, it took Docker from something really neat to something really useful.
+
+00:10:36 Yeah.
+
+00:10:36 Right.
+
+00:10:37 The promise of Docker is that I can have all these different, if I want to run, like we just
+
+00:10:42 described, I want to run Redis.
+
+00:10:43 I want to run maybe a Celery backend.
+
+00:10:45 I want to run Postgres.
+
+00:10:47 And then my dev code is going to run and talk to all that.
+
+00:10:50 Well, keeping those all up to date, you know, start making sure they all build those files
+
+00:10:55 and they all run and maybe they run in the right order.
+
+00:10:57 Well, that all of a sudden isn't fun anymore.
+
+00:10:59 But if you can create a Compose file and just say, here's the set of containers that needs
+
+00:11:03 to work together, bring them all up in the right order and make sure they're all up to
+
+00:11:07 date, you know, got their recent build and so on.
+
+00:11:09 Like that's a whole nother level of the promise of containers.
+
+00:11:12 Yeah.
+
+00:11:13 Also, I don't know if you know anything about this.
+
+00:11:15 I'll maybe take a wild guess here.
+
+00:11:17 But Daniel Chen out in the live stream also says, question, is there in Windows, is there
+
+00:11:22 any difference between WSL 2 for the Docker backend compared to Hyper-V or is Hyper-V more
+
+00:11:28 for backwards compatibility legacy support?
+
+00:11:30 I, in general, don't use Windows that much.
+
+00:11:33 But basically, there's two, like, since you're running Linux and Windows is not Linux, you
+
+00:11:38 need to have some way of running Linux.
+
+00:11:40 In the past, the way you do that, you would run a virtual machine.
+
+00:11:43 This is what it does in macOS 2, I believe.
+
+00:11:44 Windows subsystem for Linux is a way to transparently run Linux applications on Windows and Docker supports
+
+00:11:52 it these days.
+
+00:11:53 I suspect they would be faster, but that's just a guess.
+
+00:11:56 So I don't have a good...
+
+00:11:58 Yeah, that's my thought as well, that they would be a little more integrated.
+
+00:12:00 Probably you could more easily do things like mount Windows file system folders from your
+
+00:12:07 Docker container.
+
+00:12:08 I don't know.
+
+00:12:08 Maybe you still can't with the others.
+
+00:12:09 Probably you can.
+
+00:12:10 But...
+
+00:12:10 I'd expect to be faster at least, yeah.
+
+00:12:12 Yeah.
+
+00:12:12 It seems like if you want to run on Linux, you're probably...
+
+00:12:16 I think you're probably closer.
+
+00:12:16 It's definitely more lightweight.
+
+00:12:18 Hyper-V would be running a full-on Linux VM and then hosting Docker in that, I'm pretty
+
+00:12:23 sure.
+
+00:12:23 Yeah.
+
+00:12:24 Yeah.
+
+00:12:24 Cool.
+
+00:12:24 All right.
+
+00:12:25 Well, hopefully our guesses there, Daniel, are helpful.
+
+00:12:27 All right.
+
+00:12:28 Well, let's talk about your talk that you gave at PyCon.
+
+00:12:32 I mean, giving talks today at conferences, like we started the show off, like it's a weird
+
+00:12:36 world, right?
+
+00:12:37 I'm giving a talk and both doing a live stream podcast on a conference tomorrow at the Manning
+
+00:12:44 Developer Productivity Conference.
+
+00:12:46 How can I do that?
+
+00:12:47 We record it.
+
+00:12:48 We publish it.
+
+00:12:49 And then we have a live Q&A afterwards.
+
+00:12:51 So the presentation of my recording will be during the Python bytes recording tomorrow,
+
+00:12:56 but then the live interactive bit will be actually after.
+
+00:12:59 So yeah, that's the commerce world we live in.
+
+00:13:01 And so PyCon this year was virtual.
+
+00:13:05 You put together a really nice presentation sort of in this format.
+
+00:13:09 And yeah, like I said, I got a lot out of it and I liked what you covered there.
+
+00:13:14 Yeah.
+
+00:13:14 And so the starting point is you have the service, now you want to run it in production.
+
+00:13:18 And this is a very dramatic departure from running things locally, because locally, the
+
+00:13:25 thing you're prioritizing is basically your feedback loop, like your development feedback
+
+00:13:31 loop.
+
+00:13:31 Like if you're a web developer, you do like it and you save your code, like can you reload
+
+00:13:36 the page to have the new stuff running?
+
+00:13:37 Other applications of feedback loops are a little different.
+
+00:13:40 But like your goal is just as quickly as possible to interact with your code.
+
+00:13:45 When you're in production, you have to worry about a whole bunch of other issues because
+
+00:13:48 it's actually, you have users who are going to be interacting with the software or the data
+
+00:13:54 it's emitting will be used in the real world.
+
+00:13:56 It's no longer just something you're working on.
+
+00:13:59 It's a thing that actually has some, the output actually has some weights and meaning, some
+
+00:14:04 importance.
+
+00:14:04 You have to approach it in a different way.
+
+00:14:06 So some of the things that come to mind here would be downtime, you know, in a perfect
+
+00:14:11 world, zero downtime in a reasonable world, a couple of seconds of downtime in the world
+
+00:14:17 of some bizarre web companies that I cannot, I literally cannot understand eight hours of
+
+00:14:23 downtime because we're deploying the new version of the site.
+
+00:14:25 So Sunday it'll be down.
+
+00:14:26 Like what?
+
+00:14:27 I just literally, I got this a while, you know, a couple of months ago for something
+
+00:14:32 I was using.
+
+00:14:32 There's going to be hours of downtime for a site.
+
+00:14:35 That's just, do, do, as you said, do you upgrade to the new version of the site?
+
+00:14:39 That should be a button folks.
+
+00:14:40 That should be not long.
+
+00:14:41 Anyway, one of the things is downtime, right?
+
+00:14:43 You want to focus on that and you don't care about that at all with development.
+
+00:14:47 I mean, you want it to be somewhat responsive, but it doesn't matter if it's down for a moment.
+
+00:14:53 This portion of Talk Python Army is brought to you by Sentry.
+
+00:14:55 How would you like to remove a little stress from your life?
+
+00:14:58 Do you worry that users might be having difficulties or are encountering errors in your app right
+
+00:15:03 now?
+
+00:15:03 Would you even know it until they send that support email?
+
+00:15:06 How much better would it be to have the error and performance details immediately sent to
+
+00:15:11 you, including the call stack and values of local variables and the active user recorded
+
+00:15:16 in that report?
+
+00:15:17 With Sentry, this is not only possible, it's simple.
+
+00:15:20 In fact, we use Sentry on all the Talk Python web properties.
+
+00:15:24 We've actually fixed a bug triggered by a user and had the upgrade ready to roll out as we
+
+00:15:30 got their support email.
+
+00:15:31 That was a great email to write back.
+
+00:15:32 We saw your error and have already rolled out the fix.
+
+00:15:35 Imagine their surprise.
+
+00:15:36 Surprise and delight your users today.
+
+00:15:38 Create your Sentry account at talkpython.fm/Sentry.
+
+00:15:42 And if you sign up with the code talkpython2021, it's good for two months of Sentry's team plan,
+
+00:15:48 which will give you up to 20 times as many monthly events as well as other features.
+
+00:15:53 So just use that code talkpython2021 as your promo code when you sign up.
+
+00:15:58 Another one that you made a big deal out of that can matter is security.
+
+00:16:03 You don't want to be in the newspaper or the news website front pages for leaking the largest
+
+00:16:10 data breach ever or something like that, right?
+
+00:16:12 Yeah, that's embarrassing.
+
+00:16:13 Basically, once you're packaging for production, you're at the intersection of a whole bunch
+
+00:16:18 of processes.
+
+00:16:18 This is where it starts getting complicated.
+
+00:16:20 You're coding, and then you have this image, and then you might want to run some tests with
+
+00:16:24 it, maybe integration tests, and you're going to deploy it.
+
+00:16:27 And then when you deploy it, you might be upgrading an existing package, existing server.
+
+00:16:32 It's a server.
+
+00:16:32 It's a batch process.
+
+00:16:33 Things are a little different.
+
+00:16:35 So there's deployment, and then things might go wrong in production, and then you might
+
+00:16:39 have some sort of feedback mechanism, and maybe you're going to try to reproduce the
+
+00:16:42 bug locally.
+
+00:16:43 So all of these different technological organizational processes have some interact in some way with
+
+00:16:50 your packaging.
+
+00:16:50 And so it basically makes it a lot more complicated.
+
+00:16:54 And then you add into it all the different technologies that are intersecting in packaging.
+
+00:16:58 There's a lot of details to get right, and it gets complicated very quickly.
+
+00:17:01 Another area that you want to get into has to do with making sure that you're running
+
+00:17:07 the latest version, but you're not necessarily every deployment just grabbing the latest version.
+
+00:17:14 So you need some way to inject stability, and you need some way that that stability doesn't
+
+00:17:19 lock in computer vulnerabilities or any of those kinds of issues.
+
+00:17:24 It also allows it to keep growing, right?
+
+00:17:26 Yeah.
+
+00:17:26 And this is sort of one of the more significant examples, but an example of the bigger picture,
+
+00:17:33 which is packaging is a process.
+
+00:17:35 And so it's not just about writing some configuration files.
+
+00:17:39 It's going to interact with the way you write code, and it's a thing that parts of it are going
+
+00:17:44 to continue over time.
+
+00:17:45 So when you're packaging for production, you're not just writing a few config files and calling
+
+00:17:50 it a day.
+
+00:17:50 You actually need to think about, need to set up these ongoing processes for things
+
+00:17:55 like security updates and for things like dependency updates.
+
+00:17:58 Right.
+
+00:17:58 It's one thing to get it running on a cluster, a container cluster.
+
+00:18:01 It's another to say, and here's how we're going to keep this software healthy and running
+
+00:18:06 over time, right?
+
+00:18:08 Yeah.
+
+00:18:08 You need to sort of think through the implications of what you're doing, and it's not just a
+
+00:18:13 one-off thing.
+
+00:18:13 It's an ongoing thing.
+
+00:18:14 Yeah, absolutely.
+
+00:18:15 All right.
+
+00:18:16 Let's dive into some of the details.
+
+00:18:18 So it turns out I discovered today, as I was pulling up your website, that you've actually
+
+00:18:23 written a whole bunch of stuff about production-ready Docker packaging, and that you're actually
+
+00:18:29 working on a handbook.
+
+00:18:30 I end up doing this a lot as well.
+
+00:18:32 I end up, I'll spend a month doing tons of research and examples and thinking about a course,
+
+00:18:38 and I'm like, oh, there's a couple of nice presentations or conference talks I could pull
+
+00:18:42 out of here.
+
+00:18:42 And yeah, it's a good way to do it, right?
+
+00:18:45 So you've been thinking a lot about this, not just for this talk, but beyond, right?
+
+00:18:48 Yeah.
+
+00:18:49 I'm sort of spending two years on it so far.
+
+00:18:52 Like, I have three different products up there.
+
+00:18:56 I've done training.
+
+00:18:56 There's like a lot of articles these days.
+
+00:19:00 It just adds up.
+
+00:19:01 And yeah, I've spent a lot of time looking into this because it turns out it's, I should say,
+
+00:19:07 I don't like Docker packaging.
+
+00:19:10 Okay.
+
+00:19:11 This isn't a thing I'm doing because this is fun.
+
+00:19:14 It's not actually fun.
+
+00:19:16 It's kind of a pain.
+
+00:19:17 It's just, it's very useful and it's very easy to get it wrong or to miss things.
+
+00:19:23 And so what I've been trying to do is sit and say, here's this really useful thing.
+
+00:19:28 Here are the details you need to get right.
+
+00:19:30 And now that I've written it down, you don't have to waste your time trying to figure this
+
+00:19:34 out because much of it is not, it's really useful, but it's not like, you don't feel like
+
+00:19:39 you're a better person for having figured this out.
+
+00:19:42 It's just, it's the getting, it's an obstacle.
+
+00:19:45 And I'm trying to get people past those obstacles that can use this useful technology.
+
+00:19:48 Yeah.
+
+00:19:49 Well, there's a lot of stuff that you talk about that is not necessarily something that
+
+00:19:52 would be front of mind, like security, like how to manage the versioning over time and
+
+00:19:57 so on.
+
+00:19:58 But I think also it would be quite satisfying to have, you know, take something that's janky
+
+00:20:03 and maybe it does have that like one hour banner on Sunday, we're going to be down from three
+
+00:20:07 to four upgrading our site and, and be able to remove that and say, no, we just deploy a
+
+00:20:12 couple of times a week now.
+
+00:20:13 We don't think about it because it's get push prod and then wait 30 seconds.
+
+00:20:19 And then prod is now the new one.
+
+00:20:20 Right.
+
+00:20:21 Yeah.
+
+00:20:21 I think that's a very good feeling.
+
+00:20:22 Yeah.
+
+00:20:23 And there's a bunch more you need to do that than what I talk about.
+
+00:20:26 I'm talking about one piece.
+
+00:20:27 There's also the deployment process and that there's having good observability and
+
+00:20:31 logging, even just the packaging part of it.
+
+00:20:33 Like there's a lot of details to get right that can make it a lot easier.
+
+00:20:36 Yeah.
+
+00:20:36 So the way you started the presentation, your first thought for this was that packaging,
+
+00:20:42 this whole Docker as production, packaging your app and Docker for production is an iterative
+
+00:20:48 process and maybe also layers, right?
+
+00:20:51 Like, so you sit, you don't necessarily start with the whole, well, we want zero downtime.
+
+00:20:56 You start with, can we make it run in Docker?
+
+00:20:58 Yeah.
+
+00:20:58 And you don't have to do it as an iterative process.
+
+00:21:01 Like if you can manage to keep all this in your head, which honestly, I can't, but there's
+
+00:21:05 too many details.
+
+00:21:06 Or if I were to start Dockerizing something, I would probably do a bunch of it in one go
+
+00:21:11 because I remember some of it.
+
+00:21:12 But if you're doing this at your job and you probably are like someone's, there's going
+
+00:21:17 to be an emergency or someone's going to pull you over or there's going to be a bug that
+
+00:21:21 you have to fix.
+
+00:21:21 And so you're going to get pulled away at some point.
+
+00:21:23 And so what you'd like to do is build your packaging in a way where if you're interrupted,
+
+00:21:29 you have to stop, you have to put it on hold.
+
+00:21:31 You can put it aside and know you're a good stopping port and you want to sort of prioritize
+
+00:21:35 the most important ways.
+
+00:21:37 So if you run, like you may just run out of time budget, like you just have limited time
+
+00:21:42 and you want to do the highest priority things first.
+
+00:21:44 And if you ever have more time, you can-
+
+00:21:46 Well, it sounds like what you're describing is a little bit of what happened to the software
+
+00:21:50 development side of things when it went from waterfall to agile or waterfall to something
+
+00:21:55 better, right?
+
+00:21:56 So many projects used to say, well, what we're going to do is we're going to build it until
+
+00:21:59 we're going to work on it for six months.
+
+00:22:01 And it's not going to be actually usable in any meaningful way until that six month point.
+
+00:22:06 And then maybe it drags on and it goes over budget and gets canceled.
+
+00:22:09 And there's just all sorts of, you know, you get no user feedback.
+
+00:22:12 There's all these kinds of problems trying to build software.
+
+00:22:14 So it doesn't surprise me that there would be lots of advantages to trying to apply that
+
+00:22:19 same sort of iterative thinking.
+
+00:22:20 Like, let's make sure that each step along the way, we have something that's useful and
+
+00:22:25 more useful than it was before.
+
+00:22:26 Yeah.
+
+00:22:27 And also, even if you know you have the time budget to do all of it, having a good understanding
+
+00:22:32 of the priorities means you can focus on the really important things.
+
+00:22:36 Yeah.
+
+00:22:37 Like large images are very visible.
+
+00:22:39 Like it's very easy.
+
+00:22:40 Like you can look at your image and say, why is this two gigabyte?
+
+00:22:42 Like this is ridiculous.
+
+00:22:44 And then you can go into this rabbit hole of like trying to make your image smaller.
+
+00:22:48 And that's a fine thing to do.
+
+00:22:50 But if you deploy an image that's insecure and nice and small, that's not the best trade-off.
+
+00:22:57 I would venture to say that your organization would not praise you for your efforts to make
+
+00:23:03 it small.
+
+00:23:04 But rather, they would be pretty upset about the security problems, right?
+
+00:23:07 Yeah.
+
+00:23:07 Yeah.
+
+00:23:07 And so like security seems like a high priority, like automation's high priority.
+
+00:23:13 And the order you might actually do it, it might be slightly different depending on your
+
+00:23:17 particular domain you're working on.
+
+00:23:19 Right.
+
+00:23:19 But yeah, you want to think about.
+
+00:23:21 It's a bit of a priority stack, right?
+
+00:23:23 Like what is most important to me or what is most foundational to the whole, this whole
+
+00:23:27 packaging and Docker process.
+
+00:23:29 Yeah.
+
+00:23:29 So you actually put up some six points that you thought were sort of stages in your talk.
+
+00:23:35 Yeah.
+
+00:23:35 Get something working.
+
+00:23:36 That's just, can you use Docker at all?
+
+00:23:38 Obviously, if it doesn't work, it's not going to be useful.
+
+00:23:40 And then number two, even before continuous integration, security.
+
+00:23:43 I can see that people would overlook that, but that's not trivial, right?
+
+00:23:47 Yeah.
+
+00:23:48 And like security is sort of a never ending thing, like, because you have to deal with security
+
+00:23:54 updates.
+
+00:23:54 But if you want to, like, you don't need complete automation to like spin up a server somewhere
+
+00:24:01 and test something.
+
+00:24:02 Like if you're using Heroku, you can like push a Docker image to Heroku and spin up a server.
+
+00:24:06 Yeah.
+
+00:24:06 You could manually do a get push.
+
+00:24:08 Yeah.
+
+00:24:09 You can push stuff.
+
+00:24:10 But, and then try it out.
+
+00:24:12 But if it's talking to like a production database and it's not secure, that's the problem.
+
+00:24:17 And packaging is only one small part of the security and most of it's going to be application
+
+00:24:22 security, but it still comes into it and it's still important.
+
+00:24:25 Right.
+
+00:24:25 Right.
+
+00:24:25 Little Bobby tables is still a problem, even if it's running in Docker.
+
+00:24:29 Yes.
+
+00:24:30 That's right.
+
+00:24:31 Okay.
+
+00:24:32 So number two is security.
+
+00:24:33 And then number three is continuous integration.
+
+00:24:36 So making sure that like when we check in code that it's tested in Docker, guessing the tester
+
+00:24:43 run, the system, something of a Docker compose up type of thing happens and it's all good.
+
+00:24:48 Then correctness and debugability.
+
+00:24:51 So correctness is obvious, right?
+
+00:24:53 It needs to work.
+
+00:24:54 It needs to have fresh data.
+
+00:24:55 It can't have like stale caches and weird things like that.
+
+00:24:58 But debugability is interesting.
+
+00:25:00 Maybe you want to focus on that for just a sec?
+
+00:25:02 Sure.
+
+00:25:03 So the idea is that like once you have automated builds, you might start actually running things
+
+00:25:08 for product in production for real.
+
+00:25:09 Or even if not, you're going to have, if you're building an image for every pull request, now
+
+00:25:14 you have a bunch of images.
+
+00:25:15 And so someone files a bug.
+
+00:25:17 How do you know what version of your code, like which Docker image, do they know which Docker
+
+00:25:20 image they were using?
+
+00:25:21 What version of the code it matches to?
+
+00:25:22 If something crashes, like, are you going to get actual, are you going to get logs that someone
+
+00:25:27 can report or not?
+
+00:25:28 If you don't go to the effort of exporting the volume that has where the logs get written,
+
+00:25:33 every new deploy gets a new fresh set of logs.
+
+00:25:36 Yeah.
+
+00:25:36 So yeah, like logging to standard out or standard error is the other way you deal with logs in
+
+00:25:42 Docker.
+
+00:25:42 But you need to like put some minimal thought into like, where are my logs going to go?
+
+00:25:47 Yeah.
+
+00:25:47 Another thing that gets really tricky around that kind of stuff, I feel, has to do with
+
+00:25:52 the fact that there's just so many moving parts a lot of times.
+
+00:25:54 You know, you've got your Celery Docker container.
+
+00:25:57 You've got your Redis Docker container.
+
+00:25:59 You've got your Postgres Docker container.
+
+00:26:01 You've got your app Docker container.
+
+00:26:03 You're doing microservices, like who knows how many.
+
+00:26:06 And then all of those things have logs.
+
+00:26:08 Do you use anything, any of the services that try to bring all those logs into one place?
+
+00:26:13 Not a huge amount of experience on any particular one.
+
+00:26:16 I have, or I've built a system like that, which these days I wouldn't recommend using, but
+
+00:26:22 it's more for this point only for scientific computing.
+
+00:26:24 Yeah.
+
+00:26:24 But before the log as a service, log aggregation as a service was a thing.
+
+00:26:30 Yeah.
+
+00:26:30 I've worked on like airline reservation system.
+
+00:26:32 I had one of these.
+
+00:26:33 And this was a like eye opener for me being able to see logs going between five services
+
+00:26:38 in like multiple different protocols.
+
+00:26:41 So you could make debugging vastly simpler.
+
+00:26:44 Yeah.
+
+00:26:44 So you really like anything that lets you trace across services with a tracing ID will
+
+00:26:51 make your, like once you have more than one service, it'll make your life much easier.
+
+00:26:54 However, I, my recommendation is avoid microservices unless your company has 500 people or something
+
+00:27:02 like that.
+
+00:27:02 Yeah.
+
+00:27:03 It's an amazing architectural design pattern when there, there needs to be autonomy for
+
+00:27:09 different parts of the application.
+
+00:27:10 Like this team works on the front end little bits here.
+
+00:27:13 This team works on the user authentication and identity part APIs.
+
+00:27:18 And, but you know, looking at the most recent PSF JetBrains survey, that is not the number
+
+00:27:25 of employees, number of people on a team type of description for most Python developers.
+
+00:27:30 It's like a handful of folks all working on a lot of it.
+
+00:27:34 Right.
+
+00:27:34 Yeah.
+
+00:27:34 And if you look at the companies that are doing microservices successfully at scale,
+
+00:27:38 they will have a team of, you know, three to five people working on one service.
+
+00:27:42 So if you have a team of five people, 20 services, you are doing like a hundred times more services
+
+00:27:48 per developer than the big companies.
+
+00:27:50 Yeah.
+
+00:27:50 And that's a lot of complexity you've just added to your life and it is often unnecessary.
+
+00:27:56 Yeah.
+
+00:27:56 Here, let's, I'll pull up the survey.
+
+00:27:59 So Python developer survey 2020 results.
+
+00:28:02 If you search in that for team, not team city, employment work, working in a team versus
+
+00:28:07 working independently, about half the people work on a team.
+
+00:28:10 But if you look at the team size, 75% are two to seven.
+
+00:28:13 Yeah.
+
+00:28:13 That should be one microservice.
+
+00:28:15 Yeah.
+
+00:28:15 It's really microservices.
+
+00:28:17 And there are applications that are actually, there are distributed systems where you actually,
+
+00:28:21 it makes sense to do more, but like any time you make something more distributed, you
+
+00:28:26 are adding a vast amount of complexity.
+
+00:28:28 And so if you can avoid it, avoid it.
+
+00:28:31 Yeah.
+
+00:28:31 Well, here's the way that I think about it.
+
+00:28:32 I think about microservices.
+
+00:28:35 They have a tons of value and they move where the complexity of your application lives.
+
+00:28:41 So what you end up with is very simple, relatively simple, small, easy bits of code.
+
+00:28:47 But what you also end up with is a much more complex deployment DevOps coordination story.
+
+00:28:53 So when I think about microservices, the farther you go towards microservices, the more you're
+
+00:28:57 taking the code complexity of a large app and architectural patterns and separation.
+
+00:29:02 And you're saying, well, we don't need any of that.
+
+00:29:03 Let's make it real simple.
+
+00:29:04 And we move that complexity to coordinating a bunch of services that are always up, that are
+
+00:29:09 debuggable across services and versioned and all those things.
+
+00:29:13 And when I think about that for me, I'm way better at software complexity than I am at deployment
+
+00:29:18 complexity.
+
+00:29:18 So I'm more successful not putting it where I don't have my experience or skillset.
+
+00:29:23 You know?
+
+00:29:23 It's actually software complexity too, because if you call a function, you're going to call
+
+00:29:28 a function.
+
+00:29:29 If you send a message to another service, it may never arrive.
+
+00:29:32 It may be delayed arbitrarily.
+
+00:29:34 Yeah.
+
+00:29:35 And so the communication becomes and the reliability of a thing you're calling, the switch from a
+
+00:29:42 function within the same process to remote service is a sort of huge increase in unpredictability
+
+00:29:48 and sources of error.
+
+00:29:49 That's a good point.
+
+00:29:50 Because as for many things that could go wrong with, say, calling some function or a
+
+00:29:55 sort of class level method, not having it get called is not one of the things you'd have
+
+00:30:00 to worry about.
+
+00:30:01 Yeah.
+
+00:30:02 Right?
+
+00:30:02 You might crash because the file system isn't there, isn't accessible.
+
+00:30:06 The database isn't there.
+
+00:30:07 But it's not that you couldn't even call it, right?
+
+00:30:09 That's going to happen.
+
+00:30:10 Yeah.
+
+00:30:10 Before we move on, Kim says, FileBeat, Logstash, Prometheus, and Protainer.
+
+00:30:16 Oh, Protainer.
+
+00:30:17 I've never heard of that one.
+
+00:30:18 Can all help with logs from Docker in various ways.
+
+00:30:20 Awesome.
+
+00:30:20 Good resources to check out.
+
+00:30:22 Okay.
+
+00:30:22 Last one on your quick hit list before we dive into some of the details is faster builds
+
+00:30:27 and smaller images.
+
+00:30:28 I think we skipped reproducible builds.
+
+00:30:31 Who needs reproducibility?
+
+00:30:32 Yeah.
+
+00:30:32 Let's go with reproducibility.
+
+00:30:33 Yeah.
+
+00:30:34 And so this is the static versus dynamic change of dependencies that you talked about,
+
+00:30:39 where on the one hand, you really don't want every time you reinstall your application to
+
+00:30:44 get the latest dependencies because a new version of Django comes out.
+
+00:30:48 You don't want your code to suddenly start running on it just because it came out.
+
+00:30:52 Right.
+
+00:30:52 And maybe you're not aware, right?
+
+00:30:53 Because you have the older version of Django, as you suggest, and you're working on it.
+
+00:30:58 You get push.
+
+00:30:59 It goes to CI.
+
+00:31:00 And then that ideally is going to like some sort of continuous delivery and it's grabbed
+
+00:31:05 just the latest, which is not what you had.
+
+00:31:07 And then it runs with it.
+
+00:31:08 Like that could be bad news.
+
+00:31:09 Yeah.
+
+00:31:09 This happens a lot of like dev tools.
+
+00:31:11 And then like, oh, I'm going to go check if there's been a new release today.
+
+00:31:15 And the matter is less.
+
+00:31:16 But when it's your actual production software, that's not, oh, I wasted 20 minutes figuring
+
+00:31:21 out a failed build.
+
+00:31:22 It's my code is acting weird in production.
+
+00:31:25 On the other hand, if you just freeze all your dependencies and never change them, then
+
+00:31:29 at some point you're going to be running on a version of software from two or three or
+
+00:31:34 five years ago.
+
+00:31:35 Like I've, the extreme cases, like there are organizations still running on Python too.
+
+00:31:40 And this is, becomes very problematic because upgrades become more and more terrifying the more
+
+00:31:48 you put them off.
+
+00:31:49 Because it's not just like Django.
+
+00:31:51 It's like, you have to upgrade Python and Django and three other major libraries you depend
+
+00:31:56 on.
+
+00:31:57 And it's, it's like this project.
+
+00:32:00 And it's a project that's not features or bug fixers or anything.
+
+00:32:04 It's just risk.
+
+00:32:05 But if you put it off more, then it's more risk.
+
+00:32:07 And so you need a process that's ongoing.
+
+00:32:09 So you need both in the short term to be, make sure your builds are identical, reproducible
+
+00:32:14 and long or mostly identical.
+
+00:32:16 And then the longterm you need the process to continuously update so that upgrades are
+
+00:32:21 not this terrifying thing.
+
+00:32:22 They're just a standard part of your development process.
+
+00:32:24 Yeah.
+
+00:32:24 I had Carlton and Will on from Django chat a while ago talking about deployment.
+
+00:32:29 And we came up with the idea that there are basically two types of applications.
+
+00:32:33 There's ones that you're going to continue to add features to, and you're going to care
+
+00:32:37 about, and you have a, maybe a team dedicated to it.
+
+00:32:40 And for those, you never want to be that far from the latest thing.
+
+00:32:43 Just like you described, the farther you get, the more frightening and the more potential
+
+00:32:47 problems you have if we take on the latest, right?
+
+00:32:50 Because if you're on Django 2 and it's Django 4.5 is out in some future world, you're like,
+
+00:32:56 well, we finally need to move to get that because the other one's gone fully unsupported.
+
+00:32:59 Well, that's like you said, as a project.
+
+00:33:01 Because if you're always kind of just in dev, sort of rolling into later one and then deciding
+
+00:33:05 to roll that out, like that's a much smaller challenge.
+
+00:33:08 So those should absolutely stay there.
+
+00:33:10 Also, we talked about a set of apps, a type of app that falls into the, please don't
+
+00:33:16 touch it.
+
+00:33:16 And if you do touch it and break it, it's now your baby.
+
+00:33:19 It's some horrible legacy code.
+
+00:33:22 The person who created it probably doesn't work at the company anymore.
+
+00:33:25 Nobody really likes it.
+
+00:33:26 It's not important, but it needs to be there.
+
+00:33:29 Like it's some internal app or something, right?
+
+00:33:30 Like maybe those, you just freeze those in time.
+
+00:33:34 They're very likely not public facing or something.
+
+00:33:37 But certainly if you care about continuing to work on this thing and adding features to
+
+00:33:41 it and it matters, then keep it not too far.
+
+00:33:44 That's the tension.
+
+00:33:45 You don't want to just constantly ship the latest thing because maybe that's a major release of
+
+00:33:50 some library, but at the same time, you don't want to freeze it.
+
+00:33:54 This portion of Talk Python to me is sponsored by Linode.
+
+00:33:57 Visit talkpython.fm/Linode to see why Linode has been voted the top infrastructure
+
+00:34:02 as a service provider by both G2 and TrustRadius.
+
+00:34:05 From their award-winning support, which is offered 24, 7, 365 to every level of user,
+
+00:34:11 to the ease of use and setup, it's clear why developers have been trusting Linode for
+
+00:34:15 projects both big and small since 2003.
+
+00:34:18 Deploy your entire application stack with Linode's one-click app marketplace or build
+
+00:34:24 it all from scratch and manage everything yourself with supported centralized tools like Terraform.
+
+00:34:28 Linode offers the best price-to-performance value for all compute instances, including GPUs
+
+00:34:34 as well as block storage, Kubernetes, and their upcoming bare metal release.
+
+00:34:39 Linode makes cloud computing fast, simple, and affordable, allowing you to focus on your
+
+00:34:44 projects, not your infrastructure.
+
+00:34:46 Visit talkpython.fm/Linode and sign up with your Google account, your GitHub account,
+
+00:34:52 or your email address, and you'll get $100 in credit.
+
+00:34:55 That's talkpython.fm/Linode, or just click the link in your podcast player's show notes.
+
+00:35:00 And thank them for supporting Talk Python.
+
+00:35:02 Quick comment back to the monolith.
+
+00:35:07 Tolines says, can you speak to microservices versus monolith, in particular for ML applications?
+
+00:35:14 I think that's a little bit different.
+
+00:35:16 I haven't really thought of it from an ML perspective.
+
+00:35:17 You got thoughts?
+
+00:35:18 My decent, a decent rule of thumb is, are you working on a web application where there's
+
+00:35:23 hundreds of developers working on that application?
+
+00:35:25 And the answer is yes.
+
+00:35:27 Then someone in the organization is going to bring up microservices.
+
+00:35:32 Anything smaller than that, just don't think about it.
+
+00:35:37 Once you're small enough, I tend to feel the same way about Kubernetes.
+
+00:35:42 There's a lot of technologies for a company with 5,000 people or 500 people or 50 people
+
+00:35:48 or five people or one person.
+
+00:35:50 Each organizational size, you're going to want different technologies because different
+
+00:35:54 architectures because, when I say applications, we'll have 500 developers or five developers
+
+00:35:58 because your ability to specialize, your ability to build infrastructure are different.
+
+00:36:03 And so if it's a thing that an organization that has thousands of developers working, like,
+
+00:36:08 are you building Pinterest?
+
+00:36:10 Probably not.
+
+00:36:11 Then the technology sources Pinterest makes may not be relevant to you.
+
+00:36:15 Yeah.
+
+00:36:15 I think maybe another consideration is how much is part of that functionality shared?
+
+00:36:19 Are you building an API that has some models that make some prediction that a whole bunch
+
+00:36:24 of your company and different apps and websites and such might need?
+
+00:36:28 And, you know, maybe that's its own thing.
+
+00:36:30 But if it's only being shared in one place, maybe not.
+
+00:36:34 There's an interesting article that was from 2019.
+
+00:36:37 Might be worth people checking out.
+
+00:36:39 It's called Give Me Back My Monolith from Craig Kirsten's.
+
+00:36:44 Anyway, I'm not going to go into it here, but it's kind of an interesting read.
+
+00:36:48 People can check that out if they want.
+
+00:36:49 All right.
+
+00:36:50 We talked about faster builds and small images now.
+
+00:36:52 We're there.
+
+00:36:53 Tell us about that.
+
+00:36:54 People who are new to Docker, haven't done a lot with Docker.
+
+00:36:56 There's a lot of things you can do to result in a smaller, physically a smaller image size,
+
+00:37:04 right?
+
+00:37:04 A smaller file on disk.
+
+00:37:06 Yeah.
+
+00:37:06 It's very easy to get a giant image in Docker because the Docker image format is basically
+
+00:37:12 in many ways like a Git history.
+
+00:37:14 So every time you make a change, it's not overriding.
+
+00:37:17 It's adding.
+
+00:37:18 So there's a history there.
+
+00:37:19 The history is always there.
+
+00:37:20 So if you delete a file, it doesn't make the Docker image any smaller if it was added in
+
+00:37:25 a previous layer.
+
+00:37:25 Right.
+
+00:37:26 If it was added in a different layer, that's right.
+
+00:37:27 Yeah.
+
+00:37:28 If you structure things right, there's a bunch you can do to make your images smaller.
+
+00:37:31 And similarly, Docker has a bunch of features to allow you to not have to run pip install
+
+00:37:39 every single time you rebuild your image because the dependencies haven't changed.
+
+00:37:42 So it can just cache those files for you, but you have to set it up right.
+
+00:37:46 So it does that.
+
+00:37:47 And you can go from a half an hour build to a one minute build depending on how you built
+
+00:37:54 your Docker image.
+
+00:37:55 So LP Linux being my current favorite example, although maybe that's going to get fixed over
+
+00:37:59 the next year.
+
+00:38:00 One of the things that's super interesting about that as well is the ordering as well as the
+
+00:38:04 grouping of those commands can really matter.
+
+00:38:08 So for example, if the first thing that you do in your Docker file is to copy over your source
+
+00:38:14 code, then the next thing to do is to do an apps update, apps upgrade.
+
+00:38:19 Then the next thing to do is to install the dependencies and so on and so on.
+
+00:38:24 Right.
+
+00:38:24 Every time any file that you're working on, even like an unrelated CSS file changes, everything
+
+00:38:30 below that has to be rebuilt.
+
+00:38:31 Right.
+
+00:38:31 And if you make a point to say, well, let's reorder that.
+
+00:38:34 So the very last thing we do is copy our files over.
+
+00:38:37 Then as you make changes, like you won't, those other layers will just be up to date.
+
+00:38:42 And one cool trick that I've seen that you can make that even better is somewhere in that
+
+00:38:46 intermediate bit.
+
+00:38:47 You could even copy your requirements or pyproject.toml file over and then install those and then
+
+00:38:53 copy the rest of your code over, which looks like a stupid duplication.
+
+00:38:57 Like, why are you just copying this one file?
+
+00:38:58 You already copied it in the next one, but you can cache that pip install, pip compile step,
+
+00:39:04 make it faster.
+
+00:39:04 Yeah.
+
+00:39:05 But basically, if you understand how Docker caching works, then you can sort of structure
+
+00:39:11 Docker file in the right way.
+
+00:39:12 And then you get caching.
+
+00:39:14 Then you need extra steps to get it working in CI, but you can get a much faster build.
+
+00:39:18 So it'll work.
+
+00:39:19 The fast scene is super clear.
+
+00:39:20 Tell us about smaller though.
+
+00:39:21 What do you really focus on for smaller?
+
+00:39:23 So some of it is just things where various packaging tools are optimized for development
+
+00:39:29 by default.
+
+00:39:30 So if you do pip install and you do something like NumPy, this can be, or if you're, let's
+
+00:39:35 say, let's go, the big packages, like things like TensorFlow, like these packages, some of
+
+00:39:41 these packages are hundreds of megabytes.
+
+00:39:42 Like they're just huge.
+
+00:39:44 So you download the package and then it unpacks it and installs all the files.
+
+00:39:49 And then by default, pip will keep a copy of that downloaded file in a directory.
+
+00:39:53 Probably the intermediate build output.
+
+00:39:55 The wheel file you downloaded.
+
+00:39:57 Potentially all that stuff.
+
+00:39:58 Yeah.
+
+00:39:58 It'll keep a copy of the wheel file.
+
+00:40:00 The idea is like you might be doing another virtual end in another two hours.
+
+00:40:07 And so when you do pip install, this time it can just, it doesn't have to download it.
+
+00:40:10 It can just use the cache version.
+
+00:40:11 And for development, that's great.
+
+00:40:13 But for a Docker image, you are never going to call pip install again.
+
+00:40:18 So keeping this file is just like an extra 400 megabytes of this space.
+
+00:40:22 And so there's a command line option for pip install.
+
+00:40:25 It says --no cache there.
+
+00:40:27 Yeah.
+
+00:40:27 And then it doesn't keep a copy.
+
+00:40:28 And now you're, you haven't, you're free to put a bunch of space by adding, which can be
+
+00:40:34 fairly considerable if you're doing certain, especially for data science tools.
+
+00:40:38 Right.
+
+00:40:39 You add it up across all the dependencies and their transitive dependencies and so on.
+
+00:40:43 Right.
+
+00:40:43 Yeah.
+
+00:40:43 That's like just not storing files you don't need.
+
+00:40:46 One of the mind shifts you got to get into to work with this stuff is you will never, ever
+
+00:40:52 change the Docker configuration.
+
+00:40:54 Right.
+
+00:40:55 It's not like, oh, there's updates to Linux.
+
+00:40:57 So I'm going to go in and like app update it, or there's an update to my requirements.
+
+00:41:00 So I'm going to reinstall the requirements.
+
+00:41:02 You recreate a new Docker image and you throw away the old Docker image.
+
+00:41:05 Right.
+
+00:41:06 So there's a lot of the things that are there to make that next step.
+
+00:41:09 Right.
+
+00:41:10 pip installing, again, work well are just liabilities and negative effects on your Docker image.
+
+00:41:16 Right.
+
+00:41:16 Yeah.
+
+00:41:17 Because Docker images are sort of designed to be treated as immutable artifacts, which is
+
+00:41:23 sort of great.
+
+00:41:24 But also like you're dealing with a whole bunch of tools that don't really have that assumption.
+
+00:41:28 And so you have to figure out ways to make those two conflicting goals work together.
+
+00:41:33 Yeah.
+
+00:41:33 Another interesting thing that Peter brought up, Peter McKee in the other episode we did
+
+00:41:39 not too long ago, was intermediate frameworks and all sorts of stuff.
+
+00:41:43 It doesn't apply super well to the Python space, but maybe there's certain aspects, especially
+
+00:41:49 in the data science side that might.
+
+00:41:51 So for example, if you're going to install like the development setup for Python, not
+
+00:41:55 just the ability to run, but to do pip installs and do all sorts of things.
+
+00:41:59 The example he gave was if you're going to have something that runs in Go, well, one of the
+
+00:42:04 steps you might install might do is like, well, we're going to install the Go compiler and
+
+00:42:08 all that business.
+
+00:42:08 And we're going to compile the artifact.
+
+00:42:10 And then you would try to run it.
+
+00:42:11 It's like, you create a separate container that will take the code and compile it and
+
+00:42:16 give you the binary, just copy the binary without the compiler back in there.
+
+00:42:20 So maybe there's some techniques like that.
+
+00:42:22 I don't know.
+
+00:42:22 I mean, I don't see it quite as well in Python because we can't fully package it up as reliably.
+
+00:42:27 But yeah.
+
+00:42:28 So a common, so this happens a bunch if you're compiling your own custom C extensions.
+
+00:42:33 Yeah.
+
+00:42:34 So one way you can deal with that is like, you can have a thing that generates wheels and
+
+00:42:38 then like you build your Docker image, you just download the compiled wheel.
+
+00:42:41 But if you want to do it in your Docker image, you're going to have to install a compiler,
+
+00:42:45 but then you don't, that compiler package is going to be in your final image.
+
+00:42:49 So it just makes your image bigger.
+
+00:42:50 You don't need GCC.
+
+00:42:51 And so you can use a multi-stage build, which is probably what he was describing.
+
+00:42:56 Yeah.
+
+00:42:56 So the one easy way to do that is you create a virtual env, install all your code, and then
+
+00:43:02 you copy just the virtual env into a new Docker image.
+
+00:43:06 And then the new Docker image just has the resulting self-contained virtual env, doesn't
+
+00:43:10 have any of the compilers that you needed to build it.
+
+00:43:11 Right.
+
+00:43:11 No matter what else might've been over there.
+
+00:43:14 Yeah.
+
+00:43:14 Yeah.
+
+00:43:14 Maybe you could even use something like PEX if you really cared to like compile that or
+
+00:43:18 to bundle that into a zip and then run that directly.
+
+00:43:20 I'm not sure, but possibly.
+
+00:43:22 Yeah.
+
+00:43:22 Tim out there in the live stream says, dash dash, no cash dir has made my evening.
+
+00:43:27 Thanks.
+
+00:43:27 I never thought about it.
+
+00:43:28 The intermediate files from pip only from app.
+
+00:43:30 Yeah.
+
+00:43:31 Then also Docker on build option can help a bit with that scenario.
+
+00:43:35 Yeah.
+
+00:43:36 But not including the dev tools.
+
+00:43:36 Okay.
+
+00:43:37 That's cool.
+
+00:43:37 I may have deprecated on builds, but I could be misremembering.
+
+00:43:41 That would be too bad because I just learned about it.
+
+00:43:43 Okay.
+
+00:43:45 Those are the six things that you talk about in this iterative process or this layered process.
+
+00:43:49 It's like step one, your first deliverable or your first package of this as Docker sprint
+
+00:43:55 would be get something working in either the single container or the suite of containers
+
+00:44:00 from Docker Compose.
+
+00:44:01 Step two is make sure they're secure.
+
+00:44:03 Step three, getting them running in CI.
+
+00:44:04 Step four, make sure that they're correct and debuggable.
+
+00:44:08 Number five is reproducibility with that balance of not exactly the latest, but not super old
+
+00:44:14 and stale.
+
+00:44:14 And then finally fast builds and small images.
+
+00:44:17 Yeah.
+
+00:44:17 And then along the way, there's a whole bunch of different things you can do depending what
+
+00:44:22 tools you're using and like what's your priorities are.
+
+00:44:25 And yeah.
+
+00:44:26 Can maybe give some examples if we have time.
+
+00:44:28 Yeah, absolutely.
+
+00:44:29 We got a little bit of time.
+
+00:44:30 I thought that'd be fun.
+
+00:44:31 So we could dive into just get something working, which is like a hand line of a couple of lines
+
+00:44:38 in Docker, like see Docker symbol.
+
+00:44:39 Yeah.
+
+00:44:40 Yeah.
+
+00:44:40 You choose a base image, copy your code and run pip install and say, this is what I want
+
+00:44:45 you to run when you start up.
+
+00:44:46 And for many applications, I'll do the trick.
+
+00:44:48 So I'm always wondering what is a good container base to start from, right?
+
+00:44:53 So you have this Python 3.9 Slim Buster version as the base.
+
+00:44:59 Yeah.
+
+00:44:59 There's a bunch of different options, right?
+
+00:45:00 What do you think?
+
+00:45:01 So the first thing is you want a, these are all based on Linux distributions typically.
+
+00:45:06 So you want a Linux distribution that's some sort of long-term support where like they are
+
+00:45:10 both guaranteeing backwards compatibility in terms of like binary ABIs, but also in terms
+
+00:45:16 of features, but they're also doing security backboards.
+
+00:45:19 So like Debian stable, Ubuntu long-term support, Red Hat Enterprise Linux, they all are going
+
+00:45:24 to give you this stability guarantee.
+
+00:45:27 They'll say, we'll give you a stable operating system with security updates to it.
+
+00:45:31 So you want something that's based on one of those probably.
+
+00:45:33 And then you need to, you typically are going to want a up-to-date Python.
+
+00:45:37 And these distributions will sometimes like backport, new versions of Python.
+
+00:45:43 And so you can use that.
+
+00:45:44 So you can say, I'm going to use like Ubuntu long-term support from 2020.
+
+00:45:50 And like it has Python 3.8 and maybe they just added 3.9.
+
+00:45:54 I'm not sure.
+
+00:45:54 I saw something to that effect.
+
+00:45:56 And then you can go with that.
+
+00:45:57 Or Docker maintains these things for the official, in quotes, Docker images for Python.
+
+00:46:04 And basically what they do is they take Debian stable and then they compile all the different
+
+00:46:09 versions of Python for it.
+
+00:46:10 So you can get 3.7 or 3.8 or 3.9 and 3.10 when it comes out, regardless of what's in Debian
+
+00:46:14 stable.
+
+00:46:15 So it's Debian stable plus an extra Python.
+
+00:46:17 So Python colon 3.9 is Debian stable plus 3.9.
+
+00:46:22 Then they have two variants.
+
+00:46:24 One has a bunch of extra packages and one has fewer.
+
+00:46:27 One with fewer packages is the dash slim.
+
+00:46:29 And then the dash buster is which version of Debian you're using.
+
+00:46:33 And the reason you don't have to specify that, but like maybe like at the end of the year,
+
+00:46:38 maybe early next year, there's going to be a new version of Debian stable.
+
+00:46:41 And so you don't want overnight to go from Debian 10 to Debian 11 as your base image.
+
+00:46:46 You would probably want to just at least do that consciously, right?
+
+00:46:51 And so saying dash buster means I want to stick to Debian 10 buster.
+
+00:46:56 And for those who don't know, Debian Linux releases are based on Toy Story characters.
+
+00:47:00 Nice.
+
+00:47:01 So Buster is one of them, right?
+
+00:47:03 Yeah.
+
+00:47:03 And I don't remember what the next one is.
+
+00:47:07 There's Debian unstable, which is named CID.
+
+00:47:09 It's always Debian unstable and it's always CID.
+
+00:47:12 They never release it.
+
+00:47:13 That's cool.
+
+00:47:14 All right.
+
+00:47:14 So in this example, it's the Docker file says from Python colon 3.9 dash slim dash buster,
+
+00:47:21 which means all the stuff that you described there.
+
+00:47:24 And then you copy your files over, you run pip install to install the dependencies.
+
+00:47:29 And then you just basically start your app as the entry point.
+
+00:47:32 And that is, hey, we got something working.
+
+00:47:34 This is probably an oversimplification.
+
+00:47:36 There might be a database thing that also needs to start up and run its bits and so on.
+
+00:47:41 But yeah, that's pretty much it, right?
+
+00:47:43 It's pretty simple.
+
+00:47:44 Typically pretty simple to just get everything's working because it's just install some packages
+
+00:47:49 and then tell it to run the scripts when you run a container.
+
+00:47:52 Yeah.
+
+00:47:52 It's pretty much whatever you need to do to get a new machine set up to run this,
+
+00:47:57 do that in this file and you're good to go.
+
+00:47:59 Yeah.
+
+00:47:59 And I guess seeing a comment on the chat and I should add that as far as I can tell,
+
+00:48:04 Docker on build is not deprecated, but I'm not sure.
+
+00:48:08 So maybe.
+
+00:48:09 All right.
+
+00:48:10 All right.
+
+00:48:10 I'll have to look into it.
+
+00:48:11 Sounds good.
+
+00:48:12 So getting it working is super straightforward.
+
+00:48:15 Yep.
+
+00:48:15 But getting something secure is interesting.
+
+00:48:18 Let me go back.
+
+00:48:19 I think we might be skipping around a bit, but you're talking about having that version specified there of Slim Buster.
+
+00:48:25 I know how we'll get new dependencies for the Python code up there.
+
+00:48:30 And if there's some kind of security problem, what will probably happen is Dependabot on GitHub will send me a PR that says,
+
+00:48:37 warning, warning, your version of web framework has such and such CVE.
+
+00:48:41 We've created a PR.
+
+00:48:42 You accept it.
+
+00:48:43 You push it back to the right branch.
+
+00:48:45 That kicks off the whole process and everything goes again, right?
+
+00:48:49 That keeps like the flow of the somewhat fresh code and dependencies going through your system.
+
+00:48:55 However, how do I keep that same thing happening for Linux, right?
+
+00:49:00 Suppose Linux has some security vulnerability in the version that I've got,
+
+00:49:04 or I've got Nginx running and it has something like that I need to update.
+
+00:49:08 Like, what is the trigger that helps me know?
+
+00:49:12 Like, what is the process that helps me know?
+
+00:49:14 Oh, you need to, even if this is a somewhat stable, stale project that we haven't touched for a month,
+
+00:49:19 you need to somehow go give it a kick to like force it to get the latest and do that again.
+
+00:49:23 Because there's no auto app upgrade running there.
+
+00:49:27 Yeah.
+
+00:49:27 So one thing to note is some people assume that the Debian, like the official Python or even official Debian or whatever,
+
+00:49:34 the official base images from Docker get security updates every time they come out.
+
+00:49:38 They don't.
+
+00:49:39 Some of them get updated fairly frequently.
+
+00:49:42 Some of them, like the CentOS one, which I guess people are probably switching away from,
+
+00:49:46 but for a while it was a lot of people probably using it.
+
+00:49:49 The CentOS base image will not be updated for months at a time.
+
+00:49:53 And so they are relying on, and the Debian ones, well, I have seen them like lag on security updates by two weeks.
+
+00:50:00 So Debian has released a new security update, but the Docker image hasn't been updated.
+
+00:50:04 Which is not ideal because you're telling all the hackers, here's the problem that you can just go look for in systems that lag on getting their patches.
+
+00:50:11 Yeah.
+
+00:50:12 And so you as someone who is creating a Docker image cannot rely on the base images to be up to date.
+
+00:50:18 You need to install security updates when you build your Docker image.
+
+00:50:22 But what's that look like?
+
+00:50:23 The step two is apt update, apt upgrade, dash Y, or something like that?
+
+00:50:28 Yeah.
+
+00:50:28 apt get update, and then apt get minus Y upgrade.
+
+00:50:31 You can add a few more command line options to make your image smaller.
+
+00:50:34 But yeah, it's basically you do an upgrade.
+
+00:50:36 But there's a problem.
+
+00:50:38 Docker has, as we talked about, has this caching thing, where if you rebuild an image and nothing's changed, it will just use a cache layer.
+
+00:50:45 So when you rebuild your image, if you are using caching to speed up builds,
+
+00:50:48 it'll look at Docker apt get, look at the apt get update, apt get upgrade,
+
+00:50:51 and say, well, this is unchanged.
+
+00:50:53 Same command.
+
+00:50:54 And so it'll just use a cache layer.
+
+00:50:56 Yeah.
+
+00:50:56 And you absolutely will very likely be doing that.
+
+00:50:59 Because it's like five minutes versus three seconds to restart and build and test your app.
+
+00:51:04 So everyone is going to be using the caching.
+
+00:51:06 Maybe not CI, CD, but everywhere else.
+
+00:51:09 I mean, you probably typically will want it in CI, CD too.
+
+00:51:12 And so the result is that if you've set up caching to speed things up, that caching will ensure you don't get security updates.
+
+00:51:19 And so basically what you have to do is just have this process where once a day or once a week,
+
+00:51:26 or in response to CVs coming out, you rebuild your image from scratch without caching.
+
+00:51:31 So you can just say every night at 3 a.m. when no one's working, we are going to rebuild our image from scratch without caching.
+
+00:51:40 And so our image will always have the latest security updates.
+
+00:51:45 And then if you're in a system that has continuous deployment, you can then just automatically deploy that.
+
+00:51:50 Wait, how do you make the little banner that says you're going to be down Sunday from 3 to 5
+
+00:51:53 when you do that part?
+
+00:51:54 Just kidding.
+
+00:51:55 Yeah.
+
+00:51:56 So this is easier if you have a process that you trust enough to do automatic deploys like anytime you want.
+
+00:52:02 But you basically have to rebuild your image from scratch without caching,
+
+00:52:07 either whenever a security update comes out or just on a regular basis and redeploy if it's a server,
+
+00:52:14 because you have these immutable artifacts that if you're running a VM, like you can just have like a cron job that installs security updates nightly.
+
+00:52:24 Like there's unattended upgrades package in Debian.
+
+00:52:26 For Docker images, you can't do that.
+
+00:52:28 And so you have to rebuild from scratch with security updates and then redeploy.
+
+00:52:32 And this is an ongoing process.
+
+00:52:34 Yeah, I'm glad you pointed out the caching because it's not enough to go out and say,
+
+00:52:38 oh, every once a day or once a week, we'll just do a Docker build.
+
+00:52:42 Oh, it's up to date.
+
+00:52:43 Actually, we're good.
+
+00:52:43 Yeah, no.
+
+00:52:44 Not so much.
+
+00:52:46 Yeah.
+
+00:52:47 Yeah.
+
+00:52:47 And that's why I brought this up because I think it's tricky.
+
+00:52:49 Like there's a natural flow that like kicks that refresh cycle off for code,
+
+00:52:53 but not for the infrastructure itself, unless you think about it.
+
+00:52:57 Yeah.
+
+00:52:58 So you need to explicitly think about and set up these processes, either some way to get notified of CVs
+
+00:53:03 or you can probably, if you have a bunch of registries, have security scanners.
+
+00:53:09 They'll scan your images for security problems.
+
+00:53:12 And so you can run those in a schedule, maybe.
+
+00:53:14 Honestly, the easiest though is probably just do a forced rebuild 5 a.m. or something.
+
+00:53:19 Yeah.
+
+00:53:19 And that next time every developer that comes in and runs the command Docker compose up,
+
+00:53:24 going to do a Docker build.
+
+00:53:25 It's going to see the things out of date and it'll just trigger a let's get the fresh.
+
+00:53:28 Yeah.
+
+00:53:29 Yeah.
+
+00:53:29 And it turns out security scanners are also have some, bad defaults.
+
+00:53:34 So you'll get, there's a lot of security problems that are not really problems.
+
+00:53:39 Like the upstream maintainer has closed it as won't fix, or it's not going to get fixed in Debian stable until the next release of Debian stable.
+
+00:53:47 And so the Debian maintainers are basically have decided that it is not worth fixing.
+
+00:53:50 And so there's nothing you can do.
+
+00:53:51 Most security scanners will flag those.
+
+00:53:53 And so you'll run a scanner on an updated image and it'll say, you have 60 security vulnerabilities.
+
+00:53:59 But you, if you turn on the flag that says only tell me about security vulnerabilities that I can actually fix,
+
+00:54:04 that actually have updates from Debian.
+
+00:54:05 And then you run that and it'll say you're fine.
+
+00:54:08 And that is probably a much more realistic assessment of your risk because it's like,
+
+00:54:11 there are bugs that are never going to be fixed because the GLAB C maintainers have said,
+
+00:54:16 no, won't fix.
+
+00:54:18 This is not our problem.
+
+00:54:19 It's like, it's not a real bug.
+
+00:54:20 Yeah.
+
+00:54:21 I suspect you could also get notified about things that like are not observable really.
+
+00:54:25 So, oh, there's a problem in the system, but we actually have a firewall blocking that port and we have no interaction with it.
+
+00:54:32 Right.
+
+00:54:32 It's like, how much do you worry about those kinds of things?
+
+00:54:34 You may as well upgrade and redeploy because maybe one day your firewall will fail,
+
+00:54:38 but like there's a whole bunch of just like utter noise if you don't configure your securities
+
+00:54:43 kind of correctly.
+
+00:54:44 Yeah.
+
+00:54:44 All right.
+
+00:54:45 Wrapping up this bit of the topic, Kim says forced rebuild is a great for your own images based on Debian or other OS.
+
+00:54:50 You probably still need some kind of scanning.
+
+00:54:52 Yeah.
+
+00:54:53 If you're not able to build it yourself.
+
+00:54:54 Yeah.
+
+00:54:54 Makes sense.
+
+00:54:55 All right.
+
+00:54:55 We got a little bit of time to touch on a couple of things.
+
+00:54:57 One of the areas stage two was security.
+
+00:55:01 You always want different layers.
+
+00:55:03 I talked about a firewall.
+
+00:55:04 We're talking about security updates and patches, but there's layers of security you want.
+
+00:55:09 And one of the very straightforward ones is you probably don't want to run this as root.
+
+00:55:13 And like certain systems will even warn you about this.
+
+00:55:16 So if I try to pseudo brew something on my Mac, it'll complain.
+
+00:55:20 Like you should never, ever run brew as root.
+
+00:55:21 What are you doing?
+
+00:55:22 Are you crazy?
+
+00:55:22 Stop doing that.
+
+00:55:23 I think micro whiskey might warn that you're running this root.
+
+00:55:26 If you look at the logs when you started up.
+
+00:55:28 So when I run Docker and I just get that simple, get started one, what does that run as?
+
+00:55:33 Yeah.
+
+00:55:33 So by default, Docker runs as root.
+
+00:55:35 Oh, okay.
+
+00:55:36 That kind of makes sense because all these system packages are designed to be installed as
+
+00:55:40 root.
+
+00:55:41 And so if you're going to install system packages or install security updates,
+
+00:55:44 you have to be a root by default.
+
+00:55:45 But as soon as you've, you've switched to like installing your Python code,
+
+00:55:49 you should stop being root and create a new user and switch that user because otherwise
+
+00:55:54 your application will be running as root and root inside a container is more restricted,
+
+00:55:58 restricted, but it's still not as restricted as a normal user.
+
+00:56:02 And different runtime systems might take more aggressive steps to restrict what you can do.
+
+00:56:08 And so sometimes it might be okay, but just a good best practice.
+
+00:56:11 You're, you don't know where your things are going to run.
+
+00:56:13 Things might change around.
+
+00:56:14 Just don't run as root.
+
+00:56:15 What you're saying is basically, if you run as root in a Docker container and somebody takes over your container,
+
+00:56:20 well, the worst thing they can do is like crash around inside of the container.
+
+00:56:24 It's not like they now have full access to the machine, but, you know, maybe those rights are propagated onward.
+
+00:56:30 Like maybe they can do something else to, I don't know, decrypt something that then gets them further in the network.
+
+00:56:37 Like there's, there's challenges that could happen, right?
+
+00:56:38 So it is much easier to escape a container and onto the host if you're running as root,
+
+00:56:45 because you, like in Linux, security access is granted by these things called capabilities.
+
+00:56:51 And if you're root, you have a little bit more capabilities.
+
+00:56:54 It gives you a larger attack service on Linux kernel.
+
+00:56:57 And so if there's a bug in the Linux kernel, it's easier to take it over if you're root.
+
+00:57:01 There are other things you can do to like restrict all capabilities to containers,
+
+00:57:05 even if you're running as a normal user.
+
+00:57:06 So like if you're running the ping utility, for example, it gets a little bit of extra,
+
+00:57:11 it gets an extra capability often.
+
+00:57:13 So it can do a ping.
+
+00:57:15 And then if there's a bug in the ping command, then you can sort of, and you can insert code into it somehow,
+
+00:57:22 then it'll execute it with elevated privileges and you can do more stuff.
+
+00:57:25 And so.
+
+00:57:25 Yeah.
+
+00:57:26 You don't want that.
+
+00:57:27 Yeah.
+
+00:57:28 And so you want to like run as a normal user that will restrict the attack surface on the Linux kernel,
+
+00:57:33 like removing all capabilities or restrict the attack surface even more.
+
+00:57:38 And you do these things.
+
+00:57:39 And for many applications, it won't really matter too much, but it's very, it's not a lot of work.
+
+00:57:45 And it's like a little bit more assurance that if someone does somehow take over,
+
+00:57:49 you'll limit the damage they can cause because they're only restricted to this container.
+
+00:57:53 Yeah.
+
+00:57:53 Okay.
+
+00:57:54 Good advice.
+
+00:57:54 And that uses the add user Docker command.
+
+00:57:56 Very cool.
+
+00:57:57 And then let's see, what was the next one here?
+
+00:58:00 We talked about the security updates.
+
+00:58:02 Like that's, that's a challenge.
+
+00:58:04 So what do I need to think about for continuous integration automated builds,
+
+00:58:08 specifically with regard to Docker?
+
+00:58:10 Is there anything special?
+
+00:58:12 Like.
+
+00:58:12 So first it's just doing the actual work of automating it.
+
+00:58:15 So like you really, it's really nice if every time you push to your Git repository,
+
+00:58:20 every time you pull it across, it builds a Docker image for you.
+
+00:58:23 Because then like you can test it.
+
+00:58:26 Maybe you can write additional tests to actually use a Docker image, do integration tests, that sort of thing.
+
+00:58:30 Yeah.
+
+00:58:30 Like for example, there was a really cool framework or library.
+
+00:58:34 I can't remember exactly what it is.
+
+00:58:36 We talked about it on Python Byte.
+
+00:58:37 That instead of trying to mock out, say your database or, it was mostly databases.
+
+00:58:43 There's a Docker, there's like a testing library you can use that will bring up a Docker container
+
+00:58:48 running Mongo or Postgres or something, and then fill it with test data.
+
+00:58:52 And you just connect those things and say, yeah, you can talk to the database.
+
+00:58:55 You don't care.
+
+00:58:56 It's test data.
+
+00:58:57 Might as well.
+
+00:58:57 Yeah.
+
+00:58:58 Testing with a real database is so much easier these days.
+
+00:59:00 It'd just be the default.
+
+00:59:01 Like you shouldn't be, if you're didn't deploy with Postgres, you shouldn't test with SQLite because like they're different enough
+
+00:59:07 that there'll be bugs that you're going to miss.
+
+00:59:09 Yeah.
+
+00:59:10 And so once you have that automation of like building for every pull request,
+
+00:59:14 you don't, you start having this issue where you don't want the image you built
+
+00:59:19 for the feature one, two, three branch to overwrite your production image.
+
+00:59:23 That would be awkward.
+
+00:59:24 But you would still like continuous integration to do its job and say, you checked in this thing.
+
+00:59:29 It was okay or not okay.
+
+00:59:30 Yeah.
+
+00:59:31 And it's useful to have like images uploaded for every pull request that you can download
+
+00:59:35 and maybe play around with it.
+
+00:59:36 But you don't want feature branches images to interfere with your production image.
+
+00:59:40 One easy way to do that is to name your Docker images based on the Git branch.
+
+00:59:46 So like you can just use the Git branch as the part after the colon, the tag.
+
+00:59:50 So it can be like your image colon main, if it's the main branch or your image colon feature
+
+00:59:55 one, two, three, it's the feature one, two, three branch.
+
+00:59:56 Yeah.
+
+00:59:57 That works really well with like Git flow feature branch style programming as well.
+
+01:00:01 I created an issue.
+
+01:00:02 Then I create a branch named something along those lines.
+
+01:00:05 Then I create a PR along those lines.
+
+01:00:07 And oh, guess what?
+
+01:00:08 Here's the container that goes with that thing, right?
+
+01:00:10 Yeah.
+
+01:00:10 And you can also do things like name your Docker image based on the Git commit.
+
+01:00:14 So you can sort of go from Git commit to corresponding Docker image really easily.
+
+01:00:18 Yeah.
+
+01:00:18 Yeah.
+
+01:00:19 That's a really cool idea.
+
+01:00:19 I did find that package, by the way, in case people are interested.
+
+01:00:22 It's called test containers dash Python.
+
+01:00:25 Anyway, the idea is you just say like with my SQL container, do your tests.
+
+01:00:30 And it like literally creates a Docker container with your test data and all that stuff.
+
+01:00:34 So people can check that out.
+
+01:00:35 That's kind of cool.
+
+01:00:36 All right.
+
+01:00:36 Well, we're getting a little bit short on time here.
+
+01:00:39 What else do you want to throw out for people who are thinking about a lot of these best practices?
+
+01:00:44 We touched on a lot of them, but I know there's plenty more to go.
+
+01:00:47 Like for example, faster builds.
+
+01:00:49 You talk about, say, pre-compiling the PYC files.
+
+01:00:53 Yeah.
+
+01:00:53 That's more for that actually do slower builds, but it'll give you a faster startup.
+
+01:00:57 That's what I mean.
+
+01:00:58 Yeah.
+
+01:00:58 Sorry.
+
+01:00:58 Since this comes up a bunch, Alpine Linux is not a thing you want, is often not a thing you
+
+01:01:04 want to use for your Docker base image.
+
+01:01:07 And the reason is Alpine Linux is highly recommended for if you want small images.
+
+01:01:11 And it's kind of nice because you install, like installing the Alpine packages somehow, I don't
+
+01:01:15 know what they do, but it's vastly faster than like installing Debian packages.
+
+01:01:19 And you get small images and it's kind of nice.
+
+01:01:22 Problem is Alpine Linux uses a different standard C library than most Linux distributions.
+
+01:01:27 Most Linux distributions use Glybcy.
+
+01:01:29 Alpine uses Musil or Musil.
+
+01:01:32 I don't know how to pronounce it.
+
+01:01:33 And binary wheels are compiled by default on Linux for Glybcy.
+
+01:01:39 And so if you install Python packages on Alpine Linux, you will not get binary wheels.
+
+01:01:45 You're going to have to compile them from scratch.
+
+01:01:46 And so what happens is people say, oh, I'm going to use Alpine Linux.
+
+01:01:49 It's going to make my images smaller.
+
+01:01:51 And they try to install like a Postgres package, which is pre-compiled and doesn't work.
+
+01:01:55 They're like, okay, so now I'll install a compiler and I'll install the Postgres headers.
+
+01:02:00 Now you have this image that has compiler and Postgres headers in it, and you have to compile
+
+01:02:05 stuff.
+
+01:02:05 And like when you get to like data science or scientific computing, you're like compiling
+
+01:02:10 these massive packages that take a really long time to compile and all your builds are super
+
+01:02:14 slow.
+
+01:02:15 And you can do a whole bunch of work to then use a multi-stage build so your image is small.
+
+01:02:21 And then you can use caching so the builds are fast.
+
+01:02:23 And then, but, or you can just use a different Linux distribution and use binary wheels.
+
+01:02:28 Don't cause yourself the challenge.
+
+01:02:30 Just use something else, huh?
+
+01:02:31 But there is a PEP that I believe was accepted to start the process of building wheels for Alpine.
+
+01:02:38 And I've started seeing some packaging tools who started adding support.
+
+01:02:42 And so it may be that in a year or two, it'll be just like everyone builds binary wheels for
+
+01:02:48 like many Linux, just the Glibsie.
+
+01:02:50 People might start building wheels, binary wheels for Alpine.
+
+01:02:53 And when that happens, there'll be much less of an issue.
+
+01:02:56 But until then, avoid using Alpine Linux as your base image.
+
+01:02:59 Yeah.
+
+01:03:00 You want to close it out with a PYC thing?
+
+01:03:02 Sure.
+
+01:03:03 So when you start up a Python program, it loads in your Python source files and then compiles them.
+
+01:03:09 And compilation here is not really the same as compiling a C extension.
+
+01:03:12 It's basically a one-to-one translation.
+
+01:03:14 It compiles them to bytecode and writes them out as PYC files.
+
+01:03:17 And then the next time you start, it can just load the PYC file and that will make your application
+
+01:03:22 start up quickly.
+
+01:03:23 And so if you're doing some sort of like, many applications, it doesn't matter.
+
+01:03:27 If you're doing like a serverless kind of thing where like you want things to start up
+
+01:03:32 really quickly, like having to compile the PYC is, it's going to add some startup time.
+
+01:03:37 I guess any times where the container lifetime, the life cycle is short, right?
+
+01:03:41 Let's say with a web app, you would start it and it would run for hours.
+
+01:03:44 And so it doesn't matter, right?
+
+01:03:45 Yeah.
+
+01:03:46 So it's like it took you another 20 milliseconds to start off.
+
+01:03:49 It's going to be run for three days.
+
+01:03:51 But if you're doing like a serverless thing where like 20 milliseconds might be a significant
+
+01:03:56 chunk of the latency of your service.
+
+01:03:58 So when you build your Docker image, you can pre-compile all your PYC files and then it'll
+
+01:04:03 be in the image and you won't have, then your startup will be faster.
+
+01:04:05 And the reason you have to actually think about this is that Docker images are immutable.
+
+01:04:09 So like your container starts up, it compiles and writes the PYCs, but those PYCs never make
+
+01:04:14 it to the original image.
+
+01:04:15 Every time you start the image, it has the same immutable artifact, unlike your local home directory.
+
+01:04:20 And so if you really want the fastest startup, you can make your image a bit larger and compile
+
+01:04:25 the PYCs.
+
+01:04:26 Basically that becomes a step in your Docker build files to compile the PYCs ahead of time.
+
+01:04:31 Yeah.
+
+01:04:31 Okay.
+
+01:04:31 Awesome.
+
+01:04:32 Great advice.
+
+01:04:33 Many, many tips.
+
+01:04:33 I think we're going to have to leave it there.
+
+01:04:36 We're getting basically running out of time, but yeah, really nice talk.
+
+01:04:39 I'll link to your talk that you did at PyCon and thanks for coming here and sharing the audio
+
+01:04:43 version with us.
+
+01:04:44 Thanks for inviting me.
+
+01:04:45 Of course.
+
+01:04:46 Before you get out of here though, there's the final two questions.
+
+01:04:48 If you're going to write some Python code, what editor do you use?
+
+01:04:50 I use SpaceMax, which is kind of like they took Emacs and they configured it like 20 years.
+
+01:04:56 That's like you're jumping 20 years into the future.
+
+01:04:58 It's like it's Emacs, but with all the things you need pre-configured to actually have a
+
+01:05:03 nice development environment.
+
+01:05:04 And it has VI bindings and Emacs bindings.
+
+01:05:07 I use the Emacs bindings.
+
+01:05:08 But if you like Vim, you can use the VI bindings.
+
+01:05:10 Yeah.
+
+01:05:11 Cool.
+
+01:05:11 Their subtitle and sub-subtitle is a community-driven Emacs distribution.
+
+01:05:16 The best editor is neither Emacs nor Vim.
+
+01:05:18 It's Emacs and Vim.
+
+01:05:19 I honestly don't use the Vim bindings at all.
+
+01:05:22 I'm using it for like, it does all the IDE stuff you want out of the box.
+
+01:05:27 So it's just, it's a much more modern experience.
+
+01:05:30 Okay.
+
+01:05:30 Really cool.
+
+01:05:31 And then notable PyPI package?
+
+01:05:33 Py03, which is a way to create Python extensions in Rust.
+
+01:05:38 I've used it to create both for Phil, my memory profiler, but also I wrapped some Rust library
+
+01:05:45 with it.
+
+01:05:45 It's really, really nice way to create fast, safe extensions for Python.
+
+01:05:51 And it comes, there's a packaging tool called Maturin, M-A-T-U-R-I-N, which was probably the
+
+01:05:57 nicest Python packaging I've experienced I've ever had.
+
+01:05:59 Like you add like three lines, like you had a PyProject line file, which is like three
+
+01:06:05 lines.
+
+01:06:05 You add like a tiny bit of metadata and now you can build wheels and you can pip install
+
+01:06:09 and it just works.
+
+01:06:11 And it's just amazingly smooth development experience.
+
+01:06:15 That's fantastic.
+
+01:06:16 Yeah.
+
+01:06:16 So basically if you're going to write a C extensions, maybe reconsider that and write
+
+01:06:21 them in Rust and use this possible.
+
+01:06:23 Yeah.
+
+01:06:24 It's like Rust is like, gives you the same performance that you would get from C or C++, but it's
+
+01:06:31 much safer.
+
+01:06:31 And as someone used to write C++ long ago, like I, I've learned it in the, over the past
+
+01:06:38 couple of years.
+
+01:06:38 And it's like, it is the language I always wanted C++ to be.
+
+01:06:42 Yeah.
+
+01:06:42 I hear you.
+
+01:06:43 I did a lot of C++ as well.
+
+01:06:44 I was always bringing in these things like smart pointers and other stuff.
+
+01:06:47 It's like, why does it have to be hard?
+
+01:06:49 Can't we just like make this better?
+
+01:06:50 It's not a simple language because if you want performance, you need to do work.
+
+01:06:53 And it, the way it has a very different paradigm, but it's really lovely language.
+
+01:06:57 You'll write much safer code and Py03 makes it really nice to write Python extensions.
+
+01:07:02 Yeah.
+
+01:07:02 Cool.
+
+01:07:03 Cool.
+
+01:07:03 And then Talden's out there has a interesting comment.
+
+01:07:05 Is that like an isotope?
+
+01:07:07 I think it's a reference to like oxidization, like O3, but.
+
+01:07:12 Yeah.
+
+01:07:12 Yeah.
+
+01:07:13 Because it rusts.
+
+01:07:14 And there's a lot of oxidizing happening.
+
+01:07:15 Yeah.
+
+01:07:16 Around.
+
+01:07:17 There's also PyOxidizer.
+
+01:07:18 Yeah.
+
+01:07:18 There's another project.
+
+01:07:19 There's another project.
+
+01:07:19 Yeah.
+
+01:07:20 That's like a completely different project, but yeah, it's another rust pun.
+
+01:07:25 Packaging.
+
+01:07:26 Yeah, exactly.
+
+01:07:26 Very, very cool.
+
+01:07:27 All right.
+
+01:07:28 Final call to action.
+
+01:07:29 People are interested in this.
+
+01:07:31 They want to go deeper.
+
+01:07:31 You've got some various things that you can find on your website, pythonspeed.com slash
+
+01:07:36 Docker.
+
+01:07:37 Yep.
+
+01:07:37 Where do they go?
+
+01:07:38 What do you tell them?
+
+01:07:38 Yeah.
+
+01:07:38 So if you go to pythonspeed.com slash Docker, there's a whole bunch of free articles about
+
+01:07:43 various best practices.
+
+01:07:44 If you're specifically interested in the process that we covered today, there's a PyCon talk,
+
+01:07:49 but also if you go to pythonspeed.com slash Docker process, it's also linked on that page.
+
+01:07:54 It's like an introduction to Dockerizing for production.
+
+01:07:57 It's basically like a little mini ebook I wrote that's about 10 pages, but it goes over
+
+01:08:02 this process that we talked about today and sort of prose and talks about sort of the
+
+01:08:06 decisions you have to make and how it integrates your organizational processes.
+
+01:08:09 That's super cool.
+
+01:08:10 Yeah.
+
+01:08:11 And on that site, the slash Docker, it has a bunch of articles and it has a very small
+
+01:08:15 scroll bar and a lot of stuff below it.
+
+01:08:17 So yeah, there's a lot of things going on.
+
+01:08:19 People can go check out for more resources there, right?
+
+01:08:21 Yeah.
+
+01:08:22 And I have a bunch of paid products if anyone's interested about Docker packaging from intro
+
+01:08:26 to much more detailed one.
+
+01:08:28 And if you use the code talkpython, you can get a 15% discount.
+
+01:08:32 Oh, fantastic.
+
+01:08:33 Awesome.
+
+01:08:33 Yeah.
+
+01:08:34 So be sure to do that.
+
+01:08:35 Thank you so much for being on the show and sharing a lot of your hard-earned Docker experience.
+
+01:08:40 Yeah.
+
+01:08:40 Thanks for inviting me.
+
+01:08:41 You bet.
+
+01:08:42 Great to talk to you.
+
+01:08:42 You too.
+
+01:08:43 Bye.
+
+01:08:43 Bye.
+
+01:08:45 This has been another episode of Talk Python to Me.
+
+01:08:47 Our guest in this episode was Itamar Turner-Trowing.
+
+01:08:50 It has been brought to you by Sentry, Linode, and Assembly AI.
+
+01:08:54 Take some stress out of your life.
+
+01:08:56 Get notified immediately about errors in your web applications with Sentry.
+
+01:09:00 Just visit talkpython.fm/Sentry and get started for free.
+
+01:09:04 And use the promo code talkpython2021 when you sign up.
+
+01:09:09 Simplify your infrastructure and cut your cloud bills in half with Linode's Linux virtual machines.
+
+01:09:15 Develop, deploy, and scale your modern applications faster and easier.
+
+01:09:18 Visit talkpython.fm/Linode and click the Create Free Account button to get started.
+
+01:09:23 Transcripts for this and all of our episodes are brought to you by Assembly AI.
+
+01:09:27 Do you need a great automatic speech-to-text API?
+
+01:09:30 Get human-level accuracy in just a few lines of code.
+
+01:09:32 Visit talkpython.fm/Assembly AI.
+
+01:09:35 Want to level up your Python?
+
+01:09:37 We have one of the largest catalogs of Python video courses over at Talk Python.
+
+01:09:41 Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+01:09:46 And best of all, there's not a subscription in sight.
+
+01:09:49 Check it out for yourself at training.talkpython.fm.
+
+01:09:52 Be sure to subscribe to the show, open your favorite podcast app, and search for Python.
+
+01:09:56 We should be right at the top.
+
+01:09:58 You can also find the iTunes feed at /itunes, the Google Play feed at /play,
+
+01:10:03 and the direct RSS feed at /rss on talkpython.fm.
+
+01:10:08 We're live streaming most of our recordings these days.
+
+01:10:10 If you want to be part of the show and have your comments featured on the air,
+
+01:10:14 be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+01:10:18 This is your host, Michael Kennedy.
+
+01:10:20 Thanks so much for listening.
+
+01:10:21 I really appreciate it.
+
+01:10:22 Now get out there and write some Python code.
+
+01:10:24 I'll see you next time.
+
+01:10:45 Thank you.
+

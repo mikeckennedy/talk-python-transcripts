@@ -1,0 +1,1740 @@
+00:00:00 It's time to look deep within the machine and understand what really happens when your Python code executes.
+
+00:00:06 We're code walking through the CPython code base and visualizing it at pythontutor.com.
+
+00:00:11 This is episode number 22 with Philip Guau, recorded Monday, August 3rd, 2015.
+
+00:00:17 Welcome to Talk Python to Me, a weekly podcast on Python, the language, the libraries, the
+
+00:00:47 ecosystem, and the personalities.
+
+00:00:49 This is your host, Michael Kennedy.
+
+00:00:51 Follow me on Twitter where I'm @mkennedy, and keep up with the show and listen to past
+
+00:00:56 episodes at talkpython.fm.
+
+00:00:58 Be sure to follow the show on Twitter where it's at talkpython.
+
+00:01:02 This episode is brought to you by Hired and CodeChip.
+
+00:01:06 Thank them both for supporting the show on Twitter via at HiredHQ and at CodeChip.
+
+00:01:11 Now let me introduce Philip.
+
+00:01:14 Philip Guau is an assistant professor of computer science at the University of Rochester in New York.
+
+00:01:19 He researches human-computer interactions with a focus on user interfaces for online learning.
+
+00:01:24 He's especially interested in studying how to better train software engineers and data scientists.
+
+00:01:30 He created a free web-based visualization tool for learning programming called Online Python Tutor
+
+00:01:35 at pythontutor.com, which has been used by over 1.2 million people in over 165 countries to visualize over 11 million pieces of code.
+
+00:01:45 Philip, welcome to the show.
+
+00:01:46 My pleasure.
+
+00:01:48 Yeah, it's really exciting to have you here.
+
+00:01:50 We're going to talk a lot about many things.
+
+00:01:53 We're going to talk about CPython and a really cool project that you put on your website and on YouTube called CPython, a 10-hour code walk.
+
+00:02:02 And so we'll be digging into CPython.
+
+00:02:04 And we're also going to talk about this thing called Python Tutor at pythontutor.com that you are working to help people understand the internals of Python better.
+
+00:02:12 So that's going to be great stuff.
+
+00:02:14 Cool.
+
+00:02:14 I'm looking forward to it.
+
+00:02:16 Yeah.
+
+00:02:16 Before we get into the details, though, you know, everyone likes to know how people got into programming and how they got started in Python.
+
+00:02:22 What's your story?
+
+00:02:23 So my story was I was always interested in computers as a kid, like many people who got into computer science.
+
+00:02:29 But I never really had a strong programming background until I went to college.
+
+00:02:34 So I tried to learn QBasic by myself when I was 10.
+
+00:02:39 And that, you know, I had a book and then I failed after a few weeks because I had no one teaching me.
+
+00:02:43 I took an AP computer science course in high school.
+
+00:02:46 That was in C++.
+
+00:02:46 And that was really fun.
+
+00:02:48 And that was kind of my first introduction to really doing programming.
+
+00:02:52 And in college, I decided to major in electrical engineering and computer science.
+
+00:02:57 And that's when I started just learning programming formally.
+
+00:03:01 But really, the Python relevance is I didn't actually start hacking for fun until my about my senior year of college.
+
+00:03:09 And the first language that I learned for programming for fun and not just because I had to do it for class was actually Python.
+
+00:03:15 So the first kinds of programs I wrote were scripts to manage my photos and, you know, kind of manipulate and manage my own personal photo gallery and, you know, put it up on a simple website.
+
+00:03:28 So that was where I got started getting hooked on Python.
+
+00:03:30 That was, you know, it was about 10 years ago.
+
+00:03:32 That was around 2005.
+
+00:03:33 That was like Python 2.4 or something like that.
+
+00:03:36 Yeah, that's a great way to get started.
+
+00:03:38 I think a lot of people have interesting stories like that, you know, just they have some small problem they're trying to solve.
+
+00:03:44 And, you know, it leads you down this path.
+
+00:03:47 And all of a sudden, you discover this world where, hey, there's this great thing, you know, programming or Python or whatever.
+
+00:03:52 Yep, that's exactly right.
+
+00:03:54 So I see you're calling in from Seattle, right?
+
+00:03:57 What are you doing up there?
+
+00:03:58 So I am currently an assistant professor of computer science at the University of Rochester in upstate New York.
+
+00:04:05 So that's nowhere near Seattle.
+
+00:04:06 That's what I was going to say.
+
+00:04:07 You're not – it's not at all in Seattle.
+
+00:04:08 So I get to – one of the real benefits of being a professor is that your summers are free to do research or to travel or to do other sorts of scholarly work.
+
+00:04:19 So most professors in most terms, they stay on campus in the summers and they do research full time for three months.
+
+00:04:27 What I decided to do this summer since I had some colleagues at Microsoft was to spend most of my summer at Microsoft Research doing research and both in software engineering and in online education at the lab in Seattle.
+
+00:04:41 And I came here because I actually was an intern here a long time ago when I was back in grad school.
+
+00:04:47 So I'm actually back interning in the same group.
+
+00:04:49 So it's sort of a homecoming of sorts.
+
+00:04:51 Back to the future.
+
+00:04:52 That's excellent.
+
+00:04:53 Yeah, I've done some work with some of the guys up at Microsoft.
+
+00:04:55 It's a cool place up there.
+
+00:04:57 So excellent.
+
+00:04:57 Is this related to PythonTutor.com?
+
+00:05:00 No, not really.
+
+00:05:01 I mean, this is just a completely separate sort of research project.
+
+00:05:04 So there's nothing Python related in the work here, unfortunately.
+
+00:05:08 All right.
+
+00:05:09 Cool.
+
+00:05:10 All right.
+
+00:05:11 So let's talk about your CPython internals class.
+
+00:05:16 This was a class you did at University of Rochester, right?
+
+00:05:19 2014, I think.
+
+00:05:21 At least the recorded version was 2014.
+
+00:05:23 Yep.
+
+00:05:24 So this was a class I taught in fall 2014.
+
+00:05:27 And the name of the course was Dynamic Languages and Software Development.
+
+00:05:32 So I actually inherited this course from another professor who was taking a leave and teaching another class that term.
+
+00:05:41 And that class was originally in Ruby.
+
+00:05:43 So it was sort of a graduate level programming languages class about these sorts of dynamically type languages.
+
+00:05:48 And originally he did it in Ruby.
+
+00:05:50 But since I knew Python a lot better, I revamped the class to be in Python and basically turned it into what the videos are online.
+
+00:05:59 So I'd be happy to talk about that in detail.
+
+00:06:02 Just for everyone listening, the videos are online.
+
+00:06:05 And I actually spent like the last week going through your class.
+
+00:06:08 So I feel like I've had like some super intense summer course or something, you know, doing like 10 lectures.
+
+00:06:14 And people can find those on your website at pgbovine.net slash cpython dash internals dot htm.
+
+00:06:21 And I actually went through, unrelated to this conversation or maybe preceding this whole having you on the show, I just saw your videos and thought they were awesome.
+
+00:06:30 And I put them into a YouTube playlist at bit.ly slash cpython walk.
+
+00:06:34 So both of those work well.
+
+00:06:35 What was the main goal of the class?
+
+00:06:38 Sort of get people to understand what happens when you actually run dynamic code like Python?
+
+00:06:43 Yeah, I think that was basically that was basically a philosophy.
+
+00:06:48 So a lot of programming languages classes are taught from more of a theoretical perspective.
+
+00:06:54 Right.
+
+00:06:54 So it's usually kind of some formal syntax and semantics and maybe doing some proofs.
+
+00:07:01 And it's very, you know, kind of a formalism heavy.
+
+00:07:04 And I thought it would be interesting to do a very different sort of class for graduate students from the opposite side, which is something extremely applied to saying, you know, here is a here is a piece of Python code.
+
+00:07:15 Let's start with hello world or a simple for loop or a simple function call.
+
+00:07:20 And what actually happens throughout all the steps between that code being parsed and then the output appearing on your screen, let's say.
+
+00:07:29 So I wanted to dive into the interpreter and show students how everything worked under the hood and how there's really, you know, by deconstructing, you can show that there's really no magic here.
+
+00:07:39 There's just a lot of C code behind the scenes that keeps track of a lot of stuff.
+
+00:07:43 And eventually your program runs.
+
+00:07:45 So we we we we don't do the parsing stage because I think parsing is fairly standard.
+
+00:07:50 And that's covered by most kind of introductory compilers classes.
+
+00:07:54 You write a grammar and parser generator and some code gives you a like an AST.
+
+00:08:00 And then that gets walked to turn into some kind of bytecode.
+
+00:08:04 So the class actually starts with assuming you have a bunch of Python bytecode.
+
+00:08:07 How does the bytecode actually get interpreted step by step by the by the interpreter runtime system to do your your programs operations?
+
+00:08:16 Yeah, that's really cool.
+
+00:08:17 And I think, you know, if I think about how like C code runs and then my intuition about how that C code actually executes, if you understand a little bit about registers and memory addresses and pointers, your intuition more or less will carry the day.
+
+00:08:32 I think with interpreted languages, all bets are off.
+
+00:08:36 Right.
+
+00:08:37 I mean, you have some concept of the programming language doing things, but then the way that happens, you really have to look inside.
+
+00:08:44 Right.
+
+00:08:45 Yeah, exactly.
+
+00:08:47 Because the these interpret languages are often not implemented like you would conceptually think of it.
+
+00:08:53 Right.
+
+00:08:53 You think of something as you have frames and variables and pointers to each other.
+
+00:08:57 But really, these bytecodes are this sort of the Python one is sort of this stack based kind of virtual machine.
+
+00:09:04 I think Java, the Java virtual machine is that way, too, but I forgot the exact semantics.
+
+00:09:08 But it's not something you would think about normally, but they do it that way.
+
+00:09:11 One, because it's really compact and it's kind of leads to really compact code and sort of easy to understand code for the implementer.
+
+00:09:18 But yeah, but that's very different than the conceptual model in your head at the very high level, how a program ought to work.
+
+00:09:24 And we can talk about that later when we talk about the Python tutor as well, because that kind of leads into that other tool.
+
+00:09:30 So we can keep talking about the CPython stuff first.
+
+00:09:32 Sure. So one of the things I thought was interesting was in your very first session, you did you have kind of a cool whiteboarding thing you're doing with a Microsoft Surface and like a pen where you can kind of draw on the code.
+
+00:09:43 And that's cool.
+
+00:09:44 You do a cool little sketch about what actually happens when you type Python space some file that py.
+
+00:09:50 And I mean, on one level, I knew it.
+
+00:09:54 On the other, it was a little surprising to me to say.
+
+00:09:56 And the first step is compilation.
+
+00:09:58 Can you maybe like talk just briefly about like what happens when I run my Python code before we get into the interpreter itself?
+
+00:10:05 Yeah.
+
+00:10:06 So many people are surprised when there's a compilation step in Python or in these sorts of dynamic or what people call scripting languages, because usually you think of running Python space, whatever, or Perl space, whatever, Ruby space, whatever.
+
+00:10:20 And it just runs, right?
+
+00:10:21 Right.
+
+00:10:22 I just thought, here we go with the interpreter.
+
+00:10:24 And now it's interpreting, right?
+
+00:10:26 Right.
+
+00:10:27 So with Java or C or C Sharp, you have a compilation step and then you run a compiled binary.
+
+00:10:33 And there's two separate steps.
+
+00:10:34 But with Python, as with many other languages, the compilation happens before the execution.
+
+00:10:40 So what happens is as a standard kind of a front end to a compiler, it takes the source code.
+
+00:10:46 It does the lexical analysis.
+
+00:10:48 It does the parsing.
+
+00:10:49 It creates a AST or abstract syntax tree from that.
+
+00:10:52 And then it walks that tree and creates a bunch of bytecode.
+
+00:10:56 So the Python bytecode language, you can read in the documentation, it has, I don't know, a few dozen operations like add, load, store, and also some operations that are a little bit more Python specific, like build a list, build a dictionary, build a tuple, function call, those sorts of things.
+
+00:11:16 So the compilation step really takes your source code, which is in human readable, somewhat human readable form, and turns it into a linear stream of instructions.
+
+00:11:26 Very much like assembly language, except you can think of bytecode as an assembly language for a Python virtual computer.
+
+00:11:35 Right. That was kind of the impression I got as well, like a much, much richer assembly language where you have operations like build class and call method, push and pop stuff off stacks and so on.
+
+00:11:46 Yep, exactly.
+
+00:11:47 If we want to go work with this, right, we can go to python.org and download the code and decompress it or untar it or whatever.
+
+00:11:56 And it's just, it literally is a bunch of C code, right?
+
+00:11:59 The C in CPython is, here's your C implementation of this interpreter, right?
+
+00:12:03 That's right.
+
+00:12:04 So if you go to, this is what I do on the first day of class.
+
+00:12:07 We have everybody download the C interpreter source code from, sorry, the CPython source code from python.org and unzip it and do configure and make.
+
+00:12:19 Now, part of the class, I didn't require students to actually run the interpreter if they didn't want,
+
+00:12:26 because most of the class was actually reading through the code and walking through it.
+
+00:12:29 Now, the students who were a bit more adventurous, they could try to compile the interpreter themselves.
+
+00:12:34 And then try to, you know, put in debug statements or print statements to see how it works behind the scenes.
+
+00:12:40 But actually, compile interpreter itself might not be easy if you're on, say, especially, say, on a Windows machine, which doesn't have a lot of development tools, compilers.
+
+00:12:49 So I'm usually on Linux and Mac machines.
+
+00:12:51 If you install the standard developer tool chain with GCC and make and configure and all that stuff.
+
+00:12:58 In theory, right, building is always hard.
+
+00:13:01 But in theory, if you do dot slash configure and then and you type make all your your you'll actually call the C compiler on your machine.
+
+00:13:10 And it will compile all the C files and the C and the H files in the CPython slash directory.
+
+00:13:18 And in the end, it will produce a binary executable file called Python.
+
+00:13:22 And that Python you can just run.
+
+00:13:24 And that is the Python interpreter that you just compiled from C source code.
+
+00:13:29 So most of the class, what we do is we go over what a lot of those C files actually do and see.
+
+00:13:34 Maybe you could give us like a 10,000 foot view of what are the interesting parts of that source code and what is just noise and details.
+
+00:13:44 So there's like objects and then there's include there's see eval dot C.
+
+00:13:49 There's there's like a few really common parts that you come back to over and over and over.
+
+00:13:53 And then there's a bunch of details.
+
+00:13:54 Yeah.
+
+00:13:55 So on the Web site with all the videos, I actually show the the files that they reference.
+
+00:14:00 But really, the core file that I keep on going back to what you're saying is in Python slash C eval dot C.
+
+00:14:08 And what that is that that file at its core is the main interpreter loop.
+
+00:14:12 So conceptually, how you execute how Python executes code is a byte code is just a bunch of them.
+
+00:14:20 It's just a list of instructions.
+
+00:14:22 Each one is add or subtract or build list or function call or so forth.
+
+00:14:28 And all the interpreter does is just go through one instruction at a time, take it off the list of instructions, do something and then move to the next instruction, do something, move the instruction and then do something else.
+
+00:14:41 And it might jump around the stream of instructions if you have, say, a function call or a loop.
+
+00:14:46 But really, the main interpreter loop in C eval dot C, all it does is it's just a big, wild, true, infinite loop that just.
+
+00:14:54 Yeah, there's like a huge switch statement.
+
+00:14:56 And it is huge, right?
+
+00:14:57 That's right.
+
+00:14:58 Yeah, there's like a 3000 or whatever line switch statement.
+
+00:15:02 There's a fun fact in there.
+
+00:15:03 If you actually I don't know if it's in all the versions, but at least in some of the versions I saw, there's some kind of comment in there saying that they needed to like break up the switch statement in some weird way.
+
+00:15:15 Because some C compilers just can't take switch statements that are that big.
+
+00:15:21 So they had to actually break up the code into pieces because, you know, it wouldn't compile on some kind of computers because that code was just too giant.
+
+00:15:28 Yeah, that's pretty funny.
+
+00:15:30 It's like a 3000 line switch statement.
+
+00:15:31 It's pretty cool.
+
+00:15:32 But those are more or less the steps that have all the opcodes.
+
+00:15:37 And so if I look at Python, it's not necessarily mapping one to one the Python code I write to these opcodes, which is a good thing for Python programmers, right?
+
+00:15:50 That means you're working in a high level language.
+
+00:15:52 You're not working like down in the detail, right?
+
+00:15:54 But it also means it's hard for me to understand if I write, you know, create a class and I say, you know, T equals new test class.
+
+00:16:01 What does that actually mean?
+
+00:16:03 Like, how do I line that up?
+
+00:16:04 And so you had a cool way to disassemble that, right?
+
+00:16:07 And look at it.
+
+00:16:37 Currently, candidates receive five or more offers in just the first week and there are no obligations ever.
+
+00:16:42 Sounds pretty awesome, doesn't it?
+
+00:16:45 Well, did I mention there's a signing bonus?
+
+00:16:47 Everyone who accepts a job from Hired gets a $2,000 signing bonus.
+
+00:16:51 And as Talk Python listeners, it gets way sweeter.
+
+00:16:55 Use the link Hired.com slash Talk Python to me and Hired will double the signing bonus to $4,000.
+
+00:17:04 Opportunity's knocking.
+
+00:17:04 Visit Hired.com slash Talk Python to me and answer the call.
+
+00:17:18 Right, right.
+
+00:17:19 So the disassembler actually comes in the standard Python library.
+
+00:17:25 So if you do, right, so if you do Python space dash M space DIS, which runs the disk module space, the Python file name, name of Python file, I'll actually run the main function in the DIS module.
+
+00:17:41 And what that will do is I'll actually print out a somewhat human readable representation of the bytecode.
+
+00:17:46 And the cool thing about that is that it shows the line number of which line of your Python source code compiles into which bytecode.
+
+00:17:55 And as you mentioned, it's not a one-to-one mapping.
+
+00:17:57 So one line usually compiles to several bytecodes because the bytecode is at a lower level.
+
+00:18:03 So you can run that DIS command.
+
+00:18:05 And the DIS module, you can just search for, if you search on your favorite search engine for Python space DIS, you should see the documentation for this disassembler module.
+
+00:18:16 And that is in the standard library, and that gives you all of the stuff.
+
+00:18:20 So now that said, though, that only prints out the instructions.
+
+00:18:24 There was somebody who made a library called byteplay, which is B-Y-T-E-P-L-A-Y.
+
+00:18:31 And that library actually is an enhanced version of the disassembler that lets you get the disassembled bytecode into objects.
+
+00:18:39 You can actually play with it yourself.
+
+00:18:41 You can manipulate it.
+
+00:18:42 You can, you know, take it apart.
+
+00:18:44 You can analyze it.
+
+00:18:45 So this byteplay library, I haven't used it myself personally, but I know people who really like playing with it.
+
+00:18:51 Yeah, that's cool.
+
+00:18:52 A little more powerful.
+
+00:18:53 One thing about the DIS module is it's super easy to look at just sort of flat code in Python files.
+
+00:19:02 But if I want to look at the functions or I've got nested functions and classes, it's a little more work to do that, right?
+
+00:19:07 Yeah.
+
+00:19:09 So the default with the DIS module is it just disassembles the top level of your program.
+
+00:19:15 So all the top level says is that if you define a function, it'll just say function definition.
+
+00:19:20 And then what you have to do is you actually have to go inside that function and disassemble that function itself.
+
+00:19:27 So it is a little bit more hairy.
+
+00:19:29 And I don't know if byteplay handles all that out of the box, but it might.
+
+00:19:34 But the idea is that the DIS module, if you just run it by default, it will just disassemble the top level program.
+
+00:19:39 And any functions will not be disassembled automatically.
+
+00:19:42 You have to actually grab the code of those functions and go in there and call dis on that.
+
+00:19:47 So it is a little bit more tricky to do that.
+
+00:19:50 Sure.
+
+00:19:51 The other thing I thought was interesting is if I've got a function, let's say foo, in Python, I could say, what is it?
+
+00:19:59 Foo.func underscore bytecode.
+
+00:20:03 How do I – the bytecode is actually there on the function.
+
+00:20:06 And you can look at it in its encoded form, which is kind of some binary string type thing.
+
+00:20:12 And then you can also disassemble that as well, right?
+
+00:20:15 That's right.
+
+00:20:16 And that's what I think we're just leading into that.
+
+00:20:18 So the idea is that DIS itself, if you just run it, it disassembles the bytecode of the, I guess, of the top level file.
+
+00:20:26 But each function itself has its own code.
+
+00:20:29 And like you said, I think it's – it's actually different in Python 2 and 3, the name of it.
+
+00:20:34 But I think in one version it's like the function object dot func underscore code.
+
+00:20:39 The other one is just like just dot code or something like that.
+
+00:20:43 But the idea is that the code of the function just appears inside of it as a binary string of data.
+
+00:20:50 So if you actually print it out, it just looks like some garbled string.
+
+00:20:53 But if you run it through some – you can run it through some pretty printing function or through DIS.
+
+00:20:58 And it actually shows you the bytecode of the function.
+
+00:21:01 Because all a function object is that it's some context plus an actual string of bytecode that represents what the instructions are that the function is supposed to execute when you run it.
+
+00:21:14 Yeah, the other thing I thought was pretty cool is – or interesting to understand is that sort of compile step that you talk about, right?
+
+00:21:22 When I run Python My Python file, I get first like a compile step to bytecode and then the dynamic interpreted execution.
+
+00:21:30 But all those functions and stuff, that bytecode is there and ready to roll.
+
+00:21:34 It's just not kind of wired together until it gets to the interpreter, right?
+
+00:21:39 That's right.
+
+00:21:40 So you can actually compile – I think it's just the Python interpreter does the compiling and running all at the same time.
+
+00:21:48 But I think there's actually a mode in Python that you can just compile to – you can just compile the bytecode and not actually run it yet.
+
+00:21:57 I'm not sure exactly which flags are that one.
+
+00:21:59 But sometimes people actually ship pre-compiled Python bytecode instead of the source code.
+
+00:22:06 So there's – I don't know what reason people do this because you can just run the source code.
+
+00:22:12 And some people like to obfuscate their bytecode maybe, but I don't know how well that actually works because you can kind of reverse engineer it.
+
+00:22:20 But yeah, so the compile step is completely separate from the running step.
+
+00:22:25 And like you said, once you compile, it's just a bunch of – instead of a text file, a .py file, it's called, I think, a .pyo file or something.
+
+00:22:33 It's just a bunch of garbled stuff.
+
+00:22:35 And then that garbled stuff, you can just run through the interpreter and it'll do your – it'll run with your program.
+
+00:22:40 Yeah, it's really interesting to see how it's all coming together.
+
+00:22:45 What do you think some of the main reasons for studying Python at this level are?
+
+00:22:49 Like how does it make you a better programmer, do you think?
+
+00:22:51 That's a great question.
+
+00:22:54 I think that studying Python at this level of the implementation level, it kind of makes you – I feel like it makes you a better programmer in that you kind of, one, build a really good mental model of what goes on behind the scenes.
+
+00:23:09 And you see that these languages are just tools made by people.
+
+00:23:14 I think there's something really powerful in that.
+
+00:23:15 I feel this is a very kind of systems perspective of programming.
+
+00:23:20 So one analogy is that why do people study, say, operating systems or study compilers?
+
+00:23:26 That's a good example.
+
+00:23:27 Like the kind of classic thing in college is that a lot of people have to take an operating systems course where they build a very simple sort of OS kernel in C and maybe some assembly.
+
+00:23:39 And their kernel kind of runs and it does a simple hello world.
+
+00:23:42 Or you do a compilers course where you build a compiler using some basic building blocks.
+
+00:23:49 And the idea there is that it's not that you're going to ever build an operating system or a compiler in real life or a new programming language.
+
+00:23:56 You're not – most people are not going to implement a new kind of programming language.
+
+00:23:59 But by studying the principles behind how it works, I feel like – I think it makes you a better programmer in that you kind of understand how large complex code bases are organized and logically broken down.
+
+00:24:12 So I view this class like you've seen with these videos as more of like a code reading or literature exercise in a way.
+
+00:24:18 Because we're actually reading through dozens of – actually not that many.
+
+00:24:23 Maybe a dozen really core complex files and seeing how they – the pieces fit together.
+
+00:24:30 So it's sort of like dissecting, you know, kind of a large piece of code.
+
+00:24:35 I think that's really interesting in its own right.
+
+00:24:38 Yeah.
+
+00:24:39 A lot of people when they're in school at least studying this stuff, it's all very – I don't know, like you said, abstract or maybe not – it's not quite what I'm looking for.
+
+00:24:48 But like it doesn't have the nitty-gritty details of the real world applied to it.
+
+00:24:54 So all the error conditions that are so bizarre and all the optimizations, you don't necessarily have to deal with that.
+
+00:24:58 And so when you do finally get to a real world complex code base, it's super hard to feel comfortable.
+
+00:25:05 And I think, you know, you kind of helped your students do that a lot in there.
+
+00:25:08 So that was cool.
+
+00:25:08 Yeah.
+
+00:25:10 I think that's – and like you mentioned, there's always a tradeoff, right?
+
+00:25:13 So even in my choice of what to cover in this class, if you notice, I only cover maybe a dozen or so files.
+
+00:25:19 I mean, the Python code base has hundreds or thousands of source code files.
+
+00:25:24 And obviously, I don't have – one, I don't have time to cover all that.
+
+00:25:27 And two, I feel like this dozen is really the conceptual core of the interpreter.
+
+00:25:31 A lot of the files are just modules, right?
+
+00:25:33 A lot of the files are just like here's how strings are implemented.
+
+00:25:37 Here's how, you know, the socket class is implemented.
+
+00:25:41 Here's how, you know, memory mapped iOS is implemented.
+
+00:25:43 Those are all, I feel, auxiliary things.
+
+00:25:45 But whereas the core thing is, you know, what is an object?
+
+00:25:48 What is, you know, a class?
+
+00:25:50 What is a function?
+
+00:25:51 What is the interpreter?
+
+00:25:52 So – and even as you notice from watching the videos, I don't go over every single line in excruciating detail.
+
+00:25:58 I basically gloss over things and say, look, this block happens if there's some kind of error.
+
+00:26:02 You run out of memory.
+
+00:26:03 So, you know, look at that in spare time.
+
+00:26:05 Exactly.
+
+00:26:05 But here's like conceptually what happens.
+
+00:26:07 So, it is a balance of, you know, exposing students to the nitty-gritty, like you said, but also not too nitty-gritty because there's so much complexity in the code that isn't core to the lessons in the class.
+
+00:26:20 So, it's a balance.
+
+00:26:21 Yeah.
+
+00:26:22 A lot of times as programmers, we are – to be effective, we have to kind of zoom in, look at the tree, zoom out, look at the forest, zoom back in on another tree, zoom back in.
+
+00:26:31 And that skill of like in and out is pretty awesome.
+
+00:26:34 We talked about the opcodes.
+
+00:26:36 That's one – and that eval C – cEval.c function or class where it has the main eval loop running around and around.
+
+00:26:44 That's one of the main architectural pieces of CPython.
+
+00:26:48 Another one was – that struck me was everything is this type of C object called pi object.
+
+00:26:55 Yep.
+
+00:26:56 Everything is a pi object, right?
+
+00:26:58 Pretty much.
+
+00:27:00 So, numbers, strings, custom classes, those all kind of make sense.
+
+00:27:06 But even the class definition itself, functions, methods.
+
+00:27:11 So, that was really interesting to me.
+
+00:27:14 And then we have derivatives of those, like things that have pi object kind of as their base class, like pi int object for int, pi list object for lists, and so on.
+
+00:27:24 But C is not an object-oriented language.
+
+00:27:28 So, how does that work?
+
+00:27:29 Right.
+
+00:27:30 So, like you mentioned, the pi object structure, I guess, in C is the base of how everything is implemented.
+
+00:27:39 All the objects are implemented in Python.
+
+00:27:41 And what that contains is – that contains actually really few sorts of basic data.
+
+00:27:47 And I think the most basic, I'm trying to remember off the top of my head, is one is a reference count of how many pointers are pointing to this object at once.
+
+00:27:55 And it's because Python implements garbage collection by doing reference counting.
+
+00:28:00 So, if you have nobody pointing to you, then you get garbage collected and your memory gets reclaimed.
+
+00:28:04 So, everything is conceptually a subclass of pi objects.
+
+00:28:10 So, if you want to make an integer object, it's a pi in object.
+
+00:28:13 Or if you want to make a string, it's a pi string object.
+
+00:28:15 If you want to make a function object, it's a pi function object.
+
+00:28:18 And like you mentioned, C is not object-oriented language.
+
+00:28:21 So, there's no inheritance in the language.
+
+00:28:23 But really, you can fake it by basically doing what's called structural inheritance or structural subtyping.
+
+00:28:31 What that really does is it's a hack where you basically create a struct that is – where the first few elements of the struct are exactly the same as the base class.
+
+00:28:42 So, basically, the pi in object – I don't have the code in front of me.
+
+00:28:45 But the pi in object, the first whatever – What is it?
+
+00:28:49 Type?
+
+00:28:50 Like the class, the original type, and then the ref count like you're saying, right?
+
+00:28:53 That's right.
+
+00:28:54 So, those are the – yeah, those are the two things in pi object.
+
+00:28:58 That's right.
+
+00:28:58 So, there's a pointer to the – a tag saying what type it is.
+
+00:29:01 And then there's the number of references.
+
+00:29:04 So, every struct that represents some kind of a Python class – all the names are getting mixed up – starts with those two things.
+
+00:29:16 And the cool thing there is because if you have C code that expects a pi object star, a pi object pointer, and operates on it, it knows that the first thing it accesses in memory is the type.
+
+00:29:29 And the second thing, I think, is the reference count.
+
+00:29:31 So, all of your code will work perfectly fine if it's an in object or a long object or a string object if the function you're passing it into expects just a base class of pi objects.
+
+00:29:42 So, basically, conceptually, it's just subclassing or subtyping.
+
+00:29:46 But that's how it ends up being implemented in C.
+
+00:29:49 And, actually, how C++ does subtyping, I think, in its most basic form, is basically that.
+
+00:29:56 Because C++ is meant to be compiled to be somewhat backwards compatible with C.
+
+00:30:01 So, this idea of piling another class on top of another one structurally with the fields in the same places is a pretty classic technique.
+
+00:30:09 Yeah.
+
+00:30:10 You kind of – yeah, absolutely.
+
+00:30:12 You kind of have to really understand C pointers pretty well to get it.
+
+00:30:16 But once you do, it's pretty straightforward, right?
+
+00:30:18 Because when you say pointer and you dereference that pointer and you say a name, that really just maps to, like, an offset from the base address.
+
+00:30:25 And long as they all have the same shape up to that point in terms of in memory, you basically have inheritance, right?
+
+00:30:31 That's cool.
+
+00:30:46 This episode is brought to you by CodeShip.
+
+00:30:48 CodeShip has launched organizations, create teams, set permissions for specific team members, and improve collaboration in your continuous delivery workflow.
+
+00:30:57 Maintain centralized control over your organization's projects and teams with CodeShip's new organizations plan.
+
+00:31:03 And as Talk Python listeners, you can save 20% off any premium plan for the next three months.
+
+00:31:09 Just use the code TALKPython, all caps, no spaces.
+
+00:31:12 Check them out at CodeShip.com and tell them thanks for supporting the show on Twitter where they're at CodeShip.
+
+00:31:18 Yep, exactly.
+
+00:31:24 And that's another kind of a side effect of studying this sort of – studying implementation.
+
+00:31:29 Because most implementations are usually in C.
+
+00:31:32 So you get to kind of see these interesting C tricks and see how other languages are built on top of that, like object-in-order programming.
+
+00:31:40 Yeah, it's cool.
+
+00:31:41 I definitely have a better appreciation for macros after spending 10 hours looking through that idea.
+
+00:31:48 Because I did a lot of C++, but not a lot of pure C.
+
+00:31:51 So, you know, some of the tricks you might do differently in C++, you know, almost, you know, have really nice macro solutions.
+
+00:31:59 So that's cool.
+
+00:31:59 Your other project, Python Tutor at PythonTutor.com, what's the relationship to this?
+
+00:32:08 I mean, certainly PythonTutor.com helps you understand that sort of in-memory what's happening inside your Python code.
+
+00:32:16 So I kind of see these things as somewhat related, these two projects that you had.
+
+00:32:20 Maybe you could just introduce Python Tutor for everyone and then we could talk a bit about it.
+
+00:32:24 Sure.
+
+00:32:25 So Python Tutor at PythonTutor.com is a – it's a web-based tool where you can write Python code.
+
+00:32:32 And actually now you can write code in a lot of other languages.
+
+00:32:34 So you can write code.
+
+00:32:35 It supports Python, Java, JavaScript, TypeScript, which is a Microsoft version of JavaScript with types, which works really well.
+
+00:32:43 And also Ruby now.
+
+00:32:45 What you do is you write code in your browser and then you run it.
+
+00:32:48 And it actually goes – it sends your code to a server to run in a sandbox.
+
+00:32:52 So it actually runs a real version of the language and not some kind of JavaScript-y simulation of it.
+
+00:32:59 So it runs the code.
+
+00:33:01 It sends back the execution trace, which is everything that happened when your code ran.
+
+00:33:06 You know, what it did at every step, when it printed out, what variables there are, what data structures there are.
+
+00:33:12 And then it produces a visualization for you that you can step through.
+
+00:33:15 So it produces a visualization of every step of the code execution.
+
+00:33:20 And then you can use a slider to go through it and see that, you know, the variables being created, the function stack frames being created, the pointers that are pointing to each other.
+
+00:33:29 And what that lets you do is that lets beginners especially build up a mental model of what is kind of going on inside their program.
+
+00:33:38 Because even for code – for experienced programmers, we actually build up this model ourselves.
+
+00:33:43 We look at a piece of Python code and we think in our heads, oh, there's a variable here that's pointing something else here and that's pointing this other thing here.
+
+00:33:50 And then we call a function and that function points to the same thing we do.
+
+00:33:53 But those structures are really hard for beginners to build up in their heads.
+
+00:33:57 And this tool has just been really helpful for a lot of people to build up that model.
+
+00:34:02 And the relationship between that and the CPython stuff is actually really interesting because the CPython stuff is really for advanced learners who want to learn how things really work behind the scenes.
+
+00:34:12 And like we mentioned earlier, the Python tutors, for most people, I think, it's more useful because it's really what happens.
+
+00:34:18 It draws the pictures of what happens at the conceptual level, right?
+
+00:34:22 That you're actually – conceptually, all you want to think about is you run every line of code and something happens.
+
+00:34:27 You don't need to know about the bytecode or the stack or the main interpreter loop or PyObjects or everything.
+
+00:34:34 So I think those two are really complementary.
+
+00:34:36 One is for advanced kind of programmers who want to study internals, whereas the Python tutor is for beginners who are just learning the language.
+
+00:34:45 Yeah, that's for sure.
+
+00:34:47 I kind of saw it the same way.
+
+00:34:49 I feel like there's sort of this understanding of the thing that is CPython.
+
+00:34:55 And Python tutor is this great way to help beginners kind of form good mental models.
+
+00:35:00 And your CPython walk is really good at actually showing a super deep understanding.
+
+00:35:05 But they kind of give like two perspectives of the same thing.
+
+00:35:07 So even though I've been doing Python for a long time and I know C really well or C++ anyway, I still thought that just looking at the stuff that was going on in Python tutor,
+
+00:35:15 like it has some really great visualizations for showing basically like scope, variable scope and things like that, because that can be kind of hard to understand for beginners.
+
+00:35:26 Those kinds of things, right?
+
+00:35:28 Like because it's not just, well, it's in the curly braces.
+
+00:35:30 And so when it leaves the curly braces, this variable is gone, right?
+
+00:35:33 There's a whole different mechanism for finding what's defined where and so on.
+
+00:35:37 Right.
+
+00:35:37 That's right.
+
+00:35:38 And also with the, with nested scopes and closures in Python, that gets even more tricky.
+
+00:35:44 So the Python tutor has a way of visualizing kind of your parent frame.
+
+00:35:48 So if you, for example, the classic case, if you define a function within a function, that inner function has access to the outer functions variables as well as the global variables.
+
+00:35:59 And it gets even trickier when, you know, you have a function foo and inside of foo, you define bar and bar access is something within foo.
+
+00:36:06 But then foo returns bar to its color and foo is the stack of foo is gone.
+
+00:36:12 But when you call bar again, you can actually still get back to the variables that foo had, even though foo has finished executing.
+
+00:36:19 And the Python tutor and these sorts of tools visualize that for you.
+
+00:36:23 And it's been used by quite a few classes, especially I teach these things like nested functions and closures, which are not as obvious, you know, and they're, they're more advanced concepts.
+
+00:36:33 Yeah.
+
+00:36:34 I, I do professional like training for Python and other, other technologies as well.
+
+00:36:39 And I was thinking I'd probably pull that up when it gets to the scope stuff for students, just, you know, because, you know, I'm teaching a lot of guys who have done C++ or .NET or something like that.
+
+00:36:48 And just their mental model is not appropriate.
+
+00:36:50 Right.
+
+00:36:51 And just like seeing it is a lot easier than spending five minutes talking about it, writing some demos.
+
+00:36:56 So I think that's really cool.
+
+00:36:57 I think it can help, help a lot in those areas as well.
+
+00:37:00 Yeah, definitely.
+
+00:37:01 Please, please use it.
+
+00:37:03 And, and, and let me know if you have issues.
+
+00:37:05 I mean, it's pretty, it's pretty robust at this point.
+
+00:37:08 I mean, the thing is, it does require an expert such as yourself to guide people through.
+
+00:37:12 I mean, it's helpful for people by themselves.
+
+00:37:14 But if you just, what people do as instructors, like yourself, is you just pull up a browser and start writing code and start running it and start explaining the code to the students one step at a time.
+
+00:37:25 And that's a lot more useful, I think, than starting a terminal.
+
+00:37:28 Right.
+
+00:37:28 Because the alternative now is you start a terminal, write a, write a function or a nested function or whatever, and then put a bunch of print statements inside.
+
+00:37:35 And then you just run the terminal and just print a bunch of stuff.
+
+00:37:37 And you're like, okay, I got to explain why it's printing this.
+
+00:37:40 But whereas in the Python tutor, it's printing it to the web terminal.
+
+00:37:43 But then also every step you see, oh, it's printing this because X is now pointing to this.
+
+00:37:48 And now X points to something else and it's printing that.
+
+00:37:50 It's extremely clear.
+
+00:37:51 Yeah, it is very clear.
+
+00:37:53 And it's like, you know, if you were to do your terminal example and then go over to the whiteboard and sketch out what's really happening as you try to describe it, like Python tutor just does that drawing for you, right?
+
+00:38:02 Exactly.
+
+00:38:04 So the exact use case is what you said.
+
+00:38:06 It really replaces a combination of a terminal.
+
+00:38:11 It really replaces a text editor, you know, interpreted a terminal scene, like a REPL, and a separate whiteboard all in one.
+
+00:38:21 And I thought it was really interesting you mentioned the .NET kind of the C slash .NET developers switching the mental model of Python.
+
+00:38:28 A funny story about this is recently I wanted to learn Ruby.
+
+00:38:31 I've always wanted to learn Ruby for a while.
+
+00:38:33 I've never done it before.
+
+00:38:34 And I felt a good way for me to learn Ruby is to actually write my own Ruby backend for the Python tutor.
+
+00:38:42 So the Python tutor is actually, it's a very platform, it's a language independent interface.
+
+00:38:47 If you notice the visualizations, nothing about the visualizations has Python.
+
+00:38:50 They're just variables and stack frames and functions and lists and objects with attributes and stuff.
+
+00:38:57 And you can imagine squinting and that makes sense in another language like JavaScript or Java or Ruby.
+
+00:39:03 So what the backend does is that you actually write a backend, say in Ruby, by hooking into the Ruby debugger and printing out what happens at every step, you can actually generate visualizations for Ruby.
+
+00:39:13 So I actually spent about two weeks really deep diving into the Ruby language implementation and debugger and how it works.
+
+00:39:20 And I actually created the backend for Ruby, which is live on the site.
+
+00:39:24 And that actually gave me some really interesting revelations about how scoping especially works in Ruby.
+
+00:39:30 Have you done Ruby before?
+
+00:39:31 I started to learn Ruby on Rails a little bit, played around with it, never really got very far with it.
+
+00:39:37 Yeah, it's, it's, we could do a whole other podcast on that.
+
+00:39:40 I think people who've done Python for a long time, when, when we learn Ruby, it just seems crazy and weird.
+
+00:39:45 And I'm sure Ruby people say the same thing with Python.
+
+00:39:47 The scoping is really weird.
+
+00:39:48 So I have an example of Ruby scoping example is like something that really looks basic in Python.
+
+00:39:54 Like, oh, this ought to work.
+
+00:39:55 So I'll give you a, a classic example is if you have a, what looks like a global variable, like, you know, X equals five.
+
+00:40:03 And then you define a function in Ruby inside that function, you cannot access the global variable.
+
+00:40:08 Okay.
+
+00:40:09 It's like insane.
+
+00:40:10 And it's because it actually, when you define a global variable, it's actually not a global variable.
+
+00:40:16 It's a local variable in that scope.
+
+00:40:18 And when you define a function, I can like what it looks like a function.
+
+00:40:22 That's actually a method on the default object, which is outside of the scope of your normal thing.
+
+00:40:27 So it can't actually access what you think is a global.
+
+00:40:30 So if you actually think of things in a Python way and you're doing Ruby, it gets super confusing in terms of scope.
+
+00:40:37 So, but the Python tutor actually illustrates that all for you.
+
+00:40:40 And it's like, oh, wow, I can see why I can't access that variable.
+
+00:40:42 Even though I thought by looking at the code, I could.
+
+00:40:44 Yeah.
+
+00:40:45 And that way I think Python tutor is really interesting for experienced developers because we have these really strong mental models, but they're not always, they're not portable necessarily.
+
+00:40:54 Right.
+
+00:40:54 You can't just plug them into different situations.
+
+00:40:56 And so seeing the differences might just quickly, you know, connect that, those two together.
+
+00:41:01 Exactly.
+
+00:41:02 And I think that's why I've been extending it to other languages because it's, I want this tool to be useful not only for someone who's an absolute beginner, who's never learned anything, but also for experienced programmers.
+
+00:41:13 And one of the future pieces of work I love to get into, if I have time, is to kind of make the bridge between different languages.
+
+00:41:21 Now that imagine Python tutor is this nice visualization that is pretty much language agnostic.
+
+00:41:26 I want to see, like, one awesome thing would be, like, if I'm a Python programmer, I want to learn Ruby.
+
+00:41:31 I want to write some Python examples and then see some equivalent or similar Ruby examples and step through their code and see, oh, this is how you do this, you know, do lambdas or do nested functions in Ruby.
+
+00:41:42 It looks kind of like Python.
+
+00:41:44 So I think that with this tool, because it's on the web, people can build up interactive examples showing how different languages differ from each other.
+
+00:41:52 Yeah, I think that's actually really valuable.
+
+00:41:54 Although you might need a 301 redirect to a language tutor or something like that, right?
+
+00:42:00 Yeah, the name is funny.
+
+00:42:01 Yeah, the name kind of stuck because it started with Python.
+
+00:42:05 I debated a change of name for a while, and the domain is really good, and, you know, it's pretty highly ranked, and everybody, a lot of people know it.
+
+00:42:12 So I think it might just be an inside joke.
+
+00:42:15 I might just have to stick with Python for now, even though it supports these languages.
+
+00:42:18 Yeah, yeah, of course.
+
+00:42:19 It's cool.
+
+00:42:19 So that's all really well and good for helping.
+
+00:42:23 Before we move on, I guess, let me go back to one thing.
+
+00:42:26 One other thing that I think is really helpful, even in this mode that we've already spoken about, we'll get to the other modes that we have available in Python tutor as well.
+
+00:42:34 But one I thought was really cool is forwards and backwards execution.
+
+00:42:38 Like, so I'm a huge fan of PyCharm, and PyCharm has really nice interactive debugging.
+
+00:42:43 And, you know, speaking of Microsoft, you're around, you know, somewhere physically in here, the Visual Studio guys, and they have Python tools for Visual Studio, which have nice interactive debuggers.
+
+00:42:53 But going back in a debugger is not the same thing as actually forward and reversing time.
+
+00:42:59 And I think that's one of the things that's cool about Python tutor is I can run forwards.
+
+00:43:03 Oh, wait, I didn't understand what happened.
+
+00:43:05 Let me go back three steps, forward two steps.
+
+00:43:06 You know, that's a really cool feature.
+
+00:43:09 Yeah, and I think that's one of the key features.
+
+00:43:11 And, you know, people have been trying to do reverse kind of debuggers in production for a while.
+
+00:43:16 There are actually some teams, you know, doing stuff for various languages.
+
+00:43:21 I mean, in production, it's really hard to do.
+
+00:43:23 But actually, in this educational case, the forward and backward is sort of a trick because what happens is the whole program has already executed by the time you see it in the browser.
+
+00:43:33 So when I'm scrubbing forward and backwards, I'm just looking at different pieces of the log that the program has already done.
+
+00:43:39 So that's really nice because it allows you to go forward and backwards arbitrarily.
+
+00:43:42 It's not like I have to re-execute it all.
+
+00:43:44 The whole program is done.
+
+00:43:45 I'm just seeing what did it do with step one and what did it do with step two and such.
+
+00:43:49 That's awesome.
+
+00:43:50 Yeah, there's not like an edit, continue, or drag execution pointer to skip this if check or something like that, right?
+
+00:43:56 That would be cool.
+
+00:43:57 But, yeah, yeah.
+
+00:43:58 That would be cool.
+
+00:43:58 But, yeah, it's a read-only view.
+
+00:44:00 It's just it's done.
+
+00:44:01 Yeah, this is the program you wrote.
+
+00:44:02 Let's just see what happens at every step.
+
+00:44:03 Yeah, I think that's amazing.
+
+00:44:05 So the other thing that you can do that you seem to be building out more and more is to bring other perspectives into this.
+
+00:44:13 So if I go around pythontutor.com and I go click some stuff, it's like an automated system showing me stuff.
+
+00:44:18 But if I wanted to sit over the shoulder of somebody and help them understand it or if I was teaching a class and a bunch of people doing it, you've got tools for that as well, right?
+
+00:44:27 Yeah.
+
+00:44:28 So the immediate tool, it's all on the site right now.
+
+00:44:31 If you look at if you go to the Python Tutor site, there's a start shared session button on the upper left.
+
+00:44:37 And what that does is that it actually creates a unique URL that you can send to your friend or to a tutor or to a TA.
+
+00:44:44 And when they join that URL, they actually get into your session.
+
+00:44:49 So it's like you're both virtually in the same session that are sharing it.
+
+00:44:53 So what you can do is you can write code together just like you're in Google Docs.
+
+00:44:57 And then you can actually run when you run the code, your visualizations are synced up.
+
+00:45:02 So you can actually when you step backward, the other person's screen also steps.
+
+00:45:05 And then there's a chat box so you can talk to each other.
+
+00:45:08 And you can also see each other's mouse cursor.
+
+00:45:11 So that simulates the experience of, say, a tutor and a learner getting together and sitting side by side and trying to work out a piece of code together.
+
+00:45:20 Except you can do this anywhere and remotely.
+
+00:45:23 So we've deployed this for about a year now.
+
+00:45:26 And a bunch of people, like hundreds of people, have just used the service to do both tutoring, like remotely, just saying, you know, I sent a link to my tutor and they can tutor me and I don't have to be in the same room with them.
+
+00:45:38 And also people use it for collaborative learning, which is really neat.
+
+00:45:41 So this chat room supports arbitrary numbers of users.
+
+00:45:45 In reality, after you get to more than four or five, it gets confusing because so many people are trying to write code together and chat.
+
+00:45:51 And it's just it's a storm of little mouse cursors.
+
+00:45:54 Exactly.
+
+00:45:55 So because you see everyone's cursor.
+
+00:45:57 So I've seen people with three, four, maybe five people kind of talking about stuff.
+
+00:46:01 So that's sort of the the tool that simulates a a kind of personal interaction with the visualization.
+
+00:46:10 Then you have another form that is sort of almost a dashboard of many learners, right?
+
+00:46:17 Right.
+
+00:46:18 So then there's another tool that I've been building that isn't exactly live on the site yet because it's it's really a beta for tutors only.
+
+00:46:26 And what that is, is that that solves the problem of there not being enough tutors.
+
+00:46:30 So imagine if you're in a large, you know, in a real class, you know, in a college class, you might have 50 students in a computer lab and one tutor or TA there.
+
+00:46:40 And what the TA has to do is run around the computer lab helping everybody.
+
+00:46:43 And, you know, people are raising their hands or going around helping one person.
+
+00:46:47 Then someone else raises their hand and go around helping another person in, say, an online course, you know, a MOOC or these massive online courses.
+
+00:46:54 There may be a thousand students for every TA on the course.
+
+00:46:56 And there's no way they can help everybody at once, obviously.
+
+00:47:00 So what I've done is I built a dashboard that shows a tutor or a teacher in real time what a lot of students are doing at the same time on on a website like the Python tutor.
+
+00:47:11 So this dashboard can show up to dozens of people and each person's actions are just in a little tile.
+
+00:47:18 So it's like you have a you have dozens of little rectangular tiles and a big dashboard on your monitor.
+
+00:47:23 And each one is updating in real time as the student is editing code or running code or seeing compiler errors.
+
+00:47:30 So then as a teacher, you can glance and it's sort of like you're looking over the shoulders of, say, 20 or 30 students at once and seeing at a glance what they're doing.
+
+00:47:40 And most of the time, students are just coding along or they're paused or they're thinking.
+
+00:47:45 But then sometimes you see a student always keep getting the same compiler error or you see a student changing their code back and forth and seeming confused.
+
+00:47:53 And in that case, you can start a chat with those students in directly in the tile.
+
+00:47:58 So you can you can chat with any number of students you want.
+
+00:48:02 And each chat shows up directly in their in their coding session.
+
+00:48:06 And as a tutor, because you have this dashboard, you can simultaneously chat with many students at once.
+
+00:48:12 And the reason this works really well in practice is because a lot of students are just paused or thinking so that you could jump in to help, say, three or four or five students at once.
+
+00:48:21 And it's not like you're chatting all the time.
+
+00:48:23 You're chatting, giving them a suggestion, giving them pointers or something.
+
+00:48:26 And then they go off and do some work and you go help someone else.
+
+00:48:29 And you can do all that from the comfort of your own of your own home without having to run around a giant computer lab.
+
+00:48:35 Or if you're in an online course, you can't.
+
+00:48:37 You don't know where the students are.
+
+00:48:38 They're all over the world.
+
+00:48:39 But you can just sit there in one central location and help up to dozens of people at once.
+
+00:48:43 Yeah, that's really awesome.
+
+00:48:44 So you've got all that in a blog post that's coming up pretty soon, right?
+
+00:48:48 Do you know when that's coming out?
+
+00:48:50 Yeah, so I'm writing up a blog post.
+
+00:48:52 I don't exactly know what's coming out.
+
+00:48:53 Hopefully, it'll be in the middle of the month.
+
+00:48:56 I'm still kind of shopping around to different folks and seeing where I can get it published.
+
+00:49:02 And the research papers on these projects are coming out soon on my website as well.
+
+00:49:08 So all of these are kind of along the lines of my research projects, which all revolve around the theme of how do you build better interactive tools for teaching programming?
+
+00:49:18 Yeah, awesome.
+
+00:49:19 Speaking of interactive tools, we had Brad Miller on from Interactive Python.
+
+00:49:24 And you guys are doing some work together as well, right?
+
+00:49:28 They're doing something with pythontutor.com to integrate that?
+
+00:49:32 Yeah, so Brad, Professor Brad Miller, he was one of the first users of the Python tutor back in the day.
+
+00:49:39 So I started this project about five years ago as a graduate student.
+
+00:49:42 And that had zero users.
+
+00:49:44 And it was just something I did.
+
+00:49:46 You know, like many hobby projects, like many of these open source projects, it just scratched my own itch.
+
+00:49:50 I was teaching a bit of Python.
+
+00:49:52 I wanted to create some visualizations that helped myself out.
+
+00:49:54 And it was a fun thing to do.
+
+00:49:56 I put this project online for about a year or two.
+
+00:49:59 And no one really used it.
+
+00:50:01 You know, I showed some friends and colleagues.
+
+00:50:03 And I thought, oh, this is a kind of cool hobby project.
+
+00:50:05 But then around 20, I think around 2011, oh, it was four years ago.
+
+00:50:09 Around 2011, Brad was starting to build some digital textbook resources.
+
+00:50:15 He had been an author.
+
+00:50:16 He's been a professor for probably over a dozen years.
+
+00:50:19 And he had written some Python textbooks.
+
+00:50:22 And he was trying to experiment back then in 2011 with putting Python educational materials online in a digital format.
+
+00:50:32 And, you know, because he's really innovative, what he wanted to do is he was thinking, I don't want to just put some text and code online.
+
+00:50:40 Because then it's just like it's no better than reading a book except you're just on the computer.
+
+00:50:43 I mean, it's better in the sense only in the sense that it's free, which is cool.
+
+00:50:48 I mean, that's already great.
+
+00:50:49 I mean, having a free digital textbook that's open source is great because many more people can read it.
+
+00:50:54 But he's saying, you know, if we're all already on the computer, can't we do something more interactive?
+
+00:50:59 So he found my Python Tutor project and actually challenged me to try to make it so that you can embed it within other web pages.
+
+00:51:08 And theoretically, it was possible because it's just a web-based interface.
+
+00:51:11 But, you know, I had to write a bunch of code to get it so that it can embed within other web pages.
+
+00:51:16 And we did that.
+
+00:51:17 This was four years ago.
+
+00:51:19 And I've been working with him ever since on and off to embed the Python Tutor in his page.
+
+00:51:24 So if you actually look at his interactivepython.org digital textbooks, throughout the textbook, you'll see little widgets here and there that show a piece of Python code with a slider through it.
+
+00:51:35 And then you can just slide, and then the visualizations actually appear.
+
+00:51:38 And then if you hit edit, you can actually edit the code in the Python Tutor and see the visualizations.
+
+00:51:43 I think that's been tremendously helpful for students because they can not only read the code, they can actually see what's going on.
+
+00:51:49 And the cool thing is that that all happens within the context of their normal interactive textbook.
+
+00:51:55 So, yeah, so Brad is an early power user and longtime power user of the system.
+
+00:51:59 So I'm glad you had him on the show.
+
+00:52:01 Yeah, that's awesome.
+
+00:52:02 And the students can even kind of, like, customize the code samples and save them and stuff, right?
+
+00:52:07 So that's really neat.
+
+00:52:08 Yeah, exactly.
+
+00:52:09 And that's the cool thing about being online, that you can not only, say, with the Python 2, with the visualizations, you know, you can imagine someone making a visualization, right?
+
+00:52:19 Like an instructor using PowerPoint to very carefully draw out pointers and lists and data structures.
+
+00:52:26 And that's all good.
+
+00:52:27 But then what if, as a student, you're like, wait, I want to change this code to make it go backwards or something?
+
+00:52:33 And the cool thing about having a real tool is that you can just change your own code and see the new visualization instead of just seeing what the teacher imagined.
+
+00:52:40 Yeah, that's wonderful.
+
+00:52:41 Because that playing, that playful exploration is sort of key to becoming a good programmer, I think.
+
+00:52:47 Exactly.
+
+00:52:48 And that's something that's, you know, on a more philosophical level, that sort of tinkering mindset, like you said, is key.
+
+00:52:55 I mean, on one hand, it's very important to understand fundamental principles like variables and scoping and function and stuff.
+
+00:53:00 But a lot of this, you know, as you know, and I'm sure a lot of people have talked to, you know, software is really a craft, right?
+
+00:53:06 You can't.
+
+00:53:07 It's just like woodworking or, you know, being a carpenter or something.
+
+00:53:12 Like you have to learn some of the basic physics and material science behind it.
+
+00:53:17 But really, you can't just become an expert, you know, woodworker by just reading a bunch of books.
+
+00:53:22 You have to start tinkering and making mistakes and, you know, bruising your hands.
+
+00:53:26 And it's very similar.
+
+00:53:27 You have to write a lot of code, play around, see a bunch of errors, and just build up this intuition about how things work behind the scenes.
+
+00:53:34 And hopefully the visualizations help scaffold that learning.
+
+00:53:37 Yeah, I think absolutely they do.
+
+00:53:40 So very cool project.
+
+00:53:42 I think, Philip, that might be a good place to kind of wrap it up.
+
+00:53:45 Before I let you go, let me ask you two final questions I always ask the guests.
+
+00:53:48 Great.
+
+00:53:49 First of all, what's your favorite editor?
+
+00:53:52 Oh, starting religious wars here.
+
+00:53:55 I've used Vim.
+
+00:53:56 Hey, there's no judgments passed.
+
+00:53:58 No judgments passed.
+
+00:53:59 No judgments passed.
+
+00:54:00 So I started as an Emacs user in college for about a year or two.
+
+00:54:06 But then I saw the light and switched over to Vim a few years ago.
+
+00:54:10 So I've been using Vim for, I don't know, the past decade or so.
+
+00:54:15 And I don't have any good reason for doing it beyond just muscle memory.
+
+00:54:18 So I am not dogmatic about text headers.
+
+00:54:21 I just think you should pick one that you work well in and just get really good at it, whatever it might be.
+
+00:54:26 Yeah.
+
+00:54:27 Learn the hot keys.
+
+00:54:27 Really just become comfortable.
+
+00:54:29 That's important.
+
+00:54:30 So the other question is, there's a ton of stuff out on the Python package index.
+
+00:54:36 You got any notable favorites out there?
+
+00:54:38 Things people should know about?
+
+00:54:41 I think that one of the really useful Python packages is more of a meta package.
+
+00:54:47 So I think it's called this company called Enthought, which started as kind of a scientific Python company.
+
+00:54:54 They make some packages.
+
+00:54:55 There's one called Enthought Canopy.
+
+00:54:58 And then there's another one.
+
+00:54:59 I don't know which company does it, but it's called Anaconda.
+
+00:55:02 I think it might be Continuum or Enthought.
+
+00:55:03 But look up Canopy, C-A-N-O-P-Y, and Anaconda.
+
+00:55:08 And those are really all-in-one meta packages for just installing 100 or so Python packages and a nice one-click installer that contain...
+
+00:55:19 Mostly it's meant for scientific programming.
+
+00:55:21 So it has things like the IPython notebook and NumPy, SciPy, Matplotlib, all the scientific packages.
+
+00:55:27 But also just a lot of stuff for data science, for data processing analysis.
+
+00:55:33 The reason why I suggest those is, especially for beginners, is because they have a one-click installer for Mac, Windows, and Linux, I think.
+
+00:55:41 Because one of the annoying things about starting up with any kind of new language is just having to install extra packages.
+
+00:55:48 So for people who are a bit more savvy, they can use PyPy, Easy Install, PIP, those things.
+
+00:55:53 But sometimes they get annoying because you try to install it and it says, oh, some dependency is not found.
+
+00:55:57 Or your operating system doesn't have this compiler and stuff.
+
+00:56:00 Vars.bat not found.
+
+00:56:02 Exactly.
+
+00:56:03 Especially on Windows, right?
+
+00:56:05 Especially on Windows, development is hard.
+
+00:56:07 So the one-click installers, Canopy, Anaconda, they have a company backing them.
+
+00:56:11 I think there's free versions.
+
+00:56:13 And I just want to get past that headache and just get to the programming.
+
+00:56:16 Yeah, especially if you're doing data science and you're doing it on Windows, I definitely second that.
+
+00:56:22 Because it is super hard to get some of those things to compile over there.
+
+00:56:24 Yeah.
+
+00:56:25 And people have been talking in Python user groups and on keynotes at PyCon about how if you want to improve Python exposure, we need a better store on Windows.
+
+00:56:36 Because the current store on Windows, it's pretty hard to get going.
+
+00:56:40 But these one-click package installers are going to help.
+
+00:56:44 And I'm hoping in the future, as web and cloud stuff get better, more of this stuff could be hosted in the cloud.
+
+00:56:49 So imagine a web-based Python cloud service where the web IDs are so good.
+
+00:56:55 I mean, I bet some companies are already starting to do this.
+
+00:56:57 You can just have a web-based ID for Python, which is really responsive.
+
+00:57:01 And all your stuff just runs in the cloud.
+
+00:57:02 It has every single thousands of libraries available.
+
+00:57:05 You don't even have to worry about installing.
+
+00:57:07 You just import whatever you want and everything works.
+
+00:57:09 I think that's the dream.
+
+00:57:11 Yeah, that's definitely a cool dream.
+
+00:57:12 There's a company called Python Anywhere on anywhere.com.
+
+00:57:16 And they're started down that path.
+
+00:57:19 It's not quite that far, but it is a pretty cool thing.
+
+00:57:22 It's free for people to try.
+
+00:57:23 That's pretty cool.
+
+00:57:24 All right.
+
+00:57:25 So, Philip, awesome conversation.
+
+00:57:26 Thank you so much for being on the show.
+
+00:57:28 Is there anything that you would like to talk about or tell people about that I forgot?
+
+00:57:32 A final call to action?
+
+00:57:33 Final call to action.
+
+00:57:35 Wow, this is a high pressure here.
+
+00:57:37 I think, I mean, I would say the call to action would be to find – actually, here's a good call to action.
+
+00:57:47 A call to action is to go on YouTube and watch some of the videos that people have put up, especially talk.
+
+00:57:56 So, PyCon, which is the main Python conference, has some great keynote talks or just amazing.
+
+00:58:01 They're really good about putting up talks publicly.
+
+00:58:04 I mean, they have hundreds of talks on all sorts of topics, and they're well-produced, too.
+
+00:58:09 Like, PyCon and also the affiliates in different countries.
+
+00:58:13 A lot of times what I do is I just listen in the background if I'm working or I'm doing errands.
+
+00:58:17 Both the keynotes, which are more high-level, here's where Python is going, and also very detailed things.
+
+00:58:25 Like, if I want to learn about networking in Python, I want to learn about data science in Python.
+
+00:58:29 I think those videos are amazing.
+
+00:58:31 There are so many of them.
+
+00:58:32 I mean, it's just like thousands of them.
+
+00:58:34 I totally second that.
+
+00:58:36 That's a really good suggestion.
+
+00:58:37 And on a more focused level for this conversation, I really recommend people go and watch your 10-hour code walk through the CPython code base.
+
+00:58:47 You will absolutely learn something no matter what your experience level is.
+
+00:58:51 It's very cool.
+
+00:58:52 So, check that out.
+
+00:58:53 Great.
+
+00:58:53 Well, thank you very much for promoting that.
+
+00:58:56 And I'm really glad I made this video.
+
+00:58:58 So, I guess the final tidbit you want to include in the outtakes is that I didn't plan on producing those videos.
+
+00:59:06 I mean, those are just part of my class.
+
+00:59:08 And the great decision I made was I just turned on the screen recording capture.
+
+00:59:13 And I have a Microsoft Surface tablet.
+
+00:59:16 And that allows me to do a lot of the drawings and the more interactive things.
+
+00:59:20 But really, what you're hearing is exactly what I gave in those, I think, 10 lectures or so.
+
+00:59:25 That's exactly what the lectures were.
+
+00:59:27 I did some light editing.
+
+00:59:29 You know, in the beginning, you know, people were setting up in class.
+
+00:59:31 And I did some light editing.
+
+00:59:32 But if you notice, the audio quality isn't amazing.
+
+00:59:34 That's the one downside because I didn't have a nice mic.
+
+00:59:37 I just basically was teaching in front of the class.
+
+00:59:40 But I feel like maybe another call to action is for people, if you're giving a lecture or giving a talk about something, just record it and put it online.
+
+00:59:49 You know, the quality doesn't have to be amazing.
+
+00:59:52 But just like the CPython walkthrough, it wasn't like I pre-planned to, like, go to a studio and, like, spend $10,000 making some high-quality production.
+
+01:00:01 I just recorded this as part of my class.
+
+01:00:03 And, you know, I set a disclaimer.
+
+01:00:04 This is kind of rough.
+
+01:00:05 You know, some parts are, you know, I'm stuttering or I'm kind of backtracking or there are mistakes.
+
+01:00:10 But it's great to have the resources out there.
+
+01:00:12 And something like Khan Academy, which is really famous now with Sal Khan, making these very simple sketches explaining basic math and arithmetic.
+
+01:00:21 That's exactly how he started.
+
+01:00:23 He just was tutoring his cousins.
+
+01:00:24 And he had a pen tablet and he just recorded videos.
+
+01:00:27 And he didn't care that they were kind of very impromptu.
+
+01:00:31 In a way, people really liked that because it seemed really genuine.
+
+01:00:33 It wasn't just some, you know, million-dollar production in a studio somewhere.
+
+01:00:38 So I'm glad I put those up.
+
+01:00:39 And the cool thing is I didn't actually take much work.
+
+01:00:42 I just recorded it and did some light editing.
+
+01:00:44 I probably won't do as much editing as you'll do on this podcast.
+
+01:00:49 But, you know, and they're up and people happen to like them.
+
+01:00:54 So I'm glad that I did that.
+
+01:00:55 Yeah, I think it's a great contribution to the community.
+
+01:00:57 So thanks for doing it and thanks for being on my show.
+
+01:01:00 Great.
+
+01:01:01 Thank you very much.
+
+01:01:02 Yeah.
+
+01:01:03 See you later.
+
+01:01:03 This has been another episode of Talk Python to Me.
+
+01:01:08 Today's guest was Philip Guau.
+
+01:01:09 And this episode has been brought to you by Hired and CodeChip.
+
+01:01:12 Thank you guys for supporting the show.
+
+01:01:14 Hired wants to help you find your next big thing.
+
+01:01:18 Visit Hired.com slash Talk Python to Me to get five or more offers with salary and equity
+
+01:01:24 presented right up front and a special listener signing bonus of $4,000.
+
+01:01:28 Check out CodeChip at CodeChip.com and thank them on Twitter via at CodeChip.
+
+01:01:33 Don't forget the discount code for listeners.
+
+01:01:35 It's easy.
+
+01:01:36 Talk Python.
+
+01:01:37 No caps.
+
+01:01:38 No spaces.
+
+01:01:38 You can find the link from today's show at talkpython.fm/episodes slash show slash
+
+01:01:46 22.
+
+01:01:46 And while you're there, be sure to subscribe to the show.
+
+01:01:49 Open your favorite podcatcher and search for Python.
+
+01:01:51 We should be right at the top.
+
+01:01:53 You'll find the iTunes and direct RSS feed links in the footer of the website.
+
+01:01:57 Our music is Developers, Developers, Developers by Corey Smith, who goes by Smix.
+
+01:02:03 You should check out the entire song on our website at talkpython.com.
+
+01:02:06 This is your host, Michael Kennedy.
+
+01:02:09 Thanks again for listening.
+
+01:02:10 Smix takes out of here.
+
+01:02:12 Outro Music.
+

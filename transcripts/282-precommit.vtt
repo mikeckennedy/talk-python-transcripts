@@ -1,0 +1,3182 @@
+WEBVTT
+
+00:00:00.001 --> 00:00:04.680
+Git hook scripts are useful for identifying simple issues before committing your code.
+
+00:00:04.680 --> 00:00:08.800
+Hooks run on every commit to automatically point out issues in your code,
+
+00:00:08.800 --> 00:00:11.200
+such as trailing white space and debug statements.
+
+00:00:11.200 --> 00:00:14.360
+By pointing out these issues before you get to a code review,
+
+00:00:14.360 --> 00:00:18.220
+this allows the code reviewer to focus on the architecture of a change
+
+00:00:18.220 --> 00:00:21.380
+while not wasting time with trivial style nitpicks.
+
+00:00:21.380 --> 00:00:24.380
+As we create more libraries and projects,
+
+00:00:24.380 --> 00:00:28.740
+we recognize that sharing pre-commit hooks across projects is painful.
+
+00:00:29.420 --> 00:00:33.920
+That's why I'm happy to welcome Anthony Sotili to the show to discuss pre-commit,
+
+00:00:33.920 --> 00:00:38.160
+a framework for managing and maintaining multi-language pre-commit hooks.
+
+00:00:38.160 --> 00:00:43.600
+This is Talk Python to Me, episode 282, recorded July 1st, 2020.
+
+00:00:57.080 --> 00:01:03.360
+Welcome to Talk Python to Me, a weekly podcast on Python, the language, the libraries, the ecosystem, and the personalities.
+
+00:01:03.360 --> 00:01:05.300
+This is your host, Michael Kennedy.
+
+00:01:05.300 --> 00:01:07.440
+Follow me on Twitter where I'm @mkennedy.
+
+00:01:07.440 --> 00:01:11.200
+Keep up with the show and listen to past episodes at talkpython.fm.
+
+00:01:11.200 --> 00:01:13.680
+And follow the show on Twitter via at Talk Python.
+
+00:01:13.680 --> 00:01:17.140
+This episode is brought to you by Brilliant.org and us.
+
+00:01:18.260 --> 00:01:22.000
+Python's async and parallel programming support is highly underrated.
+
+00:01:22.000 --> 00:01:29.400
+Have you shied away from the amazing new async and await keywords because you've heard it's way too complicated or that it's just not worth the effort?
+
+00:01:29.400 --> 00:01:35.000
+With the right workloads, a hundred times speed up is totally possible with minor changes to your code.
+
+00:01:35.400 --> 00:01:37.440
+But you do need to understand the internals.
+
+00:01:37.440 --> 00:01:45.640
+And that's why our course, Async Techniques and Examples in Python, show you how to write async code successfully as well as how it works.
+
+00:01:45.640 --> 00:01:51.540
+Get started with async and await today with our course at talkpython.fm/async.
+
+00:01:51.540 --> 00:01:54.040
+Anthony, welcome to Talk Python to Me.
+
+00:01:54.040 --> 00:01:55.300
+Yeah, glad to be here.
+
+00:01:55.300 --> 00:01:56.540
+It's great to have you here.
+
+00:01:56.940 --> 00:02:00.800
+You and I have been on together on Python Bytes along with Brian.
+
+00:02:00.800 --> 00:02:04.060
+We had you over there once, I believe, but never on Talk Python.
+
+00:02:04.060 --> 00:02:05.120
+So welcome to the show.
+
+00:02:05.120 --> 00:02:06.660
+Really happy to have you around.
+
+00:02:06.660 --> 00:02:09.520
+And you have this cool project that we're going to talk about.
+
+00:02:09.520 --> 00:02:12.460
+And it's kind of like the old thing is new again, right?
+
+00:02:12.460 --> 00:02:17.080
+It's been around for a little while, but it's some of the other stuff that seems to have boosted its popularity.
+
+00:02:17.080 --> 00:02:23.020
+And to me, it seems like a fantastic idea with pre-commit hooks and a framework for running them and building them.
+
+00:02:23.020 --> 00:02:24.500
+So I'm excited to dig into it with you.
+
+00:02:24.500 --> 00:02:25.220
+Sounds great.
+
+00:02:25.220 --> 00:02:26.200
+Happy to talk about it.
+
+00:02:26.200 --> 00:02:26.720
+Yeah.
+
+00:02:27.180 --> 00:02:28.760
+Before we do, though, let's get to your story.
+
+00:02:28.760 --> 00:02:29.960
+How did you get into programming in Python?
+
+00:02:29.960 --> 00:02:35.820
+My first Python programming was actually at Yelp, where I worked as a software engineer.
+
+00:02:35.820 --> 00:02:40.660
+I was hired as a front-end developer and mostly did CSS and JavaScript.
+
+00:02:40.660 --> 00:02:52.000
+But quickly realized that in order to unblock my own job, it made a lot more sense for me to learn the back-end and write my own APIs instead of waiting for a back-end engineer to implement the same APIs.
+
+00:02:52.000 --> 00:02:56.340
+So I picked up a bunch of Python and made my job a lot easier in that way.
+
+00:02:56.360 --> 00:02:56.900
+Nice.
+
+00:02:56.900 --> 00:02:57.900
+What did you use on the back-end?
+
+00:02:57.900 --> 00:03:00.060
+Was that Flask, Django, something else?
+
+00:03:00.560 --> 00:03:06.520
+So unfortunately, Yelp was created before there were a lot of these larger frameworks.
+
+00:03:06.520 --> 00:03:10.020
+And so Yelp had kind of their own homegrown framework.
+
+00:03:10.020 --> 00:03:15.500
+I eventually shifted from front-end to full-stack to back-end to infrastructure.
+
+00:03:15.500 --> 00:03:22.400
+And part of the infrastructure work that we did there was to move the monolithic code base to be based on Pyramid.
+
+00:03:22.620 --> 00:03:25.540
+So kind of like the Pyramid pylon sort of approach.
+
+00:03:25.540 --> 00:03:37.680
+And it was actually really nice because we could basically cut out parts of the proprietary Yelp main code and stick in bits of Pyramid so that we could offload some of the logic to open source software.
+
+00:03:37.680 --> 00:03:38.520
+Oh, nice.
+
+00:03:38.520 --> 00:03:39.280
+Yeah, that's really cool.
+
+00:03:39.280 --> 00:03:40.900
+Most of my sites are built in Pyramid as well.
+
+00:03:40.900 --> 00:03:41.560
+I like that framework.
+
+00:03:41.740 --> 00:03:43.340
+It gives you a ton of customization.
+
+00:03:43.340 --> 00:03:46.120
+It's a little bit daunting to start with like small projects.
+
+00:03:46.120 --> 00:03:48.020
+I usually prefer to use like Flask or whatever.
+
+00:03:48.020 --> 00:03:48.520
+Yeah.
+
+00:03:48.520 --> 00:03:50.240
+But it definitely lets you do everything.
+
+00:03:50.240 --> 00:03:50.640
+Yeah.
+
+00:03:50.640 --> 00:03:55.300
+Well, if I'm looking at new things that look really sweet, FastAPI is looking sweet.
+
+00:03:55.300 --> 00:03:56.380
+Yeah, I've heard some good things.
+
+00:03:56.440 --> 00:03:57.980
+I haven't had a chance to try it out yet, though.
+
+00:03:57.980 --> 00:04:06.000
+You know what I really like about it is you can define models, classes in Pydantic, and then say your view method takes one of those models.
+
+00:04:06.000 --> 00:04:16.040
+If you do get receiving like a JSON post and it'll do validated pre-population of all the fields using the Pydantic validation, which I'm just like, oh, that's just saved me like two thirds of my whole app right now.
+
+00:04:16.040 --> 00:04:16.460
+That's awesome.
+
+00:04:16.460 --> 00:04:17.420
+Yeah, that's pretty good.
+
+00:04:17.420 --> 00:04:20.120
+Yeah, I feel like I spend most of my time in validation, input validation.
+
+00:04:20.120 --> 00:04:21.340
+So if it's...
+
+00:04:21.340 --> 00:04:21.380
+Exactly.
+
+00:04:21.380 --> 00:04:22.320
+Or converting.
+
+00:04:22.320 --> 00:04:25.620
+I know it's a string, but then we're going to cast it to an int if it can be casted to an int.
+
+00:04:25.620 --> 00:04:26.320
+All that kind of stuff.
+
+00:04:26.320 --> 00:04:27.540
+Like, yeah, it's all built in.
+
+00:04:27.540 --> 00:04:32.120
+So anyway, if I go build some new APIs, that's not just part of the main app.
+
+00:04:32.120 --> 00:04:34.940
+I probably would do some FastAPI stuff, but that's pretty new.
+
+00:04:34.940 --> 00:04:36.260
+It's only been around a year and a half.
+
+00:04:36.260 --> 00:04:36.580
+Nice.
+
+00:04:36.580 --> 00:04:37.260
+Awesome.
+
+00:04:37.260 --> 00:04:45.840
+So you moved from the front end stuff over to the back end at Yelp, and it sounds like you got to do some really cool transformation, sort of empowering things there.
+
+00:04:45.840 --> 00:04:46.880
+What are you doing now?
+
+00:04:46.880 --> 00:04:55.900
+Well, technically, I'm currently unemployed, but my current passion is developer tooling and kind of infrastructure in that space.
+
+00:04:55.900 --> 00:05:04.200
+I was recently at Lyft where I led the developer experience organization and, you know, building tools and infrastructure that make developers productive.
+
+00:05:04.580 --> 00:05:14.220
+The idea being like, I can invest some in tooling and give that to all developers and then they can get their jobs done faster and better and safer and etc.
+
+00:05:14.220 --> 00:05:14.760
+Yeah.
+
+00:05:14.760 --> 00:05:15.100
+Awesome.
+
+00:05:15.100 --> 00:05:16.980
+Are you looking for that consulting stuff?
+
+00:05:16.980 --> 00:05:19.880
+People are out there or are you got plans already?
+
+00:05:20.260 --> 00:05:24.940
+So right now, right now I'm trying to build my own project and see where it goes.
+
+00:05:24.940 --> 00:05:28.180
+But I've kind of time boxed myself to like six to nine months.
+
+00:05:28.180 --> 00:05:33.340
+And if it doesn't turn out well, when it doesn't turn out, I'll be looking for new employment after that.
+
+00:05:33.340 --> 00:05:34.460
+It might turn out.
+
+00:05:34.460 --> 00:05:35.100
+It might turn out.
+
+00:05:35.100 --> 00:05:35.980
+You're a good programmer.
+
+00:05:35.980 --> 00:05:36.660
+I know you can do it.
+
+00:05:36.660 --> 00:05:37.120
+Awesome.
+
+00:05:37.120 --> 00:05:38.100
+There's always a chance.
+
+00:05:38.100 --> 00:05:39.200
+Yeah, for sure.
+
+00:05:39.200 --> 00:05:40.180
+You got to give it a shot.
+
+00:05:40.180 --> 00:05:40.580
+That's awesome.
+
+00:05:40.940 --> 00:05:43.780
+Well, let's talk about this project that you've been working on for a while.
+
+00:05:43.780 --> 00:05:55.180
+But like I said, has gotten a little bit of traction, a lot of traction lately because of tools like Black and other things that have made pre-commit hooks awesome and exciting all of a sudden.
+
+00:05:55.180 --> 00:06:00.200
+But before we talk about what you've been doing, let's just talk about the idea of pre-commit hooks in general.
+
+00:06:00.200 --> 00:06:00.560
+Sure.
+
+00:06:00.560 --> 00:06:04.300
+What is this for a lot of people who are like, yeah, I kind of know what Git is.
+
+00:06:04.300 --> 00:06:10.240
+I kind of use that or maybe have even used like zip as a zip and name of a date as a source control.
+
+00:06:10.240 --> 00:06:12.400
+Final one, one, one.
+
+00:06:12.400 --> 00:06:20.640
+But yeah, the idea behind Git hooks and specifically the pre-commit hook, because I think that's probably the one that most people get the most interaction with.
+
+00:06:20.640 --> 00:06:33.560
+But there are a bunch of commands in Git where you can register callbacks as scripts to either do like validation or like seeing some people use it to like send emails or like close tickets, all sorts of other stuff.
+
+00:06:33.760 --> 00:06:43.000
+The main focus around Git hooks to me is the pre-commit hook where you can do like linting and code validation, code formatting.
+
+00:06:43.000 --> 00:06:45.640
+You can run tests or other stuff like that.
+
+00:06:45.640 --> 00:06:54.500
+I guess the pre-push hook is another one that's also kind of big in that same space where you want to do validation of your changes before you send them off to like a...
+
+00:06:54.500 --> 00:07:03.740
+Right. So you could like maybe reject some kind of reject the Git push if the formatting is wrong or the header is missing or something like that, right?
+
+00:07:03.740 --> 00:07:18.980
+Yep. You can take a lot of those like easy to validate things and do them in a kind of a quick fast manner before you would do your larger test suite or something or catch a syntax error before you spend a bunch of time spinning up your CI systems.
+
+00:07:18.980 --> 00:07:26.920
+Right. Well, speaking of CI, to me, this seems like the next natural progression from having CI do these tests, right?
+
+00:07:27.560 --> 00:07:33.780
+So there's different levels. The developer should probably be writing and running tests and making sure that the tests pass.
+
+00:07:33.780 --> 00:07:37.280
+They should be like formatting their code before they check it in and stuff like that.
+
+00:07:37.280 --> 00:07:47.660
+But when you work on a team, my experience has been there's a wide, wide range of how much people are willing to do that, how much they care about those kinds of things.
+
+00:07:48.060 --> 00:07:55.120
+And what that means is maybe you have CI continuous integration that runs automatically during check-in or once check-in is done.
+
+00:07:55.120 --> 00:08:03.260
+And so then they might check in something and might say, oh, the build is now broken because you didn't bother to run the test, but you broke the test.
+
+00:08:03.260 --> 00:08:05.260
+But because you didn't run them, you didn't know it.
+
+00:08:05.260 --> 00:08:07.780
+So, you know, a tree falls in a forest. No one hears it, right?
+
+00:08:07.780 --> 00:08:10.180
+That sort of thing.
+
+00:08:10.660 --> 00:08:17.060
+And so then you end up in the situation, the people that care about the build working have to track down the person who broke it, who didn't actually care.
+
+00:08:17.060 --> 00:08:19.760
+Like, it's just these layers of like annoying type of thing.
+
+00:08:19.760 --> 00:08:20.240
+Yeah.
+
+00:08:20.240 --> 00:08:26.560
+And if you can make the sort of push that validation to the location where the person is and all the people, right?
+
+00:08:26.560 --> 00:08:32.320
+So even if you care, like you might not want to break the build, you might rather just get a warning or just automatically have it fixed.
+
+00:08:32.320 --> 00:08:35.260
+And pre-commit hooks seem like that's the natural place for that.
+
+00:08:35.580 --> 00:08:49.640
+Yeah. Kind of the mentality that I always had is like, if I'm waiting till CI to get feedback on like nitpicks around commas or white space or syntax or whatever, that to me is way too late in the process.
+
+00:08:49.640 --> 00:08:53.360
+Because I've already like, you know, I've pushed, I've already gone off to the next thing.
+
+00:08:53.360 --> 00:08:59.040
+I'm already answering my email or looking at GitHub issues or talking in Slack or whatever.
+
+00:08:59.040 --> 00:09:02.340
+And like, I've already context switched to a completely different situation.
+
+00:09:02.500 --> 00:09:07.180
+I'm like, I could have been, I assumed it was good because I already committed and pushed, right?
+
+00:09:07.180 --> 00:09:08.360
+I never make mistakes.
+
+00:09:08.360 --> 00:09:09.440
+So yeah, exactly.
+
+00:09:09.440 --> 00:09:10.660
+Zero fault code.
+
+00:09:10.660 --> 00:09:12.980
+Git push is like the final action.
+
+00:09:12.980 --> 00:09:14.200
+Now you're done, right?
+
+00:09:14.200 --> 00:09:15.540
+Yeah.
+
+00:09:15.540 --> 00:09:26.240
+But like, it was incredibly frustrating to like make a push and then have some either build system telling me that something was wrong or in code review, someone was like, oh, well, you could have reordered these imports.
+
+00:09:26.240 --> 00:09:27.840
+So they're alphabetical or something.
+
+00:09:27.980 --> 00:09:30.480
+It's just like, yeah, this is a big waste of time.
+
+00:09:30.480 --> 00:09:36.600
+Let's kind of push this as far towards the developer as possible such that we can make that a better, a better situation.
+
+00:09:36.600 --> 00:09:47.920
+The other thing I think is interesting around these ideas is there's been studies that have shown that people are more willing to take nitpicky advice from a computer than from a human.
+
+00:09:47.920 --> 00:09:55.640
+There's like, oh, okay, well, the computer requires that I have this kind of white space or this kind of indentation or like this type of fort, like you said, order alphabetical ordering or whatever.
+
+00:09:56.120 --> 00:10:00.300
+And when it comes from a person in a code review, it's like, well, that person is just a jerk, right?
+
+00:10:00.300 --> 00:10:01.180
+I wrote good code.
+
+00:10:01.180 --> 00:10:03.560
+Here I am taking this flack for this thing.
+
+00:10:03.560 --> 00:10:09.980
+So having this happen like automatically, I think takes away the need to review that kind of stuff.
+
+00:10:09.980 --> 00:10:14.180
+It takes away the need to complain and be that grumpy person that does that.
+
+00:10:14.180 --> 00:10:18.140
+And you can even go farther with tools like Black, where it doesn't just complain.
+
+00:10:18.140 --> 00:10:19.940
+It just goes, I fixed it for you.
+
+00:10:20.180 --> 00:10:26.800
+Yeah, actually, the way that I usually talk about this is like the absolute, the worst situation is that a human tells you that something is wrong.
+
+00:10:26.800 --> 00:10:30.820
+The next worst situation is that like a CI system tells you that something's wrong.
+
+00:10:30.820 --> 00:10:35.180
+Better than that is that an automated local tool tells you that something is wrong.
+
+00:10:35.180 --> 00:10:39.220
+And the like golden standard is that an automated tool just fixes it for me.
+
+00:10:39.220 --> 00:10:41.160
+Like I don't, don't have to worry about it all.
+
+00:10:41.160 --> 00:10:42.280
+It just makes it happen.
+
+00:10:42.280 --> 00:10:42.920
+Yeah.
+
+00:10:42.920 --> 00:10:49.060
+And it also results, you don't have this sort of like dueling alternate format style, right?
+
+00:10:49.060 --> 00:11:01.160
+Like if I like to work in PyCharm, you like to work in VS Code and our formatting rules vary ever so slightly, you know, like commas between parameters or there are two spaces between the colon on a type annotation.
+
+00:11:01.160 --> 00:11:04.960
+You know, if we both keep reformatting document, they cycle back and forth.
+
+00:11:04.960 --> 00:11:05.220
+Right.
+
+00:11:05.220 --> 00:11:09.300
+And this way you can sort of just hit it with the same formatter right before it goes every time.
+
+00:11:09.300 --> 00:11:09.900
+Of course.
+
+00:11:09.900 --> 00:11:10.140
+Yeah.
+
+00:11:10.140 --> 00:11:15.100
+And that also helps with things like get blame or like noticing when patches are minimal or whatever.
+
+00:11:15.440 --> 00:11:23.540
+And like being able to triage a change way down the road, not be distracted by two different editors reformatting in a different way.
+
+00:11:26.140 --> 00:11:29.240
+This portion of Talk Python to Me is brought to you by Brilliant.org.
+
+00:11:29.240 --> 00:11:36.880
+Brilliant has digestible courses in topics from the basics of scientific thinking all the way up to high-end science like quantum computing.
+
+00:11:36.880 --> 00:11:42.700
+And while quantum computing may sound complicated, Brilliant makes complex learning uncomplicated and fun.
+
+00:11:42.700 --> 00:11:46.840
+It's super easy to get started and they've got so many science and math courses to choose from.
+
+00:11:47.060 --> 00:11:51.860
+I recently used Brilliant to get into rocket science for an upcoming episode and it was a blast.
+
+00:11:51.860 --> 00:11:59.260
+The interactive courses are presented in a clean and accessible way and you could go from knowing nothing about a topic to having a deep understanding.
+
+00:11:59.260 --> 00:12:03.800
+Put your spare time to good use and hugely improve your critical thinking skills.
+
+00:12:03.800 --> 00:12:07.240
+Go to talkpython.fm/brilliant and sign up for free.
+
+00:12:07.240 --> 00:12:11.800
+The first 200 people that use that link get 20% off the premium subscription.
+
+00:12:12.280 --> 00:12:17.100
+That's talkpython.fm/brilliant or just click the link in the show notes.
+
+00:12:17.100 --> 00:12:28.820
+So that brings us to your project, pre-commit.com, which to me, I thought this was kind of something new because I hadn't heard of it before.
+
+00:12:28.820 --> 00:12:37.780
+And I feel like with all the excitement around Black being one of these auto-formatters that we just discussed, some of the other tooling around get pre-commit hooks,
+
+00:12:38.120 --> 00:12:44.120
+that this was like this big new thing, but we were talking and you told me it's been around for a little while and it's just gaining a lot of momentum now.
+
+00:12:44.120 --> 00:12:44.620
+Yeah.
+
+00:12:44.620 --> 00:12:57.940
+The original project actually came out of my want to enforce my partners in group projects in college to make sure that their white space was nice and that formatting was good.
+
+00:12:57.940 --> 00:13:04.760
+But it was originally just like a several hundred line Python script pre-commit.py way back in 2012.
+
+00:13:04.760 --> 00:13:13.500
+The first public version of pre-commit, I believe, was May of 2014, which means that it just turned six years old a little while ago.
+
+00:13:13.720 --> 00:13:19.840
+And for the most part, the framework's idea has remained basically the same since the beginning.
+
+00:13:19.840 --> 00:13:26.360
+Most of what's happened since 2014 has been a lot of bug fixes, a lot more platform support.
+
+00:13:26.360 --> 00:13:34.960
+So like making things work well on Windows and other exotic platforms like macOS, which is basically the Wild West, right?
+
+00:13:34.960 --> 00:13:35.820
+These uncommon.
+
+00:13:35.820 --> 00:13:37.200
+Yeah, exactly.
+
+00:13:37.200 --> 00:13:38.140
+Exactly.
+
+00:13:38.540 --> 00:13:40.860
+But also like support for other programming languages.
+
+00:13:40.860 --> 00:13:45.940
+So even though pre-commit is written in Python, it aims to target a bunch of different programming languages.
+
+00:13:45.940 --> 00:13:55.840
+It can both lint and run tools in, I think it's like nine or 10 or 11 different programming languages now and continues to support more going forward.
+
+00:13:55.840 --> 00:13:58.420
+It's pretty easy to add support for another language.
+
+00:13:58.420 --> 00:13:59.420
+Yeah, very cool.
+
+00:13:59.420 --> 00:14:07.760
+So the idea is this is a framework for creating pre-commit hooks and some tooling to install and initialize some of the various plugins.
+
+00:14:08.060 --> 00:14:20.560
+And one of the things that's like you just covered is pretty unique to it, I think, is that it happens to be implemented in Python, but it'll let you both install linters that require different runtimes like Ruby or Java.
+
+00:14:20.560 --> 00:14:21.520
+I'm not sure about Java.
+
+00:14:21.520 --> 00:14:22.460
+I don't remember.
+
+00:14:22.460 --> 00:14:25.060
+It doesn't quite have Java support yet, but it's in the works.
+
+00:14:25.060 --> 00:14:30.480
+But the cool thing about it is that it aims to make it so you don't have to set up anything locally.
+
+00:14:30.740 --> 00:14:38.080
+You just install pre-commit, you have a configuration file, and it manages installing and running all those tools for you.
+
+00:14:38.080 --> 00:14:53.380
+So you don't have to worry about, like as a sysadmin, you don't have to worry about distributing Ruby to your machines or like installing some weird Node.js package on your system or like maintaining the version of that or updating and downgrading or whatever you need to do with that.
+
+00:14:53.820 --> 00:14:56.660
+And like pre-commit will just install those tools for you.
+
+00:14:56.660 --> 00:14:57.080
+Right.
+
+00:14:57.080 --> 00:15:02.520
+And there's a lot of tools that we may care about, even if we're just Python developers that are not in Python.
+
+00:15:02.520 --> 00:15:11.760
+For example, we might be creating a Pyramid web app that has a SCSS, like a less SAS type of programming language for CSS.
+
+00:15:12.060 --> 00:15:16.400
+There's a nice linter in Ruby, but we got to have Ruby in order to do that, right?
+
+00:15:16.400 --> 00:15:16.800
+Yeah.
+
+00:15:16.800 --> 00:15:24.300
+Unfortunately, pre-commit makes setting up SCSS lint in particular, if that's the one you're referring to, makes that pretty easy to set up and go.
+
+00:15:24.300 --> 00:15:34.200
+You just add a little configuration and it will set up a Ruby environment, even if you don't have Ruby installed on your machine, and install SCSS lint and make that easy to go.
+
+00:15:34.200 --> 00:15:35.040
+That's pretty cool.
+
+00:15:35.040 --> 00:15:47.720
+The weird thing about SCSS lint, though, is it's kind of stopped development as SCSS has moved from either the Ruby implementation to the C++ implementation or the Dart implementation.
+
+00:15:47.720 --> 00:15:55.840
+And there are actually linters for SCSS in JavaScript as well, which is another popular programming language that pre-commit supports.
+
+00:15:55.840 --> 00:15:58.560
+And a lot of people have been moving to those other ones as well.
+
+00:15:58.560 --> 00:16:02.240
+But again, like pre-commit will just install that and make that easy to run for you.
+
+00:16:02.240 --> 00:16:12.660
+So how's that work? Talk me through the, I don't have Ruby on my machine. I want to run some tool as a pre-commit hook that needs the Ruby runtime. Where's the magic?
+
+00:16:12.660 --> 00:16:21.280
+Yeah, so I actually think that's probably the biggest selling point of pre-commit is all of the language smarts where it knows how to install and run things.
+
+00:16:21.280 --> 00:16:27.440
+But let's talk about SCSS lint specifically. So what you would do is you would install pre-commit on your machine.
+
+00:16:27.960 --> 00:16:31.400
+And there's directions in like the quick start guide on pre-commit.com.
+
+00:16:31.400 --> 00:16:38.100
+You would set up a configuration file, a small YAML file, which points at some repositories which provide hooks.
+
+00:16:38.100 --> 00:16:43.660
+In this case for SCSS lint, I believe it's pre-commit slash mirrors SCSS lint.
+
+00:16:43.660 --> 00:16:52.420
+There are some repositories where we have to mirror them because the upstreams are either dead or, or like, don't want to add a small bit of metadata to their repository.
+
+00:16:52.820 --> 00:16:59.420
+And once you have the configuration file, you can run pre-commit run or pre-commit install to make it part of your Git hooks.
+
+00:16:59.420 --> 00:17:07.060
+And pre-commit run will, in the case of Ruby, it uses several different approaches to try to set up a Ruby environment.
+
+00:17:07.060 --> 00:17:15.380
+So the first thing it'll attempt is if you already have Ruby installed, it'll just kind of skip all of the environment setup and it'll just reuse the Ruby that you have.
+
+00:17:15.380 --> 00:17:19.120
+But it'll install SCSS lint in an isolated fashion.
+
+00:17:19.120 --> 00:17:22.420
+So it tries to stay away from everything else that's running on your system.
+
+00:17:22.420 --> 00:17:26.980
+Basically, the idea is like pre-commit provides virtual environments, but for every other program.
+
+00:17:26.980 --> 00:17:27.880
+Right, right.
+
+00:17:27.880 --> 00:17:28.660
+That's cool.
+
+00:17:28.660 --> 00:17:36.760
+And when you don't have Ruby, it will either download it using RVM or RB env, which I love.
+
+00:17:36.760 --> 00:17:38.460
+I love the Ruby tooling landscape.
+
+00:17:38.460 --> 00:17:44.640
+It's like impossible to talk about either of the tools because they both sound the same if you slur your words together like I do sometimes.
+
+00:17:44.640 --> 00:17:45.340
+Yeah.
+
+00:17:45.340 --> 00:17:50.080
+But RVM provides a bunch of pre-built binaries for a bunch of platforms.
+
+00:17:50.080 --> 00:17:52.660
+So it makes it easy to just like download and run Ruby.
+
+00:17:52.660 --> 00:17:58.100
+And R-B-E-N-V, the other tool, makes it really easy to build Ruby from source.
+
+00:17:58.100 --> 00:18:02.240
+And so pre-commit uses both of those tools to provide Ruby environments.
+
+00:18:02.240 --> 00:18:02.800
+I see.
+
+00:18:02.800 --> 00:18:08.100
+So there's this background thing that just, if you don't have the right runtime, it'll go and get it.
+
+00:18:08.100 --> 00:18:09.100
+Yep, it'll make it happen.
+
+00:18:09.100 --> 00:18:09.400
+Yeah.
+
+00:18:09.400 --> 00:18:15.440
+And there's a similar tool called NodeM or JavaScript that pre-commit leans on as well to set up those environments.
+
+00:18:15.440 --> 00:18:21.500
+NodeM is kind of a mesh between the ideas of like PyEnv and VirtualEnv.
+
+00:18:21.500 --> 00:18:31.840
+It actually has some like direct integration with VirtualEnv, but it basically allows you to go from nothing to a working JavaScript environment without having to install anything on your system.
+
+00:18:31.840 --> 00:18:32.300
+Nice.
+
+00:18:32.300 --> 00:18:33.080
+Yeah, yeah.
+
+00:18:33.080 --> 00:18:33.840
+That's super cool.
+
+00:18:33.840 --> 00:18:35.860
+I do think that that's the magic, right?
+
+00:18:35.860 --> 00:18:43.780
+You can use all these different pre-commit hooks without a setup beyond just pip install or pipx install pre-commit.
+
+00:18:43.780 --> 00:18:45.540
+By the way, does pipx make sense?
+
+00:18:45.540 --> 00:18:46.480
+Are you familiar with pipx?
+
+00:18:46.480 --> 00:18:47.760
+Yeah, I'm familiar with pipx.
+
+00:18:47.760 --> 00:18:49.280
+I think it works for pre-commit.
+
+00:18:49.280 --> 00:18:54.660
+I haven't tried it myself, mostly because I manage stuff with virtual environments, but it should work.
+
+00:18:54.660 --> 00:18:55.900
+There's nothing super special about it.
+
+00:18:55.900 --> 00:18:58.040
+Yeah, it seems like it would as well to me.
+
+00:18:58.040 --> 00:18:58.640
+Yeah, yeah.
+
+00:18:58.640 --> 00:19:01.740
+So you install it and then that's all you got to worry about.
+
+00:19:01.760 --> 00:19:05.580
+You don't have to worry about having Ruby or Node or how about even Python?
+
+00:19:05.580 --> 00:19:06.980
+You do need Python.
+
+00:19:06.980 --> 00:19:08.740
+That's the one dependency.
+
+00:19:08.740 --> 00:19:10.760
+Right, because it's implemented in Python, right?
+
+00:19:10.760 --> 00:19:11.340
+Yeah.
+
+00:19:11.340 --> 00:19:14.720
+There's plans to build a, what is it called?
+
+00:19:14.720 --> 00:19:15.580
+Py installer?
+
+00:19:15.580 --> 00:19:16.380
+Is that the one?
+
+00:19:16.380 --> 00:19:16.920
+I don't know.
+
+00:19:16.920 --> 00:19:17.940
+There's a bunch of different tools.
+
+00:19:17.940 --> 00:19:18.840
+Yeah, yeah.
+
+00:19:18.840 --> 00:19:20.720
+Py installer or PyToApp or yeah.
+
+00:19:20.720 --> 00:19:22.480
+Like one of those or CXFreeze.
+
+00:19:22.480 --> 00:19:26.820
+So you've been thinking about potentially like turn it into one of these raw executables?
+
+00:19:27.180 --> 00:19:27.320
+Yeah.
+
+00:19:27.320 --> 00:19:29.980
+Unfortunately, I know almost nothing about them.
+
+00:19:29.980 --> 00:19:32.120
+So I haven't had a chance to look into that.
+
+00:19:32.120 --> 00:19:34.640
+But it should be pretty straightforward to make that happen.
+
+00:19:34.640 --> 00:19:35.460
+Yeah, that'd be cool.
+
+00:19:35.460 --> 00:19:40.560
+But yeah, one other thing before we move on, like I think the two, there's a bunch of these
+
+00:19:40.560 --> 00:19:41.280
+GitHub frameworks.
+
+00:19:41.280 --> 00:19:46.060
+And like, I think pre-emit is pretty unique in this installs the tools for you sort of aspect.
+
+00:19:46.400 --> 00:19:49.800
+I think like a lot of these other frameworks make two main mistakes.
+
+00:19:49.800 --> 00:19:54.700
+One of them is like, well, the first mistake that everyone seems to make is like you check
+
+00:19:54.700 --> 00:19:58.220
+in this 2000 blind bash script and that's how you manage your GitHub.
+
+00:19:58.220 --> 00:20:03.140
+And like anytime someone needs to change that, they've got to dive into this terrible script
+
+00:20:03.140 --> 00:20:07.180
+that always breaks and makes people's workflows really frustrating, which is actually what we
+
+00:20:07.180 --> 00:20:09.600
+had at Yelp before Yelp moved to pre-commit.
+
+00:20:10.240 --> 00:20:13.500
+But the other thing is managing tools.
+
+00:20:13.500 --> 00:20:21.520
+I find that a lot of shops will install these linters globally and their get hooks will assume
+
+00:20:21.520 --> 00:20:23.320
+that they're installed globally.
+
+00:20:23.320 --> 00:20:27.800
+And you instantly have like three different problems from that.
+
+00:20:27.800 --> 00:20:32.420
+One is version drift, both that all of your developers will need to like make sure that
+
+00:20:32.420 --> 00:20:33.560
+they're on a specific version.
+
+00:20:33.900 --> 00:20:36.100
+The other is you need environment setups.
+
+00:20:36.100 --> 00:20:42.140
+You can't just like switch from your laptop to your personal machine or, you know, maybe
+
+00:20:42.140 --> 00:20:44.600
+I'm working on a netbook in a coffee shop or whatever.
+
+00:20:44.600 --> 00:20:48.560
+You would need to make sure that you have your very specific global environment setup.
+
+00:20:48.560 --> 00:20:49.040
+Right.
+
+00:20:49.040 --> 00:20:51.820
+That can always kind of drift and be painful.
+
+00:20:51.820 --> 00:20:59.580
+And the third thing is if tools are managed globally, upgrading is impossible because I have
+
+00:20:59.580 --> 00:21:04.080
+an old version of the code checked out and a new version of linter is now on the machine.
+
+00:21:04.080 --> 00:21:08.760
+And so my code doesn't pass the new linter and the new code doesn't pass the old linter.
+
+00:21:08.760 --> 00:21:12.380
+And like you have this, you kind of have this like lockstep deployment problem.
+
+00:21:12.380 --> 00:21:13.120
+That's really hard.
+
+00:21:13.120 --> 00:21:13.720
+I see.
+
+00:21:13.720 --> 00:21:14.180
+Yeah.
+
+00:21:14.180 --> 00:21:14.540
+Right.
+
+00:21:14.540 --> 00:21:18.340
+And then if you have a global, you have two projects and they're out of sync, then it's
+
+00:21:18.340 --> 00:21:18.840
+even worse.
+
+00:21:18.840 --> 00:21:19.560
+Oh, and yeah.
+
+00:21:19.560 --> 00:21:21.620
+The multi-project problem gets even harder.
+
+00:21:21.620 --> 00:21:23.960
+Like microservices become almost impossible.
+
+00:21:23.960 --> 00:21:24.580
+Right.
+
+00:21:24.580 --> 00:21:29.500
+But the cool thing with pre-commit is the tools are all versioned directly in the configuration
+
+00:21:29.500 --> 00:21:30.000
+file.
+
+00:21:30.000 --> 00:21:34.720
+And so upgrading a linter can be done in one atomic commit to move forward or backward.
+
+00:21:34.720 --> 00:21:38.520
+And so everyone is always at like a consistent state there.
+
+00:21:38.520 --> 00:21:39.040
+Yeah.
+
+00:21:39.040 --> 00:21:42.120
+That's really a good philosophy or good design principle there.
+
+00:21:42.120 --> 00:21:47.240
+So you spoke a little bit about the steps to get going, but maybe just walk us really quickly
+
+00:21:47.240 --> 00:21:52.860
+through a quick start just to what's it like if I've got a machine with no get commit hooks,
+
+00:21:52.860 --> 00:21:58.260
+no pre-commit installed, how do I make my project start doing some of these cool validations?
+
+00:21:58.260 --> 00:21:59.120
+Yeah, sounds good.
+
+00:21:59.120 --> 00:22:02.820
+So there is a quick start guide on pre-commit.com.
+
+00:22:02.820 --> 00:22:06.580
+So all of this stuff that I'm about to say here is pretty easy to, you know, follow the
+
+00:22:06.580 --> 00:22:07.920
+instructions there and get the same thing.
+
+00:22:07.920 --> 00:22:10.040
+But I'm just going to run through it quickly here as well.
+
+00:22:10.040 --> 00:22:13.900
+So the first step is acquiring the pre-commit tool.
+
+00:22:14.440 --> 00:22:16.980
+And you can do this in a number of different ways.
+
+00:22:16.980 --> 00:22:20.460
+Some of the operating system package managers have packaged it.
+
+00:22:20.460 --> 00:22:26.100
+So sometimes you can, you know, apt install or DNF install pre-commit and get it that way.
+
+00:22:26.100 --> 00:22:31.540
+I usually don't suggest that because the operating system package managers are usually like six
+
+00:22:31.540 --> 00:22:34.040
+to eight months behind and you won't get the newest features and stuff.
+
+00:22:34.040 --> 00:22:38.360
+But, you know, if you're on macOS, like brew install pre-commit is usually up to date.
+
+00:22:38.360 --> 00:22:41.120
+And if you're a Python project, you can just use pip install.
+
+00:22:41.120 --> 00:22:44.040
+I mean, even if you're not a Python project, you can also use pip install.
+
+00:22:44.820 --> 00:22:49.920
+There's also a condo package and a few other ways you can acquire pre-commit.
+
+00:22:49.920 --> 00:22:52.740
+But anyway, the first step is to somehow install the pre-commit tool.
+
+00:22:52.740 --> 00:22:53.620
+Right.
+
+00:22:53.620 --> 00:22:54.820
+Pick your favorite pick.
+
+00:22:54.820 --> 00:22:55.480
+Pick your favorite.
+
+00:22:55.480 --> 00:22:55.940
+Go with it.
+
+00:22:55.940 --> 00:22:56.100
+Yeah.
+
+00:22:56.100 --> 00:22:57.020
+Yep, for sure.
+
+00:22:57.020 --> 00:23:01.280
+The next step is to set up some amount of pre-commit configuration file.
+
+00:23:01.280 --> 00:23:06.820
+You can usually find one in a project that you use and know uses pre-commit.
+
+00:23:06.900 --> 00:23:11.420
+So I often copy and paste from another project that I've done or a project that someone else
+
+00:23:11.420 --> 00:23:12.580
+has done that involves pre-commit.
+
+00:23:12.580 --> 00:23:16.540
+But pre-commit also comes with a pre-commit sample config command.
+
+00:23:16.540 --> 00:23:20.940
+So you can get kind of a very, very basic configuration that you can expand out further.
+
+00:23:20.940 --> 00:23:25.200
+I think the default configuration comes with a YAML checker and some whitespace fixers.
+
+00:23:25.520 --> 00:23:29.600
+And you can always add your favorite code formatter or linter to that.
+
+00:23:29.600 --> 00:23:35.360
+There's a list of supported hooks on pre-commit.com slash hooks.html.
+
+00:23:35.360 --> 00:23:40.660
+And there's hundreds of different tools at this point that can be installed and run directly
+
+00:23:40.660 --> 00:23:41.540
+without any setup.
+
+00:23:41.540 --> 00:23:44.060
+But yeah, the second step is setting up a configuration file.
+
+00:23:44.060 --> 00:23:48.080
+The next step after that is to opt into the git hooks.
+
+00:23:48.220 --> 00:23:53.240
+So the git hooks are actually, you know, it was originally the point of pre-commit to be
+
+00:23:53.240 --> 00:23:54.560
+just like a git hooks manager.
+
+00:23:54.560 --> 00:23:59.100
+But at this point, I think pre-commit works almost better as just like a linter code formatter
+
+00:23:59.100 --> 00:23:59.380
+runner.
+
+00:23:59.380 --> 00:24:04.340
+If I would, honestly, if I went back in time, I would probably be like, Anthony, don't call
+
+00:24:04.340 --> 00:24:04.980
+it pre-commit.
+
+00:24:04.980 --> 00:24:07.340
+And Anthony, maybe don't use YAML.
+
+00:24:07.340 --> 00:24:13.240
+But yeah, because pre-commit now supports like a bunch of different git hooks, like pre-push,
+
+00:24:13.240 --> 00:24:17.220
+commit message, prepare commit message, post checkout, a bunch of other ones.
+
+00:24:17.220 --> 00:24:17.500
+Right.
+
+00:24:17.500 --> 00:24:21.160
+But also like, it's useful even if you're not using it in Git workflow.
+
+00:24:21.160 --> 00:24:24.520
+But yeah, anyway, the next step is to install the git hook scripts.
+
+00:24:24.520 --> 00:24:26.700
+And you can do that by doing pre-commit install.
+
+00:24:26.700 --> 00:24:29.460
+You need to install it for a particular hook type.
+
+00:24:29.460 --> 00:24:33.840
+It defaults to pre-commit, but you can install like pre-commit install --hook type.
+
+00:24:33.840 --> 00:24:36.000
+I don't know, like post checkout or whatever.
+
+00:24:36.000 --> 00:24:37.020
+Right, right.
+
+00:24:37.020 --> 00:24:38.280
+Prepare commit message.
+
+00:24:38.280 --> 00:24:42.260
+And so this looks in the YAML file where you specify the hooks that you want.
+
+00:24:42.260 --> 00:24:44.680
+And so when you install it, it goes, okay, these are the three I need.
+
+00:24:44.680 --> 00:24:45.660
+So it defaults.
+
+00:24:45.660 --> 00:24:48.600
+So the YAML file can be used for a bunch of different hooks.
+
+00:24:48.600 --> 00:24:54.580
+So the hooks in the YAML file specify a stages property, and that will decide which of the
+
+00:24:54.580 --> 00:24:55.940
+git hooks they fire for.
+
+00:24:55.940 --> 00:25:03.260
+You might, you know, have like a trailing whitespace hook, and it might run on commit, push, and post
+
+00:25:03.260 --> 00:25:04.240
+checkout, or I don't know.
+
+00:25:04.740 --> 00:25:10.680
+And so like, the specific git hook that you opt into is only part of the install setting.
+
+00:25:10.680 --> 00:25:14.960
+And so like, if you wanted to use pre-push with pre-commit, you would do pre-commit install
+
+00:25:14.960 --> 00:25:16.420
+hook type pre-push.
+
+00:25:16.420 --> 00:25:21.140
+But yeah, once you've set up the git hooks, it's usually a good idea to run pre-commit against
+
+00:25:21.140 --> 00:25:24.840
+your entire project, especially when you're just starting out with a new code formatter or
+
+00:25:24.840 --> 00:25:25.140
+something.
+
+00:25:25.660 --> 00:25:29.380
+And pre-commit makes this really easy with pre-commit run --all files.
+
+00:25:29.380 --> 00:25:34.120
+This will kind of take all of the tools, install all of them, and then run them against every
+
+00:25:34.120 --> 00:25:35.080
+file in your repository.
+
+00:25:35.080 --> 00:25:35.680
+Right.
+
+00:25:35.780 --> 00:25:41.300
+So this is as if you had done, you basically added everything, and then somehow triggered
+
+00:25:41.300 --> 00:25:46.260
+a git push to evaluate those files, but you can just make it happen to sort of set the baseline.
+
+00:25:46.260 --> 00:25:47.600
+Yeah, it's for setting a baseline.
+
+00:25:47.600 --> 00:25:50.980
+Yeah, because your first commit isn't going to touch every file in your code base.
+
+00:25:50.980 --> 00:25:57.500
+And pre-commit tries to be very smart about the files that it passes to linters to make
+
+00:25:57.500 --> 00:25:59.920
+sure that your git hooks are as fast as possible.
+
+00:25:59.920 --> 00:26:03.900
+Because you could lynch your entire code base every commit, but no one has time for that.
+
+00:26:03.900 --> 00:26:04.680
+Yeah, exactly.
+
+00:26:05.140 --> 00:26:09.020
+And yeah, once you've kind of got set up there, you can kind of iterate on your pre-commit
+
+00:26:09.020 --> 00:26:13.280
+configuration, like add more tools that you might want to see or might want to use things
+
+00:26:13.280 --> 00:26:20.920
+like FlakeGate or Black or your favorite import reorder or your SCSS formatter or whatever
+
+00:26:20.920 --> 00:26:22.560
+tools that you might want to do.
+
+00:26:22.560 --> 00:26:25.280
+You can also add your own custom tools as well.
+
+00:26:25.280 --> 00:26:29.020
+If you have existing scripts that you want to migrate to pre-commit, pre-commit makes it
+
+00:26:29.020 --> 00:26:34.500
+pretty easy to run stuff directly in your repository as local hooks or things that happen to
+
+00:26:34.500 --> 00:26:38.380
+be globally installed as you migrate to more of a managed hook situation.
+
+00:26:39.380 --> 00:26:44.460
+And kind of the last step that I usually suggest is if you're going to add this pre-commit validation.
+
+00:26:44.460 --> 00:26:46.560
+So pre-commit validation can always be skipped.
+
+00:26:46.560 --> 00:26:51.400
+There's --no verify in git commit, which allows you to just skip all the git hooks.
+
+00:26:51.400 --> 00:26:52.960
+So you could just turn it off if you wanted.
+
+00:26:52.960 --> 00:26:57.600
+Pre-commit also provides a skip environment variable that lets you skip individual hooks.
+
+00:26:57.760 --> 00:27:06.660
+So if you have like some buggy hook that you don't want to check or actually we had this one hook at Yelp that was hilariously slow.
+
+00:27:06.660 --> 00:27:09.560
+And so I just never wanted to run that hook.
+
+00:27:09.560 --> 00:27:14.880
+So I would just always skip it and make sure that I was adhering to the policy manually.
+
+00:27:15.640 --> 00:27:16.080
+Right.
+
+00:27:16.080 --> 00:27:19.400
+But you don't have to skip hooks.
+
+00:27:19.400 --> 00:27:24.400
+But anyway, they're always just client validation and client validation can always be bypassed.
+
+00:27:24.400 --> 00:27:29.520
+So it's usually a good idea to set up some amount of this linting validation in your continuous integration.
+
+00:27:29.520 --> 00:27:30.160
+Right.
+
+00:27:30.160 --> 00:27:31.400
+And fortunately...
+
+00:27:31.400 --> 00:27:32.400
+Hold on.
+
+00:27:32.400 --> 00:27:38.120
+First, it's probably a good idea to have continuous integration and then to set this up for it, right?
+
+00:27:38.120 --> 00:27:39.340
+Yeah, that's true.
+
+00:27:39.340 --> 00:27:40.800
+You have tests, right?
+
+00:27:40.800 --> 00:27:41.860
+Right.
+
+00:27:42.800 --> 00:27:45.920
+But yeah, it's always a good idea to have some amount of continuous integration.
+
+00:27:45.920 --> 00:27:47.800
+AKA users?
+
+00:27:47.800 --> 00:27:50.680
+No, I'm just kidding.
+
+00:27:50.680 --> 00:27:51.120
+Just kidding.
+
+00:27:51.120 --> 00:27:57.060
+I'm just going to hide because my chat in my stream the other day was hounding me for not having tests on my most recent project.
+
+00:27:57.060 --> 00:27:59.160
+And I was like, oh, yeah.
+
+00:27:59.160 --> 00:28:01.000
+I did write some yesterday, though.
+
+00:28:01.000 --> 00:28:02.720
+So I have non-zero tests now.
+
+00:28:02.720 --> 00:28:03.340
+That's good.
+
+00:28:03.340 --> 00:28:05.600
+Sorry, I didn't mean to derail you.
+
+00:28:05.600 --> 00:28:07.400
+You're saying you should also set this up at CI.
+
+00:28:07.400 --> 00:28:08.480
+Oh, yeah, yeah.
+
+00:28:08.480 --> 00:28:11.120
+And pre-commit makes that really easy to get set up in CI.
+
+00:28:11.120 --> 00:28:19.240
+You can essentially run the same command we ran earlier, which is pre-commit run --all files, and set that up as something that validates all of your code changes.
+
+00:28:19.240 --> 00:28:21.140
+How does it get set up in CI?
+
+00:28:21.140 --> 00:28:25.280
+Like, do you have to do the pre-commit dash install on every run?
+
+00:28:25.280 --> 00:28:27.320
+Does that get cached and only do the delta?
+
+00:28:27.320 --> 00:28:29.440
+Or what's the CI look like there?
+
+00:28:29.860 --> 00:28:38.800
+So, unfortunately, it's kind of a little bit fiddly to set up right now in CI, which is actually part of the project that I'm building right now.
+
+00:28:38.800 --> 00:28:46.180
+I'm actually working on building a kind of generic continuous integration solution that's aimed only at pre-commit.
+
+00:28:46.180 --> 00:28:46.780
+Oh, nice.
+
+00:28:46.780 --> 00:28:49.520
+So if you want to check out more information on that, it's pre-commit.ci.
+
+00:28:49.520 --> 00:28:51.180
+It's kind of a work in progress right now.
+
+00:28:51.440 --> 00:28:55.600
+But you can set up pre-commit with basically any CI provider that you have right now.
+
+00:28:55.600 --> 00:28:58.380
+But you have to manage the cache yourself.
+
+00:28:58.380 --> 00:29:00.900
+You have to figure out what command you want to run.
+
+00:29:00.900 --> 00:29:03.620
+You have to figure out, like, what change set boundaries you want to run against.
+
+00:29:03.620 --> 00:29:09.360
+So, like, maybe on a pull request, you only want to validate the files that changed between master and your branch.
+
+00:29:09.360 --> 00:29:12.840
+And, yeah, it's all pretty manual setup right now.
+
+00:29:12.840 --> 00:29:16.660
+And for Travis CI, it's five to ten lines of YAML.
+
+00:29:16.660 --> 00:29:19.280
+For Azure Pipelines, it's, like, 30 lines of YAML.
+
+00:29:19.280 --> 00:29:26.060
+And, like, if you don't get it quite right or if the cache is invalidated for weird reasons, like, your run will be significantly slower.
+
+00:29:26.580 --> 00:29:38.520
+And that's actually one of the big selling points that I'm trying to push for on pre-commit CI, which is that everything will basically always be cached because it can share all these tools amongst other developers, which is pretty cool.
+
+00:29:38.520 --> 00:29:39.420
+Right, right.
+
+00:29:39.420 --> 00:29:40.300
+Yeah, that's really cool.
+
+00:29:40.300 --> 00:29:49.380
+Yeah, but you've got a lot of examples, and I'll try to link to them in the show notes, of how to set it up for Travis, Azure Pipelines, all the various things, right?
+
+00:29:49.380 --> 00:29:50.800
+So that's pretty straightforward.
+
+00:29:50.800 --> 00:29:53.560
+Yeah, I think most popular ones are covered there.
+
+00:29:53.760 --> 00:29:56.740
+And if there's others that are missing, like, feel free to send a pull request.
+
+00:29:56.740 --> 00:29:57.300
+Yeah.
+
+00:29:57.300 --> 00:30:09.320
+Another cool thing that I'm trying to build into my CI tool is that, like, and this happens probably, like, ten or so times a month, where someone will come to one of my projects and submit a pull request.
+
+00:30:09.320 --> 00:30:13.980
+And they haven't set up the client tooling locally, so they aren't running the pre-commit hooks.
+
+00:30:13.980 --> 00:30:16.800
+They haven't run the code formatters or any of these things.
+
+00:30:17.120 --> 00:30:24.900
+And so they'll get kind of that middle to worst case of the CI system is telling them, oh, your code isn't formatted this way.
+
+00:30:24.900 --> 00:30:26.600
+Like, here's a patch that would fix it.
+
+00:30:26.600 --> 00:30:33.640
+But one of the features that I'm planning to build is that pre-commit CI will just automatically fix pull requests for you.
+
+00:30:33.640 --> 00:30:39.780
+So you won't have to, even if you forgot to set up the local tooling, the remote tooling will just auto fix it for you.
+
+00:30:39.780 --> 00:30:40.800
+Oh, that'd be nice.
+
+00:30:40.800 --> 00:30:44.020
+Instead of just saying, oh, it's wrong, you have to fix it.
+
+00:30:44.060 --> 00:30:45.480
+It just, it always comes in right.
+
+00:30:45.480 --> 00:30:46.960
+Yeah, it just fixes it for you.
+
+00:30:46.960 --> 00:30:48.280
+There's actually a tool.
+
+00:30:48.280 --> 00:30:53.220
+I guess it doesn't always come in right, because it could be, like, actually broken Python, and you could be validating.
+
+00:30:53.220 --> 00:30:54.800
+Like, there's things that can't be fixed.
+
+00:30:54.800 --> 00:30:57.080
+But if it could be fixed, it should be auto fix, right?
+
+00:30:57.080 --> 00:30:59.580
+Yeah, it tries to auto fix things that are auto fixable.
+
+00:30:59.580 --> 00:31:02.920
+There's actually a tool, I think Mariota made it.
+
+00:31:02.920 --> 00:31:11.260
+I believe it's called Blackout, which is a Black-specific tool that kind of has this same idea of, like, just fix the pull request for me.
+
+00:31:11.260 --> 00:31:13.220
+Sorry, I didn't set up Black locally.
+
+00:31:13.700 --> 00:31:13.920
+Yeah.
+
+00:31:13.920 --> 00:31:18.540
+But Pre-Commit CI kind of aims to be a generic tool for these sort of auto fixing things.
+
+00:31:18.540 --> 00:31:19.540
+Yeah, that's really cool.
+
+00:31:19.540 --> 00:31:29.840
+So you talked about, if I didn't set this up locally, the way this works is all of these get, in general, get pre-commit hooks, they don't stick to the repository.
+
+00:31:29.840 --> 00:31:33.060
+They're not, like, now part of the repo because I set them up.
+
+00:31:33.060 --> 00:31:36.800
+Like, every person on the team has to go through this three or four step process.
+
+00:31:37.140 --> 00:31:42.780
+Yeah, so they won't have to set up the configuration because usually you check that in so that it's shared amongst all your peers.
+
+00:31:42.780 --> 00:31:45.800
+But yeah, setting up the tool would be something that everyone else has to do.
+
+00:31:45.800 --> 00:31:46.140
+Okay.
+
+00:31:46.440 --> 00:31:48.120
+There are ways.
+
+00:31:48.120 --> 00:31:51.240
+So there are ways to kind of automate this among peers.
+
+00:31:51.240 --> 00:31:57.920
+So, like, one thing that we did at Yelp was we made pre-commit one of the Python dependencies of the application.
+
+00:31:57.920 --> 00:31:59.720
+So the installation part was skipped.
+
+00:32:00.080 --> 00:32:05.400
+And we also made the get hook set up part of the common make targets.
+
+00:32:05.400 --> 00:32:10.200
+So, like, you used to run, like, make minimal to get Yelp application working or whatever.
+
+00:32:10.200 --> 00:32:14.720
+And make minimal would install the hooks so that you didn't have to think about that sort of thing.
+
+00:32:14.720 --> 00:32:15.740
+Yeah, that's cool.
+
+00:32:15.740 --> 00:32:18.600
+In other, in managed environments, there are other things you can do as well.
+
+00:32:18.600 --> 00:32:21.380
+Like, you can set a get init template.
+
+00:32:21.380 --> 00:32:24.600
+And the init template could already contain the get.
+
+00:32:24.600 --> 00:32:27.680
+Pre-commit actually has a command that makes it easy to set up an init template.
+
+00:32:27.680 --> 00:32:33.380
+But yeah, if you're working just, like, on vanilla laptops or, like, on open source projects,
+
+00:32:33.380 --> 00:32:36.220
+like, you would need to consciously opt into this behavior.
+
+00:32:36.220 --> 00:32:39.980
+And actually, that's one of the bigger design principles of Pre-commit is, like,
+
+00:32:39.980 --> 00:32:42.160
+none of this stuff happens super automatically.
+
+00:32:42.160 --> 00:32:44.400
+Like, you're always opting into the behavior.
+
+00:32:44.400 --> 00:32:45.040
+Right.
+
+00:32:45.040 --> 00:32:46.000
+It's all optional.
+
+00:32:46.000 --> 00:32:46.760
+Okay.
+
+00:32:46.760 --> 00:32:48.680
+Yeah, I think that's positive, right?
+
+00:32:48.680 --> 00:32:50.860
+That's a good thing that you're not forcing it on people.
+
+00:32:50.860 --> 00:32:53.860
+But with the CI, you're kind of catching the mist.
+
+00:32:53.860 --> 00:32:54.360
+Yeah.
+
+00:32:54.460 --> 00:32:58.740
+The other part is, like, if stuff runs too automatically, people get concerned about security.
+
+00:32:58.740 --> 00:33:04.720
+And so it tries to not be, you know, an arbitrary code execution engine, even though it is with opt-in.
+
+00:33:04.720 --> 00:33:05.300
+Yeah.
+
+00:33:05.300 --> 00:33:09.500
+Well, people do get a little touchy when you automatically run tools against their source code.
+
+00:33:09.500 --> 00:33:14.840
+Yes, I've received quite a few issues that are like,
+
+00:33:14.840 --> 00:33:16.160
+why does this thing exist?
+
+00:33:16.160 --> 00:33:17.220
+You should delete it now.
+
+00:33:17.280 --> 00:33:20.480
+And it's like, oh, well, you don't have to use it.
+
+00:33:20.480 --> 00:33:21.760
+Exactly.
+
+00:33:21.760 --> 00:33:27.000
+Talk Python to me is partially supported by our training courses.
+
+00:33:27.000 --> 00:33:30.000
+How does your team keep their Python skills sharp?
+
+00:33:30.000 --> 00:33:34.140
+How do you make sure new hires get started fast and learn the Pythonic way?
+
+00:33:34.140 --> 00:33:38.240
+If the answer is a series of boring videos that don't inspire,
+
+00:33:38.240 --> 00:33:43.120
+or a subscription service you pay way too much for and use way too little, listen up.
+
+00:33:43.600 --> 00:33:47.040
+At Talk Python Training, we have enterprise tiers for all of our courses.
+
+00:33:47.040 --> 00:33:51.580
+Get just the one course you need for your team with full reporting and monitoring.
+
+00:33:51.580 --> 00:33:54.700
+Or ditch that unused subscription for our course bundles,
+
+00:33:54.700 --> 00:33:59.320
+which include all the courses, and you pay about the same price as a subscription once.
+
+00:33:59.980 --> 00:34:03.660
+For details, visit training. talkpython.fm/business,
+
+00:34:03.660 --> 00:34:06.600
+or just email sales at talkpython.fm.
+
+00:34:06.600 --> 00:34:10.960
+Let's talk about some of the tools.
+
+00:34:10.960 --> 00:34:12.700
+You know, we've set the groundwork, right?
+
+00:34:12.700 --> 00:34:16.180
+It's like this framework for bringing in all these different types of pre-commit hooks.
+
+00:34:16.180 --> 00:34:19.460
+And when you say there's a lot that you can bring in, there are a ton.
+
+00:34:19.460 --> 00:34:23.360
+So maybe we could talk through some of the ones that come built in that you think are cool.
+
+00:34:23.360 --> 00:34:24.640
+I'll grab a couple as well.
+
+00:34:24.640 --> 00:34:28.180
+And then there's a bunch of others that are sort of external, but can be loaded.
+
+00:34:28.540 --> 00:34:29.100
+Yeah, sounds great.
+
+00:34:29.100 --> 00:34:30.820
+So pre-commit itself is a framework,
+
+00:34:30.820 --> 00:34:36.340
+but there's also an official set of pre-commit hooks that I and other contributors have written.
+
+00:34:36.340 --> 00:34:39.880
+And those are available at pre-commit slash pre-commit hooks on GitHub.
+
+00:34:39.880 --> 00:34:47.960
+And there's, what, like 29 of them that are provided kind of out of the box there.
+
+00:34:47.960 --> 00:34:53.480
+The original intent of the pre-commit hooks repository was to be Python specific.
+
+00:34:53.480 --> 00:34:57.040
+However, it's more shifted to like take the Python parts and split them out
+
+00:34:57.040 --> 00:34:59.440
+and kind of aim to be language agnostic.
+
+00:34:59.440 --> 00:35:03.400
+So there's a lot of checks in there for like your common configuration formats.
+
+00:35:03.400 --> 00:35:06.660
+So like there's checkers for like JSON, Toml, YAML, et cetera.
+
+00:35:06.660 --> 00:35:10.160
+There's actually some really cool ones for Python specific stuff.
+
+00:35:10.160 --> 00:35:15.400
+Like there's one that checks that you don't check in breakpoints or debugger statements.
+
+00:35:15.400 --> 00:35:17.560
+So like you accidentally put import PDB.
+
+00:35:17.560 --> 00:35:20.580
+It'll flag that and make sure that that doesn't end up in production.
+
+00:35:21.320 --> 00:35:22.040
+Right, right.
+
+00:35:22.040 --> 00:35:30.140
+You definitely do not want to leave a import PDB set breakpoint sort of thing because I don't know why the server is locked up,
+
+00:35:30.140 --> 00:35:34.260
+but it just seems like it's, there's not, it's not using the CPU, but it's just stuff's timing out.
+
+00:35:34.260 --> 00:35:34.780
+What's going on?
+
+00:35:34.780 --> 00:35:35.940
+Yeah.
+
+00:35:35.940 --> 00:35:39.720
+The number of times I've seen PDB quit in production, I'm like, oh, damn it.
+
+00:35:40.380 --> 00:35:42.000
+This is entirely my fault.
+
+00:35:42.000 --> 00:35:46.140
+But yeah, this kind of helps prevent that.
+
+00:35:46.140 --> 00:35:51.280
+Or like, you know, I left a breakpoint and my test suite exploded because there was a breakpoint in it or stuff like that.
+
+00:35:51.280 --> 00:35:51.700
+Right.
+
+00:35:51.700 --> 00:35:58.100
+So some of the stand out to me, like one was check AST, which checks whether or not Python files can be parsed.
+
+00:35:58.100 --> 00:36:03.880
+That's pretty cool because Python doesn't have a compiler, not in the command line version sense.
+
+00:36:04.080 --> 00:36:08.000
+I know it sort of, it does generate the PYC, but kind, kind does.
+
+00:36:08.000 --> 00:36:10.300
+There's not a build step is what I'm saying.
+
+00:36:10.300 --> 00:36:10.880
+Right.
+
+00:36:10.880 --> 00:36:11.320
+For sure.
+
+00:36:11.320 --> 00:36:11.960
+Right.
+
+00:36:11.960 --> 00:36:13.600
+Which goes through and verifies all the files.
+
+00:36:13.600 --> 00:36:16.920
+So this is a little bit like a build step for like really basic stuff.
+
+00:36:16.920 --> 00:36:17.320
+Yeah.
+
+00:36:17.320 --> 00:36:20.980
+Check AST kind of aims to be like a first line of defense.
+
+00:36:21.120 --> 00:36:26.060
+In a lot of ways, like other linters like Flick 8 could be a better choice than check AST.
+
+00:36:26.060 --> 00:36:30.900
+But yeah, check AST is kind of like the most basic, is this valid syntax check?
+
+00:36:30.900 --> 00:36:35.660
+We actually use this as part of moving to Python 3 at Lyft.
+
+00:36:35.660 --> 00:36:38.360
+We kind of had this like three to four stage process.
+
+00:36:38.500 --> 00:36:42.400
+And like the first stage was make sure all the syntax is valid Python 3 syntax.
+
+00:36:42.400 --> 00:36:45.160
+And like make sure that linters pass in Python 3.
+
+00:36:45.160 --> 00:36:49.660
+And then like make sure that Python 3 specific linters pass in Python 3.
+
+00:36:49.660 --> 00:36:51.400
+And then run the test in Python 3.
+
+00:36:51.400 --> 00:36:52.940
+And then go to staging and then production.
+
+00:36:52.940 --> 00:36:54.880
+And then delete all the Python 2 code.
+
+00:36:54.880 --> 00:36:58.800
+And that was kind of our, check AST was kind of our first step there in that process.
+
+00:36:58.800 --> 00:36:59.380
+I see.
+
+00:36:59.380 --> 00:37:00.380
+Yeah, that's really cool.
+
+00:37:00.380 --> 00:37:04.240
+Another is about checking for AWS secrets.
+
+00:37:04.240 --> 00:37:05.400
+Ah, yes.
+
+00:37:06.620 --> 00:37:12.080
+How many times have you accidentally your entire AWS account to the public on GitHub?
+
+00:37:12.080 --> 00:37:17.460
+Actually, GitHub has some special checking for this now as well to make sure that your AWS
+
+00:37:17.460 --> 00:37:20.040
+secrets or whatever are not leaked on commits.
+
+00:37:20.040 --> 00:37:25.820
+And Amazon actually has invested a lot in scanning public source code repositories to
+
+00:37:25.820 --> 00:37:28.700
+invalidate these tokens as quick as possible.
+
+00:37:28.700 --> 00:37:30.080
+Oh, yeah, that's cool.
+
+00:37:30.080 --> 00:37:35.000
+Because it costs, you know, it costs individuals a lot of money, but it also, Amazon spends CPU
+
+00:37:35.000 --> 00:37:40.460
+and other resources finding Bitcoin or whatever, whatever people are doing nefariously with
+
+00:37:40.460 --> 00:37:41.840
+these leaked tokens.
+
+00:37:41.840 --> 00:37:45.480
+But yeah, this is kind of like, again, a first line of defense for not checking in.
+
+00:37:45.480 --> 00:37:46.680
+Yeah, you don't want to do it.
+
+00:37:46.680 --> 00:37:48.600
+It's not like eventually someone's going to find it.
+
+00:37:48.600 --> 00:37:49.140
+It's bad.
+
+00:37:49.140 --> 00:37:50.880
+So there's systems like...
+
+00:37:50.880 --> 00:37:51.460
+It's like seconds.
+
+00:37:52.060 --> 00:37:57.900
+Yeah, it's like shh git is a project.
+
+00:37:57.900 --> 00:37:58.940
+There's a bunch of these.
+
+00:37:58.940 --> 00:38:03.980
+But this one is, should git find secrets and sensitive files across GitHub, including gist,
+
+00:38:03.980 --> 00:38:06.640
+git lab and bit bucket in near real time.
+
+00:38:06.640 --> 00:38:11.460
+And it does so by hooking up to like the public stream of activity.
+
+00:38:11.460 --> 00:38:14.380
+And like, as soon as there's a check in, it's just after it, right?
+
+00:38:14.380 --> 00:38:16.080
+And so there's three or four of these types of tools.
+
+00:38:16.080 --> 00:38:21.980
+And basically, it would be really nice if something like this detect AWS credentials,
+
+00:38:21.980 --> 00:38:24.960
+pre-commit hook, didn't let that get into the mix.
+
+00:38:24.960 --> 00:38:25.580
+For sure.
+
+00:38:25.580 --> 00:38:25.980
+Yeah.
+
+00:38:25.980 --> 00:38:30.900
+And there's actually a lot of other tools around detecting credentials in the pre-commit space.
+
+00:38:30.980 --> 00:38:36.900
+So there's direct integration for, I believe the tool is called Bandit, which is a Python
+
+00:38:36.900 --> 00:38:37.800
+specific...
+
+00:38:37.800 --> 00:38:38.200
+Yeah.
+
+00:38:38.200 --> 00:38:39.040
+Bandit's cool.
+
+00:38:39.040 --> 00:38:39.780
+...tool.
+
+00:38:39.780 --> 00:38:41.780
+And I believe they have direct pre-commit integration.
+
+00:38:41.780 --> 00:38:43.980
+So you can just set up Bandit as a pre-commit hook.
+
+00:38:43.980 --> 00:38:44.680
+I don't know.
+
+00:38:44.680 --> 00:38:47.960
+There's a Go project that's fairly popular that does the same thing.
+
+00:38:47.960 --> 00:38:51.020
+And pre-commit has direct support for Go in that particular tool.
+
+00:38:51.020 --> 00:38:55.500
+But there's a bunch of tools in this space that make it really easy to prevent check-in
+
+00:38:55.500 --> 00:38:56.840
+of sensitive credentials.
+
+00:38:56.840 --> 00:39:00.860
+Another one that stood out to me was no commit to branch.
+
+00:39:00.860 --> 00:39:01.420
+Yeah.
+
+00:39:01.420 --> 00:39:04.800
+This one actually was a community-contributed hook.
+
+00:39:04.800 --> 00:39:10.180
+The idea being that you don't accidentally commit directly to your master branch or to
+
+00:39:10.180 --> 00:39:12.280
+your particular development branch.
+
+00:39:12.280 --> 00:39:14.080
+And this helps you enforce your...
+
+00:39:14.080 --> 00:39:15.180
+Production or whatever.
+
+00:39:15.180 --> 00:39:15.460
+Yeah.
+
+00:39:15.460 --> 00:39:15.900
+Yeah.
+
+00:39:15.900 --> 00:39:18.880
+It helps you enforce your specific Git workflow that you want to do.
+
+00:39:18.880 --> 00:39:23.880
+So you're specifically targeting your own feature branch, or you could use this to
+
+00:39:23.880 --> 00:39:27.420
+enforce a branch naming scheme or a bunch of other stuff like that.
+
+00:39:27.420 --> 00:39:29.460
+But yeah, that one was actually contributed externally.
+
+00:39:29.460 --> 00:39:30.440
+Yeah, exactly.
+
+00:39:30.620 --> 00:39:35.460
+Basically, you require people to use a proper PR workflow, like a Git flow type of thing,
+
+00:39:35.460 --> 00:39:37.080
+rather than just jam it straight in.
+
+00:39:37.080 --> 00:39:38.300
+Yeet it straight to master.
+
+00:39:38.300 --> 00:39:40.920
+Heck, just edit it on production.
+
+00:39:40.920 --> 00:39:41.680
+That's even quicker.
+
+00:39:41.680 --> 00:39:45.060
+I deploy via SSH.
+
+00:39:45.060 --> 00:39:46.660
+Exactly.
+
+00:39:46.660 --> 00:39:47.180
+Yeah.
+
+00:39:47.180 --> 00:39:51.220
+Another cool one that we used at Yelp was forbid new submodules.
+
+00:39:51.220 --> 00:39:52.660
+We went through this.
+
+00:39:52.660 --> 00:39:56.180
+This is actually kind of a long story, so I'll keep it a little bit short.
+
+00:39:56.400 --> 00:40:02.240
+But Yelp went through a migration of installing all Python packages globally on the system to
+
+00:40:02.240 --> 00:40:03.780
+virtual environments.
+
+00:40:03.780 --> 00:40:08.600
+And there are some grumpy sysadmins that were super against virtual environments.
+
+00:40:08.860 --> 00:40:13.900
+And so we kind of cheesed our way to getting virtual environments by using submodules instead.
+
+00:40:13.900 --> 00:40:17.620
+And Git submodules, not Python submodules, Git submodules.
+
+00:40:17.620 --> 00:40:22.380
+And so there was one point where Yelp main had 98 Git submodules.
+
+00:40:22.940 --> 00:40:30.960
+And we were doing this fancy pip install workflow that allowed us to locally install all of these tools so that we didn't have to manage them at the system.
+
+00:40:30.960 --> 00:40:36.820
+But eventually, the grumpy people left the company and we moved everything to virtual environments.
+
+00:40:36.820 --> 00:40:41.640
+And part of moving to virtual environments was to burn down the tech debt of submodules.
+
+00:40:41.900 --> 00:40:55.320
+And so we added this forbid new submodules hook, which prevents newly introduced submodules while allowing existing ones such that we could kind of do some graph driven development and bring that down to zero while we migrated towards the new world.
+
+00:40:55.320 --> 00:40:57.620
+That seems like a good path there.
+
+00:40:57.620 --> 00:40:58.260
+Very nice.
+
+00:40:58.260 --> 00:41:07.440
+One that I was wondering about is check executables have shebangs, the little hash exclamation point, something at the top, which is fine.
+
+00:41:07.440 --> 00:41:09.000
+But how do you know it's an executable?
+
+00:41:09.000 --> 00:41:12.300
+Is it because it has a dunder main equals dunder name thing in it?
+
+00:41:12.300 --> 00:41:13.840
+Or what counts as an executable?
+
+00:41:13.840 --> 00:41:20.360
+So this is more about file permissions and accidentally checking in files that are not executable.
+
+00:41:20.360 --> 00:41:33.540
+So one example where this commonly gets triggered is when you copy files from a thumb drive, they'll commonly be on a FAT32 file system, which doesn't have full support for all of the permission bits.
+
+00:41:33.540 --> 00:41:43.380
+And so almost always the permission bits will be 777 and you'll end up checking in all sorts of non-executable and non-script files with executable bit permissions.
+
+00:41:43.380 --> 00:41:47.800
+And depending on your particular system that you're using, this can often trigger lint errors.
+
+00:41:47.800 --> 00:41:50.760
+And so this is kind of a first defense against that.
+
+00:41:50.760 --> 00:41:56.980
+One particular system is like Debian is real grumpy about, oh, this PNG file has the executable bit set.
+
+00:41:56.980 --> 00:41:59.580
+And so I'm going to reject this package or whatever.
+
+00:41:59.580 --> 00:42:00.400
+Right, right.
+
+00:42:00.400 --> 00:42:03.980
+But this also helps you if you've forgotten to put a shebang.
+
+00:42:03.980 --> 00:42:11.600
+So like sometimes you'll have like an entry point to your application that you intend to be executable, but you've forgotten to put user bin env Python 3 or whatever.
+
+00:42:11.600 --> 00:42:12.020
+Right.
+
+00:42:12.020 --> 00:42:13.220
+So this kind of checks for that.
+
+00:42:13.220 --> 00:42:13.840
+Okay, cool.
+
+00:42:13.840 --> 00:42:16.300
+So those are a bunch of the built-in ones.
+
+00:42:16.300 --> 00:42:18.700
+Any of the other external ones you want to give a shout out to?
+
+00:42:18.700 --> 00:42:19.640
+Yeah.
+
+00:42:19.860 --> 00:42:23.720
+So if you're setting up a Python project, you probably want an import sorter.
+
+00:42:23.720 --> 00:42:27.140
+And there are two, the two most popular ones.
+
+00:42:27.140 --> 00:42:30.420
+One of them I wrote, which is called Reorder Python Imports.
+
+00:42:30.420 --> 00:42:32.280
+It's very basic in what its name is.
+
+00:42:32.280 --> 00:42:38.960
+But the idea behind Reorder Python Imports is you set up essentially no configuration and it just does the right thing all the time.
+
+00:42:39.380 --> 00:42:44.980
+And if you kind of want the opposite of that spectrum, there's a tool called iSort, which has direct support in pre-commit.
+
+00:42:44.980 --> 00:42:51.960
+iSort has 50 or 60 configuration options, so you can customize your import sorting to whatever thing you want.
+
+00:42:51.960 --> 00:42:56.260
+Some others that I would suggest is getting a linter like Flake 8 set up.
+
+00:42:56.260 --> 00:42:59.720
+And Flake 8 has direct support for pre-commit as well.
+
+00:42:59.960 --> 00:43:03.380
+I'm also the maintainer of Flake 8, so of course it has pre-commit support.
+
+00:43:03.380 --> 00:43:04.320
+Of course. Awesome.
+
+00:43:04.320 --> 00:43:14.540
+And perhaps the most popular and probably one of the reasons that pre-commit has taken off a lot recently is Black, which is, we've talked a couple of times on this already about Black.
+
+00:43:14.540 --> 00:43:20.460
+But Black is a code formatter that there's one way to do it right, and Black does it in a very specific way.
+
+00:43:20.460 --> 00:43:23.380
+And Black has direct integration with pre-commit.
+
+00:43:23.380 --> 00:43:27.900
+You can also set up things like type checkers, like there's mypy integration with pre-commit.
+
+00:43:28.240 --> 00:43:30.540
+There's other sorts of stuff like that.
+
+00:43:30.540 --> 00:43:41.080
+And one more that I'll shout out, which is one that I've written, a tool called PyUpgrade, which allows you to kind of upgrade your syntax to newer versions of the language.
+
+00:43:41.080 --> 00:43:49.740
+So things like automatically making f-strings, or like removing Python 2 syntax constructs, or unsixing your code, so to speak.
+
+00:43:49.740 --> 00:43:53.040
+And that's another one that has decent pre-commit integration as well.
+
+00:43:53.040 --> 00:43:57.840
+I see. It looks for old idioms and styles and says, stop doing that.
+
+00:43:58.100 --> 00:44:01.440
+Yeah, well, not only does it say stop doing that, it just auto-fixes it for you.
+
+00:44:01.440 --> 00:44:02.400
+Oh, that's even better.
+
+00:44:02.400 --> 00:44:04.360
+But yeah, I really like my code formatters.
+
+00:44:04.360 --> 00:44:09.220
+Like, if a linter is grumbling at me, I'd rather have formatter just auto-fix it for me.
+
+00:44:09.220 --> 00:44:10.120
+Yeah, absolutely.
+
+00:44:10.120 --> 00:44:13.880
+All right, so that's the big list of things that you could use.
+
+00:44:13.880 --> 00:44:15.760
+But what if you have an idea for a new one?
+
+00:44:15.760 --> 00:44:21.900
+Part of the whole idea of pre-commit is it's a framework for building and distributing these things, right?
+
+00:44:21.900 --> 00:44:24.640
+Yep, and it's really easy to make your own set of hooks.
+
+00:44:24.640 --> 00:44:33.800
+That's actually another problem with the other sort of frameworks, is that if you want to add tools to it, you kind of have to fork their framework and, like, inject your code directly into their framework.
+
+00:44:33.800 --> 00:44:37.760
+But pre-commit takes kind of a distributed model to this.
+
+00:44:38.000 --> 00:44:45.480
+Basically, any git repository that has a little bit of metadata in it can provide a git hook, as long as it's installable in some way.
+
+00:44:45.480 --> 00:44:52.640
+And the process is outlined on the pre-commit documentation, but there's a bunch of different programming languages that this works with.
+
+00:44:52.640 --> 00:44:58.600
+And you basically set up a pre-commit hooks.yaml to provide hooks to other repositories.
+
+00:44:58.740 --> 00:45:03.980
+And there's a, you know, you can always follow an example on any of the other repositories that already provide stuff.
+
+00:45:03.980 --> 00:45:11.200
+And it's also pretty easy to take an existing tool and add the small metadata file to it that can be used directly with pre-commit.
+
+00:45:11.200 --> 00:45:13.180
+Of course, there's also escape hatches.
+
+00:45:13.180 --> 00:45:23.480
+Like, if you don't want to use the repository-managed approach, you can set up local hooks that go directly to PyPI or, like, use a Docker image or other stuff like that instead of going through the managed approach.
+
+00:45:23.480 --> 00:45:30.440
+Although there's some disadvantages to that around, like, automatic updates and workflow management and that sort of deal.
+
+00:45:30.440 --> 00:45:32.460
+Right. Yeah, that looks really cool.
+
+00:45:32.460 --> 00:45:34.160
+So it seems pretty easy to make them.
+
+00:45:34.160 --> 00:45:42.680
+And as long as it's installable via IPI or gem or NPM or is it executable, it's more or less ready to go along with that metadata.
+
+00:45:42.680 --> 00:45:48.140
+Yep. Essentially, like, if you can be git cloned and something can run, like, pip install or the equivalent, you're golden.
+
+00:45:48.140 --> 00:45:48.780
+You're ready to go.
+
+00:45:48.780 --> 00:45:57.560
+Yeah. And then under supported languages, where maybe languages is in, like, quotes or something, you've got Conda, Docker, Docker images, fail.
+
+00:45:57.560 --> 00:45:58.420
+What is fail?
+
+00:45:58.420 --> 00:45:59.900
+So there's a special hook.
+
+00:45:59.900 --> 00:46:03.860
+This was actually added specifically for pytest, which I'm a maintainer of.
+
+00:46:03.860 --> 00:46:10.780
+Fail takes a file name regular expression and will always return one if anything matches that.
+
+00:46:10.780 --> 00:46:21.640
+So one example is, like, we wanted to enforce that our changelogs were a specific file name pattern because it's very common for somebody to write a changelog but forget the RST extension.
+
+00:46:21.640 --> 00:46:27.540
+And when they forgot the RST extension, then would go to run a release, we would forget their changelog fragment.
+
+00:46:27.540 --> 00:46:29.520
+And so their change wouldn't be called out.
+
+00:46:29.860 --> 00:46:35.460
+And so this was a way to enforce with a particular message that a file name matches specifically.
+
+00:46:35.460 --> 00:46:37.120
+Okay. Yeah, cool.
+
+00:46:37.120 --> 00:46:44.200
+And then you got Golang, Node, Perl, Python, Ruby, Rust, Swift, Script, I'm guessing Bash and whatnot.
+
+00:46:44.200 --> 00:46:45.900
+So that's a lot of options.
+
+00:46:45.900 --> 00:46:48.820
+And with Docker, like, that's a pretty wide open.
+
+00:46:48.820 --> 00:46:50.340
+Yeah, with Docker, you can basically do anything.
+
+00:46:50.340 --> 00:46:51.280
+Yeah, exactly.
+
+00:46:51.280 --> 00:46:52.020
+Exactly.
+
+00:46:52.020 --> 00:46:54.440
+Yeah, and it's actually pretty easy to add a new language.
+
+00:46:54.440 --> 00:47:02.900
+So if there's another language that you would like to see pre-commit support, there's actually a little guide in the contributing documentation for pre-commit on how to set up another one.
+
+00:47:02.900 --> 00:47:12.120
+Someone's actually working on support for Crystal right now, which is a language that I had not heard of until relatively recently, but it's basically like compiled Ruby.
+
+00:47:12.120 --> 00:47:13.360
+It's pretty cool.
+
+00:47:13.360 --> 00:47:14.100
+Okay.
+
+00:47:14.100 --> 00:47:15.780
+Yeah, there may be support for that.
+
+00:47:15.780 --> 00:47:16.880
+Yeah, nice.
+
+00:47:16.880 --> 00:47:23.280
+Something that I also saw in the docs was talking about automatically enabling pre-commit on repositories.
+
+00:47:23.280 --> 00:47:28.620
+Can you, like, register it with Git so when you get a new repo or clone something, it'll just be part of it?
+
+00:47:28.620 --> 00:47:32.800
+Yeah, so there's this template directory concept in Git.
+
+00:47:32.800 --> 00:47:38.640
+Basically, you can run pre-commit init templater and then set a specific configuration value in your Git config.
+
+00:47:38.640 --> 00:47:46.460
+And Git will splat out files in a particular way in your clone such that you'll automatically be enabled.
+
+00:47:46.460 --> 00:47:46.940
+Okay.
+
+00:47:46.940 --> 00:47:47.900
+Yeah, that's nice.
+
+00:47:47.900 --> 00:47:51.460
+This usually involves just, like, writing the Git hooks pre-commit file magically.
+
+00:47:51.460 --> 00:47:52.420
+Right, yeah.
+
+00:47:52.420 --> 00:47:57.320
+So if you really like this whole idea, then just make it automatic, right?
+
+00:47:57.320 --> 00:47:57.780
+Yep.
+
+00:47:57.780 --> 00:48:04.620
+We use this at Lyft so that whenever you would clone a Lyft repository, you would automatically have everything set up, which worked pretty well.
+
+00:48:04.620 --> 00:48:05.200
+Yeah.
+
+00:48:05.200 --> 00:48:10.940
+And one of the things that all the cool repositories are doing these days is they have those little badges, like, on their readme.
+
+00:48:10.940 --> 00:48:11.480
+Mm-hmm.
+
+00:48:11.480 --> 00:48:11.880
+Right?
+
+00:48:11.880 --> 00:48:18.440
+So it's Python 3, or it has this many downloads on PyPI.org, installs via pip, and so on, or whatever.
+
+00:48:18.440 --> 00:48:26.140
+And so you guys have a nice way to badge your project as well to say that it's powered by pre-commit to sort of spread the word.
+
+00:48:26.400 --> 00:48:26.600
+Yep.
+
+00:48:26.600 --> 00:48:29.340
+Actually, this one's a really cool thing that I want to shout out.
+
+00:48:29.340 --> 00:48:36.640
+This was actually contributed by an external contributor, which was like, hey, I want a way to, like, show other people, like, what tools I'm using.
+
+00:48:36.640 --> 00:48:39.840
+And, like, pre-commit is a really cool tool, and I want to see it succeed.
+
+00:48:39.960 --> 00:48:52.440
+And so they made SVG badge and, like, made it really easy to set up a little bit of markdown or RST or whatever text document format you want to use to badge your repository and spread the word.
+
+00:48:52.440 --> 00:48:53.120
+Yeah, awesome.
+
+00:48:53.120 --> 00:48:54.140
+That's really nice.
+
+00:48:54.140 --> 00:48:59.480
+And then last question on this, I guess, is are you looking for contributors to the project?
+
+00:48:59.480 --> 00:49:03.120
+There's a lot of people who ask me, hey, I want to get started in open source.
+
+00:49:03.120 --> 00:49:05.200
+Could you recommend something I work on?
+
+00:49:05.200 --> 00:49:06.880
+Would this project count as one of those?
+
+00:49:06.880 --> 00:49:08.480
+Yeah, we're always looking for new contributors.
+
+00:49:08.780 --> 00:49:14.940
+The thing with pre-commit is, I don't want to say it's feature complete, but it hasn't really gained any large features in quite a long time.
+
+00:49:14.940 --> 00:49:21.820
+Most of the places to expand pre-commit is to add more tooling support or to add more programming language support.
+
+00:49:21.820 --> 00:49:24.960
+And I'm always looking for expansions in those spaces.
+
+00:49:24.960 --> 00:49:28.000
+Or, you know, new ideas that I just haven't really thought of yet.
+
+00:49:28.000 --> 00:49:33.460
+Yeah, maybe there's some cool tool out there that's not integrated with you guys.
+
+00:49:33.460 --> 00:49:38.760
+Maybe they could commit to pre-commit by actually committing to that other project to get the right metadata.
+
+00:49:38.760 --> 00:49:39.700
+For sure.
+
+00:49:39.700 --> 00:49:39.900
+Yeah.
+
+00:49:39.900 --> 00:49:45.540
+There are a few like help wanted getting started smaller issues that are in the issue tracker.
+
+00:49:45.540 --> 00:49:48.780
+But I usually try and keep the backlog pretty well trimmed.
+
+00:49:48.780 --> 00:49:49.400
+Yeah.
+
+00:49:49.400 --> 00:49:49.880
+Nice.
+
+00:49:49.880 --> 00:49:50.580
+All right.
+
+00:49:50.580 --> 00:49:52.100
+Well, what a cool project.
+
+00:49:52.100 --> 00:49:56.360
+And it's definitely something I'm going to be checking out as well because it looks neat.
+
+00:49:56.360 --> 00:49:56.900
+Thanks.
+
+00:49:56.900 --> 00:49:57.620
+I'm really proud of it.
+
+00:49:57.620 --> 00:49:58.740
+Yeah, you should be.
+
+00:49:58.740 --> 00:49:59.180
+It's great.
+
+00:49:59.180 --> 00:49:59.640
+All right.
+
+00:49:59.640 --> 00:50:03.120
+Before we get out of here, though, got to ask you the two final questions.
+
+00:50:03.920 --> 00:50:05.520
+You're going to write some Python code.
+
+00:50:05.520 --> 00:50:07.260
+And I know you write a lot.
+
+00:50:07.260 --> 00:50:08.920
+What editor do you use?
+
+00:50:08.920 --> 00:50:10.660
+Oh, no, this is always a fun one.
+
+00:50:10.980 --> 00:50:16.040
+So if you would have asked me this six months ago, I would have been a little bit embarrassed
+
+00:50:16.040 --> 00:50:19.120
+about my answer, which maybe I'm still embarrassed about my final answer.
+
+00:50:19.120 --> 00:50:23.460
+But six months ago, I would have said nano as my text editor of choice.
+
+00:50:23.460 --> 00:50:26.660
+I've actually I'm actually really good at using nano.
+
+00:50:27.040 --> 00:50:31.040
+Before that, I was a IntelliJ user and I used that for the longest time.
+
+00:50:31.040 --> 00:50:35.180
+But I found that like context switching between the terminal and not was was a lot of work.
+
+00:50:35.180 --> 00:50:39.680
+But anyway, my real answer to this question, I have actually written my own text editor,
+
+00:50:39.680 --> 00:50:43.980
+which in retrospect, I would not suggest anyone to do this.
+
+00:50:43.980 --> 00:50:45.800
+It's been quite a roller coaster.
+
+00:50:45.800 --> 00:50:47.880
+But my texter is called Babby.
+
+00:50:47.880 --> 00:50:49.480
+The name is a little bit silly.
+
+00:50:49.480 --> 00:50:50.580
+It's actually nano.
+
+00:50:50.580 --> 00:50:55.420
+But if on a QWERTY keyboard, if you shift your hand over one and typo nano, you end up with
+
+00:50:55.420 --> 00:50:55.740
+Babby.
+
+00:50:55.740 --> 00:50:59.180
+And this was like a common typo that I would I would make pretty frequently.
+
+00:50:59.180 --> 00:51:01.140
+But yeah, it's open source.
+
+00:51:01.140 --> 00:51:02.060
+It's written in Python.
+
+00:51:02.060 --> 00:51:06.960
+Some of the ideas behind it were like, make it really easy to hack on and like add features
+
+00:51:06.960 --> 00:51:09.940
+to and like I wrote a lot of it on my Twitch stream.
+
+00:51:09.940 --> 00:51:15.600
+And interestingly, a bunch of the features in the text editor were actually contributed by
+
+00:51:15.600 --> 00:51:19.800
+just like people in chat, which were like, hey, this would be cool if Babby did this and
+
+00:51:19.800 --> 00:51:24.620
+like run off for 15 or 20 minutes and come back and have a working patch with the
+
+00:51:24.620 --> 00:51:28.160
+new command or new cool way to do something.
+
+00:51:28.160 --> 00:51:29.000
+That's awesome.
+
+00:51:29.000 --> 00:51:30.380
+But yeah, it's pretty easy to hack on.
+
+00:51:30.380 --> 00:51:33.660
+And that's part of the reason that I kind of like it.
+
+00:51:33.660 --> 00:51:34.920
+Is it pip install Babby?
+
+00:51:34.920 --> 00:51:35.520
+Yep.
+
+00:51:35.520 --> 00:51:36.360
+Pip install Babby.
+
+00:51:36.360 --> 00:51:38.100
+And that should work on most platforms.
+
+00:51:38.100 --> 00:51:44.060
+It works on Windows, oddly enough, which was actually also another thing that chat contributed.
+
+00:51:44.060 --> 00:51:47.760
+Like I developed it entirely on Linux and it's based on curses.
+
+00:51:47.760 --> 00:51:53.180
+Windows doesn't quite have native curses support, but you can install it like Windows curses package
+
+00:51:53.180 --> 00:51:54.040
+to make that work.
+
+00:51:54.040 --> 00:51:54.360
+Okay.
+
+00:51:54.360 --> 00:51:54.800
+Yeah.
+
+00:51:54.800 --> 00:51:58.100
+It should just be pip install Babby and start hacking on it.
+
+00:51:58.100 --> 00:51:59.800
+It's not feature complete in any way.
+
+00:51:59.800 --> 00:52:02.880
+So like there's some stuff that's, you know, like horribly broken.
+
+00:52:02.880 --> 00:52:06.580
+Like if you try and rename a file in Babby, it's just like, no, I don't I don't know how
+
+00:52:06.580 --> 00:52:07.060
+to do that.
+
+00:52:07.060 --> 00:52:07.380
+Sorry.
+
+00:52:08.220 --> 00:52:10.660
+But I use it as my daily driver now.
+
+00:52:10.660 --> 00:52:14.200
+So it's I know the shortcomings and I'll eventually get around to implementing those.
+
+00:52:14.200 --> 00:52:15.200
+But yeah, cool.
+
+00:52:15.200 --> 00:52:16.020
+It's pretty neat.
+
+00:52:16.020 --> 00:52:16.460
+Awesome.
+
+00:52:16.460 --> 00:52:16.900
+All right.
+
+00:52:16.900 --> 00:52:19.200
+That is the first time anyone has ever said Babby.
+
+00:52:19.200 --> 00:52:19.840
+So very cool.
+
+00:52:19.840 --> 00:52:21.460
+Now we're getting the word out about it.
+
+00:52:21.460 --> 00:52:25.480
+I'd be surprised if anyone else uses it, to be honest.
+
+00:52:25.480 --> 00:52:27.060
+All right, cool.
+
+00:52:27.060 --> 00:52:28.300
+Well, very interesting.
+
+00:52:28.300 --> 00:52:31.700
+And then notable PyPI package, something that maybe people haven't heard about.
+
+00:52:31.700 --> 00:52:33.880
+Ooh, something that people haven't heard about.
+
+00:52:33.880 --> 00:52:37.260
+Or just that you came across, you're like, it's, you know, it's not requests.
+
+00:52:37.260 --> 00:52:37.940
+It's not Django.
+
+00:52:37.940 --> 00:52:39.820
+It's like, oh, this thing I found is pretty awesome.
+
+00:52:39.820 --> 00:52:40.620
+People should know about it.
+
+00:52:40.620 --> 00:52:41.540
+It's not requests.
+
+00:52:41.540 --> 00:52:43.160
+You mean, you mean HTTPX?
+
+00:52:43.160 --> 00:52:45.020
+HTTPX is also cool.
+
+00:52:45.020 --> 00:52:47.920
+But it's just, you know, it's like the most common answer, I would say, is requests.
+
+00:52:47.920 --> 00:52:48.660
+That's true.
+
+00:52:48.660 --> 00:52:49.000
+Yeah.
+
+00:52:49.000 --> 00:52:52.380
+I actually, controversial opinion, I really don't like requests.
+
+00:52:52.380 --> 00:52:55.740
+So can we do an unpackage for this one?
+
+00:52:55.740 --> 00:52:56.380
+You can.
+
+00:52:56.380 --> 00:52:57.160
+Well, how about it?
+
+00:52:57.160 --> 00:52:58.420
+What do you use instead of requests?
+
+00:52:58.420 --> 00:53:04.140
+So if I get away with it, like I don't need H2 support or I don't need like special streaming
+
+00:53:04.140 --> 00:53:07.240
+APIs, I'll mostly just use standard library.
+
+00:53:07.240 --> 00:53:08.120
+Yeah.
+
+00:53:08.120 --> 00:53:14.120
+Although for like newer stuff where I need like streaming APIs or H2 or I need async support,
+
+00:53:14.120 --> 00:53:16.680
+I'll reach for like HTTPX or AIO.
+
+00:53:16.680 --> 00:53:17.140
+Yeah.
+
+00:53:17.140 --> 00:53:18.400
+AIO client.
+
+00:53:18.400 --> 00:53:18.840
+Yeah.
+
+00:53:18.840 --> 00:53:19.400
+In there.
+
+00:53:19.400 --> 00:53:19.800
+Yep.
+
+00:53:19.800 --> 00:53:20.180
+That's nice.
+
+00:53:20.400 --> 00:53:23.300
+I've actually like, I've not done a lot of asyncio yet.
+
+00:53:23.300 --> 00:53:25.960
+I've been dabbling with it a little bit.
+
+00:53:25.960 --> 00:53:31.820
+I'm writing a chatbot for Twitch and I've kind of started sprinkling around some of the AIO
+
+00:53:31.820 --> 00:53:32.160
+libraries.
+
+00:53:32.160 --> 00:53:34.240
+What do you think about async in Python?
+
+00:53:34.240 --> 00:53:36.460
+I think it's pretty good.
+
+00:53:36.460 --> 00:53:41.560
+There's a few like get it set up and get it moving things that kind of bug me.
+
+00:53:41.840 --> 00:53:44.920
+It bothers me that I can't just fire and forget async stuff.
+
+00:53:44.920 --> 00:53:45.280
+Yeah.
+
+00:53:45.280 --> 00:53:46.480
+You have to await it eventually.
+
+00:53:46.480 --> 00:53:47.220
+Yeah.
+
+00:53:47.220 --> 00:53:47.600
+Yeah.
+
+00:53:47.600 --> 00:53:52.180
+Or like, like if you just call the async function, you get a coroutine, but the coroutine isn't
+
+00:53:52.180 --> 00:53:56.800
+started until you like turn it into a task or you give it to the loop to run.
+
+00:53:56.800 --> 00:53:57.180
+Yeah.
+
+00:53:57.340 --> 00:53:59.120
+So that bugs me a little bit.
+
+00:53:59.120 --> 00:54:03.480
+The fact that like the threading module doesn't support async and await.
+
+00:54:03.480 --> 00:54:04.660
+Yeah.
+
+00:54:04.660 --> 00:54:08.640
+But the IO module does, you know, the multiple, like all of them should.
+
+00:54:08.640 --> 00:54:14.600
+So I actually am a huge fan of unsync, which is a library that puts a unified API on top of
+
+00:54:14.600 --> 00:54:16.140
+those and gives you the fire and forget.
+
+00:54:16.140 --> 00:54:19.640
+And it has a background thread that manages the runtime loop for you.
+
+00:54:19.640 --> 00:54:21.540
+So, oh yeah, I've played a little bit with unsync.
+
+00:54:21.540 --> 00:54:22.280
+It seems really cool.
+
+00:54:22.280 --> 00:54:26.780
+So I think the, what we have in Python is really close to right.
+
+00:54:26.840 --> 00:54:28.140
+There's just like a few rough edges.
+
+00:54:28.140 --> 00:54:31.980
+And I think it's not necessarily unsync is the right answer, but something like that is
+
+00:54:31.980 --> 00:54:34.080
+really close to like the final polish.
+
+00:54:34.080 --> 00:54:38.700
+It needs to take it from like a, a B to an A minus or something level like that.
+
+00:54:38.700 --> 00:54:38.940
+Right.
+
+00:54:38.940 --> 00:54:39.500
+Yeah.
+
+00:54:39.500 --> 00:54:43.340
+And then maybe once we get sub interpreters dropping the guild, you can take it up a notch
+
+00:54:43.340 --> 00:54:43.700
+as well.
+
+00:54:43.700 --> 00:54:44.240
+Oh yeah.
+
+00:54:44.240 --> 00:54:45.800
+Sub interpreters can be really cool.
+
+00:54:45.800 --> 00:54:46.540
+Yeah.
+
+00:54:46.540 --> 00:54:49.180
+My problem with async is I feel like I have to rewrite all my code.
+
+00:54:49.180 --> 00:54:50.780
+Sometimes that barrier to entry.
+
+00:54:50.780 --> 00:54:51.200
+Yeah.
+
+00:54:51.200 --> 00:54:53.800
+The challenge can be like it propagates, right?
+
+00:54:53.800 --> 00:54:56.400
+You want to do it way down and well, that becomes async.
+
+00:54:56.400 --> 00:54:58.000
+And then the things that call it become async.
+
+00:54:58.000 --> 00:54:59.920
+And the things that call it become async.
+
+00:54:59.920 --> 00:55:01.260
+And yeah, that can be a challenge.
+
+00:55:01.260 --> 00:55:03.220
+And your testing library has to be async.
+
+00:55:03.220 --> 00:55:05.360
+And then like all this, all this other stuff.
+
+00:55:05.360 --> 00:55:06.160
+Yep.
+
+00:55:06.160 --> 00:55:06.620
+Yep.
+
+00:55:06.620 --> 00:55:08.000
+I think it'll get there though.
+
+00:55:08.000 --> 00:55:13.340
+I think it's just like Python has 20 years of history and async was introduced pretty late
+
+00:55:13.340 --> 00:55:14.100
+into that history.
+
+00:55:14.100 --> 00:55:19.500
+And there's going to be some growth pains as it gets better, so to speak.
+
+00:55:19.500 --> 00:55:19.900
+Yeah.
+
+00:55:19.900 --> 00:55:23.560
+But places where I think that really shines is where you don't have to think about it.
+
+00:55:23.560 --> 00:55:26.440
+Like where the thing that you're doing as async is on the boundary.
+
+00:55:26.440 --> 00:55:28.880
+So for example, FastAPI, right?
+
+00:55:28.880 --> 00:55:32.220
+You can just make your view method async or not make it async, right?
+
+00:55:32.220 --> 00:55:32.980
+It's up to you.
+
+00:55:32.980 --> 00:55:36.420
+And then if you want to do that part of your app async, you can.
+
+00:55:36.420 --> 00:55:39.800
+But it's not from the bottom up, but it's kind of from the outside in.
+
+00:55:39.800 --> 00:55:44.260
+And you can pick on the entry points from the outside where you want to adopt it.
+
+00:55:44.340 --> 00:55:46.100
+And then I think that that makes a lot of sense there.
+
+00:55:46.100 --> 00:55:46.460
+Yeah.
+
+00:55:46.460 --> 00:55:49.940
+Especially like because you have a framework calling you, so you don't necessarily have
+
+00:55:49.940 --> 00:55:51.520
+to do all async or all not.
+
+00:55:51.520 --> 00:55:52.140
+Exactly.
+
+00:55:52.140 --> 00:55:52.700
+Exactly.
+
+00:55:52.700 --> 00:55:54.580
+You get a plug into it or opt into it.
+
+00:55:54.580 --> 00:55:54.960
+Yeah.
+
+00:55:54.960 --> 00:55:57.780
+But as a library designer, it's more challenging, I think.
+
+00:55:57.780 --> 00:56:01.280
+How do you expose an async version and a non-async version and so on?
+
+00:56:01.280 --> 00:56:01.760
+Definitely.
+
+00:56:01.760 --> 00:56:02.420
+Cool.
+
+00:56:02.420 --> 00:56:03.080
+All right.
+
+00:56:03.080 --> 00:56:06.220
+Well, that's not exactly one package, but that's kind of a conversation around packages.
+
+00:56:06.220 --> 00:56:11.280
+So let's maybe just put an answer to HTTPX or AIO, HTTP client.
+
+00:56:11.380 --> 00:56:14.940
+Those are two cool HTTP libraries that kind of fit in that world.
+
+00:56:14.940 --> 00:56:15.460
+I like them.
+
+00:56:15.460 --> 00:56:15.840
+Yeah.
+
+00:56:15.840 --> 00:56:16.220
+Sounds good.
+
+00:56:16.220 --> 00:56:16.760
+Cool.
+
+00:56:16.760 --> 00:56:17.000
+Yeah.
+
+00:56:17.000 --> 00:56:19.980
+I mean, usually my answers would be around like a code formatter or linter.
+
+00:56:19.980 --> 00:56:26.060
+I'll actually shout out like two of my favorite linters that are code formatters that I tend
+
+00:56:26.060 --> 00:56:26.400
+to use.
+
+00:56:26.400 --> 00:56:29.600
+I do really love Black, but I actually don't use it myself.
+
+00:56:29.600 --> 00:56:33.020
+I actually tend to use a combination of two formatters.
+
+00:56:33.020 --> 00:56:38.580
+One of them is called Autopep8, which is very similar to Black and some of its ideas and
+
+00:56:38.580 --> 00:56:40.280
+like fixing lint errors.
+
+00:56:40.280 --> 00:56:45.140
+And the other one, which is very similar to Black, but has existed for like four or five
+
+00:56:45.140 --> 00:56:49.940
+years, is a tool called AddTrailingComma, which literally does what it says on the tin.
+
+00:56:49.940 --> 00:56:54.420
+It tries to enforce trailing commas in the same way that Black does.
+
+00:56:54.420 --> 00:56:55.600
+Right.
+
+00:56:55.600 --> 00:57:00.520
+So the final element in like a list format, it would have that so that that line doesn't
+
+00:57:00.520 --> 00:57:02.720
+get a diff when you add the next element.
+
+00:57:03.040 --> 00:57:03.180
+Yep.
+
+00:57:03.180 --> 00:57:08.180
+It tries to make minimal diffs when adding or removing like parameters and like lists or
+
+00:57:08.180 --> 00:57:14.660
+tuples or function signatures or class signatures or type annotations or the whole gamut of
+
+00:57:14.660 --> 00:57:17.060
+places where you can have braces and commas.
+
+00:57:17.060 --> 00:57:17.620
+Cool.
+
+00:57:17.620 --> 00:57:18.240
+All right.
+
+00:57:18.240 --> 00:57:19.160
+That's a bunch of good ones.
+
+00:57:19.160 --> 00:57:19.640
+Okay.
+
+00:57:19.640 --> 00:57:20.540
+Final call to action.
+
+00:57:20.540 --> 00:57:22.400
+People are interested in pre-commit.
+
+00:57:22.400 --> 00:57:23.500
+They want to check it out.
+
+00:57:23.500 --> 00:57:24.260
+They want to start using it.
+
+00:57:24.260 --> 00:57:24.920
+What do you tell them?
+
+00:57:24.920 --> 00:57:27.740
+So I would tell them to go to pre-commit.com.
+
+00:57:27.740 --> 00:57:29.660
+That's probably the place where you can get the most.
+
+00:57:29.660 --> 00:57:31.760
+It's pre-commit.com, right?
+
+00:57:31.760 --> 00:57:32.360
+Correct.
+
+00:57:32.360 --> 00:57:32.600
+Yeah.
+
+00:57:32.600 --> 00:57:33.120
+With a dash.
+
+00:57:33.120 --> 00:57:37.060
+The one without a dash is like some weird real estate website that I've been trying to
+
+00:57:37.060 --> 00:57:41.620
+bug the guy to like give up his domain for years, but I don't know that he actually reads
+
+00:57:41.620 --> 00:57:42.340
+his email at all.
+
+00:57:42.340 --> 00:57:46.620
+But yeah, I would check out pre-commit.com and that's where you can get all the information
+
+00:57:46.620 --> 00:57:47.240
+about that.
+
+00:57:47.240 --> 00:57:53.540
+And pretty soon, pre-commit.ci will have more information about the CI system that I'm building
+
+00:57:53.540 --> 00:57:54.160
+around pre-commit.
+
+00:57:54.160 --> 00:57:54.820
+Oh yeah.
+
+00:57:54.820 --> 00:57:55.620
+That's really exciting.
+
+00:57:55.620 --> 00:57:56.560
+That's going to be cool as well.
+
+00:57:56.560 --> 00:57:58.080
+I'll put a link to that in the show notes also.
+
+00:57:58.080 --> 00:57:58.560
+Cool.
+
+00:57:58.560 --> 00:57:59.100
+All right.
+
+00:57:59.400 --> 00:57:59.900
+Thank you, Anthony.
+
+00:57:59.900 --> 00:58:03.320
+It's great to chat with you and see all these amazing things you're creating.
+
+00:58:03.320 --> 00:58:03.860
+Yep.
+
+00:58:03.860 --> 00:58:05.040
+Always glad to chat.
+
+00:58:05.040 --> 00:58:05.440
+Yep.
+
+00:58:05.440 --> 00:58:06.260
+But see you later.
+
+00:58:06.260 --> 00:58:06.700
+Bye.
+
+00:58:06.700 --> 00:58:10.600
+This has been another episode of Talk Python to Me.
+
+00:58:10.600 --> 00:58:15.560
+Our guest on this episode was Anthony Sotili and it's been brought to you by Brilliant.org
+
+00:58:15.560 --> 00:58:17.600
+and us over at Talk Python Training.
+
+00:58:17.600 --> 00:58:22.120
+Brilliant.org encourages you to level up your analytical skills and knowledge.
+
+00:58:22.120 --> 00:58:27.940
+Visit talkpython.fm/Brilliant and get Brilliant Premium to learn something new every
+
+00:58:27.940 --> 00:58:28.160
+day.
+
+00:58:29.140 --> 00:58:30.560
+Want to level up your Python?
+
+00:58:30.560 --> 00:58:35.380
+If you're just getting started, try my Python Jumpstart by Building 10 Apps course.
+
+00:58:35.700 --> 00:58:40.460
+Or if you're looking for something more advanced, check out our new Async course that digs into
+
+00:58:40.460 --> 00:58:43.520
+all the different types of async programming you can do in Python.
+
+00:58:43.520 --> 00:58:47.480
+And of course, if you're interested in more than one of these, be sure to check out our
+
+00:58:47.480 --> 00:58:48.200
+Everything Bundle.
+
+00:58:48.360 --> 00:58:50.080
+It's like a subscription that never expires.
+
+00:58:50.080 --> 00:58:52.220
+Be sure to subscribe to the show.
+
+00:58:52.220 --> 00:58:54.620
+Open your favorite podcatcher and search for Python.
+
+00:58:54.620 --> 00:58:55.860
+We should be right at the top.
+
+00:58:55.860 --> 00:59:01.420
+You can also find the iTunes feed at /itunes, the Google Play feed at /play, and the
+
+00:59:01.420 --> 00:59:04.860
+direct RSS feed at /rss on talkpython.fm.
+
+00:59:05.360 --> 00:59:06.920
+This is your host, Michael Kennedy.
+
+00:59:06.920 --> 00:59:08.420
+Thanks so much for listening.
+
+00:59:08.420 --> 00:59:09.480
+I really appreciate it.
+
+00:59:09.480 --> 00:59:11.240
+Now get out there and write some Python code.
+
+00:59:11.240 --> 00:59:32.120
+Thank you.
+

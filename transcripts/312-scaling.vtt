@@ -1,0 +1,3059 @@
+WEBVTT
+
+00:00:00.001 --> 00:00:03.980
+How do you build Python applications that can handle literally billions of requests?
+
+00:00:03.980 --> 00:00:07.820
+It certainly has been done to great success with places like YouTube,
+
+00:00:07.820 --> 00:00:12.780
+handling a million requests a second, and Instagram, as well as internal pricing APIs
+
+00:00:12.780 --> 00:00:18.580
+at places like PayPal and other banks. While Python can be fast at some operations and slow
+
+00:00:18.580 --> 00:00:22.860
+at others, it's generally not so much about the language raw performance as it is about
+
+00:00:22.860 --> 00:00:27.780
+building an architecture for that scale. That's why it's great to have Julian Danzhao on this show.
+
+00:00:27.960 --> 00:00:30.720
+We'll dive into his book, The Hacker's Guide to Scaling Python,
+
+00:00:30.720 --> 00:00:34.220
+as well as some of his performance work he's been doing over at Datadog.
+
+00:00:34.220 --> 00:00:39.440
+This is Talk Python to Me, episode 312, recorded April 8th, 2021.
+
+00:00:39.440 --> 00:00:57.620
+Welcome to Talk Python to Me, a weekly podcast on Python, the language, the libraries, the ecosystem,
+
+00:00:57.620 --> 00:01:02.100
+and the personalities. This is your host, Michael Kennedy. Follow me on Twitter where I'm at,
+
+00:01:02.100 --> 00:01:06.340
+mkennedy, and keep up with the show and listen to past episodes at talkpython.fm,
+
+00:01:06.340 --> 00:01:09.380
+and follow the show on Twitter via at Talk Python.
+
+00:01:09.380 --> 00:01:14.800
+This episode is brought to you by 45 Drives and us over at Talk Python Training. Please check out
+
+00:01:14.800 --> 00:01:18.420
+what we're offering during those segments. It really helps support the show. Julian,
+
+00:01:18.420 --> 00:01:19.800
+welcome to Talk Python to Me.
+
+00:01:19.800 --> 00:01:20.560
+Thank you.
+
+00:01:20.840 --> 00:01:25.860
+It's great to have you here. I think we've got a bunch of fun stuff to talk about. It's really
+
+00:01:25.860 --> 00:01:30.640
+interesting to think about how we go about building software at scale. And one of the things that just,
+
+00:01:30.640 --> 00:01:35.260
+I don't know how you feel about it, reading your book, I feel like you must have some opinions on
+
+00:01:35.260 --> 00:01:40.860
+this. But when I go to a website that is clearly not a small little company, it's obviously a large
+
+00:01:40.860 --> 00:01:45.960
+company with money to put behind professional developers and stuff. And you click on it,
+
+00:01:45.960 --> 00:01:51.040
+and it takes four seconds for every page load. It's just like, how is it possible that you're
+
+00:01:51.040 --> 00:01:56.340
+building this software with so much? Oh, this is the face of your business. And sometimes they decide
+
+00:01:56.340 --> 00:02:01.820
+to fix it with front end frameworks. So then you get like a quick splash of like a box with a little UI,
+
+00:02:01.820 --> 00:02:07.220
+and then it says loading for four seconds, which to me feels no better. So I don't know, I feel like
+
+00:02:07.220 --> 00:02:11.300
+building scalable software is really important. And still people are getting it quite wrong quite often.
+
+00:02:11.300 --> 00:02:17.380
+Yeah, I mean, I think it's all also, there's a lot of things that you want to do when you do that,
+
+00:02:17.380 --> 00:02:22.300
+which is like, I mean, write proper code for sure. But also you want to be able to
+
+00:02:22.300 --> 00:02:28.260
+meter everything, like to understand where the bottleneck might be. And that's not the easy part,
+
+00:02:28.260 --> 00:02:34.820
+like writing code and fixing bugs, we all know to do that. But then if we are asking you to optimize,
+
+00:02:34.820 --> 00:02:39.700
+that's one of the things that I usually use as an example when I talk about profiling is like,
+
+00:02:39.840 --> 00:02:44.800
+well, if I were to ask you tomorrow, like I want you to tell me which part of your code is using
+
+00:02:44.800 --> 00:02:50.540
+20% of the CPU, you really don't know. Like you can guess, you can probably do a good guess most of
+
+00:02:50.540 --> 00:02:54.780
+the time. But for real, you don't know, you have no clue until you actually look at the data,
+
+00:02:54.780 --> 00:02:59.460
+use a profiler or any tool for that being that will give you this information.
+
+00:02:59.460 --> 00:03:05.220
+Yeah, we're really bad in using our intuition for those things. I remember the most extreme example
+
+00:03:05.220 --> 00:03:08.980
+I ever had of this was I was working on this project that was doing huge amounts of math,
+
+00:03:08.980 --> 00:03:14.680
+wavelet decomposition, kind of like Fourier analysis, but I think kind of worse. And I thought,
+
+00:03:14.680 --> 00:03:20.020
+okay, this is too slow. It must be in all this complicated math area. And I don't understand the
+
+00:03:20.020 --> 00:03:23.320
+math very well. And I don't want to change it. But this has got to be here, right? It's slow.
+
+00:03:23.560 --> 00:03:29.120
+And I put it into the profiler. And the thing that turned out was, we were spending 80% of our time
+
+00:03:29.120 --> 00:03:32.920
+just doing and like finding the index of an element. Yeah, in a list.
+
+00:03:32.920 --> 00:03:35.120
+Yeah, which is not obvious at all.
+
+00:03:35.120 --> 00:03:36.240
+And we it's insane.
+
+00:03:36.240 --> 00:03:41.320
+Yeah. My favorite, I think, programming quote is from Donald Knuth, which is,
+
+00:03:41.320 --> 00:03:46.980
+value optimization is the root of all evil. Like it's, yeah, widely known. I mean, I think I will
+
+00:03:46.980 --> 00:03:48.740
+quote it every week or so now.
+
+00:03:48.740 --> 00:03:53.220
+Yeah, it's fantastic. It's fantastic. Yeah. In my case, we switched it to a dictionary and it went
+
+00:03:53.220 --> 00:03:57.720
+five times faster. And that was it. Like it was incredibly easy to fix. But understanding that
+
+00:03:57.720 --> 00:04:02.360
+that was where the problem was, I would have never guessed. So yeah, it's hard to understand. And we're
+
+00:04:02.360 --> 00:04:07.080
+going to talk about finding these challenges and also some of the design patterns. You've written a
+
+00:04:07.080 --> 00:04:11.340
+really cool book called The Hacker's Guide to Scaling Python. And we're going to dive into some of the
+
+00:04:11.340 --> 00:04:15.720
+ideas you cover there. Also talk about some of your work at Datadog that where you're doing some of the
+
+00:04:15.720 --> 00:04:19.780
+profiling stuff, not necessarily for you internally, although I'm sure there is some,
+
+00:04:19.780 --> 00:04:24.920
+but it also could be, you know, for so many people, like you guys basically have profiling as a service
+
+00:04:24.920 --> 00:04:29.220
+and, you know, runtime as a service, runtime analysis of the service, which is great. And we'll get into
+
+00:04:29.220 --> 00:04:32.660
+that. But before we do, let's start with your story. How do you get into programming in Python?
+
+00:04:32.660 --> 00:04:37.780
+That was a good question. So actually, I think I started like 15 years ago or so. I actually started
+
+00:04:37.780 --> 00:04:42.460
+to learn Per, the first programming language, like, you know, kind of scripting language,
+
+00:04:42.460 --> 00:04:48.100
+like we used to call them at least a few years ago. And I like Perl, but I wanted to learn like
+
+00:04:48.100 --> 00:04:54.480
+object-oriented programming. And I never understood Perl object-oriented programming. Like their model
+
+00:04:54.480 --> 00:04:59.600
+was so weird for me, maybe because I was young and I don't know. Somebody talked to me about Python.
+
+00:04:59.600 --> 00:05:05.700
+I bought the book, like the Auree book about Python. And I kept it around for a year or so because I had
+
+00:05:05.700 --> 00:05:11.740
+no project at all, like no idea. Most of my job back then was to be a sysadmin. So not really anything
+
+00:05:11.740 --> 00:05:17.620
+to do with Python. And someday I'm like, I was working on DPN, like the distribution. And I was
+
+00:05:17.620 --> 00:05:22.820
+like, oh, I need to do something like a new project. And I'm going to do that with Python. And I started
+
+00:05:22.820 --> 00:05:27.260
+to learn Python this way with my project on one side, the book on the other side. I was like,
+
+00:05:27.260 --> 00:05:30.580
+that's amazing. I love it. And I never stopped doing Python after that.
+
+00:05:31.140 --> 00:05:36.120
+Yeah, that's fantastic. It feels like it very much was a automate the boring stuff
+
+00:05:36.120 --> 00:05:41.220
+type of introduction. Like there's these little problems and bash is too small or too hard to make
+
+00:05:41.220 --> 00:05:44.700
+it solve those problems. What else could I use? And Python was a good fit for that.
+
+00:05:44.700 --> 00:05:48.900
+Yeah, it's a great way. I mean, usually I have a lot of people coming to me over the years and
+
+00:05:48.900 --> 00:05:52.700
+being like, Julian, I want to contribute to a project. I want to start something in Python.
+
+00:05:52.700 --> 00:05:55.940
+Like, what should I do? And like, I don't know. Like, what's your problem you want to solve?
+
+00:05:55.940 --> 00:06:00.800
+Like if you want to find a boring thing you want to automate or anything, that's the best idea you can have to
+
+00:06:00.800 --> 00:06:05.040
+if it's an oposal project that exists already. Great. I mean, good for you. It's even better.
+
+00:06:05.040 --> 00:06:10.940
+But I mean, just write a script or whatever you want to start hacking and learning. That's the best
+
+00:06:10.940 --> 00:06:15.880
+ways to scratch your own itch. Yeah, absolutely. It's so easy to think of, well, I want to build this
+
+00:06:15.880 --> 00:06:20.200
+great big thing, but we all have these little problems that need solving. And it's good to start
+
+00:06:20.200 --> 00:06:24.800
+small and practice small and build up. And I find it really valuable. People often ask me like,
+
+00:06:24.800 --> 00:06:28.820
+oh, I want to get started. What should I do? Should I build a website like this? Maybe machine learning
+
+00:06:28.820 --> 00:06:32.380
+thing like that? I'm like, whoa, whoa, whoa. Like that's, yes, you definitely want to get there,
+
+00:06:32.380 --> 00:06:36.500
+but you're really, really just starting. Like, don't kill yourself by trying to take on too much
+
+00:06:36.500 --> 00:06:39.980
+at once. So yeah, it sounds like it worked well for you. How about now? What are you doing day to day?
+
+00:06:39.980 --> 00:06:45.580
+I hinted at Datadog. Yeah. So I've been doing Python for the next 10 years. After I learned Python,
+
+00:06:45.580 --> 00:06:51.820
+I've been working on OpenStack, which is a huge Python project, implementing an open cloud system
+
+00:06:51.820 --> 00:06:59.500
+where you can host your own AWS basically. And so everything is in Python there. So I work on very
+
+00:06:59.500 --> 00:07:04.380
+large, one of the largest, I think, Python project, which has opened the site for a few years. And then
+
+00:07:04.380 --> 00:07:10.060
+I decided to go for a change. And Datadog was looking into building a profiling team,
+
+00:07:10.060 --> 00:07:15.900
+building a profiler, a continuous profiler, which means you would not profile your script on your
+
+00:07:15.900 --> 00:07:20.000
+laptop, but you would profile your application running on your production system for real.
+
+00:07:20.000 --> 00:07:26.260
+And I was like, that's not something I think anyone did before in Python at least. So I want to do that.
+
+00:07:26.260 --> 00:07:29.320
+And that's what I started to do like two years ago. And I'm still doing that.
+
+00:07:29.320 --> 00:07:35.400
+That's really interesting because normally you have this quantum mechanics problem with profilers and
+
+00:07:35.400 --> 00:07:41.820
+debuggers, especially profilers, like the line by line ones so much where it runs at one speed normally,
+
+00:07:41.820 --> 00:07:46.160
+and then you hit it with like C profile or something, and it's five times slower or whatever
+
+00:07:46.160 --> 00:07:53.520
+it turns out to be. And you're like, whoa, this is a lot slower. Hopefully it gives you just a factor
+
+00:07:53.520 --> 00:08:00.320
+of slowness over it. Like if it says it's been 20% here and 40% there, hopefully it's still true at
+
+00:08:00.320 --> 00:08:04.880
+normal speed. But sometimes it really depends, right? Like if you're calling a function,
+
+00:08:04.880 --> 00:08:09.240
+that goes out of your system and that's 20%, and then you're doing a really tight loop with lots
+
+00:08:09.240 --> 00:08:15.580
+of code, the profiler will introduce more overhead in your tight loop part than it will in the external
+
+00:08:15.580 --> 00:08:21.020
+system where it adds basically zero overhead. And so that's a big challenge of understanding profiling
+
+00:08:21.020 --> 00:08:27.400
+results in general. And it's a really big reason to not just run the profiler constantly in production.
+
+00:08:27.400 --> 00:08:28.580
+Right?
+
+00:08:28.580 --> 00:08:34.680
+Yeah, exactly. And people do that now. I mean, if you have the right profiler, so the way I see
+
+00:08:34.680 --> 00:08:38.580
+profile works, I mean, and we can dig a bit into that, but like C profile, the way it works,
+
+00:08:38.580 --> 00:08:43.340
+like it's going to intercept everything. It's what we call a data mystic profiler, where if you run the
+
+00:08:43.340 --> 00:08:48.560
+same program twice, you will get the same C profile output for sure. Like it's intercepting all the
+
+00:08:48.560 --> 00:08:53.020
+function calls that you have. So if you have a ton of function calls, it makes things like you were
+
+00:08:53.020 --> 00:08:56.540
+saying five times slower for sure, at least. So yeah.
+
+00:08:56.540 --> 00:09:01.380
+Yeah. And it'll inject a little bits of bytecode at the beginning and end of every function, all sorts of
+
+00:09:01.380 --> 00:09:03.280
+stuff. And it actually changes what happens, right?
+
+00:09:03.280 --> 00:09:08.480
+Yeah, exactly. So you can change the timing. It can change. I mean, it's so it's a good solution to like
+
+00:09:08.480 --> 00:09:12.880
+ballpark estimate of what's going on and it gives you pretty good results. And usually it's a good tool.
+
+00:09:12.940 --> 00:09:18.740
+like I use it a lot of times over the years and it always gave me a good information. The problem with
+
+00:09:18.740 --> 00:09:22.300
+C profiles is that you can't use in production because it's too slow. It's also not providing
+
+00:09:22.300 --> 00:09:27.560
+information. Like it gives you the whole time that you use, but not necessarily the CPU time of each of
+
+00:09:27.560 --> 00:09:32.520
+your thread, et cetera, that you're going to use. So the information is not really fine grained. It's
+
+00:09:32.520 --> 00:09:34.020
+a rough whole time.
+
+00:09:34.020 --> 00:09:39.140
+Yeah. It's probably not streaming either. Right. It probably it runs and then gives you the answer.
+
+00:09:39.140 --> 00:09:42.500
+Exactly. It's not some sort of real time stream of what's happening.
+
+00:09:42.500 --> 00:09:46.960
+So, I mean, for one of the kids, like we were mentioning previously where, I mean, you know,
+
+00:09:46.960 --> 00:09:52.080
+this part of the code, like this scenario that you can recreate in a one minute script or something,
+
+00:09:52.080 --> 00:09:56.260
+you know, it's slow and it should take only 30 seconds. You can run C profile around it on one
+
+00:09:56.260 --> 00:10:00.160
+minute on your laptop and be, okay, I'm going to optimize this piece of code. But if you want to see
+
+00:10:00.160 --> 00:10:04.120
+what's happening on production with a real workload for real and like you were saying,
+
+00:10:04.120 --> 00:10:10.080
+streaming the data to see in real time what's going on, or C profile doesn't fit. And also
+
+00:10:10.080 --> 00:10:16.160
+any data mystic profiler, which tries to catch everything your program does will not work with
+
+00:10:16.160 --> 00:10:21.640
+good performance. So you have to do another approach, which is what most profiling profilers for
+
+00:10:21.640 --> 00:10:26.160
+continuous profiling do, which is statistical profiling, where you actually sample your program
+
+00:10:26.160 --> 00:10:31.300
+and you try to look what it does most of the time and the most often. So it's not a true
+
+00:10:31.300 --> 00:10:36.140
+representation. It's not like the reality 100%. It's a good statistical approach of what your
+
+00:10:36.140 --> 00:10:37.240
+program is doing most of the time.
+
+00:10:37.240 --> 00:10:43.380
+I see. Is that more of the sampling style of profilers where it's like every 200 milliseconds,
+
+00:10:43.380 --> 00:10:45.320
+like, what are you doing now? What are you doing now?
+
+00:10:45.320 --> 00:10:45.880
+Exactly.
+
+00:10:45.880 --> 00:10:48.500
+Like a really annoying young child. Like, what are you doing now?
+
+00:10:48.500 --> 00:10:49.240
+Exactly.
+
+00:10:49.240 --> 00:10:53.420
+And it's going to miss some things, right? If there's a function you call and it's really quick,
+
+00:10:53.420 --> 00:10:56.500
+it's like, well, you never called that function as far as the profiler is concerned,
+
+00:10:56.500 --> 00:11:01.140
+because it just didn't line up. But if you do it enough over time, you'll get to see a good picture
+
+00:11:01.140 --> 00:11:05.140
+of exactly. You don't care about the stuff that happens really fast, but you care about the stuff
+
+00:11:05.140 --> 00:11:09.600
+that happens really slow. And those are going to show up pretty largely in these sorts of sampling.
+
+00:11:09.600 --> 00:11:14.180
+Exactly. So if you see profile, you will see this very small function because it catches
+
+00:11:14.180 --> 00:11:19.500
+everything. But reality for the purpose of optimizing your program, you actually don't care.
+
+00:11:19.560 --> 00:11:23.760
+You don't care if you don't see them statistically, but because they're not important. So that's not
+
+00:11:23.760 --> 00:11:28.480
+what you want to optimize in the end. That's not where your problem lies, probably. It's in the
+
+00:11:28.480 --> 00:11:33.140
+like outliers, the one that you see often in your profile, the one using, you see like 80% of the
+
+00:11:33.140 --> 00:11:37.120
+time when the profiler asks your program, what are you doing? It's always the same function being called,
+
+00:11:37.120 --> 00:11:38.260
+what's the one you want to look at?
+
+00:11:38.260 --> 00:11:43.140
+Yeah. So I think that fits quite well with the production style. I know I was going to ask you about
+
+00:11:43.140 --> 00:11:46.380
+your book, but we're sort of down in this profiling story.
+
+00:11:46.380 --> 00:11:47.040
+That's fine.
+
+00:11:47.240 --> 00:11:53.280
+And you know, I've used Datadog's tools for error handling and like exception, you know,
+
+00:11:53.280 --> 00:11:56.160
+let me know when there's an error type thing. So I have that set up on like Talk Python,
+
+00:11:56.160 --> 00:12:00.180
+the podcast site and the Talk Python training courses site. And of course, when you turn it on,
+
+00:12:00.180 --> 00:12:04.660
+you get all these errors that are like happening in the site, but nobody's complained to you that
+
+00:12:04.660 --> 00:12:08.460
+you didn't realize there's some edge case or whatever. And it's really fantastic. But something
+
+00:12:08.460 --> 00:12:14.240
+I've never looked at is the real time profiling stuff that you're working on these days. So maybe just,
+
+00:12:14.240 --> 00:12:17.660
+I have no idea what this is like, I can imagine maybe what it's like, but you know,
+
+00:12:17.660 --> 00:12:21.040
+give me a sense of what kind of stuff do I get out of it?
+
+00:12:21.160 --> 00:12:25.480
+Sure. Yeah. So what you'll get, the first thing you'll get is to profile. So you'll get flame charts,
+
+00:12:25.480 --> 00:12:30.580
+essentially, which are, you know, this kind of charts where, I mean, they look like flames,
+
+00:12:30.580 --> 00:12:36.060
+usually because they are like orange and red and going up and down and the height being the depth
+
+00:12:36.060 --> 00:12:42.600
+of your stack trace and the width being the percent of time of resources that you use. So usually it's
+
+00:12:42.600 --> 00:12:47.420
+time you're going to meter. For example, we meter a wall time in CPU. So what you'll see is if your
+
+00:12:47.420 --> 00:12:52.620
+function using a lot of wall time, is it waiting for something? Is it waiting for a socket to be read,
+
+00:12:52.620 --> 00:12:58.320
+for a lock to be acquired? But one of the other profile we gather is how much CPU is actually using.
+
+00:12:58.320 --> 00:13:03.040
+So if you want to know if your program is CPU bound, you will see which function is actually
+
+00:13:03.040 --> 00:13:04.880
+using the most CPU in your program.
+
+00:13:04.880 --> 00:13:09.580
+Right. Because I could go to like my hosting provider and I could check a box and say, no,
+
+00:13:09.580 --> 00:13:14.140
+no, I don't want to pay $20 a month. I want to pay $50 a month to make this go two and a half times
+
+00:13:14.140 --> 00:13:20.920
+faster. If I'm CPU bound, that might actually work. But if I'm not, it probably has no effect or small
+
+00:13:20.920 --> 00:13:21.580
+effects, right?
+
+00:13:21.580 --> 00:13:22.160
+Exactly.
+
+00:13:24.500 --> 00:13:30.320
+This portion of TalkPytherMade is brought to you by 45Drives. 45Drives offers the only enterprise
+
+00:13:30.320 --> 00:13:35.780
+data storage servers powered by open source. They build their solutions with off the shelf hardware
+
+00:13:35.780 --> 00:13:40.920
+and use software defined open source designs that are unmatched in price and flexibility.
+
+00:13:40.920 --> 00:13:47.160
+The open source solutions 45Drives uses are powerful, robust, and completely supported from
+
+00:13:47.160 --> 00:13:52.520
+end to end. And best of all, they come with zero software licensing fees and no vendor lock-in.
+
+00:13:53.120 --> 00:13:57.900
+45Drives offers servers ranging from four to 60 bays and can guide your organization through
+
+00:13:57.900 --> 00:14:03.040
+any sized data storage challenge. Check out what they have to offer over at talkpython.fm
+
+00:14:03.040 --> 00:14:08.020
+slash 45Drives. If you get in touch with them and say you heard about their offer from us,
+
+00:14:08.020 --> 00:14:14.600
+you'll get a chance to win a custom front plate. So visit talkpython.fm/45Drives or just click
+
+00:14:14.600 --> 00:14:21.220
+the link in your podcast player. So knowing that answer, knowing that would be really helpful.
+
+00:14:21.740 --> 00:14:25.680
+Can I scale this vertically or do I have to change something else? Yeah.
+
+00:14:25.680 --> 00:14:31.080
+Yeah. It's a whole story on profiling where, I mean, most of our users, when they come to us,
+
+00:14:31.080 --> 00:14:35.600
+like we save thousands of dollars because we actually understood that we got a button like
+
+00:14:35.600 --> 00:14:39.780
+here or there and we were able to downsize our deployment because we optimized this function
+
+00:14:39.780 --> 00:14:45.320
+and we understood that this was blocked by this IO or whatever. And when you understand all of that
+
+00:14:45.320 --> 00:14:49.220
+with profiling, whatever the language is, by the way, and being Python or Java or anything,
+
+00:14:49.220 --> 00:14:54.320
+you actually save a lot, a lot. We have terrific stories about customers or internal users
+
+00:14:54.320 --> 00:14:58.940
+saving thousands of dollars just because they were able to understand what was going on in their
+
+00:14:58.940 --> 00:15:03.440
+program. And scaling up was not the solution, optimizing the right function was the solution.
+
+00:15:03.600 --> 00:15:08.380
+So yeah, you'll get CPU, WorldCharm, and we also do memory profiling. So you'll see all the memory
+
+00:15:08.380 --> 00:15:13.820
+allocations that are done by Python, which are kind of tied to the CPU usage because the more objects
+
+00:15:13.820 --> 00:15:18.420
+you're going to allocate, and when I mean allocate, I mean, even if they don't stay around, instead you
+
+00:15:18.420 --> 00:15:23.720
+want to create a new string, a new object or whatever, even for a few seconds, milliseconds,
+
+00:15:24.060 --> 00:15:28.480
+it costs you memory, like you have to call malloc, and there's a way you have to allocate memory,
+
+00:15:28.480 --> 00:15:33.680
+which takes time. So you will see that. So if you use a lot of objects that are not reused,
+
+00:15:33.680 --> 00:15:39.340
+for example, you might want to see that. The latest one we shipped two weeks ago is the
+
+00:15:39.340 --> 00:15:44.600
+heap profiler, where you actually see a sample of your heap, like the memory you use in real time,
+
+00:15:44.600 --> 00:15:47.100
+and what has been allocated on the heap.
+
+00:15:47.100 --> 00:15:50.740
+Can you tell me how many of each type of object I have?
+
+00:15:50.740 --> 00:15:55.920
+Like you've got 20 megs in lists, you've got 10 megs in strings?
+
+00:15:55.920 --> 00:16:00.480
+No, no. I mean, in theory, yes. In practice, no. And I'm actually fighting upstream with the
+
+00:16:00.480 --> 00:16:04.200
+CPython folks to be able to do that. It's a limitation of CPython right now. Technically,
+
+00:16:04.200 --> 00:16:08.680
+I can't really do that, but I'm able to give you the line number of the file, the function name,
+
+00:16:08.680 --> 00:16:12.860
+and the thread that has allocated the memory. And yeah, I wish I could know the class name,
+
+00:16:12.860 --> 00:16:16.080
+but it would be amazing. Like for example, Java has that, and I want to have that in Python.
+
+00:16:16.080 --> 00:16:17.840
+That will be my battle for next year.
+
+00:16:18.440 --> 00:16:22.500
+I mean, if you have a memory leak, for example, which is quite common, right, where you keep
+
+00:16:22.500 --> 00:16:26.940
+adding more objects on top of each other, and at some point, your memory grows forever,
+
+00:16:26.940 --> 00:16:31.800
+and you don't know where that comes from. With such a tool, a profiler, you're able to see
+
+00:16:31.800 --> 00:16:36.760
+which stack trace is going to add more and more and more memory forever, and you'd be able to...
+
+00:16:36.760 --> 00:16:37.080
+I see.
+
+00:16:37.320 --> 00:16:41.980
+It won't give you the solution to your problem. It will give you where to look at,
+
+00:16:41.980 --> 00:16:43.320
+which usually is...
+
+00:16:43.320 --> 00:16:44.140
+It's still pretty good.
+
+00:16:44.140 --> 00:16:44.520
+Yeah.
+
+00:16:44.520 --> 00:16:46.100
+Yeah, it's like 90% of the problem.
+
+00:16:46.100 --> 00:16:46.560
+So yeah.
+
+00:16:46.560 --> 00:16:51.360
+So can you talk a little bit about the internals of like how this works? I'm guessing it's not
+
+00:16:51.360 --> 00:16:52.460
+using Cprofile.
+
+00:16:52.460 --> 00:16:53.340
+No.
+
+00:16:53.340 --> 00:16:58.560
+Directly. Is it using other open source things to sort of put the service together, or is it...
+
+00:16:58.560 --> 00:17:02.140
+No, it's custom stuff. Everything is open source, so we want you to look at it. It's on our
+
+00:17:02.140 --> 00:17:08.000
+DD trace repository on GitHub. So the way it works for the CPU and WorldTime Profiler, it's pretty easy.
+
+00:17:08.000 --> 00:17:12.480
+A lot of people know about that. You can actually ask CPython to give you the list of running threads.
+
+00:17:12.480 --> 00:17:18.140
+So if you do that 100 times per second, you get a list of running threads, and you can get the stack
+
+00:17:18.140 --> 00:17:21.740
+trace they're running, like the function name, line number that they're running. So if you do that
+
+00:17:21.740 --> 00:17:26.440
+a lot of time, you get a pretty good picture of what your program and threads are doing most of the time.
+
+00:17:26.440 --> 00:17:31.580
+So, I mean, in summary, that's how it works. It's pretty easy. Then there's a few tricks to get the
+
+00:17:31.580 --> 00:17:36.700
+CPU chime, et cetera, using the P thread API, but that's most of it. And for memory, there are actually
+
+00:17:36.700 --> 00:17:43.340
+a good thing that has been done by a friend, Victor Stinner, which is one of the CPython.
+
+00:17:43.340 --> 00:17:47.620
+He's done a great amount of performance improvement, like really important stuff, yeah.
+
+00:17:47.620 --> 00:17:52.180
+And one of the things he did in Python 3.4, so it was a long time ago, is to add this module trace
+
+00:17:52.180 --> 00:17:57.620
+malloc, which we don't use. I mean, actually built on top of it at some point, but we don't use it
+
+00:17:57.620 --> 00:18:04.260
+anymore. We built a lightweight version of it, but it opened the memory API of CPython, where we can
+
+00:18:04.260 --> 00:18:10.500
+actually plug your own memory allocator to CPython. And that's what we do with our profiler. We replace
+
+00:18:10.500 --> 00:18:16.740
+a memory allocator bar, a tiny wrapper that catches every location and then do profiling on top of it.
+
+00:18:16.740 --> 00:18:21.780
+Right, exactly. So when it says allocate this, you say record this was allocated.
+
+00:18:21.780 --> 00:18:22.260
+Exactly.
+
+00:18:22.260 --> 00:18:24.500
+And then allocate it, right? Something like that.
+
+00:18:24.500 --> 00:18:24.980
+Yeah.
+
+00:18:24.980 --> 00:18:28.740
+Is this the thing you were talking about on the screen, this dd trace py, or is it?
+
+00:18:28.740 --> 00:18:35.220
+Yeah, exactly. You have a dd trace directory inside of the profiling directory and all the code is there.
+
+00:18:35.220 --> 00:18:40.740
+So you can take a look at how it works internally. Yeah. I mean, the way we build it is to be able to be
+
+00:18:41.380 --> 00:18:47.860
+easy to ship, to deploy. You don't require any extra permission. There are a lot of different
+
+00:18:47.860 --> 00:18:53.940
+ways of doing profiling using, for example, Linux capabilities, a lot of things that are external and
+
+00:18:53.940 --> 00:18:59.620
+not necessarily portable outside Linux. But the problem is that most of the time they require extra
+
+00:18:59.620 --> 00:19:04.260
+permission, like being a root or anything, like using the ptrace API requires you extra permission,
+
+00:19:04.260 --> 00:19:08.820
+which is great. I mean, great solution, maybe better technically for some point,
+
+00:19:08.820 --> 00:19:14.260
+compared to what we do there. But they are very complicated to deploy. So that was another thing
+
+00:19:14.260 --> 00:19:16.980
+that drives us, I think, for writing this.
+
+00:19:16.980 --> 00:19:21.940
+All right. So a simple pip install, plug in a line or two, and off you go, right?
+
+00:19:21.940 --> 00:19:29.380
+Exactly. I mean, it's pretty simple. And so for exporting the data, we use a pprof format from Go,
+
+00:19:29.380 --> 00:19:33.060
+which is pretty standard. So you can actually use this profiler if you want, even if you're not a
+
+00:19:33.060 --> 00:19:38.420
+data customer and you want to give it a try, you can actually export the data to a profile and see what
+
+00:19:38.420 --> 00:19:44.340
+the data, you want the whole analytics that we provide and the fancy flame shaft with all their rainbow
+
+00:19:44.340 --> 00:19:47.940
+colors. But you can use a pprof Go tool, which is pretty okay.
+
+00:19:47.940 --> 00:19:52.020
+Oh, interesting. So you can get basically the raw data out of it just by using it directly. It's
+
+00:19:52.020 --> 00:19:55.860
+just you guys provide the nice gathering. Yeah, exactly.
+
+00:19:55.860 --> 00:20:00.340
+Yeah, you have to store the file yourself. Exactly. We provide the streamlining to our
+
+00:20:00.340 --> 00:20:05.620
+backend and we provide ton of analysis. But if you are curious and want to take a look at how it works
+
+00:20:05.620 --> 00:20:07.620
+and what you can provide, I mean, it's a good way to do it too.
+
+00:20:07.620 --> 00:20:11.300
+All right. Awesome. I do want to dig into your profile, your scaling book, which is
+
+00:20:11.300 --> 00:20:16.020
+what we're going to spend a lot of time on. Sure. One final question though, can I diff
+
+00:20:16.020 --> 00:20:21.060
+profiles like from one version to another? Because one of the things that drives me crazy is
+
+00:20:21.060 --> 00:20:26.500
+I've done a bunch of recording, I got my numbers, and then I'm going to make a change. Is it better?
+
+00:20:26.500 --> 00:20:30.820
+Is it worse? What has gotten better? What has gotten worse? Like, is there a way to say, compare?
+
+00:20:30.820 --> 00:20:34.660
+Yeah. That's something we are building a data log on our backend side to be able to
+
+00:20:34.660 --> 00:20:40.340
+track your releases and tell you, well, this is going faster. This is going slower and which functions
+
+00:20:40.340 --> 00:20:44.900
+or method are being the culprit, like of your slowness or whatever. So yeah, I mean, that's
+
+00:20:44.900 --> 00:20:49.700
+definitely something we want to do. Yeah. And that'd be so neat because you do maybe take a whole week or
+
+00:20:49.700 --> 00:20:53.940
+two and you sit down and you make your code fast and you get it all polished. And then over time,
+
+00:20:53.940 --> 00:20:58.740
+it kind of degrades, right? As people add new stuff to it and they don't really necessarily do so
+
+00:20:58.740 --> 00:21:03.700
+thinking about performance. So it'd be cool to like, okay, here's how it's degraded. And we can just focus
+
+00:21:03.700 --> 00:21:07.620
+our energy and making this part better again. I think that'd be great. Yeah.
+
+00:21:07.620 --> 00:21:11.620
+All right. Well, tell us about your book. I find it fascinating. I kind of gave it a bit of an
+
+00:21:11.620 --> 00:21:18.180
+introduction, the idea of scaling it, but official title is the hacker's guide to scaling Python. And
+
+00:21:18.180 --> 00:21:23.620
+the subtitle is build apps that scale to billions, billions of users, billions of requests, billions
+
+00:21:23.620 --> 00:21:28.820
+of whatever, I guess. But yeah, most apps don't do this. So I think they would be, a lot of people
+
+00:21:28.820 --> 00:21:32.660
+would be interested in hearing about it. Right. I mean, most apps don't do this, but so many apps don't
+
+00:21:32.660 --> 00:21:37.460
+really need to do that. So that's not a problem. I wrote that book, I think four years ago now,
+
+00:21:37.460 --> 00:21:43.140
+because I was working, like I said, on OpenStack where I would actually try to scale the things to
+
+00:21:43.140 --> 00:21:48.180
+billions where it would be running, like it would be apps running on thousands of nodes.
+
+00:21:48.180 --> 00:21:53.700
+Right. And maybe any individual app is not scaling to that level, but you guys basically being the
+
+00:21:53.700 --> 00:21:58.340
+platform as a service in aggregate have a huge amount of load put on it. Right?
+
+00:21:58.340 --> 00:21:59.780
+Exactly. Okay.
+
+00:21:59.780 --> 00:22:03.540
+And which at that point, like when I started to write the book, a lot of people were
+
+00:22:04.180 --> 00:22:10.260
+flying outside Python, outside the Python realm, because while Python is slow, you can't do anything
+
+00:22:10.260 --> 00:22:14.900
+meaningful with Python, right? So slow, you have to switch to Go. And that was a lot of things I was...
+
+00:22:14.900 --> 00:22:19.140
+You have, that's the first thing you'd have to do is if I understand is that Python is slow,
+
+00:22:19.140 --> 00:22:21.700
+so you have to switch to Go, right? That's, I hear this all the time.
+
+00:22:21.700 --> 00:22:26.740
+Yeah, exactly. So I saw conferences about that. In the OpenStack project, somebody rewrote one of the
+
+00:22:26.740 --> 00:22:32.260
+software of OpenStack in Go because it was faster and was like, nope. I mean, the Python architecture you
+
+00:22:32.260 --> 00:22:38.420
+use is slow. That's why it's the program is slow. It's not being ready to Python, like, and there's no
+
+00:22:38.420 --> 00:22:42.420
+need to switch to Go. Like, I mean, it's not related to the language. It's that the architecture was
+
+00:22:42.420 --> 00:22:47.780
+different. So that's what kind of motivated me at the beginning to write that book, to be able to
+
+00:22:47.780 --> 00:22:53.780
+share everything I learned for the years before building OpenStack. I mean, part of it and learning
+
+00:22:53.780 --> 00:22:59.540
+on what works and doesn't work as scale in Python and to stop people switching to Go for bad reasons.
+
+00:22:59.540 --> 00:23:02.740
+There are good reasons to switch for Go for sure, but sometimes no.
+
+00:23:02.740 --> 00:23:07.780
+Exactly. Not just because it's necessary. So, well, you know, another example of this is people
+
+00:23:07.780 --> 00:23:12.820
+switching to Node.js because it's, it can handle more connections, right? And the reason it can handle
+
+00:23:12.820 --> 00:23:18.020
+more connections is because it's written in an asynchronous way, a non-blocking way. And so if you
+
+00:23:18.020 --> 00:23:22.900
+write blocking Python, it doesn't matter if you write blocking C, it's not going to take it as well as if you
+
+00:23:22.900 --> 00:23:30.180
+write non-blocking Python, right? And so things like asyncio and those types, ASGI servers and
+
+00:23:30.180 --> 00:23:35.860
+whatnot, can automatically sort of put you back in the game compared to those systems that the magic of,
+
+00:23:35.860 --> 00:23:39.940
+magic in quotes, the magic of Node was they made you do that from the start. They're like, oh,
+
+00:23:39.940 --> 00:23:44.340
+you can't call synchronous functions. So the only way you do this is you write crazy callbacks and
+
+00:23:44.340 --> 00:23:49.380
+tell better ways, like with promises and futures, and then async and awake get into the language. But
+
+00:23:49.380 --> 00:23:53.940
+they forced people to go down this pattern that allowed for scale. And then you can say,
+
+00:23:53.940 --> 00:23:58.580
+oh, look, our apps scale really well. And it's just that I think a lot of times people start with
+
+00:23:58.580 --> 00:24:03.060
+the easy way, which makes a lot of sense in Python, but that's not necessarily the scalable way. So
+
+00:24:03.060 --> 00:24:07.780
+start one way, but as you identify these problems, you know, maybe bring in some of the ideas of your
+
+00:24:07.780 --> 00:24:11.700
+book, right? Yeah, totally. I mean, one of the first thing I like to say about that is like,
+
+00:24:11.700 --> 00:24:17.380
+Python is not fast or slow first. It's like, you would say like English is slow or English is fast.
+
+00:24:17.380 --> 00:24:21.940
+It doesn't make any sense. You have people speaking English very fast over a node. It's like
+
+00:24:21.940 --> 00:24:27.540
+Python is a long way. When CPython is slow, okay, it's not the best VM out there actually. I think it's
+
+00:24:27.540 --> 00:24:32.740
+far from being the best VM out there, I mean, by VM and virtual machine of the language. Like if you
+
+00:24:32.740 --> 00:24:36.660
+look at the state of the art of, I don't know, V8 for JavaScript or
+
+00:24:36.660 --> 00:24:43.620
+or Gral or whatever for Java or the JVM itself is pretty great nowadays. And I mean, if you look at
+
+00:24:43.620 --> 00:24:50.500
+all of that Python, I mean, CPython is already looking bad, I think. But then it has over upside,
+
+00:24:50.500 --> 00:24:55.780
+which gives you a good thing when you use Python and a good reason to keep using Python and CPython in
+
+00:24:55.780 --> 00:25:01.220
+the end. So I think it's a trade-off and people are not always putting the right weights at the
+
+00:25:01.220 --> 00:25:04.740
+right place for doing that trade-off. Yeah, I agree. One trade-off might be,
+
+00:25:04.740 --> 00:25:09.300
+oh, you could write it in, let's say Rust or something, for example, make it go faster.
+
+00:25:09.300 --> 00:25:13.700
+But then you're giving up the ability for people to come with just a very partial understanding of
+
+00:25:13.700 --> 00:25:18.740
+Python itself and still being really productive, right? Like people don't come to Rust and Java with
+
+00:25:18.740 --> 00:25:23.540
+very partial understandings of it and be super productive. They just don't, right? You got to dig in
+
+00:25:23.540 --> 00:25:29.460
+a big bite of that whole, all the computer science ideas there. Whereas like Python can start so simple
+
+00:25:29.460 --> 00:25:33.620
+and clean. And I think that's part of the magic. But some of the, I guess some of the patterns of
+
+00:25:33.620 --> 00:25:38.100
+that simple world don't always make sense, right? I do like that you pointed out that not everyone
+
+00:25:38.100 --> 00:25:41.060
+needs highly scalable apps. Yeah.
+
+00:25:41.060 --> 00:25:45.700
+Right. Because it's really cool to hear, oh, they're doing this thing with Instagram, right?
+
+00:25:45.700 --> 00:25:50.900
+Like Instagram turned off the garbage collector and now they're getting like better memory reuse across
+
+00:25:50.900 --> 00:25:54.420
+their web workers. And so maybe we should do that too. It's like, well, hold on now.
+
+00:25:54.420 --> 00:25:55.300
+Yeah.
+
+00:25:55.300 --> 00:25:59.540
+How much are you spending on infrastructure? Can you afford just 20 more dollars and not have to deal
+
+00:25:59.540 --> 00:26:03.620
+with this ever? Right. I mean, they run their own version of CPython. That's a fork where they turn
+
+00:26:03.620 --> 00:26:06.660
+off the garbage collector, right? Like, do you really need to go that far?
+
+00:26:06.660 --> 00:26:07.380
+Yeah.
+
+00:26:07.380 --> 00:26:07.780
+Yeah.
+
+00:26:07.780 --> 00:26:12.900
+So I kind of put that out there, just kind of a heads up for people before they dive in. Because
+
+00:26:12.900 --> 00:26:16.180
+kind of like design patterns, like I feel like when you learn some of this stuff, you're like,
+
+00:26:16.180 --> 00:26:20.340
+oh, let's just put all of this into place. And then you can end up with a more complicated system
+
+00:26:20.340 --> 00:26:25.300
+that didn't really need all those put in together at once. And maybe like, there's no app that actually
+
+00:26:25.300 --> 00:26:30.180
+incorporates every single idea that you've mentioned here. Just they're all good ideas in their context,
+
+00:26:30.180 --> 00:26:34.100
+but not necessarily, you know, you wouldn't order everything on a menu and put it all on one plate and
+
+00:26:34.100 --> 00:26:34.820
+then try to eat it.
+
+00:26:34.820 --> 00:26:36.420
+No. Right.
+
+00:26:36.420 --> 00:26:40.740
+Especially because if you start, like, for example, the thing people do usually is like,
+
+00:26:40.740 --> 00:26:45.220
+you have a program. Okay. It's not fast enough. Let's not say it's slow. It's not fast enough for
+
+00:26:45.220 --> 00:26:50.820
+you. You're like, okay, I want to make it faster. So if you can, you can prioritize thing. You're like,
+
+00:26:50.820 --> 00:26:56.260
+okay, I could run this and parallel. You go, okay, I'm going to use threads. All right. That's easy.
+
+00:26:56.260 --> 00:27:02.500
+There's a threading API. There are the concurrents in future API in Python. It's really easy to do,
+
+00:27:02.500 --> 00:27:07.540
+but it adds so much complexity to your program. You have to be sure it's really worth it because,
+
+00:27:07.540 --> 00:27:11.140
+yeah, you know, you're entering the world of concurrency and when you're entering,
+
+00:27:11.140 --> 00:27:16.580
+yeah, I mean, you have to use locks. You have to be sure about your program is not having side effects
+
+00:27:16.580 --> 00:27:22.260
+between threads at the bad time or anything. And it adds so much complexity. It's actually very hard to
+
+00:27:22.260 --> 00:27:26.660
+make this kind of program right and to make sure that works. And there are so many new edge cases
+
+00:27:26.660 --> 00:27:32.660
+you're adding by adding concurrency, being threads or anything else, but you have to be sure it's worth it.
+
+00:27:32.660 --> 00:27:36.260
+And for a lot of people out there, it's really not worth it. Like you could have a pretty simple
+
+00:27:36.260 --> 00:27:42.500
+application with just one process or a couple of process behind a unicorn or your Usgy Walker and be
+
+00:27:42.500 --> 00:27:47.300
+fine forever, but it doesn't make any sense to try to optimize. And like I was saying, like early
+
+00:27:47.300 --> 00:27:51.620
+optimization, the root of all level, don't do it. Like, unless you are sure and you actually,
+
+00:27:51.620 --> 00:27:56.500
+you know why it's slow, you know where to, to optimize, which might be a good user for
+
+00:27:56.500 --> 00:28:01.140
+profiler or not, depending on what you're trying to optimize. But make sure that you understand
+
+00:28:01.140 --> 00:28:06.180
+the trade-offs you are doing. I saw so many people rushing into threads or anything like that and
+
+00:28:06.180 --> 00:28:10.260
+writing code that is invalid and I think you crash in production because of race condition,
+
+00:28:10.260 --> 00:28:14.820
+et cetera, and they never thought about. And it takes them months, years to get things right again,
+
+00:28:14.820 --> 00:28:21.220
+because it's very complex and writing like multi-freaded code is not something humans do very well.
+
+00:28:21.220 --> 00:28:25.060
+So if you can't afford to not do it, don't do it.
+
+00:28:25.060 --> 00:28:28.740
+Well, I think going back to the earlier discussion with profiling and stuff, either
+
+00:28:28.740 --> 00:28:34.900
+in production or just with C-profiling, measure first, right? Because, and then you know so much
+
+00:28:34.900 --> 00:28:39.620
+better what can be applied to solve that problem. Because if the slow thing is you're waiting on the
+
+00:28:39.620 --> 00:28:45.780
+database, well, you sure don't need more threads to worry about that, right? You might consider caching.
+
+00:28:45.780 --> 00:28:49.460
+That could be an option. You might consider indexes to make the database faster.
+
+00:28:49.460 --> 00:28:56.340
+But you could really easily introduce lots of complexity into the system by applying the wrong fix and
+
+00:28:56.340 --> 00:29:07.140
+not really get a whole lot better. So yeah, yeah. All right. Let's talk about scaling. I think scaling is just the definition of scaling. It's really interesting because a lot of people see here that
+
+00:29:07.140 --> 00:29:11.700
+like, I want an app that scales or like, man, YouTube is so awesome. It scales to, you know,
+
+00:29:11.700 --> 00:29:17.940
+a million requests a second or whatever. I want that. And then they have one, they have their app running and
+
+00:29:17.940 --> 00:29:23.700
+they click the link and it takes three seconds or they, they run the function. It takes three seconds.
+
+00:29:23.700 --> 00:29:30.180
+Well, if that app scaled well, it would mean it could run in three seconds for a hundred people,
+
+00:29:30.180 --> 00:29:34.260
+as well as it could run in three seconds for one person. Like that doesn't necessarily mean faster.
+
+00:29:34.260 --> 00:29:38.660
+So there's like this, this distinction I think people need to make between high performance,
+
+00:29:38.660 --> 00:29:44.420
+fast code, quickly responding, and then scaling. Like it doesn't degrade as it takes on more users,
+
+00:29:44.420 --> 00:29:46.660
+right? Maybe you want to riff on that a little bit?
+
+00:29:46.660 --> 00:29:49.940
+Yeah. There are two dimensions, basically, which is like we were saying,
+
+00:29:49.940 --> 00:29:55.700
+one is more users, which is more in parallel, let's say. And what is faster, like having the
+
+00:29:55.700 --> 00:30:00.340
+page being loaded faster. So there are two different things. If you want to really optimize
+
+00:30:00.340 --> 00:30:05.060
+one particular use case, like page being loaded or whatever, it's really a good practice. I mean,
+
+00:30:05.060 --> 00:30:10.820
+you can't really scale that request on multiple nodes unless it's very complicated, but like to load
+
+00:30:10.820 --> 00:30:16.420
+a page or REST API or anything like that. Usually you want to profile that part of the code to be sure.
+
+00:30:16.420 --> 00:30:19.860
+Yeah. And that's a case where profiling locally with CProfile,
+
+00:30:19.860 --> 00:30:23.300
+might actually be really good, right? Like one request is actually quite slow.
+
+00:30:23.300 --> 00:30:23.700
+Yeah.
+
+00:30:23.700 --> 00:30:29.140
+Like you could learn a lot about that, running that in a profiler and adding the horizontal
+
+00:30:29.140 --> 00:30:33.460
+scalability stuff might actually make it a tiny bit slower for each individual request,
+
+00:30:33.460 --> 00:30:36.980
+but allow many more of them to happen. So you got to figure out which part you're working on,
+
+00:30:36.980 --> 00:30:37.140
+right?
+
+00:30:37.140 --> 00:30:41.060
+Yeah. Keeping in mind, like if you see profile on your laptop is going to be different by using
+
+00:30:41.060 --> 00:30:45.540
+CProfile on AWS or anything you run, because like your database is going to be different.
+
+00:30:45.540 --> 00:30:50.180
+The latency is going to be different. So it's hard to reproduce the same condition on your
+
+00:30:50.180 --> 00:30:54.340
+developer laptop that you have in production. You don't have the same system. So, I mean,
+
+00:30:54.340 --> 00:31:00.340
+it's really a good way and it can do 80% of the job, but in some cases, it's great to have continuous
+
+00:31:00.340 --> 00:31:05.860
+profiling on your production system. And that gives you a good way to optimize your code and to make sure
+
+00:31:05.860 --> 00:31:11.700
+that this dimension of being faster is covered. Then the dimension of, well, let's scale to 1000 of
+
+00:31:11.700 --> 00:31:16.340
+users and still have the three seconds load for everyone. Then that's another problem. And that's
+
+00:31:16.340 --> 00:31:21.700
+where you actually don't need a profiler, but you need a good architecture of your program and your code
+
+00:31:21.700 --> 00:31:22.260
+Yeah.
+
+00:31:22.260 --> 00:31:28.340
+And be able to spawn new process, new threads, new node, new anything that can process things in parallel
+
+00:31:28.340 --> 00:31:33.780
+for you. And decouple, like split your program in different parts and having a good architecture.
+
+00:31:33.780 --> 00:31:39.060
+And there you can do that with Python, with any programming language, honestly, but you can do it
+
+00:31:39.060 --> 00:31:42.660
+also that with Python, there's only to switch to any other language if you know what you're doing.
+
+00:31:42.660 --> 00:31:46.020
+Right. It makes such an important difference there. All right. So let's go. I thought it'd be fun to
+
+00:31:46.020 --> 00:31:50.500
+go through a couple of the chapters of your books and just your book and just talk about some of the big
+
+00:31:50.500 --> 00:31:55.860
+ideas there. And the first, you kind of build your way up to larger systems, right? Like you start out,
+
+00:31:55.860 --> 00:32:01.060
+we already talked about what is scaling, but the next one that you really focused on is how do I scale to
+
+00:32:01.060 --> 00:32:06.500
+take full advantage of my current computer? Like the one I'm recording on here is my Mac mini M1.
+
+00:32:06.500 --> 00:32:12.900
+It has four cores over there. I have my sim racing setup. It has 16 cores. Let's suppose I'm running
+
+00:32:12.900 --> 00:32:16.900
+on that one. If I run my Python code over there and I create a bunch of threads and it says a bunch of
+
+00:32:16.900 --> 00:32:20.980
+Python things, there's a good chance it's using one 16th of that CPU, right?
+
+00:32:20.980 --> 00:32:27.860
+Yeah, exactly. It's it's I mean, people will start with Python. Usually it's that issue. I mean,
+
+00:32:27.860 --> 00:32:32.180
+pretty soon where you want to run multiple, I mean, you want to run multiple threads in Paralyze,
+
+00:32:32.180 --> 00:32:37.380
+for example, to make sure your code is faster. And then, which is a proper way. I mean, outside
+
+00:32:37.380 --> 00:32:42.260
+Python, it's a proper way to scale. Like running a threads, I'll allow you to run another execution
+
+00:32:42.260 --> 00:32:48.020
+thread of your program in another CPU. I mean, and threads were not used that much 20 years ago,
+
+00:32:48.020 --> 00:32:51.940
+because all computers, every computer, are only one core, right? I mean, your personal computer,
+
+00:32:51.940 --> 00:32:56.900
+it was a bunch of them with only one core and nobody cared about the threads. Now that everybody,
+
+00:32:56.900 --> 00:33:01.220
+16 cores in their pockets, it's like, whoa, who should do multiple threads, right?
+
+00:33:01.220 --> 00:33:06.260
+So exactly. Yeah. So, I mean, and that's where you started like 10 years ago,
+
+00:33:06.260 --> 00:33:10.740
+seeing more and more people being interested in using threads in Python because, well, I mean,
+
+00:33:10.740 --> 00:33:14.980
+I'm doing this computation and I could do it twice to go faster. So I'm spending on new threads and
+
+00:33:14.980 --> 00:33:20.100
+and we got, except that if you do that in Python, it doesn't work very well because there's this
+
+00:33:20.100 --> 00:33:26.820
+global interpreter lock, the gil, which actually makes sure that your Python code works nice on
+
+00:33:26.820 --> 00:33:31.860
+multiple threads. It's about every thread running Python code, executing bytecode, they have to acquire
+
+00:33:31.860 --> 00:33:38.420
+this lock and L2 it forever until they're finished or until they get interrupted, which means you can only
+
+00:33:38.420 --> 00:33:45.220
+have one thread in Python running at a time on the Python VM. And the overflare have to wait or do
+
+00:33:45.220 --> 00:33:51.780
+other stuff which are not Python related, which is what a lot of C extension like NumPy or other C
+
+00:33:51.780 --> 00:33:56.340
+extension you may be using are doing. They're releasing the gil and doing things which are not Python,
+
+00:33:56.340 --> 00:34:01.060
+but still doing things that are useful for you. But in that case, they're able to release the gil and
+
+00:34:01.060 --> 00:34:06.580
+let the rest of the Python program runs. But if your program is 100% Python, you don't use any kind of C
+
+00:34:06.580 --> 00:34:12.420
+extension, no native code or anything, then all your threads have this giant bottleneck, which is a gil,
+
+00:34:12.420 --> 00:34:20.260
+which blocks every thread. So if you run, I think my record is like 1.6 cores with a ton of threads on the
+
+00:34:20.260 --> 00:34:26.100
+Python program that you can't really use. I never managed to use two cores with a single Python program
+
+00:34:26.100 --> 00:34:34.100
+and a lot of threads. It's very hard to get to that two cores being used. So when you have a 3264 cores machine that you rent
+
+00:34:34.580 --> 00:34:38.420
+or what you use, it's a pretty waste of resources.
+
+00:34:38.420 --> 00:34:44.500
+Yeah. So this is super interesting. And people often see this as like Python doing a threading
+
+00:34:44.500 --> 00:34:51.780
+restriction. And what's really interesting is the gil is really about protecting the memory allocation and
+
+00:34:51.780 --> 00:34:57.060
+cleanup. It's incrementing and decrementing that ref count. So you don't have to take a lock every time
+
+00:34:57.060 --> 00:35:01.300
+you touch an object or assign a variable, which would make it really slow. It'd be more scalable,
+
+00:35:01.300 --> 00:35:05.140
+but it would be slower even in the single use case, right?
+
+00:35:05.140 --> 00:35:08.980
+I've had a lot of experiences to do that. This is actually what you have in Java. They have this
+
+00:35:08.980 --> 00:35:13.460
+kind of monitor, I think they call it, where you have a lock per object. And it works well for them,
+
+00:35:13.460 --> 00:35:18.180
+but that's me the details. But for Python, there have been a few experiments to do that. And yeah,
+
+00:35:18.180 --> 00:35:23.940
+it makes the thing very, very slower, unfortunately. So it's not a good option to do to go that road.
+
+00:35:23.940 --> 00:35:27.780
+And I mean, there have been, if you look at the history of the gil, there has been a project called
+
+00:35:27.780 --> 00:35:33.700
+the gilectomy a few years ago to remove the gil. I mean, there have been plenty of experiments to try to
+
+00:35:33.700 --> 00:35:38.100
+get rid of that. And the other problem is that if we ever do that at some point, it will break the
+
+00:35:38.100 --> 00:35:43.380
+language and a lot of assumptions around the language. Because like in Python, when you add an item to a
+
+00:35:43.380 --> 00:35:48.820
+list, it is thread safe by definition, because of the gil for sure. But if we start by saying,
+
+00:35:48.820 --> 00:35:53.940
+well, each time you want to add an item to a list, you need to use a lock to do that.
+
+00:35:53.940 --> 00:35:58.180
+Either we do it implicitly, but it's very slow. Or you do it explicitly as a programmer,
+
+00:35:58.180 --> 00:36:02.740
+then it's going to be very tedious for sure. And it's not going to be compatible with the Python
+
+00:36:02.740 --> 00:36:06.420
+we know right now, which is not a good option. So we're stuck.
+
+00:36:06.420 --> 00:36:13.140
+Yeah. Well, there is, have you been tracking the work on HEP 554, multiple sub-interpreters?
+
+00:36:14.100 --> 00:36:15.140
+that Eric Snow has been doing?
+
+00:36:15.140 --> 00:36:16.420
+Yeah, a little bit.
+
+00:36:16.420 --> 00:36:19.460
+I think that offers some really interesting opportunities there.
+
+00:36:19.460 --> 00:36:23.780
+Yeah, I think it's a different approach. But it's a mix, like it's a trade-off between
+
+00:36:23.780 --> 00:36:25.540
+the multi-threading and multi-processing.
+
+00:36:25.540 --> 00:36:28.740
+Yeah, it's like a blend, like a half and half of them. Yeah.
+
+00:36:28.740 --> 00:36:32.820
+Yeah. And, but I think it's the most promising thing we have right now, because I don't think
+
+00:36:32.820 --> 00:36:38.180
+the gil is going to go away anytime soon, unless somebody really take a, like a giant project
+
+00:36:38.180 --> 00:36:42.580
+and do that. But there's nobody, unfortunately, outside,
+
+00:36:42.580 --> 00:36:46.580
+inside the Python community, like there's no company trying to sponsor any kind of effort
+
+00:36:46.580 --> 00:36:51.620
+like that. A lot of the Python upstream stuff from what I see are run by people, you know,
+
+00:36:51.620 --> 00:36:56.100
+willing to do that on their free time. And some are sponsored for sure, or hired by company,
+
+00:36:56.100 --> 00:37:01.540
+but a lot of them are not. And then there are nobody like a giant big tech company trying to push
+
+00:37:01.540 --> 00:37:07.140
+something like that forward. So it's probably what's also not helping Python. So it's the multi-interpreter
+
+00:37:07.140 --> 00:37:09.060
+thing is probably the next best thing we'll get.
+
+00:37:09.060 --> 00:37:13.380
+I think it is as well, because I just don't see the gil going away unless we were to say we're going to
+
+00:37:13.380 --> 00:37:18.660
+give up reference counting. Yeah. And if you give up reference counting and then you add like a JIT and
+
+00:37:18.660 --> 00:37:22.740
+you get like, I mean, that's a really different change. And you think of all the trouble just
+
+00:37:22.740 --> 00:37:26.500
+changing strings from Python 2 to Python 3. Yeah.
+
+00:37:26.500 --> 00:37:29.380
+Like this is the next level, right? It's crazy.
+
+00:37:29.380 --> 00:37:33.620
+Okay. We're not finished yet. I still have to maintain a lot of Python 2 code, to be honest.
+
+00:37:33.620 --> 00:37:37.780
+So I'm not ready to do Python 4 yet. So yeah.
+
+00:37:37.780 --> 00:37:42.260
+I don't think we're ready for it either. So I think subinterpreters is interesting. And subinterpreters
+
+00:37:42.260 --> 00:37:49.060
+are interesting because they take the ways in which you sort of do multi-processing,
+
+00:37:49.060 --> 00:37:54.740
+which does work for scaling out, right? You kind of do message passing and each process owns its own
+
+00:37:54.740 --> 00:37:58.740
+data structures and stuff like that. And it just says, well, you don't have to create processes
+
+00:37:58.740 --> 00:38:02.580
+to make that happen. So it's faster basically. Yeah. And I think one of the problems with
+
+00:38:02.580 --> 00:38:09.140
+multi-processing is also serializing the data between the different process, which is always,
+
+00:38:09.140 --> 00:38:13.940
+I think Stack Overflow is filled with that. People are complaining about unable to pick all the data
+
+00:38:13.940 --> 00:38:20.020
+between multiple processes, which is very tedious. So I think, I hope that having the subinterpreters
+
+00:38:20.020 --> 00:38:24.100
+thing will solve part of that, not having to serialize everything. Also in terms of performance,
+
+00:38:24.100 --> 00:38:28.100
+in terms of usage for sure, but also in terms of performance, you don't have to serialize
+
+00:38:28.100 --> 00:38:32.580
+and serialize everything. Every time you want to pass something to a subprocess, it will be a very
+
+00:38:32.580 --> 00:38:38.260
+huge failure. Yeah. So in danger of not making it all the way through the other topics. Let me ask you
+
+00:38:38.260 --> 00:38:43.380
+just a couple other real quick questions or comments that you call out a couple of things.
+
+00:38:43.380 --> 00:38:48.740
+One, like the CPU scaling is a problem, except for when it's not. Like sometimes it's not a problem at
+
+00:38:48.740 --> 00:38:52.980
+all. And the example I'm thinking of, if I'm writing an API, if I'm writing a website,
+
+00:38:52.980 --> 00:38:58.180
+any of those things, the way that you host those is you go to a server or you use a platform as a
+
+00:38:58.180 --> 00:39:02.740
+service, which does this for you. And you, you run it in something like micro whiskey or G unicorn or
+
+00:39:02.740 --> 00:39:07.060
+something. And what those do immediately is they say, well, we're not really going to run it in the
+
+00:39:07.060 --> 00:39:10.740
+main process. The main process is going to look at the other ones. And we're going to create four or
+
+00:39:10.740 --> 00:39:15.780
+eight or 10 copies of your app running all at the same time. And it will like send the requests off
+
+00:39:15.780 --> 00:39:20.420
+to these different processes. And then all of a sudden, hey, if you have less than 10 cores,
+
+00:39:20.420 --> 00:39:25.860
+you're scaling again. Yeah. So that's why, I mean, threads are great for things like IO,
+
+00:39:25.860 --> 00:39:30.180
+et cetera. But if you don't really want to scale for CPU and cores, threads are not the right solution.
+
+00:39:30.180 --> 00:39:34.180
+And it's way better to use multiple processes. So either way, I mean,
+
+00:39:34.180 --> 00:39:40.420
+Unicorn, you will give a good solution for web apps or the alternative to like, I mean, to that,
+
+00:39:40.420 --> 00:39:47.220
+but yeah, or a framework like Celery for doing tasks, for example, which is about out of the box to spawn
+
+00:39:47.220 --> 00:39:53.140
+multiple processes to handle all of your tasks on multiple CPUs. And usually you won't choose, I mean,
+
+00:39:53.140 --> 00:39:58.900
+if you don't choose any kind of ishink IO-like framework or tornado or anything like that,
+
+00:39:58.900 --> 00:40:03.700
+where you only do have one process running one task at a time, you can spawn multiple
+
+00:40:03.700 --> 00:40:07.700
+processes even more process than you have cores. If you have 16 cores, you can start,
+
+00:40:07.700 --> 00:40:13.700
+I don't know, 100 processes. If you have enough memory for sure. But memory is really not a problem
+
+00:40:13.700 --> 00:40:18.500
+unless you, depending on what you do for sure. But like for a REST API, it's really not a big problem.
+
+00:40:18.500 --> 00:40:21.940
+You're not using gigabytes of memory per process and per regress. So yeah,
+
+00:40:21.940 --> 00:40:25.940
+it's fine spawning a lot of unicorn workers.
+
+00:40:25.940 --> 00:40:30.340
+So two things that I ran across that were interesting in this chapter that you covered were
+
+00:40:30.340 --> 00:40:35.620
+futurist and Kotlin. I'm not sure how you say that second one, but can you tell people about these two
+
+00:40:35.620 --> 00:40:37.220
+little helper library packages?
+
+00:40:37.220 --> 00:40:43.540
+Yeah, futurist is actually, it's a tiny wrapper around Confluent.futures that you might know in Python.
+
+00:40:43.540 --> 00:40:49.780
+The thing, it has a few things that are not there, like the ability to have statistics about your
+
+00:40:49.780 --> 00:40:56.340
+pool of threads or your pool of anything you use process or, which is give you a pretty good idea.
+
+00:40:56.340 --> 00:41:01.220
+A lot of applications out there, they're like, I can scale on, I don't know, 32 threads, 64.
+
+00:41:01.220 --> 00:41:05.460
+And you have a setting usually to scale that. And you don't really know as a user or even as a
+
+00:41:05.460 --> 00:41:11.140
+developer, how many threads you're supposed to start and to handle your workload. You're like just typing
+
+00:41:11.140 --> 00:41:15.780
+a number randomly and see if it works or not. And having statistics around that, it's pretty useful.
+
+00:41:15.780 --> 00:41:20.020
+There are also some features, if I remember correctly, where you can actually control the backlog.
+
+00:41:20.020 --> 00:41:26.180
+Like usually you have a pool of threads or processes or a pool of anything trying to handle your task.
+
+00:41:26.180 --> 00:41:31.780
+But the more you add, I mean, it can grow forever. So having the ability to control your backlog and say,
+
+00:41:31.780 --> 00:41:37.540
+okay, I have enough tasks in the queue. No, you have to do something like, I'm not going to take any more tasks.
+
+00:41:37.540 --> 00:41:42.260
+So that's the pattern you see a lot in queue system. Usually people, when they design a queue system,
+
+00:41:42.260 --> 00:41:47.300
+they design the queue system with like, there's a queue, I'm going to take things out of it and process them.
+
+00:41:47.300 --> 00:41:53.220
+And they don't think about controlling the size of the queue so the queue can grow forever, which in theory is great.
+
+00:41:53.220 --> 00:41:58.820
+But in practice, you don't have infinite resources to start the queue and then to process it. So you want to be able to
+
+00:41:58.820 --> 00:42:02.420
+reject works.
+
+00:42:02.420 --> 00:42:05.300
+Talk Python to me is partially supported by our training courses.
+
+00:42:05.300 --> 00:42:10.900
+Do you want to learn Python, but you can't bear to subscribe to yet another service?
+
+00:42:10.900 --> 00:42:15.620
+At Talk Python Training, we hate subscriptions too. That's why our course bundle gives you full access
+
+00:42:15.620 --> 00:42:20.980
+to the entire library of courses for one fair price. That's right. With the course bundle,
+
+00:42:20.980 --> 00:42:27.460
+you save 70% off the full price of our courses and you own them all forever. That includes courses
+
+00:42:27.460 --> 00:42:32.020
+published at the time of the purchase, as well as courses released within about a year of the bundle.
+
+00:42:32.020 --> 00:42:37.620
+So stop subscribing and start learning at talkpython.fm/everything
+
+00:42:37.620 --> 00:42:44.100
+One of the big complaints or criticisms, I guess I should say is in these async systems that they
+
+00:42:44.100 --> 00:42:46.100
+don't provide back pressure. Yeah.
+
+00:42:46.100 --> 00:42:50.500
+Right. A bunch of work comes into the front and it piles into asyncio, which then piles just
+
+00:42:50.500 --> 00:42:52.900
+massively on top of the database. And then the database dies.
+
+00:42:52.900 --> 00:43:00.420
+And there's no place further back before the dying of the database where it kind of slows down. And so
+
+00:43:00.420 --> 00:43:04.340
+this is something that would allow you to do that for threading and multiprocessing, right?
+
+00:43:04.340 --> 00:43:10.740
+Yeah, exactly. And which is one of the other chapters of the book, which, well, the title is Design for Failure.
+
+00:43:10.740 --> 00:43:15.460
+And you could write an entire book on that, which is when you write your application, usually you write
+
+00:43:15.460 --> 00:43:20.500
+something in a very optimistic way because you are in a good mood and you're like, everything's going to work, right?
+
+00:43:20.500 --> 00:43:23.060
+Well, and you test it with small data and a few clients, right?
+
+00:43:23.060 --> 00:43:28.660
+Exactly. And the more you scale, the more you add threads, the more you add processes,
+
+00:43:28.660 --> 00:43:32.980
+you want to add nodes over your network. You're going to use Kubernetes to spawn
+
+00:43:32.980 --> 00:43:37.140
+hundreds of nodes and versions of your application. And the more likely it is to fail, like somebody's
+
+00:43:37.140 --> 00:43:41.860
+going to unplug a cable somewhere, anything can happen for sure. And you're not designing for that.
+
+00:43:41.860 --> 00:43:45.940
+Usually you're designing in a very optimistic way because most of the time it works.
+
+00:43:45.940 --> 00:43:50.500
+And when, when it doesn't, if you really want to go at scale, I mean, you really want to go far and
+
+00:43:50.500 --> 00:43:57.540
+you want to work even in extreme conditions, like when the weather is really rainy, it's a lot of work.
+
+00:43:57.540 --> 00:44:01.460
+So that's why I was saying at the beginning, like it's a trade-off to add even threads because
+
+00:44:01.460 --> 00:44:06.100
+then you have to handle what happens when I can't start a new thread anymore because I don't know,
+
+00:44:06.100 --> 00:44:10.420
+my system is out of, which is pretty rare nowadays. You have a lot of space for threads usually,
+
+00:44:10.420 --> 00:44:15.780
+but if you are on a, I mean, very limited resource system or whatever, like what do you handle of that?
+
+00:44:15.780 --> 00:44:18.820
+Yeah. And threads pre-allocate a lot of memory, like stack space and stuff.
+
+00:44:18.820 --> 00:44:19.140
+Yeah.
+
+00:44:19.140 --> 00:44:21.940
+Have you heard of Locus at locus.io? Have you seen this thing?
+
+00:44:21.940 --> 00:44:23.700
+No, I don't think so.
+
+00:44:23.700 --> 00:44:26.500
+Yeah. So speaking of back pressure and just knowing what your system can take,
+
+00:44:26.500 --> 00:44:32.420
+this thing is super, super cool. It's a Python load testing thing that allows you to even do
+
+00:44:32.420 --> 00:44:37.620
+distributed load. But what you do that's really interesting is you create a class in Python and
+
+00:44:37.620 --> 00:44:42.980
+you say you give it tasks and then those tasks have URLs. And then you can say, well,
+
+00:44:42.980 --> 00:44:46.820
+this one, I want 70% of the time, the user's going to go there and then they're going to go here. And
+
+00:44:46.820 --> 00:44:51.620
+then I want you to kind of delay to like, they click around, like maybe every 10 seconds or so. So
+
+00:44:51.620 --> 00:44:56.020
+randomly around that time, have them click around. And it's just a really good library for a tool for
+
+00:44:56.020 --> 00:45:00.740
+people who are like, well, I didn't test it with enough users because I'm just me, but what is it
+
+00:45:00.740 --> 00:45:03.140
+actually like something like this would be a really good option, I think.
+
+00:45:03.140 --> 00:45:08.500
+Yeah, that's a good event to gather data for profiling after that's a pretty good. If you're
+
+00:45:08.500 --> 00:45:10.100
+able to reproduce something that looks like a production.
+
+00:45:10.100 --> 00:45:15.300
+Oh yeah. Yeah. Yeah. That's interesting. Yeah. Right. Because you want to profile a realistic
+
+00:45:15.300 --> 00:45:18.340
+scenario. So instead of hitting with one person, you hit it with like a hundred.
+
+00:45:18.340 --> 00:45:21.620
+Yeah. And then get the profiling results of that. Okay. That's a good idea.
+
+00:45:21.620 --> 00:45:25.860
+Yeah. That's really the good thing with continuous profiling is what you're able to see for real
+
+00:45:25.860 --> 00:45:29.300
+what happens. But if you know to reproduce it, that's also a valuable option.
+
+00:45:29.300 --> 00:45:34.820
+Yeah. Okay. Very interesting. All right. So CPU scaling is interesting. And then Python around
+
+00:45:34.820 --> 00:45:40.740
+three, four, three, five came out with this really interesting idea of asyncio and especially async and
+
+00:45:40.740 --> 00:45:45.940
+await that makes asyncio so much better to work with. And what's interesting is that has nothing to
+
+00:45:45.940 --> 00:45:50.500
+do with threading. Like that doesn't suffer any of the problems of almost any of the problems of like
+
+00:45:50.500 --> 00:45:53.940
+the GIL and so on, because it's all about waiting on things. And when you're waiting,
+
+00:45:53.940 --> 00:45:57.300
+usually you release the gill. Yeah. So threads are a good solution for
+
+00:45:57.300 --> 00:46:01.460
+or I/O when you can't actually use something like asyncio because let's be honest, I mean,
+
+00:46:01.460 --> 00:46:06.340
+if you're using your own library, which was designed five years ago, it's not designed to be async at all.
+
+00:46:06.340 --> 00:46:12.500
+So. Right. Or you're using an old ORM and the old ORM doesn't have an async version of it. And
+
+00:46:12.500 --> 00:46:16.980
+it's either rewriting in a new one. Yeah. Or use the old non-async, right? Something like that.
+
+00:46:16.980 --> 00:46:21.780
+Maybe threads. I don't know. Yeah. Usually, I mean, ORM, it's a good, bad example in the sense that
+
+00:46:21.780 --> 00:46:25.780
+it's a good example technically, but usually the problem is people writing bad queries.
+
+00:46:25.780 --> 00:46:29.940
+Yeah. I know. Better queries than an index. I'll probably solve that most of the time. Yeah.
+
+00:46:29.940 --> 00:46:33.780
+Yeah. Exactly. But in theory, you're right. Technically, it's a good example. And yeah,
+
+00:46:33.780 --> 00:46:37.140
+I mean, even if it looks like it's in KIO, it's magic. Cause like you were saying, it's like the
+
+00:46:37.140 --> 00:46:42.820
+node thing that brought that back to life where it has been used and there for the last 40 years. I don't
+
+00:46:42.820 --> 00:46:46.660
+know. Yeah. And it's like, suddenly everybody's like, well, that's amazing. And that's how you would
+
+00:46:46.660 --> 00:46:52.340
+write anyway, any web servers for the last 30 years, but it's great. Now it's built in Python. So it's
+
+00:46:52.340 --> 00:46:57.140
+pretty easy to use and it's a very, very well, I mean, I think it progressed a lot over the years,
+
+00:46:57.140 --> 00:47:03.700
+like a couple of years ago where everybody was using Flask or Django, which is still true, but there's a
+
+00:47:03.700 --> 00:47:09.540
+lot, a lot of better alternative in the sense that like Starlet, et cetera, but the past API that you
+
+00:47:09.540 --> 00:47:13.460
+can use to build an API website based on S&KIO.
+
+00:47:13.460 --> 00:47:18.020
+Yeah. And this whole, I think I/O world has really flourished since you wrote the book, hasn't it?
+
+00:47:18.020 --> 00:47:24.100
+Yeah. Yeah. Yeah. When I wrote the book, I actually learned S&KIO writing the book and there was nothing.
+
+00:47:24.100 --> 00:47:29.300
+It was very like the main plan is like, I want to use, I don't know, Redis or like we're saying a database and
+
+00:47:29.300 --> 00:47:36.340
+there's nothing. So, or it's very low level stuff and like, it's not going to be like, yeah, I can use it, but it's going to
+
+00:47:36.340 --> 00:47:41.060
+take me hours of work to get anything close to what I would do with the synchronous version. So
+
+00:47:41.060 --> 00:47:46.100
+nowadays, yeah, it's totally better. I'm actually do a lot of work with S&KIO myself.
+
+00:47:46.100 --> 00:47:52.980
+It's, I mean, everything's there for everything doing socket IO, file IO, everything is available.
+
+00:47:52.980 --> 00:47:59.380
+There are sometimes multiple versions of the same library because don't agree on how to do Redis or
+
+00:47:59.380 --> 00:48:05.220
+whatever, which I mean, it gives you choice. So that's, that's great. And it's a very, very good way to
+
+00:48:05.220 --> 00:48:09.140
+not use threads. So you still have the conference program where you can have multiple tasks from
+
+00:48:09.140 --> 00:48:15.220
+S&KIO running it, not at the same time in our space time dimension, but like being started means
+
+00:48:15.220 --> 00:48:20.900
+pause being resume later. So you have to still take care and you actually can use lock to S&KIO.
+
+00:48:20.900 --> 00:48:21.540
+Yeah.
+
+00:48:21.540 --> 00:48:27.700
+But it's still a little less of a problem and issue with threads and you're not going to use more than one
+
+00:48:27.700 --> 00:48:33.060
+CPU for sure. That's not designed to do that, but you will be able maybe more easily because you will have
+
+00:48:33.060 --> 00:48:38.740
+less overhead than with threads to be able to use 100% of your CPU. Like we will be able to
+
+00:48:38.740 --> 00:48:43.700
+max out your resource, your CPU resource. And then when you do that with one Python process,
+
+00:48:43.700 --> 00:48:49.460
+well, just start a new one using salary, unicorn, whatever, or cotillion you were mentioning,
+
+00:48:49.460 --> 00:48:50.980
+which is a good tool to do that.
+
+00:48:50.980 --> 00:48:51.140
+Yeah.
+
+00:48:51.140 --> 00:48:51.140
+Yeah.
+
+00:48:51.140 --> 00:48:51.220
+Yeah.
+
+00:48:51.220 --> 00:48:56.260
+Which is actually able to spawn multiple process and manage them for you. Because usually that's
+
+00:48:56.260 --> 00:49:01.460
+a problem when you have a demand, you want to do a lot of work like the salary model for Q is a
+
+00:49:01.460 --> 00:49:06.980
+pretty good example. When you have multiple workers and each worker is on thread doing things in the
+
+00:49:06.980 --> 00:49:12.100
+background. If you're not using a framework such as salary and cotillion is a good small library to do
+
+00:49:12.100 --> 00:49:19.220
+that when you can want a class and each class being spawned as a process basically and be managed by a
+
+00:49:19.220 --> 00:49:24.660
+master process like you would do with whiskey or unicorn and managing the child, restarting them if they die,
+
+00:49:24.660 --> 00:49:30.180
+etc. So that's a lot of work to do. You can certainly do that yourself, but cotillion does that for you out of the box.
+
+00:49:30.180 --> 00:49:35.460
+Yeah. Yeah. That's a cool way to create those sub processes and stuff. But yeah, I think async.io is a
+
+00:49:35.460 --> 00:49:42.340
+lot of promise coming along. It's really been growing. SQLAlchemy just released their 1.4 version, which
+
+00:49:42.340 --> 00:49:48.980
+actually, so SQLAlchemy now just in like a couple of weeks ago now supports a wait session query of thing.
+
+00:49:48.980 --> 00:49:53.460
+Not exactly that syntax, but almost they've slightly adjusted it, but pretty cool. All right.
+
+00:49:53.460 --> 00:49:57.940
+And then one of the things that you talked about with scaling that I agree on that is super important
+
+00:49:57.940 --> 00:50:04.740
+is statelessness. So yeah, if you want to, and I suspect going from one to two is a harder than
+
+00:50:04.740 --> 00:50:09.780
+going from two to 10 in terms of scaling, right? Yeah. Sooners you're like, okay, this is going to be
+
+00:50:09.780 --> 00:50:14.580
+in two places. That means it has to be stateless and it's communication. All right. All these things,
+
+00:50:14.580 --> 00:50:18.980
+if you're just putting stuff in memory and sharing the pointers and kind of storing a persistent memory
+
+00:50:18.980 --> 00:50:24.180
+session for somebody, well, then putting that in two places is really fraught. Yeah. It's really the
+
+00:50:24.180 --> 00:50:28.980
+thing where I like to say that if you start using multiple processes, you're actually pretty ready to
+
+00:50:28.980 --> 00:50:34.340
+handle multiple nodes like over a network because using multiple threads, you are always in the same
+
+00:50:34.340 --> 00:50:39.140
+program. So it's tempting to share the state of everything between your different threads. And then
+
+00:50:39.140 --> 00:50:44.180
+you have concurrency issue and you need lock, et cetera. But a lot of people go that road being,
+
+00:50:44.180 --> 00:50:49.140
+I don't know, maybe a bit naive and saying, oh, that's easy. I don't have to leave my program. But if you
+
+00:50:49.140 --> 00:50:54.660
+already, you go to the step where you actually, okay, to split your work into multiple process,
+
+00:50:54.660 --> 00:50:59.940
+which might have to communicate between themselves for sure. And they can start by communicating over
+
+00:50:59.940 --> 00:51:06.660
+the same host. But then you just add networks in between the process and you can scale to multiple
+
+00:51:06.660 --> 00:51:11.940
+nodes and then over whatever number of nodes you want. Then the problem is to handle connectivity
+
+00:51:11.940 --> 00:51:16.500
+issue that you don't have if you run on a single host between process. Usually you don't have somebody
+
+00:51:16.500 --> 00:51:22.660
+unplugging the invisible cable. But if you're ready to handle that network failure, which will happen
+
+00:51:22.660 --> 00:51:27.540
+for sure, between your different processes, then you can scale pretty easily on different nodes.
+
+00:51:27.540 --> 00:51:32.180
+But as you were saying, it's like you have to switch your padding when you write your program,
+
+00:51:32.180 --> 00:51:37.060
+which is being as stateless as possible, which is why I wrote an entire chapter on functional
+
+00:51:37.060 --> 00:51:42.260
+programming because, well, I love functional programming. I love Lisp. And I would do Lisp if it was more
+
+00:51:42.260 --> 00:51:46.900
+popular, but I have to do Python. So I'll do Python. It's a great Lisp. And then functional programming
+
+00:51:46.900 --> 00:51:52.340
+gives you a pretty good way of writing code and give you a good mindset, I would say, to write code that
+
+00:51:52.340 --> 00:51:57.380
+avoids to do side effects. And that makes your program stateless most of the time, which makes it very
+
+00:51:57.380 --> 00:51:58.420
+easy to scale.
+
+00:51:58.420 --> 00:52:03.140
+Right. The more statelessness you can have, the easier it is going to scale. And you can get it down to a
+
+00:52:03.140 --> 00:52:08.580
+point where maybe the state is now stored in a Redis server that's shared between them or some
+
+00:52:08.580 --> 00:52:14.500
+or even in a database, like a real common examples, just put it in a database. Right. So like on the
+
+00:52:14.500 --> 00:52:19.540
+training site that I have, people come in, the only piece of state that is shared is who is logged in.
+
+00:52:19.540 --> 00:52:24.580
+And when it comes back, it goes back to the databases. Okay. Well, who is this person? Actually,
+
+00:52:24.580 --> 00:52:28.740
+do they have a course? Can they access this course? Like all those things are asked every time. And my first
+
+00:52:28.740 --> 00:52:32.500
+impression of like writing code like that was like, well, if I have to query the database for
+
+00:52:32.500 --> 00:52:37.300
+every request to get back all the information about whatever it is I care about for them tracking on
+
+00:52:37.300 --> 00:52:42.580
+this request, it's going to be so slow, except for it's not really, it works really well, actually.
+
+00:52:42.580 --> 00:52:47.860
+And it definitely lets you scale better. Yeah. Yeah. Yeah. It's pretty interesting. Okay. So stateless
+
+00:52:47.860 --> 00:52:51.780
+programming, which means like functional programming, you want to just like call out that example of
+
+00:52:51.780 --> 00:52:56.660
+remove last item that you have on the screen here, the first page of that book. Yeah. I think it
+
+00:52:56.660 --> 00:53:00.500
+to give people a sense of what you're talking about. Yeah, exactly. It's like, I was trying
+
+00:53:00.500 --> 00:53:04.500
+to explain in that chapter what's a pure and non-pure function where you actually have one
+
+00:53:04.500 --> 00:53:09.780
+function doing the side effect. I mean, when you pass argument, like functional programming,
+
+00:53:09.780 --> 00:53:13.540
+if you never know of it, it's pretty simple. Imagine that all your functional black boxes and
+
+00:53:13.540 --> 00:53:17.940
+that you are going to put something in it. And when you get something out, you can't reuse the thing
+
+00:53:17.940 --> 00:53:22.420
+that you put inside. Like you're going to use only what's being with put. So when you don't do a
+
+00:53:22.420 --> 00:53:26.100
+pure function and function programming, you are going to pass a list, for example,
+
+00:53:26.100 --> 00:53:31.140
+and you're going to modify it and not returning anything because you actually modified the list
+
+00:53:31.140 --> 00:53:35.140
+that you passed as an argument, which is not functional at all because you actually...
+
+00:53:35.140 --> 00:53:37.940
+Like maybe like list.sort would be an example, right? Like it...
+
+00:53:37.940 --> 00:53:38.260
+Exactly. Yeah.
+
+00:53:38.260 --> 00:53:38.820
+Yeah.
+
+00:53:38.820 --> 00:53:41.300
+The thing you're calling sort on is changing the list itself. Yeah.
+
+00:53:41.300 --> 00:53:46.980
+Yeah. Which is, yeah. And that's straight off because list.sort is really faster than sorted,
+
+00:53:46.980 --> 00:53:51.940
+putting sorted on the list, but it's not functional. But if you call sorted or if you return the list
+
+00:53:51.940 --> 00:53:56.740
+minus the last item or a function that removes the last item, then it's functional. You're not
+
+00:53:56.740 --> 00:54:02.100
+returning the same list. You're writing a new list with a different output, like the last item being
+
+00:54:02.100 --> 00:54:07.460
+removed, but it is stateless. Like you can lose the first, what you put as an input. You don't care
+
+00:54:07.460 --> 00:54:10.900
+anymore. You have something that is outside. And if you design all your program like that,
+
+00:54:10.900 --> 00:54:16.100
+it's pretty easy to imagine having a large input of data, putting that into a queue,
+
+00:54:16.100 --> 00:54:20.340
+but having a worker taking that, doing whatever they need to do, and then putting something and
+
+00:54:20.340 --> 00:54:24.500
+putting that into another queue, database, whatever you might want to do. And that's the basis of
+
+00:54:24.500 --> 00:54:30.100
+anything that scales is due to be able to do that, to be able to scale and do a synchronous task in
+
+00:54:30.100 --> 00:54:30.580
+the background.
+
+00:54:30.580 --> 00:54:36.020
+Cool. Yeah. I think list.sort versus sorted of list is like the perfect comparison there.
+
+00:54:36.020 --> 00:54:36.660
+Yeah.
+
+00:54:36.660 --> 00:54:42.740
+All right. You touched on queues and I think queues have this possibility to just allow
+
+00:54:42.740 --> 00:54:49.540
+incredible scale, right? Instead of every request trying to answer the question or do the task it's
+
+00:54:49.540 --> 00:54:55.700
+meant to do entirely, all it has to do is start a task and say, "Hey, that started. Off we go." And
+
+00:54:55.700 --> 00:55:01.780
+put it into something like Rabbit queue, Celery, Redis queue, something like that, and some other thing
+
+00:55:01.780 --> 00:55:04.820
+that's going to pull it out of there and get to it when it gets done, right?
+
+00:55:04.820 --> 00:55:09.700
+Yeah, exactly. It really depends on what you do and what you're trying to solve with your application,
+
+00:55:09.700 --> 00:55:16.660
+library, whatever. But as a general thing, it's a pretty good way and architecture of a program to add that.
+
+00:55:16.660 --> 00:55:23.860
+Like if you find a rest API, which is what people do most of the time now, I mean, you can definitely
+
+00:55:23.860 --> 00:55:28.660
+process the request right away. And if you know that it's going to take, I don't know, less than one
+
+00:55:28.660 --> 00:55:33.620
+second, okay, it's fine. You can do that right away. But if you know it's going to take 10 seconds, 20 seconds,
+
+00:55:33.620 --> 00:55:39.940
+it's very, very impractical for a client to keep the connection open for 30 seconds for good and
+
+00:55:39.940 --> 00:55:41.940
+bad reasons, but it's a problem.
+
+00:55:41.940 --> 00:55:44.580
+Right. And almost anyone's going to think it's broken.
+
+00:55:44.580 --> 00:55:45.380
+Yeah.
+
+00:55:45.380 --> 00:55:49.380
+Even if it technically would have worked, you're like, "It's been 10 seconds and it's something
+
+00:55:49.380 --> 00:55:52.580
+wrong. This is not okay, right? Like it's just not the right response."
+
+00:55:52.580 --> 00:55:57.860
+Yeah. And I mean, connection can be cut. So if you need 20 seconds to do anything,
+
+00:55:57.860 --> 00:56:03.380
+and then it is being cut at 18 seconds, then you lost your time and the client has to retry.
+
+00:56:03.380 --> 00:56:08.100
+So it has to repost the same payload and then you have to reprocess it for 20 seconds. So you are
+
+00:56:08.100 --> 00:56:14.420
+actually losing time. So it's way better to take the input, start it in a queue, reply with 200,
+
+00:56:14.420 --> 00:56:19.540
+okay, I got the payload, I'm going to take care of it. And then I will notify you with the webhook.
+
+00:56:19.540 --> 00:56:24.740
+I'm going to give you the result at this address, whatever mechanism you can use to do asynchronous.
+
+00:56:24.740 --> 00:56:29.300
+But I mean, building this kind of system is a kind of slew when you have the worker taking
+
+00:56:29.300 --> 00:56:34.580
+message from the queue, processing them, putting the results somewhere else. It's sort of a really
+
+00:56:34.580 --> 00:56:40.100
+good way to scale your application. And you can start without, I mean, you can start with Python
+
+00:56:40.100 --> 00:56:44.900
+itself. Like there's a queue in Python, there's multi-process and you don't have to like deploy
+
+00:56:44.900 --> 00:56:48.020
+RabbitMQ, whatever. You can actually start if you know your program is not...
+
+00:56:48.020 --> 00:56:50.500
+You could even just have a background thread and a list.
+
+00:56:50.500 --> 00:56:54.340
+Yeah, exactly. I mean, you can start with something very simple for this pattern.
+
+00:56:54.340 --> 00:56:57.940
+You don't have to use a huge framework or whatever. If you know the pattern and you
+
+00:56:57.940 --> 00:57:02.260
+know it applies to what you're doing, you actually can use it. And you know, for example, that you
+
+00:57:02.260 --> 00:57:08.100
+will never need more than one host, one node, one computer will be enough forever for your program.
+
+00:57:08.100 --> 00:57:12.340
+While you don't need to deploy a network-based queue system like Redis, Rabbit or whatever.
+
+00:57:12.340 --> 00:57:18.100
+You can use Python itself, use a multiprocess queue, and that will solve all of your problem perfectly.
+
+00:57:18.100 --> 00:57:34.420
+Yeah, that's a great example. And the multiprocessing has an actual queue data structure that properly shares across with notifications and everything across these multiprocess processes, where the multiprocess thing can just say, I'm going to block until I get something from the queue.
+
+00:57:34.420 --> 00:57:38.020
+And then as soon as you put it in, it picks it up and goes. But otherwise it just chills in the background.
+
+00:57:38.020 --> 00:57:52.740
+Yeah. Very nice. All right. Moving on. Designing for failure. That's a good one. You know, the thing that comes to mind is the, at the extreme end of this, when I talked about scalability, I maybe said YouTube in a million requests a second. This one is chaos monkey and Netflix.
+
+00:57:52.740 --> 00:58:11.060
+Yeah. You have to design for that. Like I was saying, like a lot of people, that's why you write their code with a very optimistic mindset, like everything is going to be fine. And I don't really care about error and exceptions where you actually want to write proper exceptions, like proper classes of exceptions and proper unlink of exceptions in your program.
+
+00:58:11.060 --> 00:58:40.300
+And making sure that when you, for example, when you use, I don't know, Redis and you use a Redis library, you want to be sure to be aware. And that's something that's not very obvious, honestly, because it's honestly not really well documented. Like you can read the API of a Redis library and see, okay, it takes that type as an argument and you're going to return that type. But you don't know which exception is going to be raised. So sometimes you have to sit with your own eyes in prediction, like, oh, it's broken. It's going to raise connection error. Okay. No, I know I need to fix it.
+
+00:58:40.300 --> 00:58:46.080
+Well, the tricky part of that is not necessarily seeing the exception and knowing it, but now what?
+
+00:58:46.080 --> 00:58:46.500
+Yeah.
+
+00:58:46.500 --> 00:59:02.360
+Like when I get the connection error, it means I can't talk to the database, it's overloaded or it's rebooting because it's patching. But then what happens, right? Like how do I not just go, well, there was an error. Tell the Datadog people there was an error. So we know, and then crash for the user. Like what do you do beyond that?
+
+00:59:02.360 --> 00:59:10.240
+Yeah. And the answer is not, I mean, it's not obvious. It truly depends on what you're doing. Like if you are in a REST API and your database connection,
+
+00:59:10.240 --> 00:59:17.440
+it's broken, you can't connect to the database. I mean, what are you going to retry for how much, I mean, how many times, for how many seconds are you going to retry?
+
+00:59:17.520 --> 00:59:30.120
+Because the other guy is waiting on the other side of the line, right? So you can't do that for 10 seconds too long. So you have to do that a few times. Then what do you do? Do you return a 500 error and crash? Or do you return something that is like a retry later?
+
+00:59:30.120 --> 00:59:50.620
+I mean, there's a lot of, and you have to think about all of that. Like when to say to the client to retry, if they can retry or just, yeah, crash. That's also an option sometimes. And there are so many patterns, most of the time network errors, but it might be disk full or whatever. And you have to, so you can't think about everything at the beginning for sure. So you have to have a good report system and then it's to redeploy.
+
+00:59:50.620 --> 00:59:59.920
+I totally agree about the reporting system. It's hugely valuable and notifications as well. Because if you don't look at the reporting system, the log is full of errors and nobody would look for a week.
+
+00:59:59.920 --> 01:00:12.980
+But are you a fan of the retry decorators? You know, I'm talking about some of those things you can say, here's like an expansional back off. I like you to retry five times and like first after like a second and then five seconds, then 10 seconds. What do you think?
+
+01:00:12.980 --> 01:00:16.320
+I'm the author of Tenacity, which is one of the most widely used.
+
+01:00:16.320 --> 01:00:20.440
+Yeah, okay. So that answers that question. You're a fan.
+
+01:00:20.440 --> 01:00:20.940
+Exactly.
+
+01:00:20.940 --> 01:00:21.920
+Okay, cool.
+
+01:00:21.920 --> 01:00:35.120
+I am a fan. And it's all 80% of the problem. I mean, it's up to you to know how to retry. But it's a very, very good pattern to use. I mean, Tenacity provides that as a decorator, which is not the best strategy.
+
+01:00:35.120 --> 01:00:51.020
+If you want to have different strategy or like this function should be retry this number of times depending on who the color is. But most of the time, it's good enough. Actually, it's good enough. Like most of the time, it's better to use that in a naive way where you just retry five times for five seconds or whatever, but not doing anything.
+
+01:00:51.020 --> 01:01:05.160
+Because if you know, it's also not a silver bullet. Like I see sometimes people using it to like, well, if anything wrong happened, I'm just going to retry, which is not like, please use proper exception types, like catch the right thing and retry for the right reason, not for everything.
+
+01:01:05.160 --> 01:01:12.360
+Right. Like maybe retry with connection timeout, but some other thing that crashes, like authorization failure, like that's never going to get better.
+
+01:01:12.360 --> 01:01:24.600
+Exactly. Exactly. But sometimes you see people writing like, well, I'm going to retry an exception. Whatever is raised, I'm going to retry, which is really not a good idea because yeah, it's going to be fine for network errors.
+
+01:01:24.600 --> 01:01:36.620
+But like you were saying, if it's an authentication, you don't want to retry. So I mean, be careful in that. But then if you know that you've got an IO error most of the time because the network is done one day, then it's fine to do that.
+
+01:01:36.620 --> 01:01:40.780
+And it's a really, really good way to design easily for this kind of thing.
+
+01:01:41.100 --> 01:01:48.980
+It doesn't serve everything. And for, I don't know, if you have a large job, for example, but you know it's going to take 10 minutes to compute, et cetera.
+
+01:01:48.980 --> 01:02:00.740
+I mean, having there and there, this kind of retry is going to save you because in a framework like Celery, for example, if your job fails after five minutes, for whatever reason, it's just going to put it back in the queue and retry later.
+
+01:02:00.740 --> 01:02:03.020
+But you lost the five first minutes that you used.
+
+01:02:03.020 --> 01:02:10.860
+Yeah. And you can end up in these poison message scenarios where it tries, it fails, it goes back. It tries, it fails, it goes back. It tries, and then, yeah, then it's not so great.
+
+01:02:10.860 --> 01:02:13.380
+All right. Just a little bit of time for some more deployment.
+
+01:02:13.380 --> 01:02:14.020
+Yeah.
+
+01:02:14.020 --> 01:02:26.660
+Talk about, in your book, you talk about deploying on a platform as a server, as a pass, like Heroku. There's always VMs. These days we have Docker and Kubernetes. I mean, honestly, it's not simple to know what to do as somebody who's a newcomer, I think.
+
+01:02:26.740 --> 01:02:43.660
+Yeah. And I think it says a lot since I wrote the book, but nowadays I still, I mean, Heroku is still there and pretty widely used because it's a good solution. The thing is that deploying Python application, like for myself, I'm a pretty good Python programmer, but then outside of Python, like infrastructure and Kubernetes, I barely know anything about it.
+
+01:02:43.860 --> 01:02:59.480
+It's like, it's a full-time job and it's not my job. It's another side of another job. So I could learn for sure. And I could be an expert in Kubernetes and deployment of anything. But I mean, it's fine to do that if you want to do that. But as a Python developer, I don't really want to do it.
+
+01:02:59.480 --> 01:03:24.100
+I'm happy to use any kind of platform, the service like Heroku, where I can actually, like the using the Kubernetes container approach of deploying and spawning a lot of this to scale is not my responsibility, but I can outsource it to somebody that knows how to do that. So there's plenty of options. I think I wrote up on Heroku, OpenShift does that too. I know, I mean, Amazon or Microsoft or Google, all other solutions to do that too.
+
+01:03:24.100 --> 01:03:25.540
+Yeah, they must have something. Yeah.
+
+01:03:25.880 --> 01:03:47.100
+Yeah. And I mean, there's no reason if you really know that your application is going to scale and you don't want to spend a lot of time on infrastructure and learning. I mean, Kubernetes, Docker or whatever. I mean, you can spin easily an application on top of Heroku and then click a button to have two nodes, three nodes, four nodes, ten nodes, and then wallet. And it's expensive. That's another issue.
+
+01:03:47.860 --> 01:04:11.100
+Yeah, the platform as a service, often they exchange complete ease of use with maybe two things, one with cost, and then the other is with flexibility, right? Like you kind of got to fit their way. Like, well, the way you use the database is our managed database service. And if you don't like that, well, then I don't know, you got to just use our managed service. You know what I mean? Things like that are kind of somewhat fixed. But yeah, I think it's really good for a lot of people.
+
+01:04:11.100 --> 01:04:24.360
+Yeah, exactly. I mean, it covers 90% of the market, right? I mean, most people are going to start with, even if it's not a bad project, but like you're starting your company, you're doing a small project, and maybe it's one day you will be the next girl you have to scale.
+
+01:04:24.480 --> 01:04:54.020
+But at that time, you'll solve the problem. You'll get plenty of money to solve it. But until then, you don't have a lot of time, you don't have a lot of money. It's actually pretty cheap compared to the time you would spend learning the ropes of Kubernetes. I mean, a secure deployment at scale of Kubernetes, I'm sure it's pretty more complicated than writing a simple Flask application. So it's a trade-off. I think it's a pretty good trade-off if you really want to start saying, okay, I think at some point I will need to scale. I can't run on my laptop anymore. I need to run that somewhere. While using a platform like that is a pretty good trade-off.
+
+01:04:54.020 --> 01:05:05.000
+Yeah. And I think it's so easy to dream big and think, oh, I'm going to have to scale. So if I'm going to deploy this, what is it going to be like if I get the first 100,000 users? You should be so lucky that you have that problem, right?
+
+01:05:05.000 --> 01:05:05.240
+Exactly.
+
+01:05:05.240 --> 01:05:17.340
+So often things get built and they just stagnate or they don't go anywhere. Or the reason they stagnate is you're not adding features fast enough because you spent so much time building complicated architectures for a case in the future.
+
+01:05:17.560 --> 01:05:27.720
+When reality is on the past, you could just pay 10 times as much for two weeks and then completely move to something else and you could buy yourself that time for $500, right?
+
+01:05:27.720 --> 01:05:34.600
+But you could spend months building something, right? Like that's going to support some insane future that doesn't exist.
+
+01:05:34.600 --> 01:05:40.160
+And so a lot of people, they'd be better off to just move forward and then evolve and realize it's not forever.
+
+01:05:40.620 --> 01:05:42.960
+It's a path towards where you're going to be.
+
+01:05:42.960 --> 01:05:47.660
+Yeah. And then learn marketing to have people coming onto that project.
+
+01:05:47.660 --> 01:05:50.340
+That is the problem. Yes, that's the hard part.
+
+01:05:50.340 --> 01:05:55.500
+Yeah. That might be my next book about like doing marketing to getting people on your project to be able to scale them.
+
+01:05:55.680 --> 01:05:58.000
+Yeah, I'll definitely read that book if you write it.
+
+01:05:58.000 --> 01:06:04.920
+All right. We got some more topics to cover, but we're down to just one that I think we have a little time to touch on because it's like magic sauce.
+
+01:06:04.920 --> 01:06:07.700
+For a database, the magic sauce is indexes.
+
+01:06:07.700 --> 01:06:11.340
+For many other things, the magic sauce is caching, right?
+
+01:06:11.340 --> 01:06:15.360
+If this thing is really slow, I'll give you an example from TalkPylon or maybe even better from Python Bytes.
+
+01:06:15.360 --> 01:06:16.980
+That's a more interesting example.
+
+01:06:17.980 --> 01:06:24.720
+The RSS feed for that thing is made up out of, I think we had to limit it because we got too many, but for a while it's made up of 200 episodes.
+
+01:06:24.720 --> 01:06:26.940
+Each episode is like five pages of markdown.
+
+01:06:26.940 --> 01:06:39.440
+In order to render that RSS feed on demand, I've got to render, I've got to go to the database, query 200 things, and then markdownify them 200 times and then put that into an XML document and return that.
+
+01:06:39.440 --> 01:06:41.400
+And that is not super fast.
+
+01:06:41.720 --> 01:06:48.960
+But you know what? If I take that result, I would have returned and save it in the database and just generate it once a minute, then it's fine, right?
+
+01:06:48.960 --> 01:06:56.360
+It's like magic. It goes from one second to one millisecond, and you just get so much scale from it.
+
+01:06:56.360 --> 01:06:58.220
+Yeah, that's exactly what you're saying.
+
+01:06:58.220 --> 01:07:01.000
+It's a pretty good pattern when you have to optimize.
+
+01:07:01.420 --> 01:07:08.180
+So that would be more for the performance dimension when you want to code to be faster, not necessarily to scale the number of users.
+
+01:07:08.180 --> 01:07:17.360
+Even if that's sometimes connected, like if you have 200 people requesting at the same time, your RSS feed and you have to do that the same time, 200 times, that's pretty useless.
+
+01:07:17.360 --> 01:07:19.420
+So, I mean, caching is a pretty good pattern.
+
+01:07:19.420 --> 01:07:22.220
+There's nothing actually very specific to Python there.
+
+01:07:22.220 --> 01:07:27.800
+I mean, even in this chapter of the book, it's actually pretty, like I'm talking about how to use memcache already.
+
+01:07:27.800 --> 01:07:32.180
+So whatever you want to cache, there are pretty good solutions to cache over the network.
+
+01:07:32.180 --> 01:07:35.780
+You can start by caching locally in your own process, like memorizing.
+
+01:07:35.780 --> 01:07:40.220
+Right, like a Python dictionary is a really good cache, right? For certain things.
+
+01:07:40.220 --> 01:07:46.760
+Exactly. And there are, in Python 3 something, they added the, they were the LRU cache and they added a lot of...
+
+01:07:46.760 --> 01:07:48.760
+Yeah, the LRU cache decorator is really neat.
+
+01:07:48.760 --> 01:07:51.660
+Yeah. Cache tools, the cache tools library in Python.
+
+01:07:51.660 --> 01:07:56.860
+There's a lot of different algorithms if you want to cache locally in your own Python program.
+
+01:07:57.280 --> 01:08:00.700
+Like if you know you're going to call this method hundreds of times for...
+
+01:08:00.700 --> 01:08:01.860
+And the result is going to be the same.
+
+01:08:01.860 --> 01:08:04.340
+Just cache it. It's expensive to compute.
+
+01:08:04.340 --> 01:08:10.640
+I mean, expensive to compute might be more expensive in terms of CPU, but it also might be expensive for database.
+
+01:08:10.640 --> 01:08:14.400
+Or sometimes the expansiveness is going to be the network.
+
+01:08:14.400 --> 01:08:22.520
+Like you're going to request some data over the network and it's very far or it's a very slow system or very unreliable system.
+
+01:08:22.520 --> 01:08:23.520
+Yeah.
+
+01:08:23.520 --> 01:08:29.380
+So using caching system is a pretty good solution to avoid this capability, which is also linked to the design for failure we talked about before.
+
+01:08:29.380 --> 01:08:37.060
+Right. If you're consuming third-party services, you can't necessarily depend on their uptime, on their reliability, on their response time, all those types of things.
+
+01:08:37.180 --> 01:08:38.940
+I'll give you another example of expensive.
+
+01:08:38.940 --> 01:08:47.840
+So when you go to our courses, we've got, well, video servers throughout the world and we want to serve you the video from the one closest to you.
+
+01:08:47.840 --> 01:08:56.180
+So we have a service that we call that takes your IP address, figures out where you are, and then chooses a video server for you so you get the best time.
+
+01:08:56.180 --> 01:09:08.740
+That costs a little tiny bit of money each time, but with enough requests, it would be hundreds, maybe even, I don't know, definitely into the hundreds per month of where is this person API charges.
+
+01:09:08.740 --> 01:09:10.360
+And so we just cache that.
+
+01:09:10.360 --> 01:09:14.640
+Like if this IP address is from this city or this country, we just put that in our database.
+
+01:09:14.640 --> 01:09:16.500
+And first we check the database.
+
+01:09:16.500 --> 01:09:17.920
+Do we know where this IP address is?
+
+01:09:17.920 --> 01:09:18.280
+No.
+
+01:09:18.280 --> 01:09:19.300
+Go to the service.
+
+01:09:19.300 --> 01:09:20.780
+Otherwise, just get it from the database.
+
+01:09:20.780 --> 01:09:23.260
+It's both faster and it literally doesn't cost as much.
+
+01:09:23.260 --> 01:09:26.240
+It's less expensive in the most direct meaning of that.
+
+01:09:26.240 --> 01:09:36.920
+And then you're eating on the first and biggest issue in computer science, which is cache invalidation, which is what in your case, the IP might not change of country pretty often.
+
+01:09:36.920 --> 01:09:37.880
+It can change.
+
+01:09:37.880 --> 01:09:39.480
+Not very often, but it can change.
+
+01:09:39.480 --> 01:09:39.740
+Yeah.
+
+01:09:39.740 --> 01:09:42.860
+So for our, just for our example, what I did is it's in MongoDB.
+
+01:09:42.860 --> 01:09:47.540
+So I set up a, an index that will remove it from the database after six months.
+
+01:09:47.540 --> 01:09:47.960
+Yeah.
+
+01:09:47.960 --> 01:09:50.360
+Which is final, but arbitrary, right?
+
+01:09:50.360 --> 01:09:50.920
+Yes.
+
+01:09:50.920 --> 01:09:52.580
+It's totally, I could be wrong for a while.
+
+01:09:52.580 --> 01:09:53.520
+I mean, exactly.
+
+01:09:53.520 --> 01:09:56.480
+But the failure case is it's slow streaming with buffering.
+
+01:09:56.480 --> 01:10:00.060
+Potentially it's not complete failure, completely the wrong answer.
+
+01:10:00.060 --> 01:10:00.320
+Right.
+
+01:10:00.320 --> 01:10:01.540
+So for us, it's acceptable.
+
+01:10:01.540 --> 01:10:02.600
+Yeah, exactly.
+
+01:10:02.600 --> 01:10:04.560
+So you made a trade off, which is totally fine for your risk.
+
+01:10:04.560 --> 01:10:07.760
+And that's a lot of things that you do when you want to scale is straight off.
+
+01:10:07.760 --> 01:10:11.280
+And sometimes you don't get things totally right, but it's fine.
+
+01:10:11.280 --> 01:10:16.580
+It's just not the best experience for your user in your case, but it's fine and you can live with it.
+
+01:10:16.580 --> 01:10:24.620
+And I think it's a change of mindset when you go from, I'm writing a Python program, which has to be perfect and works 100% of the time.
+
+01:10:25.180 --> 01:10:29.820
+And then when you want to scale, you have to do a lot of stuff where like, it will work fine for 80% of the people.
+
+01:10:29.820 --> 01:10:36.060
+And for some cases, 5% of the time, while that might be not optimal, but it's fine.
+
+01:10:36.280 --> 01:10:42.360
+And that's a lot of doing things at scale are changing this mindset to, well, it works always.
+
+01:10:42.360 --> 01:10:43.300
+It's always true.
+
+01:10:43.300 --> 01:10:45.520
+And no, sometimes it's not really true.
+
+01:10:45.520 --> 01:10:55.040
+I mean, if you had a way for you to be aware and notified that an IP address changed its country, you could invalidate your cache and then make it totally reliable.
+
+01:10:55.040 --> 01:10:58.920
+I mean, for a few seconds, maybe it won't be up to date, but that would be close to perfection.
+
+01:10:58.920 --> 01:10:59.420
+Yeah.
+
+01:10:59.420 --> 01:11:00.700
+But you don't have that system.
+
+01:11:00.700 --> 01:11:03.140
+So you have to do what you did, which is a good trade-off.
+
+01:11:03.140 --> 01:11:03.980
+I mean, it's pragmatic.
+
+01:11:03.980 --> 01:11:06.520
+You have to be very pragmatic when you do things at scale.
+
+01:11:06.520 --> 01:11:06.960
+Yeah.
+
+01:11:06.960 --> 01:11:08.400
+And also kind of designed for failure.
+
+01:11:08.400 --> 01:11:10.800
+Like what's the worst case if that goes wrong?
+
+01:11:10.800 --> 01:11:11.120
+Yeah.
+
+01:11:11.120 --> 01:11:11.540
+Right.
+
+01:11:11.540 --> 01:11:13.620
+It's like streaming halfway around the world or something.
+
+01:11:13.620 --> 01:11:18.520
+Whereas other things, like if the database goes down, you've got to deal with that entirely differently.
+
+01:11:18.520 --> 01:11:19.160
+Yeah.
+
+01:11:19.160 --> 01:11:20.360
+That's a hard one to fix though.
+
+01:11:20.360 --> 01:11:21.320
+I didn't really know what to do there.
+
+01:11:21.320 --> 01:11:26.140
+Well, I mean, caching, like you could cache, for example, if your database goes down, you can.
+
+01:11:26.140 --> 01:11:26.700
+That's true.
+
+01:11:26.900 --> 01:11:30.500
+You could cache older version and reply to the client.
+
+01:11:30.500 --> 01:11:32.020
+Like it might be an older version.
+
+01:11:32.020 --> 01:11:32.540
+I'm sorry.
+
+01:11:32.540 --> 01:11:34.320
+Like what the time system is there.
+
+01:11:34.320 --> 01:11:37.980
+Or I mean, depending on what you build, obviously you have to know the use case and the trade-offs
+
+01:11:37.980 --> 01:11:38.440
+you're going to do.
+
+01:11:38.440 --> 01:11:39.760
+But caching could be a solution.
+
+01:11:39.760 --> 01:11:41.520
+And then the problem is that you have to.
+
+01:11:41.520 --> 01:11:45.760
+That's a good idea because you might actually be able to say, if I'm going to go to Redis
+
+01:11:45.760 --> 01:11:47.840
+and if it's not there, then I'm going to go to database.
+
+01:11:47.840 --> 01:11:51.380
+Many of the requests that come in might never need to go to the database again.
+
+01:11:51.380 --> 01:11:53.800
+You know, if you just say, oh, whoops, the database is down.
+
+01:11:53.800 --> 01:11:55.240
+We're just going to serve what's out of the cache.
+
+01:11:55.640 --> 01:11:58.440
+It could go for a while until there's some write operation.
+
+01:11:58.440 --> 01:12:00.420
+As long as it's read-only, it might not matter.
+
+01:12:00.420 --> 01:12:03.820
+Which is what services like Cloudflare does for the web, for example.
+
+01:12:03.820 --> 01:12:05.540
+Like we do caching, protect you.
+
+01:12:05.540 --> 01:12:10.460
+And if you're down, they're just going to show the page they had a few seconds ago until you're
+
+01:12:10.460 --> 01:12:11.920
+back up and nobody will notice.
+
+01:12:11.920 --> 01:12:12.900
+Yeah, interesting.
+
+01:12:12.900 --> 01:12:14.140
+Yeah, you can apply that.
+
+01:12:14.140 --> 01:12:17.980
+And the thing you have to keep in mind when you do caching is to be able to invalidate your
+
+01:12:17.980 --> 01:12:18.280
+cache.
+
+01:12:18.280 --> 01:12:22.500
+Like if you're caching database and something changed in the database, you have to have this
+
+01:12:22.500 --> 01:12:26.720
+callback mechanism where your database can say to your cache, hey, by the way, that changed,
+
+01:12:26.760 --> 01:12:29.940
+you need to update it if you're able to, like, you need to be aware of that.
+
+01:12:29.940 --> 01:12:34.400
+Otherwise, you have to put arbitrary timestamp, like you said, for your, like, six months.
+
+01:12:34.400 --> 01:12:37.840
+It's going to be six months and that's it, which is fine for such a use case.
+
+01:12:37.840 --> 01:12:42.020
+But for a lot of people can, like, your RSS feed, but wouldn't work very well probably
+
+01:12:42.020 --> 01:12:43.340
+if you were doing six months.
+
+01:12:43.600 --> 01:12:44.400
+Yeah, that would be bad.
+
+01:12:44.400 --> 01:12:49.480
+All of a sudden, oh, there's 24 new episodes all of a sudden or something.
+
+01:12:49.480 --> 01:12:49.780
+Yeah.
+
+01:12:49.780 --> 01:12:54.640
+So this is where you write that cron job that just restarts Redis once an hour and you'll
+
+01:12:54.640 --> 01:12:55.000
+be fine.
+
+01:12:55.000 --> 01:12:55.740
+No, just kidding.
+
+01:12:55.740 --> 01:12:56.480
+You're right.
+
+01:12:56.480 --> 01:13:01.440
+This caching validation really, really is tricky because if you check the database, then you're
+
+01:13:01.440 --> 01:13:03.100
+not really caching anymore, right?
+
+01:13:03.100 --> 01:13:04.300
+You might as well not have the cache.
+
+01:13:04.300 --> 01:13:07.600
+So yeah, it's super tricky, but definitely a bit of the magic sauce.
+
+01:13:07.600 --> 01:13:08.200
+All right.
+
+01:13:08.200 --> 01:13:12.720
+I think that there's plenty more we could cover in the book and about scaling and architecture
+
+01:13:12.720 --> 01:13:14.980
+and it'll be really fun, but we're way over time.
+
+01:13:14.980 --> 01:13:19.180
+So we should probably just wrap it up with a couple of questions here that I always ask
+
+01:13:19.180 --> 01:13:19.940
+at the end of the show.
+
+01:13:19.940 --> 01:13:23.460
+So Julian, if you're going to write some Python code, what editor do you use?
+
+01:13:23.460 --> 01:13:24.000
+Emacs.
+
+01:13:24.000 --> 01:13:26.700
+I've been an Emacs user for the last 10 years.
+
+01:13:26.700 --> 01:13:29.440
+I think I still have the commit access to Emacs itself.
+
+01:13:29.440 --> 01:13:30.300
+Oh, cool.
+
+01:13:30.300 --> 01:13:34.140
+You did say you love Lisp and you get to have your code powered by Lisp.
+
+01:13:34.140 --> 01:13:34.800
+Exactly.
+
+01:13:34.800 --> 01:13:37.860
+I stopped, but I wrote a lot of Lisp like 10 years ago.
+
+01:13:38.160 --> 01:13:38.520
+Yeah, cool.
+
+01:13:38.520 --> 01:13:43.860
+And then notable PyPI package, if you want, you can shout out Tenacity, which we covered
+
+01:13:43.860 --> 01:13:45.120
+or something else if you'd like.
+
+01:13:45.120 --> 01:13:47.820
+Tenacity and Daiquiri, which I love.
+
+01:13:47.820 --> 01:13:50.680
+Daiquiri is a tiny wrapper around the logging system of Python.
+
+01:13:50.680 --> 01:13:54.440
+So the story is that I never remember how to configure the logging system in Python.
+
+01:13:54.440 --> 01:13:59.200
+Like I do import logging and I'm like, I don't know how to configure it to work like I want.
+
+01:13:59.200 --> 01:14:00.800
+So Daiquiri does that.
+
+01:14:00.800 --> 01:14:02.020
+It's pretty easy to use.
+
+01:14:02.020 --> 01:14:07.540
+It has a functional approach like Tenacity in its design and it's making like two lines
+
+01:14:07.540 --> 01:14:08.420
+to use the logging system.
+
+01:14:08.420 --> 01:14:11.040
+You have something that works out of the box with colors, et cetera.
+
+01:14:11.040 --> 01:14:12.100
+So I like it.
+
+01:14:12.100 --> 01:14:12.980
+Oh, fantastic.
+
+01:14:12.980 --> 01:14:13.500
+Yeah.
+
+01:14:13.500 --> 01:14:14.900
+I always forget how to set it below.
+
+01:14:14.900 --> 01:14:17.040
+I get to send me something else as well.
+
+01:14:17.040 --> 01:14:19.640
+It's just like, I don't need to remember this.
+
+01:14:19.640 --> 01:14:20.360
+Fantastic.
+
+01:14:20.360 --> 01:14:20.740
+All right.
+
+01:14:20.740 --> 01:14:22.020
+So thank you for being here.
+
+01:14:22.020 --> 01:14:24.680
+Thank you for talking about this and covering all these ideas.
+
+01:14:24.680 --> 01:14:25.400
+They're fascinating.
+
+01:14:25.960 --> 01:14:28.160
+And they always require some trade-offs, right?
+
+01:14:28.160 --> 01:14:30.540
+Like it's when should I use this thing or that thing?
+
+01:14:30.540 --> 01:14:34.000
+But if people want to get started, one, where do they find your book?
+
+01:14:34.000 --> 01:14:37.460
+Two, what advice in general do you have for them going down this path?
+
+01:14:37.460 --> 01:14:39.800
+You can find my book, goingbython.com.
+
+01:14:39.800 --> 01:14:43.040
+If you want to take a look, it's a pretty good read, I think, to give you the right mindset
+
+01:14:43.040 --> 01:14:47.200
+to understand what the trade-offs you might need to be to do a program.
+
+01:14:47.380 --> 01:14:49.560
+And I think that's what boils down to that.
+
+01:14:49.560 --> 01:14:52.960
+Like, what are you ready to change and how to design your program?
+
+01:14:52.960 --> 01:14:56.220
+And what are you going to, what is going to be a real use case?
+
+01:14:56.220 --> 01:14:57.580
+Like, why do you want to scale?
+
+01:14:57.580 --> 01:14:59.700
+And are you going to scale for real?
+
+01:14:59.700 --> 01:15:04.020
+Or are you just thinking that you will need to scale in the future and do the right trade-off
+
+01:15:04.020 --> 01:15:08.660
+and don't overcomplicate things because you're just going to shoot yourself in the foot by doing that?
+
+01:15:08.660 --> 01:15:09.920
+Yeah, it's super tricky.
+
+01:15:09.920 --> 01:15:11.400
+I would just add on to that.
+
+01:15:11.400 --> 01:15:15.140
+What you think you might need to scale in the future is a web app or web API.
+
+01:15:15.340 --> 01:15:17.480
+Use Locust to actually measure it.
+
+01:15:17.480 --> 01:15:21.680
+And if what it is something more local, like a data science type of thing or something
+
+01:15:21.680 --> 01:15:25.640
+computationally locally, run Cprofile with it and just measure, right?
+
+01:15:25.640 --> 01:15:27.180
+However you go about your measuring.
+
+01:15:27.180 --> 01:15:27.740
+Yeah.
+
+01:15:27.740 --> 01:15:28.380
+Fantastic.
+
+01:15:28.380 --> 01:15:28.780
+All right.
+
+01:15:28.780 --> 01:15:29.620
+Thank you, Julian.
+
+01:15:29.620 --> 01:15:31.640
+It's been great to chat with you and sharing these ideas.
+
+01:15:31.640 --> 01:15:32.280
+Great book.
+
+01:15:32.280 --> 01:15:33.060
+Thank you, Michael.
+
+01:15:33.060 --> 01:15:33.520
+Yep.
+
+01:15:33.520 --> 01:15:33.920
+Bye.
+
+01:15:33.920 --> 01:15:37.860
+This has been another episode of Talk Python to Me.
+
+01:15:37.860 --> 01:15:43.340
+Our guest in this episode was Julian Danzow, and it's been brought to you by 45 Drives and
+
+01:15:43.340 --> 01:15:45.000
+us over at Talk Python Training.
+
+01:15:45.000 --> 01:15:49.340
+Solve your storage challenges with hardware powered by open source.
+
+01:15:49.340 --> 01:15:56.280
+Check out 45 Drives storage servers at talkpython.fm/45 Drives and skip the vendor lock-in
+
+01:15:56.280 --> 01:15:57.680
+and software licensing fees.
+
+01:15:57.680 --> 01:15:59.520
+Want to level up your Python?
+
+01:15:59.520 --> 01:16:03.580
+We have one of the largest catalogs of Python video courses over at Talk Python.
+
+01:16:03.580 --> 01:16:08.760
+Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+01:16:08.760 --> 01:16:11.420
+And best of all, there's not a subscription in sight.
+
+01:16:11.420 --> 01:16:14.320
+Check it out for yourself at training.talkpython.fm.
+
+01:16:14.320 --> 01:16:16.220
+Be sure to subscribe to the show.
+
+01:16:16.220 --> 01:16:19.000
+Open your favorite podcast app and search for Python.
+
+01:16:19.000 --> 01:16:20.320
+We should be right at the top.
+
+01:16:20.320 --> 01:16:25.480
+You can also find the iTunes feed at /itunes, the Google Play feed at /play,
+
+01:16:25.480 --> 01:16:29.680
+and the direct RSS feed at /rss on talkpython.fm.
+
+01:16:30.100 --> 01:16:33.120
+We're live streaming most of our recordings these days.
+
+01:16:33.120 --> 01:16:36.520
+If you want to be part of the show and have your comments featured on the air,
+
+01:16:36.520 --> 01:16:40.900
+be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+01:16:40.900 --> 01:16:42.800
+This is your host, Michael Kennedy.
+
+01:16:42.800 --> 01:16:44.080
+Thanks so much for listening.
+
+01:16:44.080 --> 01:16:45.260
+I really appreciate it.
+
+01:16:45.500 --> 01:16:47.160
+Now get out there and write some Python code.
+
+01:16:47.160 --> 01:17:07.760
+I'll see you next time.
+
+01:17:07.760 --> 01:17:37.740
+Thank you.
+

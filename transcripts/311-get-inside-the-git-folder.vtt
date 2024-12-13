@@ -1,0 +1,3731 @@
+WEBVTT
+
+00:00:00.001 --> 00:00:02.980
+These days, Git is synonymous with source control itself.
+
+00:00:02.980 --> 00:00:08.040
+Rare are the current debates of whether to use Git versus SVN versus some fossil like
+
+00:00:08.040 --> 00:00:12.500
+SourceSafe versus you name it, but do you know how Git works? What about its internals?
+
+00:00:12.500 --> 00:00:18.020
+I'm sure you've seen a .git folder in your project's root, but to most folks, that's a black
+
+00:00:18.020 --> 00:00:23.080
+box. In this episode, you'll meet Rob Richardson. He's going to pop the lid on that black box as we
+
+00:00:23.080 --> 00:00:27.300
+dive into Git internals and the .git folder, among other things about source control.
+
+00:00:27.800 --> 00:00:32.800
+This is Talk Python to Me, episode 311, recorded April 1st, 2021.
+
+00:00:32.800 --> 00:00:51.000
+Welcome to Talk Python to Me, a weekly podcast on Python, the language, the libraries, the
+
+00:00:51.000 --> 00:00:55.520
+ecosystem, and the personalities. This is your host, Michael Kennedy. Follow me on Twitter where
+
+00:00:55.600 --> 00:01:00.120
+I'm at mkennedy, and keep up with the show and listen to past episodes at talkpython.fm,
+
+00:01:00.120 --> 00:01:06.460
+and follow the show on Twitter via at Talk Python. Congratulations to Mike Manning. He's the final
+
+00:01:06.460 --> 00:01:10.880
+winner of our PyCon ticket giveaway. Thank you to everyone who entered, and if you didn't win,
+
+00:01:10.880 --> 00:01:15.600
+I hope you're able to get a ticket and support the PSF, the Python community, and be part of that
+
+00:01:15.600 --> 00:01:20.200
+awesome conference. See you in May. Rob, welcome to Talk Python to Me.
+
+00:01:20.380 --> 00:01:24.720
+So glad to be here. I'm really excited that I get to join you. Great to meet your audience.
+
+00:01:24.720 --> 00:01:29.380
+Yeah, it's great to have you here. You got to meet Intersection. You gave a talk at the Python
+
+00:01:29.380 --> 00:01:35.440
+web conference recently that I also spoke at, and your talk was really interesting and certainly
+
+00:01:35.440 --> 00:01:39.220
+relevant to the Python folks, so I thought it'd be cool to have you over here. And, you know,
+
+00:01:39.220 --> 00:01:43.100
+I should give credit to Paul Everett for connecting us. He's like, oh, that was a great talk. You should
+
+00:01:43.100 --> 00:01:46.240
+go talk to Rob. So thanks, Paul, as well, who was not long ago on the show.
+
+00:01:46.240 --> 00:01:51.100
+Yeah. I've been chatting with Paul about thoughts around the talk as well. He's a really brilliant
+
+00:01:51.100 --> 00:01:51.360
+guy.
+
+00:01:51.360 --> 00:01:55.940
+Yeah, he is. He definitely is. He's been doing a lot of cool stuff for a long time. So yeah,
+
+00:01:55.940 --> 00:02:02.380
+he's a great guy. Now, before we get into Git and all those types of things, which, you know,
+
+00:02:02.380 --> 00:02:05.940
+it's really surprising to me how much it's taken over the world, right? It used to be,
+
+00:02:05.940 --> 00:02:09.840
+there was always a question, well, what source control do you use? Like, that's not a question
+
+00:02:09.840 --> 00:02:14.380
+I hear all that often these days, not at least as much as it used to be. But before we dive into the
+
+00:02:14.380 --> 00:02:16.960
+details of that, let's start with your story. How'd you get into programming?
+
+00:02:16.960 --> 00:02:22.580
+This is actually a really fun story. I was 10. I was at the library because they had the computer
+
+00:02:22.580 --> 00:02:28.720
+and we'd play video games. And the methodology of how you do this is you go up to the counter and you
+
+00:02:28.720 --> 00:02:34.020
+flip through the book and you go find the video game and you show them that page and they give you the
+
+00:02:34.020 --> 00:02:39.480
+disc and you have the save icon. You take the save icon and you put it in the computer and you play the
+
+00:02:39.480 --> 00:02:44.320
+game. So I had finished playing my game and I went back to the desk to go pick another
+
+00:02:44.320 --> 00:02:50.680
+one flipping through the, you know, plastic sheets. And I found a drawing program. And I said,
+
+00:02:50.680 --> 00:02:55.880
+I'd like to play this game. They gave me an eight and a half by 11 sheet of paper. The top two thirds
+
+00:02:55.880 --> 00:03:03.580
+was graph paper, you know, graphs. And the bottom third was how to write the program to draw that on
+
+00:03:03.580 --> 00:03:04.900
+screen. Oh, cool. Okay.
+
+00:03:05.060 --> 00:03:13.860
+And it was so much fun. I got to start to build content that was in my mind in real life in this
+
+00:03:13.860 --> 00:03:20.020
+artistic medium with a very technical implementation. So, you know, that was so much fun. I did never
+
+00:03:20.020 --> 00:03:26.120
+return that game. And so that kind of brought me into the world of software development. I always
+
+00:03:26.120 --> 00:03:30.940
+thought it was just a fun thing that people did. I didn't realize it was a career. So it wasn't until
+
+00:03:30.940 --> 00:03:36.080
+really late in my college experience when I realized that I could do this for a career.
+
+00:03:36.080 --> 00:03:42.760
+And so after I graduated, I got into programming professionally and I've had a really fun time
+
+00:03:42.760 --> 00:03:45.540
+coding now for professionally for more than 20 years.
+
+00:03:45.540 --> 00:03:50.000
+Yeah. Awesome. I think programming is special because it's one of those things you kind of
+
+00:03:50.000 --> 00:03:53.600
+hinted at where you, you think of something, you dream of something, you imagine something.
+
+00:03:53.940 --> 00:03:59.620
+And then with a little bit more thinking, that thing can become real. Whereas, you know, so much
+
+00:03:59.620 --> 00:04:04.520
+of what humans do, it's one or the other. I could tell an amazing story and write the book,
+
+00:04:04.520 --> 00:04:10.740
+or I could go build an awesome house. But normally those things don't actually coexist where you think
+
+00:04:10.740 --> 00:04:15.440
+a lot about something and they come into existence. But I do think that's a magical part of what we get
+
+00:04:15.440 --> 00:04:18.520
+to do. And I think it captures a lot of people's imagination.
+
+00:04:18.520 --> 00:04:23.220
+And what's really cool is that in this digital world, there are a lot less boundaries, a lot
+
+00:04:23.220 --> 00:04:27.680
+less constraints. There's nothing telling me that this pixel needs to be in this certain way.
+
+00:04:27.680 --> 00:04:30.680
+I can draw whatever I want on these pixels on the screen.
+
+00:04:30.680 --> 00:04:35.920
+Yeah. Yeah. And modern day, we have cloud computing and we have incredible computers. Like
+
+00:04:35.920 --> 00:04:41.380
+the sky's the limit. It's really, really awesome. Also money. You don't have to go buy tons of hardware
+
+00:04:41.380 --> 00:04:46.020
+for many things that we do. Right. So really cool. Now, how about today? What are you up to these days?
+
+00:04:46.020 --> 00:04:51.280
+I'm doing a lot with software development, cloud-based development, a lot of websites,
+
+00:04:51.280 --> 00:04:57.020
+a lot of web properties, ASP.net and Node on the backend, React and Vue on the front end.
+
+00:04:57.020 --> 00:05:01.840
+Taking that into interesting modalities, I've started to play with Raspberry Pis and that's
+
+00:05:01.840 --> 00:05:07.800
+really fun. And getting to dig into all the things. I've gotten really good at doing DevOps as well.
+
+00:05:07.800 --> 00:05:13.840
+Part of my passion is being able to share this knowledge with others. So I do a lot with teaching
+
+00:05:13.840 --> 00:05:19.680
+both at user groups and conferences and elsewhere mentoring. And so it's really fun to be able to
+
+00:05:19.680 --> 00:05:24.520
+not only learn these new skills, but also pass it on to the next generation of developers too.
+
+00:05:24.520 --> 00:05:30.120
+I love to say that it's not that I'm really good at it. It's just that I've been collecting things for a
+
+00:05:30.120 --> 00:05:33.320
+while. So let me add to your collection too.
+
+00:05:33.320 --> 00:05:37.760
+Well, I think one of the things that's really interesting about becoming an expert in programming,
+
+00:05:37.760 --> 00:05:42.320
+people who are beginners or maybe don't do programming at all, they see that person as
+
+00:05:42.320 --> 00:05:49.700
+incredibly talented and incredibly smart. And they may be, they often are, but I feel like the real
+
+00:05:49.700 --> 00:05:54.180
+big difference is I've spent 10 years gathering up these little tips. Like, oh, I tried this.
+
+00:05:54.180 --> 00:05:58.780
+That doesn't work very well. That crashes. You try to talk to the database that way. That's bad. Oh,
+
+00:05:58.780 --> 00:06:02.900
+by the way, I've also built up a couple of examples of what databases are. And I've seen,
+
+00:06:02.900 --> 00:06:11.180
+you just have this almost more experience than, I don't know, like innate skill, right? So it's
+
+00:06:11.180 --> 00:06:15.500
+really cool. You can just kind of layer on these skills over your career. And the reason I think
+
+00:06:15.500 --> 00:06:19.960
+that's powerful is it's, they're very easy to communicate back to other people, right? If,
+
+00:06:19.960 --> 00:06:28.720
+you know, the way Nietzsche did philosophy or the way Euler did math, like you can't, or Bach did music,
+
+00:06:28.720 --> 00:06:33.340
+like you can't easily communicate that to someone. Like if it's this crazy innate skill,
+
+00:06:33.340 --> 00:06:38.020
+you can sort of communicate it, but it's not the same. But with programming, I think it's very easy
+
+00:06:38.020 --> 00:06:42.340
+to transmit it on and pass it on and ways to help people like level up. It's super fun.
+
+00:06:42.340 --> 00:06:46.380
+And it's really easy to get started. You know, programming languages have become much more
+
+00:06:46.380 --> 00:06:52.160
+approachable of late. And so if you're new to programming and just starting to dabble in it,
+
+00:06:52.160 --> 00:06:56.820
+you don't need to buy a big expensive thing. You know, the laptop that you're using to browse the
+
+00:06:56.820 --> 00:07:02.500
+web is probably sufficient for building simple programs. And so, you know, dive in,
+
+00:07:02.500 --> 00:07:08.460
+use free tools and just start building stuff. It's really approachable and really fun.
+
+00:07:08.460 --> 00:07:13.080
+It absolutely is. And one of the things that just never ceases to blow my mind is I can be in a coffee
+
+00:07:13.080 --> 00:07:20.980
+shop working on a relatively cheap laptop doing my coding. Git push, speaking of Git, something happens
+
+00:07:20.980 --> 00:07:25.480
+on one part of the cloud. It triggers a web hook somewhere else that then grabs the code and could run
+
+00:07:25.480 --> 00:07:31.340
+that on a tremendously powerful data center and computer or suite of computers, a cluster of
+
+00:07:31.340 --> 00:07:36.880
+computers. And yet I get the experience of basically building this super powerful thing on my very wimpy
+
+00:07:36.880 --> 00:07:43.220
+little laptop. It's just cool that you can create things like Facebook or Google, or you name these,
+
+00:07:43.220 --> 00:07:47.640
+these really large, amazing apps, but you could kind of just do it on like a laptop.
+
+00:07:47.640 --> 00:07:56.300
+Something that existed in my mind yesterday exists in the cloud and scaled to any user that wants it
+
+00:07:56.300 --> 00:07:58.920
+tomorrow. Yeah. That is really fun.
+
+00:07:58.920 --> 00:08:03.540
+Yeah. It's super, super fun. Before we move on, you also mentioned that you've been playing around with
+
+00:08:03.540 --> 00:08:04.400
+Raspberry Pi.
+
+00:08:04.400 --> 00:08:11.400
+So, something that I covered recently on Python Bytes, my other podcast, is somebody built a water-cooled
+
+00:08:11.400 --> 00:08:20.080
+Raspberry Pi cluster computer. So, eight Raspberry Pis in one thing, all of them overclocked and water-cooled.
+
+00:08:20.080 --> 00:08:22.280
+Have you seen people doing this stuff? It's crazy.
+
+00:08:22.400 --> 00:08:27.760
+It's really cool. And as you start to get into clustering programming, clustered programming, you know,
+
+00:08:27.760 --> 00:08:34.680
+multi-machine type of experiences, a Raspberry Pi is a really cheap barrier to entry. You know, for $40 or so,
+
+00:08:34.680 --> 00:08:41.580
+you can get a Raspberry Pi, get three or four or five of them, cluster them together, and now you get the sense of
+
+00:08:41.580 --> 00:08:51.260
+what does it take to build parallel machinery. And it is really, really fun. So, you know, to get an eight or ten or a hundred or a thousand,
+
+00:08:51.260 --> 00:08:55.080
+node Raspberry Pi is pretty sweet.
+
+00:08:55.080 --> 00:09:01.540
+Yeah, that's awesome. I mean, you can do something similar with Docker, right? Fire up a bunch of Docker containers, but it's not the same
+
+00:09:01.540 --> 00:09:06.940
+feeling as like, there's actually eight of them over there, and they're actually talking to each other and working together. I think it's a very
+
+00:09:06.940 --> 00:09:08.340
+different feeling. It's super cool.
+
+00:09:08.340 --> 00:09:19.560
+Containers do help us start to approximate that. But yeah, there is some lying to ourselves to believe that all of these containers running in context on my one laptop are really a
+
+00:09:19.560 --> 00:09:26.620
+distributed system. Yeah, absolutely. It's not the same, but it does let you sort of play around there a bit. Right. All right. So I want to talk about Git
+
+00:09:26.620 --> 00:09:35.800
+primarily, and that's what your presentation at the Python web conference was about. And that's what we're going to center our conversation on. But you know, you and I have both been around the
+
+00:09:35.800 --> 00:09:38.860
+industry for a lot of different things.
+
+00:09:38.860 --> 00:09:38.860
+Yeah.
+
+00:09:38.860 --> 00:10:01.800
+So maybe let's talk a little bit about the history of source control. You know, I think of source control as a spectrum from what source control all the way to get and distributed source control. Maybe, you know, there's, I've talked to people and I've seen it in action. Source control is I've got a file code file,
+
+00:10:01.800 --> 00:10:18.260
+and I've called it version one version two version two edited version three version three final final two, you know, just like, or maybe if it's a lot of files, you zip the folder and you name it like that. Right. Like that's the beginning of source control. He's doing it wrong, but it's getting getting there. Right.
+
+00:10:18.260 --> 00:10:38.140
+Well, it's doing it in exactly the way that you needed at that time. Copy folder versioning is definitely a thing. Dot bu dot date, you know, copy that content off to make sure that you have it. And that's really what we're after with version control is when we think of version control, we're really talking about two things.
+
+00:10:38.260 --> 00:10:51.640
+One is archiving the history of my journey so that I can get back to a known good state if things go bad, but also communicating with my team to be able to convey the progress of this system.
+
+00:10:52.220 --> 00:10:52.340
+Yeah.
+
+00:10:52.340 --> 00:11:11.220
+And copy folder versioning does the first one real well. It doesn't do the second one real well. There are systems that I've worked on where, you know, to upgrade the system is to first copy all the things into the dot backup folder and then upgrade the primary thing. And if it doesn't work correctly, then you point the...
+
+00:11:11.220 --> 00:11:12.340
+Put it back, put it back, put it back, put it back.
+
+00:11:12.340 --> 00:11:30.060
+Yeah. They point the web server at the backup folder. And so now the system has been running out of the backup folder for, you know, six or eight months or a year. And now we go to upgrade and step one is to take, oh, wait, we just took down the site. Now we have no known good backup thing.
+
+00:11:30.060 --> 00:11:40.300
+Yeah. Without some sort of source control, the real thing I think that falls apart, maybe you're doing the file versioning thing, which is still not that ideal, but the thing that really falls apart is collaboration.
+
+00:11:40.520 --> 00:11:49.560
+Right. Soon as two people want to work on something, it's not okay to say, well, here's my zip version. Can you merge that back together? And probably you don't have merge tools either. So what does that even mean? Right.
+
+00:11:49.560 --> 00:12:06.440
+So I quickly gets us into where I think people probably should be in some sort of version control, but back in the day, that was different stuff. For example, you know, maybe that was subversion. Actually, if you were on subversion, you were in a good place. I mean, a really good place.
+
+00:12:06.440 --> 00:12:21.360
+Yeah. Subversion was really cool. Subversion was an upgrade to CVS where CVS would version each file or each folder separately. And so nested folders just happened to kind of be together in this clump.
+
+00:12:21.360 --> 00:12:35.000
+And what subversion gave us was we're versioning the entire project together in one piece. Before that, we might've had source safe or other pieces. Team foundation server kind of fits into this realm as well.
+
+00:12:35.380 --> 00:12:49.820
+And so it's that mechanism of versioning all of the pieces together and then being able to publish that to a central place. What makes all of these systems kind of unique, specific is that they're all really client server pieces.
+
+00:12:49.820 --> 00:12:53.500
+So version was really good at being a client server piece.
+
+00:12:53.500 --> 00:12:59.440
+I'm going to go out on a limb and say it was the best client server version control system that I'm aware of.
+
+00:12:59.440 --> 00:12:59.800
+Yeah.
+
+00:12:59.800 --> 00:13:00.480
+I think so.
+
+00:13:00.480 --> 00:13:06.800
+These systems though, kind of a fundamental flaw because we want to use version control for those two pieces.
+
+00:13:06.800 --> 00:13:13.900
+We want to use it to be able to back up the work so that I can get back to a known good state and to communicate with our team.
+
+00:13:14.100 --> 00:13:22.020
+And the hard part with these client server version control systems is we're doing both every time we commit.
+
+00:13:22.020 --> 00:13:28.300
+So when I commit a change to subversion, I'm immediately publishing it to all of you.
+
+00:13:28.300 --> 00:13:38.360
+So the analogy that I like is when I'm rock climbing, I want to be able to put a carabiner in the wall as frequently as possible.
+
+00:13:38.360 --> 00:13:42.380
+If I climb a foot and I fall, I'm only going to fall a foot.
+
+00:13:42.640 --> 00:13:47.000
+If I climb six or eight or 12 feet and I fall, I'm going to fall 12 feet.
+
+00:13:47.000 --> 00:13:50.800
+Well, actually the nature of the rope is that it's going to swing all the way down.
+
+00:13:50.800 --> 00:13:54.560
+So I fall 24 feet and that's a long way to go.
+
+00:13:54.560 --> 00:13:58.240
+I want to stick pieces in the wall as frequently as I can.
+
+00:13:58.240 --> 00:14:03.240
+You don't want to see me spamming the thing every time I get there.
+
+00:14:03.240 --> 00:14:06.500
+So I get to the point where it's like, okay, I finished the thought.
+
+00:14:06.500 --> 00:14:07.060
+I'm good.
+
+00:14:07.060 --> 00:14:11.700
+I want to mark this save point, but I'm not ready to publish it to all of you.
+
+00:14:11.700 --> 00:14:20.220
+Yeah, because really the thing you should be working with most of the time is if I publish it to the rest of the team, it should be, it should at least run.
+
+00:14:20.220 --> 00:14:21.020
+Right.
+
+00:14:21.020 --> 00:14:21.500
+Yeah.
+
+00:14:21.500 --> 00:14:22.460
+Probably the test should pass.
+
+00:14:22.460 --> 00:14:24.000
+Maybe you can fix that.
+
+00:14:24.000 --> 00:14:30.940
+Like you're going to work with somebody, but it shouldn't just mean nobody can build or even start the software at all.
+
+00:14:31.300 --> 00:14:37.140
+Because you've got the save point in the middle of their work that is inconsistent or halfway there or whatever.
+
+00:14:37.140 --> 00:14:37.440
+Right.
+
+00:14:37.440 --> 00:14:39.660
+And so I've reached the stopping point, but I'm not done.
+
+00:14:39.660 --> 00:14:40.480
+It doesn't work.
+
+00:14:41.000 --> 00:14:42.700
+And so I have this moral dilemma.
+
+00:14:42.700 --> 00:14:47.560
+Do I mark a save point and inflict that on all of you or do I not?
+
+00:14:47.680 --> 00:14:58.980
+And that's when I fall back to a secondary version control system where I start doing copy folder versioning again, where it's like, I just want to take all my stuff and stick it in this spot so that I have this known good state.
+
+00:14:59.160 --> 00:15:10.120
+And that's where we pivot to distributed version control systems of which Git is one of them, where we have a separation between the commit stage and the publish stage.
+
+00:15:10.120 --> 00:15:18.260
+And that isn't the official terms that Git or any of the rest of them use, but there's a process of marking those save points.
+
+00:15:18.260 --> 00:15:22.880
+And then there's a process of collecting all of the save points and publishing them to others.
+
+00:15:23.180 --> 00:15:29.640
+It takes a bit of a mind shift to get used to it as well when you're working on it, because if you come from one of these other systems, I committed, so it's saved.
+
+00:15:29.640 --> 00:15:30.680
+Right.
+
+00:15:30.680 --> 00:15:41.300
+But commit in a distributed source control system means it's a local save point until you Git push or whatever other immacterial's equivalent of a Git push is.
+
+00:15:41.300 --> 00:15:41.500
+Right.
+
+00:15:41.500 --> 00:15:41.940
+Yeah.
+
+00:15:41.940 --> 00:15:42.880
+An HG push.
+
+00:15:42.880 --> 00:15:44.660
+And so it's exactly that.
+
+00:15:44.660 --> 00:15:52.760
+It's marking save points however frequently you want and then combining those save points together into a cohesive story.
+
+00:15:52.760 --> 00:15:54.580
+To publish to your colleagues.
+
+00:15:54.580 --> 00:16:00.300
+And that's what makes distributed version control so powerful is separating those two concepts.
+
+00:16:00.300 --> 00:16:03.580
+Mercurial, Git, Perforce.
+
+00:16:03.580 --> 00:16:06.960
+There are other distributed version control systems.
+
+00:16:06.960 --> 00:16:14.340
+And as the world was moving from subversion and TFS into this distributed world, we experimented with each of them.
+
+00:16:14.340 --> 00:16:17.760
+You know, arguably Git wasn't the best.
+
+00:16:17.760 --> 00:16:21.500
+We might have done a VHS and Betamax type of thing.
+
+00:16:21.740 --> 00:16:26.320
+But clearly Git has become the de facto standard version control system.
+
+00:16:26.320 --> 00:16:27.480
+It is distributed.
+
+00:16:27.480 --> 00:16:31.060
+And now we can separate the save points from the publish points.
+
+00:16:31.060 --> 00:16:35.620
+Talk Python to me is partially supported by our training courses.
+
+00:16:35.620 --> 00:16:39.040
+At Talk Python, we run a bunch of web apps and web APIs.
+
+00:16:39.040 --> 00:16:43.360
+These power the training courses as well as the mobile apps on iOS and Android.
+
+00:16:43.360 --> 00:16:48.120
+If I had to build these from scratch again today, there's no doubt which framework I would use.
+
+00:16:48.320 --> 00:16:49.120
+It's FastAPI.
+
+00:16:49.120 --> 00:16:54.100
+To me, FastAPI is the embodiment of modern Python and modern APIs.
+
+00:16:54.100 --> 00:16:56.740
+You have beautiful usage of type annotations.
+
+00:16:56.740 --> 00:16:59.240
+You have model binding and validation with Pydantic.
+
+00:16:59.580 --> 00:17:02.240
+And you have first class async and await support.
+
+00:17:02.240 --> 00:17:10.040
+If you're building or rebuilding a web app, you owe it to yourself to check out our course, Modern APIs with FastAPI over at Talk Python Training.
+
+00:17:10.040 --> 00:17:13.900
+It'll take you from curious to production with FastAPI.
+
+00:17:14.160 --> 00:17:21.420
+To learn more and get started today, just visit talkpython.fm/FastAPI or email us at sales at talkpython.fm.
+
+00:17:23.340 --> 00:17:34.240
+I think another really important thing to highlight for people who haven't been there, right at the Git homepage, they highlight Subversion, which we've been talking about.
+
+00:17:34.240 --> 00:17:40.940
+But Perforce, ClearCase, SourceSafe, TFS, a lot of these things, there's two things.
+
+00:17:40.940 --> 00:17:42.440
+One, they would lock files.
+
+00:17:42.440 --> 00:17:45.400
+Like if you wanted to make a change to a file, you would claim it.
+
+00:17:45.460 --> 00:17:51.100
+Like I'm editing main.py, well, no one else can interact with that file.
+
+00:17:51.100 --> 00:17:56.020
+It's literally made read-only on your computer until, you know, until that person is done.
+
+00:17:56.020 --> 00:17:59.180
+And they had better not forget and go on vacation while they got some files checked out.
+
+00:17:59.180 --> 00:18:00.340
+That's the one thing.
+
+00:18:00.340 --> 00:18:05.580
+The other is you need permission to participate in a project.
+
+00:18:05.580 --> 00:18:09.180
+You have these gatekeepers and you need to sort of prove yourself to the gatekeepers.
+
+00:18:09.180 --> 00:18:14.540
+So if I wanted to commit, I wanted to work on Flask, if it was under Subversion, I have to go.
+
+00:18:15.040 --> 00:18:18.200
+Can I have permission to go read, get read-only access to Flask?
+
+00:18:18.200 --> 00:18:22.680
+If I want to make a change, I literally have to say I need permission to commit back to Flask.
+
+00:18:22.680 --> 00:18:28.820
+With the distributed ones, you clone it, you do your proof of work, your proposed idea.
+
+00:18:28.820 --> 00:18:33.240
+And if you want, you can contribute it back or you could just go in a different way, right?
+
+00:18:33.240 --> 00:18:39.800
+There's this very interesting separation of I can kind of work on it and then see if I want to contribute
+
+00:18:39.800 --> 00:18:41.660
+it back rather than the other way around.
+
+00:18:41.660 --> 00:18:43.780
+I have to get permission to contribute.
+
+00:18:44.300 --> 00:18:47.960
+And I think that's a super critical thing in the open source space where there's a very
+
+00:18:47.960 --> 00:18:49.800
+loose coupling of people and projects.
+
+00:18:49.800 --> 00:18:54.260
+Like if somebody comes to me and says, I want to work on, I suppose I'm working on Flask.
+
+00:18:54.260 --> 00:18:56.080
+They come to me, I'm in charge of Flask.
+
+00:18:56.080 --> 00:18:57.420
+They come to me and say, I want to work on Flask.
+
+00:18:57.420 --> 00:18:59.320
+Like, well, maybe.
+
+00:18:59.320 --> 00:19:01.000
+What else have you done?
+
+00:19:01.000 --> 00:19:01.500
+Show me.
+
+00:19:01.500 --> 00:19:03.460
+This is a huge project.
+
+00:19:03.460 --> 00:19:06.900
+We do not want you to mess up Flask.
+
+00:19:06.900 --> 00:19:07.600
+But.
+
+00:19:07.600 --> 00:19:10.100
+And we had a little bit of that with SourceForge.
+
+00:19:10.100 --> 00:19:16.240
+You know, you could clone the repository in Subversion and just work on it locally, but you
+
+00:19:16.240 --> 00:19:17.340
+weren't able to participate.
+
+00:19:17.340 --> 00:19:22.680
+The moment that you wanted to help, it was a really frictionful process where, you know,
+
+00:19:22.760 --> 00:19:24.000
+okay, so I have this diff.
+
+00:19:24.000 --> 00:19:26.020
+Now, I don't have write permissions.
+
+00:19:26.020 --> 00:19:31.220
+So am I going to, you know, bake this diff into an email and hope somebody reads it?
+
+00:19:31.220 --> 00:19:33.400
+Do I just use it locally?
+
+00:19:33.400 --> 00:19:37.080
+Do I fork the project and only have our corporate version of it?
+
+00:19:37.420 --> 00:19:39.320
+You know, it was very difficult to participate.
+
+00:19:39.320 --> 00:19:47.340
+And that's not a feature of Git per se, but rather the GitHub, the shared hosted mechanism
+
+00:19:47.340 --> 00:19:49.400
+around Git that has grown up as well.
+
+00:19:49.400 --> 00:19:49.680
+Yeah.
+
+00:19:49.680 --> 00:19:53.680
+I mean, with Git, you can clone a thing and then work on it as long as you have read access.
+
+00:19:53.680 --> 00:19:58.560
+But yeah, the additional mechanisms, the Git flow around it is certainly something created
+
+00:19:58.560 --> 00:20:06.160
+by GitHub with like PRs and forks and the emerging upstreams and all that origin upstream stuff.
+
+00:20:06.500 --> 00:20:10.080
+One thing I did want to ask you before we get to the details is why do you think Git won?
+
+00:20:10.080 --> 00:20:15.940
+You did talk about this Betamax, VHS sort of thing, and there are other options out there
+
+00:20:15.940 --> 00:20:17.200
+for distributed source control.
+
+00:20:17.200 --> 00:20:19.480
+I have a theory, but what are your thoughts?
+
+00:20:19.480 --> 00:20:20.640
+And I have a theory too.
+
+00:20:20.640 --> 00:20:26.000
+I don't have the answer and maybe our listeners will help us discover what the correct answer
+
+00:20:26.000 --> 00:20:27.220
+is, or maybe there isn't one.
+
+00:20:27.220 --> 00:20:33.060
+In my mind, a lot of the time we were looking at ways to compete with things.
+
+00:20:33.620 --> 00:20:38.360
+You know, we had things that would compete with CFS or subversion because, you know,
+
+00:20:38.360 --> 00:20:42.900
+we wanted a little bit more or we wanted to make money on the process of source control.
+
+00:20:42.900 --> 00:20:48.260
+And what's really interesting about Git is that it has become so pervasive.
+
+00:20:48.980 --> 00:20:53.620
+And so we're not building competitors to Git, we're building integrations into Git.
+
+00:20:53.620 --> 00:20:53.820
+All right.
+
+00:20:53.820 --> 00:20:54.980
+We're building on top of Git.
+
+00:20:54.980 --> 00:20:55.160
+Yeah.
+
+00:20:55.160 --> 00:20:57.900
+Now, arguably GitHub helped with that too.
+
+00:20:57.900 --> 00:21:02.860
+GitHub has a really, really powerful community mechanism for that.
+
+00:21:02.860 --> 00:21:05.040
+And GitHub really only did Git.
+
+00:21:05.040 --> 00:21:11.560
+But I would argue that Git is really cool because it's free and open source.
+
+00:21:11.560 --> 00:21:15.660
+And because it's free and open source and it has that community mechanism around it,
+
+00:21:15.660 --> 00:21:17.520
+we don't need to compete with it.
+
+00:21:17.520 --> 00:21:19.440
+We don't need to try to make money on this.
+
+00:21:19.440 --> 00:21:25.600
+Instead, we can build collaborations with it and mechanisms working with it and build up the
+
+00:21:25.600 --> 00:21:26.360
+community together.
+
+00:21:26.640 --> 00:21:28.120
+My thought as well was GitHub.
+
+00:21:28.120 --> 00:21:28.540
+Yeah.
+
+00:21:28.540 --> 00:21:34.860
+It's the thing that brought not just the server infrastructure to privately have code.
+
+00:21:34.860 --> 00:21:40.100
+It brought the community and it brought the flow that allowed people to collaborate in
+
+00:21:40.100 --> 00:21:45.940
+ways that could let them collaborate once they've proven they have something to collaborate.
+
+00:21:45.940 --> 00:21:46.160
+Right.
+
+00:21:46.160 --> 00:21:50.480
+Here's my PR where I've already shown you the thing that's amazing that I want to offer up
+
+00:21:50.480 --> 00:21:50.920
+to you.
+
+00:21:50.920 --> 00:21:52.340
+Well, that does look amazing.
+
+00:21:52.340 --> 00:21:52.780
+Thank you.
+
+00:21:52.780 --> 00:21:53.180
+Who are you?
+
+00:21:53.180 --> 00:21:54.240
+Let's talk about this.
+
+00:21:54.240 --> 00:21:54.440
+Right.
+
+00:21:54.760 --> 00:21:57.060
+It's a different conversation than I've never seen you.
+
+00:21:57.060 --> 00:22:02.020
+Why should I give you right access to Blask on SVN?
+
+00:22:02.020 --> 00:22:03.120
+And it's exactly that.
+
+00:22:03.120 --> 00:22:09.220
+GitHub has these magic levels to it where at the very first level, it is just an online
+
+00:22:09.220 --> 00:22:10.900
+source code repository system.
+
+00:22:10.900 --> 00:22:16.360
+And so how is that different from SourceForge or TFS before it?
+
+00:22:16.360 --> 00:22:18.460
+It isn't at this level.
+
+00:22:18.460 --> 00:22:22.200
+And so if that's what you're using GitHub for, then that's perfect.
+
+00:22:22.200 --> 00:22:27.120
+You know, back up your local projects up to GitHub, get your content off of your machine
+
+00:22:27.120 --> 00:22:28.400
+in case there's a disaster.
+
+00:22:28.400 --> 00:22:30.080
+That is definitely the first level.
+
+00:22:30.080 --> 00:22:35.600
+The next level starts to build workflows around it where we can say, I want to create issues.
+
+00:22:35.600 --> 00:22:38.240
+I want to create project management things.
+
+00:22:38.240 --> 00:22:39.960
+I want to create milestones.
+
+00:22:39.960 --> 00:22:41.260
+I want to create goals.
+
+00:22:41.260 --> 00:22:42.800
+And so that's kind of the next level.
+
+00:22:42.800 --> 00:22:49.380
+Leveling up again, we can start to create a social community around that where we can start
+
+00:22:49.380 --> 00:22:56.580
+to have conversations around the content where I can create a diff and we can all talk about
+
+00:22:56.580 --> 00:22:58.320
+it and we can collaborate on it.
+
+00:22:58.320 --> 00:23:01.140
+And once it's good enough, now we can pull it in.
+
+00:23:01.140 --> 00:23:06.580
+Add to that then the mechanism around pull requests and things like that.
+
+00:23:06.580 --> 00:23:09.760
+Git has a concept of push and pull.
+
+00:23:09.760 --> 00:23:15.400
+You know, publish and receive, I guess, might be the terminology that matches here.
+
+00:23:15.800 --> 00:23:20.840
+And what's interesting about a pull request, I don't have right access to your repository,
+
+00:23:20.840 --> 00:23:21.800
+but I want to contribute.
+
+00:23:21.800 --> 00:23:28.700
+So instead of pushing my content to you, I'm going to request that you pull it from me.
+
+00:23:29.300 --> 00:23:35.400
+And so no longer do I need to create this email and write out all the content and hope you read the email.
+
+00:23:35.400 --> 00:23:43.000
+I create this code up in my space and I request that you include it in your space.
+
+00:23:43.000 --> 00:23:48.880
+And that made collaborating with projects really, really easy.
+
+00:23:49.340 --> 00:23:54.460
+So with that comes the next level of GitHub where we have these communities that can socialize
+
+00:23:54.460 --> 00:23:59.560
+and develop and hang out in this coding space.
+
+00:23:59.560 --> 00:24:05.960
+And that's really what made GitHub so magical is that we have this community around coding.
+
+00:24:05.960 --> 00:24:11.780
+Where previously with SourceForge or other environments, yeah, we had that online source control system,
+
+00:24:12.000 --> 00:24:14.280
+but we didn't have those levels of interaction.
+
+00:24:14.280 --> 00:24:18.880
+So pull requests or merge requests or whatever you're going to call it,
+
+00:24:18.880 --> 00:24:24.540
+is that mechanism of being able to collaborate with low trust type of environments.
+
+00:24:24.540 --> 00:24:30.740
+I want to offer up my solution to the community and see if that's going to fit into this ecosystem.
+
+00:24:30.740 --> 00:24:32.920
+Yeah, I think that's why I get one as well.
+
+00:24:32.920 --> 00:24:35.900
+And Verda Rose out there says,
+
+00:24:35.900 --> 00:24:40.020
+open source is the best way to learn and improve technically and collaborate with people you don't know.
+
+00:24:40.020 --> 00:24:43.080
+Yeah, and I think it's that the people that you don't know,
+
+00:24:43.080 --> 00:24:48.800
+it makes it special because it allows you to create these connections with people all around the world
+
+00:24:48.800 --> 00:24:51.240
+who you would otherwise not meet.
+
+00:24:51.240 --> 00:24:53.500
+And you get a chance to work with them.
+
+00:24:53.500 --> 00:24:58.400
+Even if you live in rural Canada and you want to do software development,
+
+00:24:58.400 --> 00:25:01.900
+maybe no one around you is really good at whatever you're trying to do,
+
+00:25:01.900 --> 00:25:03.700
+but go to GitHub, find a project.
+
+00:25:03.700 --> 00:25:05.620
+You can collaborate with the best people in the world on that.
+
+00:25:05.620 --> 00:25:09.440
+We can create these communities around our passions for technology
+
+00:25:09.440 --> 00:25:11.240
+or the problems that we want to solve,
+
+00:25:11.240 --> 00:25:15.200
+not necessarily based on the geographic boundaries that we find ourselves in.
+
+00:25:15.200 --> 00:25:15.900
+Yeah, absolutely.
+
+00:25:15.900 --> 00:25:16.540
+All right.
+
+00:25:16.540 --> 00:25:19.340
+So that's the history of it a little bit.
+
+00:25:19.340 --> 00:25:23.920
+I talked a little bit on why distributed source control is really powerful.
+
+00:25:23.920 --> 00:25:30.100
+And I think it has really unlocked open source in a special way and on a much larger scale than it has.
+
+00:25:30.100 --> 00:25:33.440
+And it is interesting to note that Git and GitHub are different.
+
+00:25:33.440 --> 00:25:38.500
+GitHub uses Git under the covers to be able to build its social experiences.
+
+00:25:38.500 --> 00:25:42.020
+But Git is a thing that is separate and distinct.
+
+00:25:42.020 --> 00:25:45.020
+There is no pull request concept in Git, for example.
+
+00:25:45.380 --> 00:25:53.100
+And with Git on your local machine in a cave, you can version and create those save points.
+
+00:25:53.100 --> 00:25:57.900
+When you're ready to socialize, to publish your content, to communicate with your team,
+
+00:25:57.900 --> 00:26:04.740
+you can use Git together with lots of services, GitHub or Bitbucket or GitLab,
+
+00:26:04.740 --> 00:26:10.200
+or there's lots of private services as well that allow you to create that online community.
+
+00:26:11.000 --> 00:26:16.100
+You know, GitHub has published their magic sauce to the world and lots of us have cloned it.
+
+00:26:16.100 --> 00:26:20.060
+So GitHub is still the place where we code for the most part.
+
+00:26:20.060 --> 00:26:23.720
+But if you prefer coding in another community, then that's totally fine.
+
+00:26:23.720 --> 00:26:31.460
+You can still use Git and all of the tools to be able to create your save points and publish that content to others.
+
+00:26:31.460 --> 00:26:33.940
+You could just publish it to a different server as well.
+
+00:26:33.940 --> 00:26:35.400
+Git and GitHub are different.
+
+00:26:35.400 --> 00:26:37.420
+It's easy to see them as the same thing.
+
+00:26:37.420 --> 00:26:38.820
+But yeah, they're absolutely not.
+
+00:26:39.220 --> 00:26:40.920
+We've got all these different locations.
+
+00:26:40.920 --> 00:26:46.220
+I have mixed emotions, mixed feelings about if you have another project and you put it somewhere else,
+
+00:26:46.220 --> 00:26:49.980
+I'm not going to name any particular service, but let's just say somewhere that's not GitHub.
+
+00:26:49.980 --> 00:26:51.540
+That's totally good.
+
+00:26:51.540 --> 00:26:57.120
+But at the same time, so much of the open source flow is around GitHub and the stuff that's happening there.
+
+00:26:57.120 --> 00:26:58.660
+I don't know.
+
+00:26:58.660 --> 00:27:03.300
+It's just really interesting to think why you might be at one place and not the other place and so on.
+
+00:27:03.560 --> 00:27:03.740
+Yeah.
+
+00:27:03.740 --> 00:27:10.840
+And a lot of people were worried when GitHub was bought by Microsoft, is this going to be the end of the community collaboration?
+
+00:27:10.840 --> 00:27:22.920
+And I think Microsoft has been a really good steward of the GitHub community and really making sure that GitHub is still available to all of us and facilitating the success of that ecosystem.
+
+00:27:23.160 --> 00:27:23.260
+Yeah.
+
+00:27:23.500 --> 00:27:27.840
+There was a lot of hesitancy and concern within certain communities.
+
+00:27:27.840 --> 00:27:30.460
+And I feel like they've done a great job.
+
+00:27:30.460 --> 00:27:31.460
+Yeah.
+
+00:27:31.460 --> 00:27:36.800
+What I didn't realize was that GitHub really needed some help from somebody.
+
+00:27:37.920 --> 00:27:40.320
+financially, they were not doing as well.
+
+00:27:40.320 --> 00:27:43.040
+And I looked at them like, oh, this place must be incredibly successful.
+
+00:27:43.040 --> 00:27:49.480
+But what came out after some of the reports and stuff, it was kind of important that someone came along.
+
+00:27:49.480 --> 00:27:53.480
+And if that's the case, then I was head over heels that Microsoft bought them.
+
+00:27:53.480 --> 00:27:55.500
+Last thing I want to see is them go away.
+
+00:27:55.500 --> 00:27:57.580
+And I think they've done a good job of just letting them be.
+
+00:27:57.580 --> 00:27:59.520
+Don't go mess with them.
+
+00:27:59.520 --> 00:28:00.920
+It's working really well.
+
+00:28:00.920 --> 00:28:04.200
+So I think it's been a good deal that worked out there.
+
+00:28:04.200 --> 00:28:12.520
+See also Docker for an example of a community that is amazing and contributing, but doesn't have a financial business model to be able to survive.
+
+00:28:12.520 --> 00:28:12.880
+Yeah.
+
+00:28:12.880 --> 00:28:13.460
+Yeah.
+
+00:28:13.460 --> 00:28:16.300
+Hopefully things go well for Docker, but it's just tricky.
+
+00:28:16.300 --> 00:28:20.760
+They tried the enterprise thing and then they're switching to other things.
+
+00:28:20.760 --> 00:28:21.000
+Yeah.
+
+00:28:21.000 --> 00:28:25.340
+I love their pivot back to focusing on developers in the community, which is wonderful.
+
+00:28:25.340 --> 00:28:31.300
+But I still feel like they haven't found their spot that allows them to be business successful.
+
+00:28:32.100 --> 00:28:41.280
+And the hard part is you can only do that for so long and then you need to pivot to something that can start to facilitate the business.
+
+00:28:41.280 --> 00:28:41.980
+Yeah, absolutely.
+
+00:28:41.980 --> 00:28:43.100
+All right.
+
+00:28:43.100 --> 00:28:47.840
+Are you ready to go into the Git folder and find where the hidden magic lives?
+
+00:28:47.840 --> 00:28:48.900
+Yes.
+
+00:28:48.900 --> 00:28:57.300
+If you go into a project that you've Git cloned or you've Git inited and you create some files and you mess around there, you don't see anything different.
+
+00:28:57.380 --> 00:29:01.760
+It looks just like any other folder that might have a project in it.
+
+00:29:01.760 --> 00:29:02.000
+Right.
+
+00:29:02.000 --> 00:29:11.600
+But in there actually is contained the almost the entire backup, the entire contents of all the versions of those files.
+
+00:29:11.700 --> 00:29:16.420
+At least every branch that you've checked out hidden in the hidden .git file.
+
+00:29:16.420 --> 00:29:19.120
+So .git on.
+
+00:29:19.120 --> 00:29:20.260
+And it's not almost.
+
+00:29:20.260 --> 00:29:20.860
+It is.
+
+00:29:20.860 --> 00:29:23.580
+That is the entire history of the project.
+
+00:29:24.480 --> 00:29:32.280
+So the way to back up a Git database, misusing that term, is to grab that .git folder and copy it.
+
+00:29:32.280 --> 00:29:41.160
+Inside that .git folder is lots of files that describe the history of the project since its inception down to the current version.
+
+00:29:41.860 --> 00:29:48.080
+And so, you know, kind of the only way that you can break Git is to open up that .git folder and change stuff.
+
+00:29:48.080 --> 00:29:52.220
+By default, this folder is hidden on most systems.
+
+00:29:52.220 --> 00:29:56.740
+So you may have to show hidden files and folders to be able to see the .git folder.
+
+00:29:56.740 --> 00:29:57.840
+But it's there.
+
+00:29:57.840 --> 00:29:59.480
+And it's really powerful.
+
+00:29:59.480 --> 00:29:59.800
+Yeah.
+
+00:29:59.880 --> 00:30:04.160
+And so on Windows, you go to the Explorer, there's like one of those little ribbon things that drops down.
+
+00:30:04.160 --> 00:30:06.820
+It's a checkbox for show hidden folders and files.
+
+00:30:06.820 --> 00:30:12.660
+On macOS, I learned you can hit shift command dot and that will show hidden files.
+
+00:30:12.660 --> 00:30:13.680
+That I did not know.
+
+00:30:13.680 --> 00:30:17.040
+And I was very delighted when users told me about that.
+
+00:30:17.040 --> 00:30:19.080
+On Linux, I don't know.
+
+00:30:19.080 --> 00:30:21.840
+I mean, you can go and do an LL in there on the terminal.
+
+00:30:21.840 --> 00:30:25.460
+But there's probably some way to show it in the Explorer equivalent as well.
+
+00:30:25.460 --> 00:30:28.260
+You can navigate into it from your terminal or wherever.
+
+00:30:28.260 --> 00:30:29.740
+And once you're inside of it,
+
+00:30:29.840 --> 00:30:30.000
+Yeah.
+
+00:30:30.000 --> 00:30:31.300
+All of the files are right there.
+
+00:30:31.300 --> 00:30:31.520
+Yeah.
+
+00:30:31.520 --> 00:30:40.620
+So we go in here and we find things like head, config, description, hooks, index, info, logs, objects, hacked, refs, and refs.
+
+00:30:40.620 --> 00:30:44.620
+You want to maybe give us a rundown of what each one of these are?
+
+00:30:44.620 --> 00:30:50.420
+And then we can dive deeper with one of the tools that you built into maybe some of the things like refs and so on.
+
+00:30:50.420 --> 00:30:52.140
+But yeah, also maybe hooks.
+
+00:30:52.140 --> 00:30:53.260
+But yeah, wherever you want to start.
+
+00:30:53.260 --> 00:30:58.180
+What's cool in this database is it is the entire history of your project.
+
+00:30:58.920 --> 00:31:01.140
+And it's zlib compressed.
+
+00:31:01.480 --> 00:31:12.140
+So for example, the 20-year history of Perl, the .git folder is ever so slightly larger than the checkout folder.
+
+00:31:12.260 --> 00:31:21.220
+And that includes the entire history, including all of the changes and all of the authors and all of that is really nicely compressed into this folder.
+
+00:31:21.220 --> 00:31:21.400
+Wow.
+
+00:31:21.400 --> 00:31:24.020
+It breaks down into a couple of groups of things.
+
+00:31:24.020 --> 00:31:26.340
+We have the content.
+
+00:31:26.340 --> 00:31:31.720
+We have branches and tags, you know, references to the content.
+
+00:31:32.060 --> 00:31:36.400
+We have configuration details around this repository.
+
+00:31:36.400 --> 00:31:38.720
+We have index files.
+
+00:31:38.720 --> 00:31:40.040
+We have temp files.
+
+00:31:40.040 --> 00:31:41.860
+And then we have automation tools.
+
+00:31:41.860 --> 00:31:46.540
+And so these are kind of the groups of things that we'll find in this folder.
+
+00:31:46.780 --> 00:31:50.160
+A lot of them happen to be in their own folder, which is really nice.
+
+00:31:50.160 --> 00:31:52.820
+So for example, hooks is the place that you go for automation.
+
+00:31:52.820 --> 00:31:55.860
+Refs is the place where all of the content is.
+
+00:31:55.860 --> 00:31:58.480
+No, refs is the place for branches.
+
+00:31:58.480 --> 00:32:01.140
+Objects is the place for the content.
+
+00:32:01.580 --> 00:32:06.440
+And so a lot of the things that we'll see will have their own folder, but some of them spill out.
+
+00:32:06.440 --> 00:32:12.900
+Like configuration is in the config file, but there's also some stuff in the info folder for that.
+
+00:32:12.900 --> 00:32:22.160
+Indexes, we've got the index file right there on the root directory, but we also end up with index files inside of pack folders.
+
+00:32:22.160 --> 00:32:24.720
+And so, you know, it gets a little bit interesting.
+
+00:32:25.080 --> 00:32:33.200
+The first one to dive into is probably the objects folder, because this is the stash of all of the content in your repository.
+
+00:32:33.200 --> 00:32:41.760
+Now, as you commit something into Git, you'll first add it to the staging area, and then you'll commit it with a message.
+
+00:32:41.760 --> 00:32:46.860
+And as you do so, you'll end up with content inside the objects folder.
+
+00:32:46.860 --> 00:32:53.200
+Now, what's interesting to note here is if you look at a Git log, you'll see hexadecimal thing.
+
+00:32:53.980 --> 00:32:57.080
+You know, it might be seven characters, or it might be much longer than that.
+
+00:32:57.080 --> 00:33:01.460
+And as you do that log, you can take a look at that.
+
+00:33:01.460 --> 00:33:06.080
+Inside the objects folder are folders with two digits.
+
+00:33:06.080 --> 00:33:08.640
+Those are the first two digits of the commit number.
+
+00:33:08.640 --> 00:33:15.780
+Inside that folder is all of the commits that happen to start with that two-digit number or letter.
+
+00:33:15.780 --> 00:33:20.440
+So, you know, that means that not all of the files will be in one directory.
+
+00:33:20.440 --> 00:33:22.680
+They'll kind of be arranged a little bit.
+
+00:33:22.880 --> 00:33:25.240
+That gets around too many files in one directory.
+
+00:33:25.240 --> 00:33:31.100
+But it's that objects folder that then stores all of the content there.
+
+00:33:31.100 --> 00:33:37.120
+Now, what's interesting is I think of it, if I commit one, and that's where this talk was really cool.
+
+00:33:37.120 --> 00:33:43.900
+When I commit one thing and I go look in that objects folder, I will have three different files.
+
+00:33:43.900 --> 00:33:45.640
+Now, they are zlib compressed.
+
+00:33:45.640 --> 00:33:48.220
+Yeah, you can't just open them up and look at them, right?
+
+00:33:48.280 --> 00:33:50.100
+They're kind of scrambled up.
+
+00:33:50.100 --> 00:33:51.000
+But it's not magic.
+
+00:33:51.000 --> 00:33:56.640
+I built a tool that will unzlib compress one, which is pretty cool.
+
+00:33:56.640 --> 00:34:02.580
+But once we identify a thing that we want to do, we can also use git catfile.
+
+00:34:02.580 --> 00:34:10.440
+Git catfile allows us to look at both the type and the content in a particular node.
+
+00:34:10.980 --> 00:34:19.160
+This is a directional, acyclical graph nodes, DAG nodes, that specify relationships between these things.
+
+00:34:19.160 --> 00:34:21.200
+But what's cool is we...
+
+00:34:21.200 --> 00:34:21.220
+Here's a branch.
+
+00:34:21.220 --> 00:34:24.260
+Here's a file that's in that branch, something like that.
+
+00:34:24.260 --> 00:34:26.060
+They're not branches, but they are folders.
+
+00:34:26.060 --> 00:34:28.180
+Here's a file within a folder.
+
+00:34:28.180 --> 00:34:29.520
+Here's the content.
+
+00:34:29.660 --> 00:34:32.360
+So we have three different types of these nodes.
+
+00:34:32.360 --> 00:34:33.400
+One is a commit.
+
+00:34:33.400 --> 00:34:41.000
+And in the commit, we have the author's name and the date that it was committed, the message that we gave.
+
+00:34:41.000 --> 00:34:48.640
+And also in that commit is a reference to the tree nodes that are part of that commit.
+
+00:34:48.640 --> 00:34:53.500
+Now, each tree node can specify files or folders.
+
+00:34:53.500 --> 00:34:55.800
+So a tree node can reference another tree node.
+
+00:34:55.800 --> 00:35:00.220
+And inside the tree node, we have references to those files.
+
+00:35:00.220 --> 00:35:04.100
+So I might have a tree node that references file1.txt.
+
+00:35:04.100 --> 00:35:06.480
+The third type is a blob.
+
+00:35:06.480 --> 00:35:12.940
+And so as we look at blobs, then that's the actual content in the thing.
+
+00:35:12.940 --> 00:35:15.580
+So go back to the...
+
+00:35:15.580 --> 00:35:16.600
+Click on...
+
+00:35:16.600 --> 00:35:19.160
+Oh, I don't think I have a one to get back to the blob.
+
+00:35:19.340 --> 00:35:24.800
+But the cool part about this app, hit refresh, and you'll get to that big blob of stuff.
+
+00:35:24.800 --> 00:35:28.180
+Here's all of the commits in this repository.
+
+00:35:28.180 --> 00:35:31.800
+So we had something visually to look at here, and it's about to pull up its rendering.
+
+00:35:31.800 --> 00:35:33.340
+Yeah, it's not super performant.
+
+00:35:33.340 --> 00:35:34.100
+That's all right.
+
+00:35:34.100 --> 00:35:41.360
+You built this thing called Git-Explorer, which is a little web app that runs that you pointed at a Git repository.
+
+00:35:41.360 --> 00:35:47.300
+And it lets you look at these things that you're describing visually and then click around on them, right?
+
+00:35:47.300 --> 00:35:47.780
+Right.
+
+00:35:47.780 --> 00:35:51.040
+So click on Show Type, and we see the three different colors emerge.
+
+00:35:51.040 --> 00:35:53.060
+There are commits, trees, and blobs.
+
+00:35:53.060 --> 00:36:03.880
+And it's like, okay, I have a whole bunch of files in my objects folder, and I can click on each one, and I'll use that Git cat file thing to go figure out what it is.
+
+00:36:03.880 --> 00:36:08.980
+But it's like, you know, I really wish I had more stuff about it.
+
+00:36:09.060 --> 00:36:14.020
+So that's where I click alphabetical, and that will put them all in order.
+
+00:36:14.020 --> 00:36:18.760
+Click on Tags, and now you can see the name of that thing.
+
+00:36:18.760 --> 00:36:22.580
+And I'm only showing the first seven digits of the commit here.
+
+00:36:22.580 --> 00:36:27.780
+But now you can kind of get a sense for, here are all the objects, and click on each one and open it up.
+
+00:36:27.780 --> 00:36:36.840
+Right, and these names are what often go by shahs in Git parlance, which is just the type of hash, S-H-A, whatever it is.
+
+00:36:37.540 --> 00:36:44.760
+And I don't know how many people know this, but you can use sub pieces of the shah to refer to it in Git.
+
+00:36:44.760 --> 00:36:50.060
+So you don't have to say the full, I don't know, what is that, 32 characters or whatever to describe a name.
+
+00:36:50.060 --> 00:36:56.120
+As long as it's enough to be unique, it'll go, like, you can issue commands against these things in this abbreviated form, right?
+
+00:36:56.120 --> 00:36:57.260
+Right, exactly.
+
+00:36:57.480 --> 00:37:01.420
+So oftentimes, only two digits is necessary, sometimes three or four.
+
+00:37:01.420 --> 00:37:05.920
+And that's why often when you're looking at Git history, it'll only show you the first seven.
+
+00:37:05.920 --> 00:37:06.980
+Surely enough, yeah.
+
+00:37:06.980 --> 00:37:12.860
+Now what we start to do as we're clicking through this is we get a feel for all of these green nodes.
+
+00:37:12.860 --> 00:37:14.940
+That's the content in the files.
+
+00:37:14.940 --> 00:37:17.180
+The blue nodes are the tree nodes.
+
+00:37:17.180 --> 00:37:22.360
+And as I click on one of those blue tree nodes, then it references other files.
+
+00:37:22.360 --> 00:37:26.700
+I can see their shahs, their Git hashes there in that list.
+
+00:37:27.160 --> 00:37:30.980
+And then as I look at the red ones, the commits, that's my commit message.
+
+00:37:30.980 --> 00:37:35.720
+That includes the parent node that was the commit right before this.
+
+00:37:35.720 --> 00:37:39.240
+It also references the tree node that has the files for this.
+
+00:37:39.240 --> 00:37:43.160
+And so wouldn't it be nice if we could, I don't know, arrange them in a way?
+
+00:37:43.160 --> 00:37:50.540
+So let's, instead of going from alphabetical, let's click on parent-child and start to see the relationships.
+
+00:37:50.540 --> 00:37:54.300
+We'll need to turn on lines now, and we probably want to also turn on tags.
+
+00:37:54.760 --> 00:37:59.840
+And now we can take a look at those commits and see how each one references.
+
+00:37:59.840 --> 00:38:05.640
+Now, if you have a very large repository, then I haven't built scrolling yet.
+
+00:38:05.640 --> 00:38:05.920
+Sorry.
+
+00:38:05.920 --> 00:38:13.320
+But you can see that the red commit nodes all reference each other and reference the previous
+
+00:38:13.320 --> 00:38:13.680
+ones.
+
+00:38:13.680 --> 00:38:17.340
+And then they go into these tree nodes that may reference other tree nodes.
+
+00:38:17.340 --> 00:38:19.400
+And eventually those reference the file nodes.
+
+00:38:19.660 --> 00:38:25.780
+That's part of my demo highlight that if we create the same file content and commit it in
+
+00:38:25.780 --> 00:38:30.540
+two different directories, it's actually only one blob on disk.
+
+00:38:30.540 --> 00:38:32.460
+There's only one green blob node.
+
+00:38:32.460 --> 00:38:38.460
+But the cool part here is we were able to explore each of these objects in our repository and we
+
+00:38:38.460 --> 00:38:39.720
+get a feel for how they work.
+
+00:38:39.820 --> 00:38:44.000
+So if I change one line in a very big file, what gets committed?
+
+00:38:44.000 --> 00:38:46.200
+Well, the entire file.
+
+00:38:46.200 --> 00:38:47.380
+Yeah.
+
+00:38:47.380 --> 00:38:52.960
+And I'd suspect that's probably why large binary files are not ideal to be committed here, even
+
+00:38:52.960 --> 00:38:54.460
+though you technically can put them there.
+
+00:38:54.460 --> 00:38:54.880
+Right.
+
+00:38:54.880 --> 00:38:57.900
+So that's the first group of things is these objects.
+
+00:38:57.900 --> 00:39:01.120
+So that's the top level objects folder in the .git folder.
+
+00:39:01.120 --> 00:39:01.540
+Yeah.
+
+00:39:01.720 --> 00:39:02.540
+Yes, exactly.
+
+00:39:02.540 --> 00:39:05.600
+Now, there is a pack folder inside there.
+
+00:39:05.600 --> 00:39:13.880
+If you run various commands, then Git will say, well, do I have too many commits, too many
+
+00:39:13.880 --> 00:39:20.020
+of these objects that I need to pack together to make this repository smaller on disk?
+
+00:39:20.020 --> 00:39:27.260
+And if so, then it'll automatically do a GC, a garbage collect, where it starts to pack those
+
+00:39:27.260 --> 00:39:28.280
+into pack files.
+
+00:39:28.900 --> 00:39:32.620
+Now, it's kind of a Zlib compressed group of Zlib compressed files.
+
+00:39:32.620 --> 00:39:34.360
+So it gets very meta there.
+
+00:39:34.360 --> 00:39:37.160
+But that's what the pack folder is inside the objects folder.
+
+00:39:37.160 --> 00:39:37.460
+Yeah.
+
+00:39:37.460 --> 00:39:38.260
+Okay.
+
+00:39:38.260 --> 00:39:40.520
+So next up, let's talk about the refs folder.
+
+00:39:40.520 --> 00:39:47.000
+Now, when we look at refs, we look at branches and tags and remotes.
+
+00:39:47.000 --> 00:39:51.100
+These are files that reference commits.
+
+00:39:51.100 --> 00:39:56.400
+So one example is the head folder in the root of the .git directory.
+
+00:39:56.980 --> 00:40:01.920
+And inside that head folder, it will specify what head points to.
+
+00:40:01.920 --> 00:40:06.660
+So if you do a Git log and you see that head has an arrow pointing to, I don't know, main
+
+00:40:06.660 --> 00:40:15.820
+or trunk or develop or whatever, then if you open up that head file, you'll see the text
+
+00:40:15.820 --> 00:40:17.860
+in that file is that file.
+
+00:40:17.860 --> 00:40:19.260
+It's basically the SHA, right?
+
+00:40:19.260 --> 00:40:19.880
+Is that what it is?
+
+00:40:19.960 --> 00:40:22.820
+It is the SHA if your head is pointing at a SHA.
+
+00:40:22.820 --> 00:40:25.720
+But typically, your head won't be pointing at a SHA.
+
+00:40:25.720 --> 00:40:27.160
+It'll be pointing at a branch.
+
+00:40:27.160 --> 00:40:27.780
+Oh, yeah.
+
+00:40:27.780 --> 00:40:28.220
+Refs.
+
+00:40:28.220 --> 00:40:33.920
+Mine right now is refs slash heads slash main, which is the default branch for this project.
+
+00:40:33.920 --> 00:40:34.740
+So that's awesome.
+
+00:40:34.740 --> 00:40:35.780
+Main being the branch.
+
+00:40:35.780 --> 00:40:36.040
+Yeah.
+
+00:40:36.040 --> 00:40:38.580
+Head says it goes to refs, heads, main.
+
+00:40:38.580 --> 00:40:40.060
+So we can go into the refs folder.
+
+00:40:40.060 --> 00:40:42.000
+We can go into the heads folder.
+
+00:40:42.440 --> 00:40:43.740
+And we can open up main.
+
+00:40:43.740 --> 00:40:49.420
+And what's in main is the SHA of the commit that main points to.
+
+00:40:49.420 --> 00:40:49.760
+Okay.
+
+00:40:49.760 --> 00:40:56.820
+What's cool here is that each of these refs, both head and all of these branches, is just
+
+00:40:56.820 --> 00:41:00.740
+pointers to the commits in the objects folder.
+
+00:41:00.740 --> 00:41:00.980
+Yeah.
+
+00:41:00.980 --> 00:41:06.900
+So these are like the main file is just a text file that just literally has only the SHA that
+
+00:41:06.900 --> 00:41:08.880
+is where that branch currently is.
+
+00:41:08.980 --> 00:41:09.420
+Exactly.
+
+00:41:09.420 --> 00:41:09.980
+Okay.
+
+00:41:09.980 --> 00:41:16.920
+So technically, to create a branch, I just create a file that happens to be in refs, heads.
+
+00:41:16.920 --> 00:41:18.940
+I name it something and I give it a SHA.
+
+00:41:18.940 --> 00:41:22.100
+And now I have a branch that points at that thing.
+
+00:41:22.100 --> 00:41:28.820
+Branches in Git are not these durable, fragile things like in TFS or in Subversion.
+
+00:41:28.820 --> 00:41:31.720
+Branches in Git are just name tags.
+
+00:41:31.720 --> 00:41:32.420
+They're pointers.
+
+00:41:32.420 --> 00:41:37.260
+They're references to the commits in this tree of objects.
+
+00:41:37.960 --> 00:41:39.600
+So the cool thing is we can move them around.
+
+00:41:39.600 --> 00:41:39.760
+Right.
+
+00:41:39.760 --> 00:41:44.340
+They're basically a path of these named commits through the history of the overall history
+
+00:41:44.340 --> 00:41:44.780
+of it, right?
+
+00:41:44.780 --> 00:41:45.180
+Right.
+
+00:41:45.180 --> 00:41:49.580
+They're the labels that we give it so that we can understand it because communicating in
+
+00:41:49.580 --> 00:41:52.920
+32-digit SHAs is not as much fun.
+
+00:41:52.920 --> 00:41:54.120
+No, definitely not.
+
+00:41:54.120 --> 00:41:55.080
+Definitely not.
+
+00:41:55.080 --> 00:42:00.560
+One of the talks that I like to do is I do a Git log and I show that 32-digit hash and I
+
+00:42:00.560 --> 00:42:01.640
+read it out.
+
+00:42:01.640 --> 00:42:05.120
+And then I walk up to somebody in the audience and pretend they're the project manager.
+
+00:42:05.240 --> 00:42:07.100
+And I go, can I ship it?
+
+00:42:07.100 --> 00:42:11.520
+And they're like, yeah.
+
+00:42:11.520 --> 00:42:13.700
+Thus, we have these labels.
+
+00:42:13.700 --> 00:42:14.920
+Yeah, that's right.
+
+00:42:14.920 --> 00:42:18.660
+In the heads folder is all of the branches.
+
+00:42:18.660 --> 00:42:23.640
+In the tags folder is all of the tags.
+
+00:42:23.640 --> 00:42:26.220
+And there are also just files pointing at commits.
+
+00:42:26.220 --> 00:42:27.740
+Sorry, my repo is empty.
+
+00:42:27.740 --> 00:42:28.320
+I don't have any.
+
+00:42:28.320 --> 00:42:32.460
+But if you, you know, people might tag a release or a version or a beta version or something like
+
+00:42:32.460 --> 00:42:32.700
+that.
+
+00:42:32.700 --> 00:42:38.340
+So you can refer to it by name, by label instead of, you know, main with the SHA or
+
+00:42:38.340 --> 00:42:39.200
+something weird like that.
+
+00:42:39.200 --> 00:42:39.400
+Right.
+
+00:42:39.400 --> 00:42:39.760
+Right.
+
+00:42:39.760 --> 00:42:48.000
+And then we would have a remotes folder, which references where I last saw another copy of
+
+00:42:48.000 --> 00:42:50.060
+this Git repository's branches.
+
+00:42:50.060 --> 00:42:50.460
+Yep.
+
+00:42:50.460 --> 00:42:55.340
+So in this case, you have one that says refs, remotes, origin, main, and that's perfect.
+
+00:42:55.340 --> 00:43:02.340
+That's where I last saw this server, this server's main branch.
+
+00:43:03.180 --> 00:43:07.240
+Now, in this case, I chose to call my main, my remote server origin.
+
+00:43:07.240 --> 00:43:12.820
+Now, this could be a server that we've designated as the server.
+
+00:43:12.820 --> 00:43:15.220
+It could be one of my coworkers.
+
+00:43:15.220 --> 00:43:17.360
+It could be a network share.
+
+00:43:17.360 --> 00:43:23.080
+You know, Git isn't really opinionated about what constitutes a remote repository other than
+
+00:43:23.080 --> 00:43:24.200
+that it is in this one.
+
+00:43:24.200 --> 00:43:24.440
+Yeah.
+
+00:43:24.440 --> 00:43:25.220
+Okay.
+
+00:43:25.220 --> 00:43:27.680
+How does it know what origin is?
+
+00:43:27.680 --> 00:43:30.460
+As I create a remote, I'm going to name it.
+
+00:43:30.460 --> 00:43:30.740
+Okay.
+
+00:43:30.740 --> 00:43:36.180
+So as I clone, I'm going to say, Git clone this repository and it'll build one and it'll
+
+00:43:36.180 --> 00:43:37.660
+by default call it origin.
+
+00:43:37.660 --> 00:43:43.100
+But I could also say, Git remote add origin.
+
+00:43:43.100 --> 00:43:45.780
+I just gave it a name and then give it a URL.
+
+00:43:45.780 --> 00:43:48.040
+I could say, Git remote add upstream.
+
+00:43:48.040 --> 00:43:51.060
+I could say, Git remote add Michael.
+
+00:43:51.060 --> 00:43:54.180
+Now it's a reference from my repository to yours.
+
+00:43:54.180 --> 00:43:59.760
+And so it's just in this case, in the refs, remotes folder, it's just a folder
+
+00:43:59.760 --> 00:44:02.520
+referencing the branches that I saw on your machine.
+
+00:44:02.520 --> 00:44:02.780
+Nice.
+
+00:44:02.780 --> 00:44:04.780
+Is there somewhere where it stores like the URL?
+
+00:44:04.780 --> 00:44:05.620
+It does.
+
+00:44:05.620 --> 00:44:09.400
+And that is the next section that we may want to look at, which is configuration.
+
+00:44:09.400 --> 00:44:14.560
+Let's open up the config file in the root of the .git folder.
+
+00:44:14.560 --> 00:44:15.040
+All right.
+
+00:44:15.040 --> 00:44:17.380
+Now this configuration file is really cool.
+
+00:44:17.380 --> 00:44:22.060
+It includes all kinds of configuration details associated with our repository.
+
+00:44:22.700 --> 00:44:28.120
+Now in this case, we have remote origin where we've named this one and here's the URLs that
+
+00:44:28.120 --> 00:44:28.860
+we go to there.
+
+00:44:28.860 --> 00:44:31.960
+In this case, it's github.com slash talk Python.
+
+00:44:31.960 --> 00:44:36.360
+We have other configuration details associated with this repository.
+
+00:44:37.140 --> 00:44:44.460
+This .git config file is actually one of three on my machine.
+
+00:44:44.460 --> 00:44:51.540
+And we'll start out with our config file that's installed when we install Git.
+
+00:44:51.540 --> 00:44:59.120
+So it's probably in program files or it's in user local bin or somewhere off in the ether
+
+00:44:59.120 --> 00:45:00.300
+of how we install it.
+
+00:45:00.300 --> 00:45:01.740
+We probably don't want to touch that one.
+
+00:45:02.020 --> 00:45:07.020
+But that's the base configuration of all the options that we chose when we installed Git.
+
+00:45:07.020 --> 00:45:14.100
+So if I run a command, if I were to say something like git email global, something like that,
+
+00:45:14.100 --> 00:45:16.920
+you know, the .g command, maybe it's modifying that one.
+
+00:45:16.920 --> 00:45:19.280
+Well, the one that we just talked about was the system one.
+
+00:45:19.280 --> 00:45:22.640
+The second one is the global one, which is user specific.
+
+00:45:22.640 --> 00:45:24.800
+I find that name a little confusing.
+
+00:45:24.800 --> 00:45:30.240
+But my user specific, the .git config in my user home directory.
+
+00:45:30.240 --> 00:45:38.160
+So, you know, see users rob or user or the tilde slash directory Mac and Linux.
+
+00:45:38.160 --> 00:45:44.520
+That .git config overrides any settings in my system configuration.
+
+00:45:44.520 --> 00:45:52.640
+And so oftentimes when you first install Git, you'll say git config dash global user.email user.name.
+
+00:45:52.640 --> 00:45:58.600
+And so if you open up that .git config in your user home directory, you'll see those settings.
+
+00:45:58.820 --> 00:46:06.560
+You'll see your username, your name, your email, and all of the details that you've configured there.
+
+00:46:06.880 --> 00:46:13.160
+And then the third one is the config file here in your repository that will override any of those settings.
+
+00:46:13.160 --> 00:46:21.700
+So it doesn't make sense for us to have origin in our system, in our user specific configuration file,
+
+00:46:21.700 --> 00:46:25.100
+because, well, each repository will have a different origin.
+
+00:46:25.320 --> 00:46:31.760
+But it probably does make sense to put our name and email in our system, in our user specific directory,
+
+00:46:31.760 --> 00:46:35.900
+because that would apply to all the repositories on our machine.
+
+00:46:35.900 --> 00:46:36.520
+Yeah, absolutely.
+
+00:46:36.520 --> 00:46:37.500
+Almost all of them.
+
+00:46:37.500 --> 00:46:43.560
+You might be doing home-based open source work, and you might be doing corporate button-up work,
+
+00:46:43.560 --> 00:46:49.560
+and your formal corporate place might not love your corporate email on the open source project.
+
+00:46:49.880 --> 00:46:50.360
+Exactly.
+
+00:46:50.360 --> 00:46:51.060
+Or maybe you don't have it.
+
+00:46:51.060 --> 00:46:51.100
+Exactly.
+
+00:46:51.100 --> 00:46:51.860
+Yeah.
+
+00:46:51.860 --> 00:46:56.320
+So when I have that scenario where I need to set my email address,
+
+00:46:56.320 --> 00:46:59.460
+maybe my name differently in different repositories,
+
+00:46:59.460 --> 00:47:04.220
+I can set it in my .git config in my user home directory,
+
+00:47:04.220 --> 00:47:07.200
+and then I can override it in each repository.
+
+00:47:07.200 --> 00:47:11.300
+Just copy those couple of lines, set them in your config file here,
+
+00:47:11.620 --> 00:47:16.680
+and now you've set this repository to track your email differently.
+
+00:47:16.680 --> 00:47:21.580
+Is there a git command to change it so I don't actually go into the .git folder,
+
+00:47:21.580 --> 00:47:24.840
+and I say, like, git email but not global, or git config email?
+
+00:47:24.840 --> 00:47:25.020
+Yeah.
+
+00:47:25.020 --> 00:47:26.540
+Leave off the --global.
+
+00:47:26.540 --> 00:47:26.840
+Yeah.
+
+00:47:26.840 --> 00:47:27.360
+Okay.
+
+00:47:27.360 --> 00:47:27.960
+Perfect.
+
+00:47:27.960 --> 00:47:30.140
+Then you don't even have to know how.
+
+00:47:30.140 --> 00:47:32.820
+You just know I do git email and what my email is.
+
+00:47:32.820 --> 00:47:33.200
+Right.
+
+00:47:33.200 --> 00:47:37.700
+Now, there are other configuration files here in the .git folder,
+
+00:47:38.060 --> 00:47:41.740
+but the config file is really the big one that we like to talk about.
+
+00:47:41.740 --> 00:47:41.980
+Yeah.
+
+00:47:41.980 --> 00:47:42.680
+Okay.
+
+00:47:42.680 --> 00:47:44.580
+But you'll see a description file here.
+
+00:47:44.580 --> 00:47:46.220
+That's a configuration file.
+
+00:47:46.220 --> 00:47:51.940
+Git InstaWeb is a web server baked into Git
+
+00:47:51.940 --> 00:47:55.180
+that allows you to kind of browse through your repository.
+
+00:47:55.180 --> 00:48:00.680
+Now, Git InstaWeb works pretty well on Linux and not so great on Windows.
+
+00:48:00.680 --> 00:48:04.200
+I bet you've never used InstaWeb in most scenarios.
+
+00:48:04.200 --> 00:48:06.960
+I'd never heard of it until you brought it up the other day.
+
+00:48:07.160 --> 00:48:11.120
+Yeah, but this configuration file is the name of the website
+
+00:48:11.120 --> 00:48:13.140
+when you launch Git InstaWeb.
+
+00:48:13.140 --> 00:48:17.360
+Yeah, so Git ships with a web server that can be the host of that Git repository.
+
+00:48:17.360 --> 00:48:17.820
+Yeah.
+
+00:48:17.820 --> 00:48:19.480
+Now, why would I ever do that?
+
+00:48:19.480 --> 00:48:20.600
+Why wouldn't I just use GitHub?
+
+00:48:20.600 --> 00:48:23.460
+Exactly, which is why you've never heard of Git InstaWeb.
+
+00:48:23.460 --> 00:48:24.780
+Yeah.
+
+00:48:24.780 --> 00:48:28.120
+I mean, you might say we want a private Git server or a public Git server
+
+00:48:28.120 --> 00:48:29.700
+or something like that.
+
+00:48:29.700 --> 00:48:30.240
+That might be.
+
+00:48:30.240 --> 00:48:32.740
+But yeah, usually, yeah, I've never heard of it.
+
+00:48:32.740 --> 00:48:33.400
+So very interesting.
+
+00:48:33.400 --> 00:48:34.820
+All right.
+
+00:48:34.820 --> 00:48:36.300
+What else is in this list here?
+
+00:48:36.580 --> 00:48:36.880
+Yeah.
+
+00:48:36.880 --> 00:48:37.140
+Yeah.
+
+00:48:37.140 --> 00:48:40.460
+So we've talked about the content in the objects folder.
+
+00:48:40.460 --> 00:48:43.900
+We've talked about the branches and tags in the rest folder.
+
+00:48:43.900 --> 00:48:45.440
+We've talked about configuration.
+
+00:48:45.440 --> 00:48:47.340
+Let's go poke in the hooks folder.
+
+00:48:47.340 --> 00:48:47.760
+Yeah.
+
+00:48:47.760 --> 00:48:48.520
+Hooks is interesting.
+
+00:48:48.520 --> 00:48:49.180
+Yeah.
+
+00:48:49.180 --> 00:48:50.540
+It is really cool.
+
+00:48:50.540 --> 00:48:53.100
+The hooks folder is where we do automation.
+
+00:48:53.100 --> 00:48:53.540
+Yeah.
+
+00:48:53.620 --> 00:48:57.000
+So people probably heard of pre-commit hooks, right?
+
+00:48:57.000 --> 00:49:02.240
+Like probably the most popular example in the Python space is to run the black formatter.
+
+00:49:02.720 --> 00:49:05.300
+So it automatically formats your code before it checks it in.
+
+00:49:05.300 --> 00:49:11.920
+So indentation, white space, like between a comma and an argument or something.
+
+00:49:11.920 --> 00:49:13.040
+It's always consistent.
+
+00:49:13.040 --> 00:49:17.700
+So you don't get these like back and forth editor driven, you know, merge issues.
+
+00:49:17.700 --> 00:49:18.900
+There's no real change.
+
+00:49:18.900 --> 00:49:20.620
+But I format it in my editor.
+
+00:49:20.620 --> 00:49:21.960
+You format it in yours.
+
+00:49:22.040 --> 00:49:25.940
+And back and forth, it goes between spaces with a comma and no spaces with a comma,
+
+00:49:25.940 --> 00:49:26.760
+spaces with a comma.
+
+00:49:26.760 --> 00:49:32.000
+And so you could set up a pre-commit hook to canonicalize it before it goes in.
+
+00:49:32.500 --> 00:49:33.620
+But there's more than pre-commit, right?
+
+00:49:33.620 --> 00:49:33.820
+Yeah.
+
+00:49:33.820 --> 00:49:38.820
+I could set up a pre-commit hook to make sure all my unit tests pass before I commit.
+
+00:49:38.820 --> 00:49:40.320
+I could set up.
+
+00:49:40.320 --> 00:49:47.700
+And so what we see here in this hooks directory is all different kinds of automation things.
+
+00:49:47.700 --> 00:49:53.220
+So a pre-commit hook, a pre-merge hook, a pre-push hook, a pre-rebase hook.
+
+00:49:53.220 --> 00:49:56.200
+And each of these are shell scripts.
+
+00:49:56.200 --> 00:49:58.220
+Well, with one exception, it's a Perl script.
+
+00:49:58.220 --> 00:50:02.060
+But you see at the very top, it says slash bin slash sh.
+
+00:50:02.900 --> 00:50:04.500
+Well, I'm on a Windows box.
+
+00:50:04.500 --> 00:50:06.200
+Is this shell script still going to work?
+
+00:50:06.200 --> 00:50:07.620
+Well, yeah.
+
+00:50:07.620 --> 00:50:14.260
+Get ships with enough Linux-y, Unix-y, Bash-like stuff to be able to kick off these shell scripts
+
+00:50:14.260 --> 00:50:17.120
+and run them as it would on any Linux system.
+
+00:50:17.120 --> 00:50:17.480
+Okay.
+
+00:50:17.480 --> 00:50:17.920
+Interesting.
+
+00:50:17.920 --> 00:50:21.040
+So there's basically like a little mini Bash that comes with it.
+
+00:50:21.040 --> 00:50:23.400
+I remember people using that Bash shell from Git.
+
+00:50:23.400 --> 00:50:25.580
+It'd be more Unix-like on Windows.
+
+00:50:25.580 --> 00:50:26.300
+Exactly.
+
+00:50:26.300 --> 00:50:29.900
+So here in this shell script, I could do all kinds of things.
+
+00:50:29.900 --> 00:50:31.520
+Maybe I'm calling a PowerShell script.
+
+00:50:31.700 --> 00:50:33.480
+Maybe I'm calling a Python script.
+
+00:50:33.480 --> 00:50:35.180
+Maybe I'm calling a Node formatter.
+
+00:50:35.180 --> 00:50:38.820
+I can just call into whatever tasks I want to accomplish.
+
+00:50:38.820 --> 00:50:43.840
+And that will then accomplish that task whenever this event happens.
+
+00:50:44.640 --> 00:50:50.300
+So what I love to do in my demo is remove all the dot sample pieces so that they're actual scripts.
+
+00:50:50.300 --> 00:50:55.640
+And then just merely the presence of that file will be able to kick off that automation.
+
+00:50:55.640 --> 00:50:56.060
+All right.
+
+00:50:56.060 --> 00:51:03.260
+So there's a bunch of files that are sample shell scripts named things like pre-commit.sample or pre-merge commit sample.
+
+00:51:03.420 --> 00:51:08.380
+If I just called it pre-commit but not the dot sample, now it's going to be active?
+
+00:51:08.380 --> 00:51:08.860
+Exactly.
+
+00:51:08.860 --> 00:51:09.280
+Okay.
+
+00:51:09.280 --> 00:51:10.120
+Nice.
+
+00:51:10.120 --> 00:51:13.620
+Now the cool part about these is that I have all my automation set up.
+
+00:51:13.620 --> 00:51:15.660
+I'm running the formatters.
+
+00:51:15.660 --> 00:51:18.020
+I've got my unit test passing and it's great.
+
+00:51:18.200 --> 00:51:21.520
+But this file is inside my dot git folder.
+
+00:51:21.520 --> 00:51:23.280
+So I can't commit these.
+
+00:51:23.280 --> 00:51:27.700
+It's not one of the files that is available for me to add to the staging area.
+
+00:51:27.700 --> 00:51:27.920
+Right.
+
+00:51:27.920 --> 00:51:32.840
+It would be Inception if you tried to commit stuff in the dot git folder.
+
+00:51:32.840 --> 00:51:33.340
+Right.
+
+00:51:33.480 --> 00:51:44.840
+So often we'll create shell scripts outside the dot git folder and commit them and then have something here inside the dot git folder that calls into that other shell script.
+
+00:51:44.840 --> 00:51:45.000
+Yeah.
+
+00:51:45.000 --> 00:51:50.260
+And you mentioned some kind of node-based tool that you can use, right, that will manage that stuff, right?
+
+00:51:50.260 --> 00:51:50.620
+Right.
+
+00:51:50.620 --> 00:51:51.700
+There's lots of packages.
+
+00:51:51.700 --> 00:51:56.200
+The one that I show is git hooks that is an npm package.
+
+00:51:56.200 --> 00:52:08.200
+And once you install git hooks, it will actually create all those aliases from the folder where you actually build the scripts that you can commit into this hooks directory so that then they'll run.
+
+00:52:08.200 --> 00:52:11.700
+Just installing this package installs those hooks into place.
+
+00:52:11.700 --> 00:52:11.960
+I see.
+
+00:52:11.960 --> 00:52:23.880
+So basically, if you just install the package once, it will find those other external scripts and make those be the ones that git sees with the advantage that you can commit them into GitHub.
+
+00:52:24.060 --> 00:52:26.880
+And if somebody makes a change, that change will propagate to everyone else.
+
+00:52:26.880 --> 00:52:27.260
+Yes.
+
+00:52:27.260 --> 00:52:31.340
+You can commit them into git, push them up to GitHub, and they will run.
+
+00:52:31.340 --> 00:52:31.640
+Okay.
+
+00:52:31.640 --> 00:52:32.040
+Yeah.
+
+00:52:32.040 --> 00:52:32.440
+Fantastic.
+
+00:52:32.440 --> 00:52:32.820
+Yeah.
+
+00:52:32.820 --> 00:52:33.160
+Yeah.
+
+00:52:33.160 --> 00:52:33.580
+Very neat.
+
+00:52:33.580 --> 00:52:33.900
+Very neat.
+
+00:52:33.900 --> 00:52:34.140
+Okay.
+
+00:52:34.140 --> 00:52:35.540
+What else have we got here?
+
+00:52:35.540 --> 00:52:36.920
+What else have we got?
+
+00:52:36.920 --> 00:52:38.220
+I think maybe index, maybe?
+
+00:52:38.220 --> 00:52:39.100
+That's an interesting one.
+
+00:52:39.100 --> 00:52:39.540
+Yeah.
+
+00:52:39.540 --> 00:52:41.140
+Index is really interesting.
+
+00:52:41.140 --> 00:52:48.120
+As we look through index, if we just pop it open in an editor, it's just a bunch of gobbledygook.
+
+00:52:48.120 --> 00:52:49.680
+And we're like, what is this?
+
+00:52:49.680 --> 00:52:50.600
+It's a file, right?
+
+00:52:50.600 --> 00:52:50.860
+Yeah.
+
+00:52:50.860 --> 00:52:51.340
+Yeah.
+
+00:52:51.680 --> 00:52:58.660
+This isn't the only index, but this is one of the really cool indexes where git keeps track of interesting stuff.
+
+00:52:58.660 --> 00:52:59.080
+That's nice.
+
+00:52:59.080 --> 00:52:59.380
+Yeah.
+
+00:52:59.380 --> 00:53:00.720
+Check out this blown up.
+
+00:53:00.720 --> 00:53:06.040
+If I try to look at it, it's like a binary blob exploded and died on my terminal.
+
+00:53:06.040 --> 00:53:09.040
+But there are file names in there somewhere, so it must be something to do with that.
+
+00:53:09.160 --> 00:53:09.500
+Yeah.
+
+00:53:09.500 --> 00:53:14.020
+I think it's git ls-files, where you can go look through this index.
+
+00:53:14.020 --> 00:53:19.440
+And if we pass in flags to that, then it'll be able to show the status of those files.
+
+00:53:19.440 --> 00:53:22.460
+But this is looking through that index.
+
+00:53:22.460 --> 00:53:29.020
+And the cool part about looking through that index is that git, if it wants to do a quick thing,
+
+00:53:29.100 --> 00:53:36.820
+like which files have changed, needs to know the blob that is checked out in my working directory.
+
+00:53:36.820 --> 00:53:39.140
+You know, which blob did I start with?
+
+00:53:39.140 --> 00:53:39.560
+Right.
+
+00:53:39.560 --> 00:53:43.260
+As we look through those objects, we saw a big tree of things.
+
+00:53:43.260 --> 00:53:48.940
+And so opening up each commit node, finding all the tree nodes, opening up each tree node,
+
+00:53:48.940 --> 00:53:51.960
+finding all the blob nodes, that takes a while.
+
+00:53:51.960 --> 00:53:58.460
+And so this is a cache, an index, of all the files that I checked out in my working directory.
+
+00:53:58.460 --> 00:54:08.680
+This allows git to move really fast as it looks through my folder and identifies any files that have changed or new files or things like that.
+
+00:54:08.680 --> 00:54:10.800
+So that's what this index file is for.
+
+00:54:10.800 --> 00:54:11.040
+Yeah.
+
+00:54:11.040 --> 00:54:17.280
+And my git incantations are not pulling it up here, but I think you can get it to show the shah of each file as well, right?
+
+00:54:17.280 --> 00:54:17.660
+Right.
+
+00:54:17.660 --> 00:54:24.720
+In which case, then instead of traversing the whole history and actually looking at the file on the hard drive and saying,
+
+00:54:24.720 --> 00:54:26.320
+well, what is its hash?
+
+00:54:26.320 --> 00:54:28.320
+Do I have an update for this file?
+
+00:54:28.380 --> 00:54:30.920
+I could just look in this binary file and get that answer, right?
+
+00:54:30.920 --> 00:54:31.500
+Exactly.
+
+00:54:31.500 --> 00:54:32.020
+Nice.
+
+00:54:32.020 --> 00:54:32.500
+Yeah.
+
+00:54:32.500 --> 00:54:36.540
+The next section of files that we want to look at are logs.
+
+00:54:36.540 --> 00:54:45.020
+And the cool thing about git's logs is they keep track of where all of our branches have been.
+
+00:54:45.020 --> 00:54:52.640
+So if we cat.git slash logs slash head, then we get a thing that kind of looks really weird.
+
+00:54:52.640 --> 00:54:54.720
+We've got really long lines in this.
+
+00:54:54.720 --> 00:54:57.980
+And in our first line, it says a whole bunch of zeros.
+
+00:54:58.300 --> 00:55:04.520
+And then we've got the git shah of the commit that it went to and a little bit about that commit.
+
+00:55:04.520 --> 00:55:10.140
+This is a log of where our branches have been.
+
+00:55:10.140 --> 00:55:13.620
+And so we'll have a file for each of our branches.
+
+00:55:13.620 --> 00:55:16.020
+In this case, we're looking at the head file.
+
+00:55:16.160 --> 00:55:20.960
+So we see that head started out nowhere and ended up at ed13fc.
+
+00:55:20.960 --> 00:55:24.620
+And then it has my username, my email, and then some other stuff.
+
+00:55:24.620 --> 00:55:24.980
+Yeah.
+
+00:55:24.980 --> 00:55:32.140
+The really interesting thing is this log can be really useful if, for example, I switch branches
+
+00:55:32.140 --> 00:55:33.140
+and forgot where I was.
+
+00:55:33.140 --> 00:55:37.240
+Or I commit something and then I uncommit it.
+
+00:55:37.240 --> 00:55:38.060
+That's a thing.
+
+00:55:38.060 --> 00:55:39.740
+And I want to get back to it.
+
+00:55:39.860 --> 00:55:42.260
+Or I delete a branch before I merged it in.
+
+00:55:42.260 --> 00:55:44.060
+Or, you know, those types of things.
+
+00:55:44.060 --> 00:55:51.580
+If I do that quickly enough, you know, remember git's going to do that garbage collect and go prune nodes that aren't used anymore.
+
+00:55:51.580 --> 00:56:00.100
+If I get there quickly enough, I can use this log to go back through my refs and go find that commit.
+
+00:56:00.100 --> 00:56:02.040
+The objects are still there.
+
+00:56:02.040 --> 00:56:04.760
+I just don't have any refs pointing to them anymore.
+
+00:56:04.760 --> 00:56:08.860
+And so the command that we can use on the command line is called git ref log.
+
+00:56:08.860 --> 00:56:12.800
+And we can pass git ref log a particular branch we want to look at.
+
+00:56:12.800 --> 00:56:19.660
+But by default, if we just say git ref log, all one word, then it will show the history of head.
+
+00:56:19.760 --> 00:56:22.180
+Now, in this case, we didn't move it very far.
+
+00:56:22.180 --> 00:56:26.900
+But we can see there, oh, and here's the branch that I just deleted.
+
+00:56:26.900 --> 00:56:29.540
+And here's the SHA for this one.
+
+00:56:29.540 --> 00:56:38.480
+And so at that point, then we can git checkout that commit and get back to the content that we had created and then lost the reference to.
+
+00:56:38.480 --> 00:56:39.600
+Right. Okay. Nice.
+
+00:56:39.600 --> 00:56:43.460
+There's a little bit of recovery, kind of an undelete if you had to in there.
+
+00:56:43.460 --> 00:56:44.000
+Yeah.
+
+00:56:44.000 --> 00:56:44.640
+Nice.
+
+00:56:44.640 --> 00:56:47.600
+The funny thing about this, the command is git ref log.
+
+00:56:47.940 --> 00:56:50.960
+But I've also heard it pronounced git ref log.
+
+00:56:50.960 --> 00:56:53.480
+And I'm like, so I've got this cat of nine tails.
+
+00:56:53.480 --> 00:56:54.500
+And I'm like, no, you can't.
+
+00:56:54.500 --> 00:56:56.020
+Git ref log.
+
+00:56:56.020 --> 00:56:56.500
+Exactly.
+
+00:56:56.500 --> 00:56:57.420
+Do it again.
+
+00:56:57.420 --> 00:57:03.440
+But once you understand how the refs folder works, then git ref log makes a whole lot of sense.
+
+00:57:03.700 --> 00:57:08.620
+We're looking at what those ref files have said in the past.
+
+00:57:08.620 --> 00:57:10.860
+Here's what it was before we changed it.
+
+00:57:10.860 --> 00:57:12.960
+Here's what it became after we changed it.
+
+00:57:12.960 --> 00:57:14.740
+And a little bit more context around it.
+
+00:57:14.860 --> 00:57:17.040
+Where you're currently working is where the head is pointing.
+
+00:57:17.040 --> 00:57:18.860
+Often that's some point in a branch.
+
+00:57:18.860 --> 00:57:24.200
+And this is like, where's the history of that bin throughout the branch that it's on?
+
+00:57:24.200 --> 00:57:24.900
+Yes.
+
+00:57:24.900 --> 00:57:25.240
+Yeah.
+
+00:57:25.240 --> 00:57:25.700
+Very cool.
+
+00:57:25.700 --> 00:57:26.240
+Very cool.
+
+00:57:26.240 --> 00:57:28.960
+So we're getting sort of short on time here.
+
+00:57:28.960 --> 00:57:31.380
+What else should we be talking about?
+
+00:57:31.500 --> 00:57:37.580
+What else should we close this out with in terms of content of our .git file?
+
+00:57:37.580 --> 00:57:41.260
+The only other section in here is temp files.
+
+00:57:41.260 --> 00:57:47.560
+So if we've committed stuff, we might see a commit underscore MSG file.
+
+00:57:47.560 --> 00:57:50.540
+Or maybe it's called commit underscore message.
+
+00:57:50.540 --> 00:57:52.740
+We might see other temp files.
+
+00:57:52.740 --> 00:57:56.280
+We have a temp folder sometimes baked into things.
+
+00:57:56.780 --> 00:58:01.620
+And so that's the last group of files here in the .git folder is temp files.
+
+00:58:01.620 --> 00:58:06.100
+Temp files, configuration, objects, refs, hooks.
+
+00:58:06.100 --> 00:58:10.840
+These are all the pieces that come together to make this git database.
+
+00:58:10.840 --> 00:58:13.140
+And once again, you really can't break git.
+
+00:58:13.140 --> 00:58:16.640
+You know, it's like, well, I did this incantation and it's broken.
+
+00:58:16.640 --> 00:58:17.440
+Well, no.
+
+00:58:17.440 --> 00:58:20.660
+You can use ref log to get back to a particular commit.
+
+00:58:20.660 --> 00:58:25.520
+Or you can use various commands, checkout to get back to where you need to.
+
+00:58:25.940 --> 00:58:30.240
+Maybe you'll use reset to, you know, kind of get your working directory back in shape.
+
+00:58:30.240 --> 00:58:37.600
+But that structure of git, the double entry bookkeeping inside this repository, is really
+
+00:58:37.600 --> 00:58:39.360
+good at keeping track of the things.
+
+00:58:39.360 --> 00:58:42.380
+And so you really can't break git.
+
+00:58:42.380 --> 00:58:42.600
+Yeah.
+
+00:58:42.600 --> 00:58:44.940
+And back this up.
+
+00:58:44.940 --> 00:58:45.800
+You back it up, right?
+
+00:58:45.800 --> 00:58:46.520
+You back up this folder.
+
+00:58:46.520 --> 00:58:48.620
+You back up basically everything, right?
+
+00:58:48.620 --> 00:58:49.040
+All right.
+
+00:58:49.040 --> 00:58:53.640
+Now, it might be easier to back it up, not by just backing up this folder, but by publishing
+
+00:58:53.640 --> 00:58:55.460
+your changes to another repository.
+
+00:58:55.460 --> 00:58:57.480
+And that's where we have great workflows.
+
+00:58:57.480 --> 00:59:01.700
+Like, I will push all of these changes to another server.
+
+00:59:01.700 --> 00:59:03.200
+Maybe I'll call that server origin.
+
+00:59:03.200 --> 00:59:03.920
+Yeah, absolutely.
+
+00:59:03.920 --> 00:59:07.580
+And that is automatic if you check out from somewhere like, clone it from somewhere like
+
+00:59:07.580 --> 00:59:07.760
+GitHub.
+
+00:59:07.760 --> 00:59:08.060
+Right.
+
+00:59:08.060 --> 00:59:08.360
+GitHub.
+
+00:59:08.360 --> 00:59:12.220
+So there's just a couple other things maybe I want to touch on really quickly while we
+
+00:59:12.220 --> 00:59:13.160
+have a moment.
+
+00:59:13.160 --> 00:59:19.400
+When you talked about breaking git, there's an interesting little design thing called dangit,
+
+00:59:19.480 --> 00:59:20.740
+git, or even better.
+
+00:59:20.740 --> 00:59:24.980
+Maybe I'll link to the better version, the not safe for work version where you're frustrated
+
+00:59:24.980 --> 00:59:27.660
+and it's like, oh no, I just did something terribly wrong.
+
+00:59:27.660 --> 00:59:28.700
+Please tell me how to do it.
+
+00:59:28.700 --> 00:59:31.760
+And reflog is right at the top of these things.
+
+00:59:31.760 --> 00:59:36.620
+I committed and immediately realized I need to make a change or I need to change my commit
+
+00:59:36.620 --> 00:59:37.000
+message.
+
+00:59:37.000 --> 00:59:39.220
+And yeah, anyway, that's a pretty interesting one.
+
+00:59:39.220 --> 00:59:41.660
+Another thing we've talked a lot about GitHub.
+
+00:59:41.660 --> 00:59:46.020
+And what we haven't really talked about is gitignore, right?
+
+00:59:46.080 --> 00:59:49.760
+As much as you want to track stuff, you don't want to automatically track a bunch of things
+
+00:59:49.760 --> 00:59:56.840
+that are working files, you know, build stuff from C++ or maybe node underscore modules
+
+00:59:56.840 --> 01:00:03.660
+or high charm working files or all sorts of things should not go into your project, right?
+
+01:00:03.660 --> 01:00:04.880
+Your vn directory.
+
+01:00:04.880 --> 01:00:05.300
+Yeah.
+
+01:00:05.300 --> 01:00:06.520
+Yes, exactly.
+
+01:00:06.520 --> 01:00:07.180
+Your vn directory.
+
+01:00:07.180 --> 01:00:07.680
+Absolutely.
+
+01:00:07.680 --> 01:00:10.660
+So there's gitignores.
+
+01:00:10.660 --> 01:00:16.040
+Any content that you download, any content that you compile, any of that content shouldn't
+
+01:00:16.040 --> 01:00:21.660
+be in your repository because it changes too infrequently and it's usually easier to either
+
+01:00:21.660 --> 01:00:23.440
+rebuild it or redownload it.
+
+01:00:23.440 --> 01:00:25.580
+All those things should be ignored.
+
+01:00:25.580 --> 01:00:25.860
+Yeah.
+
+01:00:25.860 --> 01:00:28.680
+It's a huge merge nightmare as well.
+
+01:00:28.680 --> 01:00:30.660
+Even if you could keep it, right?
+
+01:00:30.660 --> 01:00:34.120
+Suppose I check in my vn directory and you go on Windows.
+
+01:00:34.120 --> 01:00:38.220
+Well, you can't have the same contents as mine because mine is the macOS version.
+
+01:00:38.540 --> 01:00:42.260
+So you change it, put your Windows version in there and I get it back out and it breaks
+
+01:00:42.260 --> 01:00:43.040
+my Mac versions.
+
+01:00:43.040 --> 01:00:43.540
+I got right.
+
+01:00:43.540 --> 01:00:44.900
+So there's stuff you should ignore.
+
+01:00:44.900 --> 01:00:45.420
+Absolutely.
+
+01:00:45.420 --> 01:00:52.080
+And when you create a new project on GitHub, it very handily says, hey, what kind of project
+
+01:00:52.080 --> 01:00:52.500
+is this?
+
+01:00:52.500 --> 01:00:55.260
+We can get you far down the road with your gitignore.
+
+01:00:55.260 --> 01:00:56.540
+Is this a Python project?
+
+01:00:56.540 --> 01:00:58.860
+Is it a node project or whatever, right?
+
+01:00:58.860 --> 01:01:02.920
+What I wanted to point out is that dropdown list.
+
+01:01:02.920 --> 01:01:09.140
+There's actually a GitHub project called gitignore that has the ignore for all of these different
+
+01:01:09.140 --> 01:01:09.500
+languages.
+
+01:01:09.500 --> 01:01:15.980
+So if you want to make a change to say Python's gitignore, you can go there and pull it up
+
+01:01:15.980 --> 01:01:16.420
+and see it.
+
+01:01:16.420 --> 01:01:20.640
+And you could technically do a PR against it to say there's this new thing that's common
+
+01:01:20.640 --> 01:01:21.620
+in the community now.
+
+01:01:21.620 --> 01:01:22.820
+Please fix it.
+
+01:01:22.820 --> 01:01:23.680
+That's pretty cool.
+
+01:01:23.920 --> 01:01:25.200
+And these things aren't perfect.
+
+01:01:25.200 --> 01:01:30.340
+You know, most of them will exclude everything that starts with or ends with or contains
+
+01:01:30.340 --> 01:01:30.760
+log.
+
+01:01:30.760 --> 01:01:37.960
+But your iLogger or your log handler might get excluded by that as well.
+
+01:01:37.960 --> 01:01:41.540
+So you may need to adjust this to get it the way you want.
+
+01:01:41.540 --> 01:01:41.780
+Yeah.
+
+01:01:41.780 --> 01:01:46.540
+But it is nice to know that at least it'll give you a bit of a start and that it's a thing
+
+01:01:46.540 --> 01:01:47.780
+that you can contribute back to.
+
+01:01:47.780 --> 01:01:52.220
+It's not just magic inside of GitHub, but it's its own GitHub open source repository.
+
+01:01:52.220 --> 01:01:52.640
+Right.
+
+01:01:52.860 --> 01:01:52.980
+Yeah.
+
+01:01:52.980 --> 01:01:53.960
+Quite neat.
+
+01:01:53.960 --> 01:01:54.420
+Quite neat.
+
+01:01:54.420 --> 01:01:55.540
+Let's see.
+
+01:01:55.540 --> 01:01:57.320
+What else should we cover really quick?
+
+01:01:57.320 --> 01:02:01.500
+I think maybe just one other thing I think that's maybe worth throwing out there that was
+
+01:02:01.500 --> 01:02:03.600
+interesting, but it's pretty specific.
+
+01:02:03.600 --> 01:02:05.640
+But you've mentioned Windows a couple of times.
+
+01:02:05.640 --> 01:02:07.260
+Maybe two things, actually.
+
+01:02:07.260 --> 01:02:12.880
+One is on the shell that you saw on my screen just a minute ago, when I was inside of a git
+
+01:02:12.880 --> 01:02:18.680
+repository, it would actually put what branch it was on and the git state and so on.
+
+01:02:18.680 --> 01:02:22.560
+And I have that because I have OhMyZShell installed.
+
+01:02:22.560 --> 01:02:28.020
+Which is a really nice shell for Mac and Linux that gives you things like branch awareness
+
+01:02:28.020 --> 01:02:30.340
+and number of changes and so on.
+
+01:02:30.340 --> 01:02:31.280
+I saw your talk.
+
+01:02:31.280 --> 01:02:35.480
+You had something like that for PowerShell, the new Microsoft terminal.
+
+01:02:36.080 --> 01:02:36.960
+What were you using for that one?
+
+01:02:36.960 --> 01:02:38.360
+It's called OhMyPosh.
+
+01:02:38.360 --> 01:02:44.220
+And Scott Hanselman has a really cool video about OhMyPosh where he walks us through how
+
+01:02:44.220 --> 01:02:45.000
+to get it installed.
+
+01:02:45.000 --> 01:02:50.760
+There are various themes into OhMyPosh, but the theme that I really enjoy actually puts the
+
+01:02:50.760 --> 01:02:51.760
+cursor on the next line.
+
+01:02:52.240 --> 01:02:57.300
+One of the things that I frequently do in command prompt is I have all of the path to get to
+
+01:02:57.300 --> 01:02:57.800
+this folder.
+
+01:02:57.800 --> 01:03:01.660
+And so the command that I'm trying to teach ends up getting wrapped to the next line.
+
+01:03:01.660 --> 01:03:09.500
+And so OhMyPosh or OhMyZSH gives you that additional context of how's your git repository
+
+01:03:09.500 --> 01:03:09.980
+doing?
+
+01:03:09.980 --> 01:03:11.700
+You could also show your remote.
+
+01:03:11.700 --> 01:03:15.140
+It's basically just running a shell script behind the scenes.
+
+01:03:15.600 --> 01:03:17.480
+And so you can modify that shell script.
+
+01:03:17.480 --> 01:03:21.860
+Scott Hanselman is diabetic and so needs to check his blood sugar a lot.
+
+01:03:21.860 --> 01:03:28.040
+And so he actually has built into his OhMyPosh script, his blood sugar number, because it's
+
+01:03:28.040 --> 01:03:28.940
+really easy to miss.
+
+01:03:28.940 --> 01:03:31.300
+And it's one of those things that's really important not to miss.
+
+01:03:31.300 --> 01:03:33.780
+So it's in his terminal all the time.
+
+01:03:33.780 --> 01:03:35.220
+Probably even color code it, right?
+
+01:03:35.220 --> 01:03:37.380
+If it's out of range, make it red.
+
+01:03:37.380 --> 01:03:39.880
+If it's not out of range, you make it green, something like that.
+
+01:03:39.880 --> 01:03:40.720
+Yes.
+
+01:03:40.720 --> 01:03:41.340
+Wow.
+
+01:03:41.340 --> 01:03:42.000
+How interesting.
+
+01:03:42.000 --> 01:03:43.540
+Yeah, this looks fantastic.
+
+01:03:43.540 --> 01:03:47.160
+I've never played with this before, but yeah, it looks really nice.
+
+01:03:47.160 --> 01:03:48.140
+You recommend it?
+
+01:03:48.140 --> 01:03:49.420
+Yeah, I do.
+
+01:03:49.420 --> 01:03:49.940
+Cool, cool.
+
+01:03:49.940 --> 01:03:51.100
+All right.
+
+01:03:51.100 --> 01:03:55.080
+Well, I guess the one other thing that I was going to throw out there is I heard of this
+
+01:03:55.080 --> 01:03:57.520
+thing called VSF for Git.
+
+01:03:57.520 --> 01:04:04.680
+We talked about large files and this sounds like it's very much a Windows only thing, but
+
+01:04:04.680 --> 01:04:05.300
+it's a neat idea.
+
+01:04:05.300 --> 01:04:10.900
+This virtual file system for Git that if you have a really large repository, it's kind of
+
+01:04:10.900 --> 01:04:13.980
+like the smart sync for Dropbox or something.
+
+01:04:13.980 --> 01:04:18.580
+It only pulls the files and interacts with the files that you actually touch, but it does
+
+01:04:18.580 --> 01:04:20.520
+that behind the scenes without you knowing it.
+
+01:04:20.520 --> 01:04:21.440
+Have you seen this?
+
+01:04:21.440 --> 01:04:21.780
+Yeah.
+
+01:04:21.780 --> 01:04:28.020
+And we actually said VSF for Git, but it's actually VFS for Git, virtual file system.
+
+01:04:28.020 --> 01:04:32.480
+It's great when your repository is just massively huge.
+
+01:04:32.860 --> 01:04:35.820
+And 98% of our repositories are not.
+
+01:04:35.820 --> 01:04:41.300
+But when you have the code base of, I don't know, Windows, then you need something like
+
+01:04:41.300 --> 01:04:43.760
+this because you can't Git clone the entire thing.
+
+01:04:43.760 --> 01:04:45.340
+GitHub, not GitHub.
+
+01:04:45.340 --> 01:04:48.780
+Google is famous for having their corporate monorepo.
+
+01:04:49.140 --> 01:04:54.020
+And I suspect that's bigger than you could Git clone onto each machine as well.
+
+01:04:54.020 --> 01:04:59.980
+And so the cool part is one of the benefits of subversion that we lost as we moved to Git
+
+01:04:59.980 --> 01:05:03.440
+was I could clone only part of a repository.
+
+01:05:03.440 --> 01:05:07.440
+And VFS kind of gives us that ability back.
+
+01:05:07.440 --> 01:05:09.140
+Most of the time we don't need it.
+
+01:05:09.140 --> 01:05:14.300
+But if you've been really bad and you've committed a whole bunch of binary files to your repository,
+
+01:05:14.300 --> 01:05:16.300
+it's interesting.
+
+01:05:16.420 --> 01:05:17.680
+It might be worth kicking the tires.
+
+01:05:17.680 --> 01:05:19.560
+It isn't necessarily Windows only.
+
+01:05:19.560 --> 01:05:21.740
+It is plug-in to Git itself.
+
+01:05:21.740 --> 01:05:26.040
+But it allows you to put that checkout directory somewhere else.
+
+01:05:26.040 --> 01:05:30.980
+So, for example, on a shared network drive.
+
+01:05:30.980 --> 01:05:35.880
+Now I have all of those objects, all of those blobs in one place,
+
+01:05:35.880 --> 01:05:38.160
+and I don't need to copy each of those to my machine.
+
+01:05:38.160 --> 01:05:38.460
+Yeah.
+
+01:05:38.460 --> 01:05:39.580
+Interesting.
+
+01:05:39.580 --> 01:05:44.760
+The Windows people that were switching to Git said it was really a nightmare.
+
+01:05:44.920 --> 01:05:50.440
+So, for example, the source code for Linux repo is something like 600 megs or 0.6 gigs.
+
+01:05:50.440 --> 01:05:52.760
+Windows is like 270 gigs.
+
+01:05:52.760 --> 01:05:54.400
+So it's really ginormous.
+
+01:05:54.400 --> 01:05:57.520
+And they said to do a clone took 12 hours.
+
+01:05:57.520 --> 01:05:59.280
+To do a checkout took three hours.
+
+01:05:59.280 --> 01:06:01.600
+To do a Git status took eight minutes.
+
+01:06:01.600 --> 01:06:05.460
+And to do an add and commit took 30 minutes before they made this change.
+
+01:06:05.460 --> 01:06:10.260
+So they were suffering some hard pains to go down this path for sure.
+
+01:06:10.260 --> 01:06:12.320
+I guess it probably is worth it for them.
+
+01:06:12.320 --> 01:06:12.600
+Right.
+
+01:06:12.600 --> 01:06:13.060
+All right.
+
+01:06:13.060 --> 01:06:15.840
+Well, I guess we probably should put a bow on it.
+
+01:06:15.840 --> 01:06:17.720
+We're more or less out of time there, Rob.
+
+01:06:17.720 --> 01:06:20.960
+But I'll ask you the two questions I always ask at the end of the show.
+
+01:06:20.960 --> 01:06:23.540
+If you're going to write some code, what editor do you use?
+
+01:06:23.640 --> 01:06:26.520
+It depends on the code that I'm trying to write.
+
+01:06:26.520 --> 01:06:28.720
+In most cases, I'll reach for VS Code.
+
+01:06:28.720 --> 01:06:31.080
+But I'll also reach for Visual Studio.
+
+01:06:31.080 --> 01:06:31.360
+Right.
+
+01:06:31.360 --> 01:06:33.340
+If you're going to be doing ASP.NET stuff, like you said.
+
+01:06:33.340 --> 01:06:36.180
+Sometimes I'm also known to reach for...
+
+01:06:36.180 --> 01:06:40.320
+If you're doing like ASP.NET or something you were talking about like that or something you could...
+
+01:06:40.320 --> 01:06:43.060
+Maybe something like WPF where the tools are built in.
+
+01:06:43.060 --> 01:06:44.160
+You have to basically...
+
+01:06:44.160 --> 01:06:44.560
+Not have to.
+
+01:06:44.560 --> 01:06:45.420
+Almost have to use them.
+
+01:06:45.420 --> 01:06:48.640
+But sometimes I also reach for Sublime Text or TextEdit.
+
+01:06:48.640 --> 01:06:49.040
+Cool.
+
+01:06:49.040 --> 01:06:49.180
+Cool.
+
+01:06:49.180 --> 01:06:53.680
+And then often ask for a Python package library recommendation.
+
+01:06:53.680 --> 01:06:57.300
+Maybe we could make it your Git script.
+
+01:06:57.300 --> 01:06:59.560
+The one that runs the pre-commit stuff.
+
+01:06:59.560 --> 01:07:01.640
+The one that moves that outside the Git file.
+
+01:07:01.640 --> 01:07:02.440
+What was that called again?
+
+01:07:02.440 --> 01:07:03.820
+It's called Git Hooks.
+
+01:07:03.820 --> 01:07:04.620
+Git Hooks.
+
+01:07:04.620 --> 01:07:06.300
+And let me grab a link to it.
+
+01:07:06.300 --> 01:07:08.140
+It's actually a Node package, but exactly.
+
+01:07:08.140 --> 01:07:08.540
+Yeah.
+
+01:07:08.540 --> 01:07:09.640
+You just install it wherever.
+
+01:07:09.860 --> 01:07:11.040
+And it's good to go, right?
+
+01:07:11.040 --> 01:07:11.640
+Yes.
+
+01:07:11.640 --> 01:07:16.660
+And so if you have maybe a Flask server and you want to...
+
+01:07:16.660 --> 01:07:21.860
+As part of your Flask server, maybe you have a React or a Vue app or you need to pull down
+
+01:07:21.860 --> 01:07:27.500
+jQuery as part of your client-side dependencies, then you may have enough Node stuff to be able
+
+01:07:27.500 --> 01:07:29.180
+to leverage this as well.
+
+01:07:29.180 --> 01:07:29.460
+Yeah.
+
+01:07:29.460 --> 01:07:29.900
+Yeah.
+
+01:07:29.900 --> 01:07:30.600
+That makes a lot of sense.
+
+01:07:30.600 --> 01:07:35.100
+If you're already using NPM because you're doing front-end stuff, then you might as well,
+
+01:07:35.100 --> 01:07:35.320
+right?
+
+01:07:35.320 --> 01:07:35.880
+Yes.
+
+01:07:35.880 --> 01:07:36.160
+Yeah.
+
+01:07:36.160 --> 01:07:36.460
+Very cool.
+
+01:07:36.460 --> 01:07:39.280
+One of the things that we didn't talk about, and it's really cool how this happened,
+
+01:07:39.400 --> 01:07:40.540
+Git workflows.
+
+01:07:40.540 --> 01:07:46.180
+What's beautiful about Git is it's really unopinionated about how you do your workflow.
+
+01:07:46.180 --> 01:07:47.840
+Are you going to do GitFlow?
+
+01:07:47.840 --> 01:07:49.300
+Are you going to do GitHub Flow?
+
+01:07:49.300 --> 01:07:51.140
+Are you going to do something else?
+
+01:07:51.140 --> 01:07:56.980
+Git can work for all of those scenarios because it is just a mechanism of committing and sharing
+
+01:07:56.980 --> 01:07:57.420
+files.
+
+01:07:57.680 --> 01:08:02.720
+It doesn't impose a specific branching or naming convention.
+
+01:08:02.720 --> 01:08:09.120
+You can choose to put those on top, but Git's workflow is really open to whatever you need
+
+01:08:09.120 --> 01:08:09.500
+it to do.
+
+01:08:09.500 --> 01:08:09.760
+Yeah.
+
+01:08:09.760 --> 01:08:15.460
+Well, when I was first getting familiar with this whole PRs and merging and those kinds
+
+01:08:15.460 --> 01:08:17.340
+of things, I felt like, oh, that's a Git thing.
+
+01:08:17.340 --> 01:08:18.160
+That's a GitHub thing.
+
+01:08:18.160 --> 01:08:19.720
+It has nothing to do with Git, right?
+
+01:08:20.120 --> 01:08:22.420
+It just Git facilitates that on top of it.
+
+01:08:22.420 --> 01:08:24.260
+So you can choose however you want to work, right?
+
+01:08:24.260 --> 01:08:24.600
+Right.
+
+01:08:24.600 --> 01:08:25.020
+Quite cool.
+
+01:08:25.020 --> 01:08:25.860
+All right.
+
+01:08:25.860 --> 01:08:31.080
+Well, I don't normally close out this show with a joke, but Robinson had a good one here
+
+01:08:31.080 --> 01:08:31.940
+in the live stream.
+
+01:08:31.940 --> 01:08:34.480
+So I'm going to put this up here for us as our parting thought.
+
+01:08:34.480 --> 01:08:36.120
+And then I'll ask you for one more as well, maybe.
+
+01:08:36.120 --> 01:08:36.420
+Yeah.
+
+01:08:36.500 --> 01:08:41.160
+So he said, there's a programmer who once told him, couldn't use Git.
+
+01:08:41.160 --> 01:08:43.040
+He was afraid to commit.
+
+01:08:43.040 --> 01:08:47.820
+He was afraid of the Git commitment.
+
+01:08:47.820 --> 01:08:49.160
+Oh, that's awesome.
+
+01:08:49.160 --> 01:08:49.820
+Yeah.
+
+01:08:49.820 --> 01:08:50.100
+Yeah.
+
+01:08:50.100 --> 01:08:50.240
+Yeah.
+
+01:08:50.240 --> 01:08:50.820
+Thank you for that.
+
+01:08:50.820 --> 01:08:51.580
+Thanks for making us laugh.
+
+01:08:51.580 --> 01:08:52.240
+All right.
+
+01:08:52.240 --> 01:08:52.960
+Find a call to action.
+
+01:08:52.960 --> 01:08:54.900
+People want to go a little bit deeper than Git.
+
+01:08:54.900 --> 01:08:59.900
+Maybe they just do the three commands, Git clone, I don't know, Git add, Git commit,
+
+01:08:59.900 --> 01:09:00.360
+Git push.
+
+01:09:00.360 --> 01:09:01.340
+Like that's four commands.
+
+01:09:01.340 --> 01:09:04.440
+Like beyond that, like how do you get more into this world?
+
+01:09:04.740 --> 01:09:09.280
+What's really interesting is as we're coming off of those other systems, we want to kind
+
+01:09:09.280 --> 01:09:12.120
+of build up that tribal knowledge that we had.
+
+01:09:12.120 --> 01:09:15.680
+And so we're going to go grab those three or five commands and we're going to stick them
+
+01:09:15.680 --> 01:09:17.240
+to the post-it under our keyboard.
+
+01:09:17.240 --> 01:09:23.320
+Take the next step to go figure out, you know, what is the next command that I want to do?
+
+01:09:23.320 --> 01:09:25.820
+Or how does this command work?
+
+01:09:25.820 --> 01:09:31.640
+What we did today was we explored through that .git folder so that we could take that next level
+
+01:09:31.640 --> 01:09:32.620
+to see how it works.
+
+01:09:32.620 --> 01:09:34.420
+Git isn't a black box.
+
+01:09:34.420 --> 01:09:35.640
+It's not magic.
+
+01:09:35.640 --> 01:09:39.920
+It just works a little bit differently than the source control system you might have been
+
+01:09:39.920 --> 01:09:40.540
+familiar with.
+
+01:09:40.540 --> 01:09:42.720
+So definitely get familiar with it.
+
+01:09:42.720 --> 01:09:48.260
+Google the terms that you're looking for and really start to embrace that mechanism and
+
+01:09:48.260 --> 01:09:49.560
+get really powerful with Git.
+
+01:09:49.560 --> 01:09:55.300
+I'm confident that you can get past just those few commands and you can make it just an inherent
+
+01:09:55.300 --> 01:09:59.440
+process in your workflow and use it to be really, really powerful.
+
+01:09:59.880 --> 01:10:03.460
+Specifically, separating the save points from the publish points.
+
+01:10:03.460 --> 01:10:06.700
+That's the thing you couldn't do before that you can now do with Git.
+
+01:10:06.800 --> 01:10:07.400
+Yeah, well said.
+
+01:10:07.400 --> 01:10:09.380
+Definitely agree with all of that.
+
+01:10:09.380 --> 01:10:14.360
+I think getting really good with source control and source control these days really means Git
+
+01:10:14.360 --> 01:10:14.740
+almost.
+
+01:10:14.740 --> 01:10:18.900
+It allows you to be fearless with your code, right?
+
+01:10:18.900 --> 01:10:21.860
+So often people are like, oh, I would like to try this, but what if I break it?
+
+01:10:21.860 --> 01:10:22.880
+What if it doesn't go right?
+
+01:10:22.980 --> 01:10:28.180
+Well, if you know how to create your branches, work locally, do all sorts of stuff, roll back,
+
+01:10:28.180 --> 01:10:31.020
+you can just go crazy and just explore things.
+
+01:10:31.020 --> 01:10:32.820
+And if it doesn't work, throw it away.
+
+01:10:32.820 --> 01:10:33.840
+No harm, no foul.
+
+01:10:33.840 --> 01:10:34.500
+It's lovely.
+
+01:10:34.500 --> 01:10:40.680
+And if you get really stuck, hit me up on Twitter at Rob underscore Rich and show me the code where
+
+01:10:40.680 --> 01:10:45.460
+you got stuck and let's get you unstuck because I would love to continue this conversation and
+
+01:10:45.460 --> 01:10:46.980
+really help you be successful.
+
+01:10:46.980 --> 01:10:47.740
+All right.
+
+01:10:47.740 --> 01:10:49.880
+Well, thank you for taking the time and being here.
+
+01:10:49.880 --> 01:10:51.840
+It's been great to chat, Git with you.
+
+01:10:51.980 --> 01:10:52.540
+Most definitely.
+
+01:10:52.540 --> 01:10:53.540
+Thanks for having me on.
+
+01:10:53.540 --> 01:10:53.780
+Yeah.
+
+01:10:53.780 --> 01:10:54.420
+See you later.
+
+01:10:54.420 --> 01:10:58.220
+This has been another episode of Talk Python to Me.
+
+01:10:58.220 --> 01:11:00.960
+Our guest on this episode was Rob Richardson.
+
+01:11:00.960 --> 01:11:04.440
+It's been brought to you by our courses over at Talk Python Training.
+
+01:11:04.440 --> 01:11:06.220
+Want to level up your Python?
+
+01:11:06.220 --> 01:11:10.280
+We have one of the largest catalogs of Python video courses over at Talk Python.
+
+01:11:10.280 --> 01:11:15.460
+Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+01:11:15.460 --> 01:11:18.120
+And best of all, there's not a subscription in sight.
+
+01:11:18.120 --> 01:11:21.040
+Check it out for yourself at training.talkpython.fm.
+
+01:11:21.460 --> 01:11:22.940
+Be sure to subscribe to the show.
+
+01:11:22.940 --> 01:11:25.720
+Open your favorite podcast app and search for Python.
+
+01:11:25.720 --> 01:11:27.040
+We should be right at the top.
+
+01:11:27.040 --> 01:11:33.100
+You can also find the iTunes feed at /itunes, the Google Play feed at /play and the direct
+
+01:11:33.100 --> 01:11:36.380
+RSS feed at /rss on talkpython.fm.
+
+01:11:37.240 --> 01:11:39.820
+We're live streaming most of our recordings these days.
+
+01:11:39.820 --> 01:11:47.600
+If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+01:11:47.600 --> 01:11:49.500
+This is your host, Michael Kennedy.
+
+01:11:49.500 --> 01:11:50.780
+Thanks so much for listening.
+
+01:11:50.780 --> 01:11:51.960
+I really appreciate it.
+
+01:11:52.200 --> 01:11:53.860
+Now get out there and write some Python code.
+
+01:11:53.860 --> 01:12:14.400
+I'll see you next time.
+
+01:12:14.400 --> 01:12:14.400
+Bye.
+
+01:12:14.400 --> 01:12:14.460
+Bye.
+
+01:12:14.460 --> 01:12:14.480
+Bye.
+
+01:12:14.480 --> 01:12:14.480
+Bye.
+
+01:12:14.480 --> 01:12:14.480
+Bye.
+
+01:12:14.480 --> 01:12:44.460
+Thank you.
+

@@ -1,136 +1,2020 @@
-00:00:00 How do you build Python applications that can handle literally billions of requests. It certainly has been done to great success with places like YouTube handling a million requests a second and Instagram, as well as internal pricing API's at places like PayPal and other banks. While Python can be fast at some operations and slow it others it's generally not so much about the language raw performance, as it is about building an architecture for that scale. That's why it's great to have Julian Danielle on this show. We'll dive into his book The Hacker's guide to scaling Python, as well as some of his performance work he's been doing over at data dog. This is talk Python three, Episode 312, recorded April 8 2021.
+00:00:00 How do you build Python applications that can handle literally billions of requests?
 
-00:00:52 Welcome to talk Python, a weekly podcast on Python, the language, the libraries, the ecosystem, and the personalities. This is your host, Michael Kennedy, follow me on Twitter, where I'm at m Kennedy, and keep up with the show and listen to past episodes at talk python.fm. And follow the show on Twitter via at talk Python. This episode is brought to you by 45 DRS and us over at Talk Python Training. Please check out what we're offering during those segments. It really helps support the show, Julian, welcome to talk Python me,
+00:00:03 It certainly has been done to great success with places like YouTube, handling a million requests a second, and Instagram, as well as internal pricing APIs
 
-00:01:19 thank you, it's great to have you here. We've got a bunch of fun stuff to talk about. It's really interesting to think about how we go about building software at scale. And one of the things that just I don't know how you feel about it reading your book, I feel like you must have some opinions on this. But when I go to a website that is clearly not a small little company, it's obviously a large company with money to put behind you and professional developers and stuff. And you click on it. And it takes four seconds for every page load. It's just like, how is it possible that you're building this software, with so much, this is the face of your business. And sometimes they decide to fix it with front end frameworks. So then you get like a quick splash of like a box with a little UI. And then it says loading for four seconds, which to me feels no better. So I don't know, I feel like building scalable software is really important. And still people aren't getting it quite wrong quite often.
+00:00:12 at places like PayPal and other banks. While Python can be fast at some operations and slow
 
-00:02:11 Yeah. I mean, I think it's all it's all also, there's a lot of things, what you want to do when you do that, which is like, I write proper code, for sure. But also you want to be able to make sure everything like to understand where that bottleneck might be. And that's not the easy part, like writing code and fixing bugs is dumb. And we all know to do that. But then if we are asking you to optimize like, well, that's one of the things that I usually use, as an example, when I talk about profiling is like, well, if I were to ask you tomorrow, like, I want you to tell me which products your curry is using 20% of the CPU, you really don't know, like, you can guess yeah, you can probably do a good guess most of the time. But for real, you don't know, you have no clue until you actually look at the data. Use a profiler or any tool for being that will give you this information.
+00:00:18 at others, it's generally not so much about the language raw performance as it is about
 
-00:02:59 Yeah, we're really bad. And using our intuition for those things. I remember the most extreme example I ever heard of this was I was working on this project that was doing a huge amounts of math, wavelet decomposition, kind of like Fourier analysis, but I think kind of worse. And I thought, Okay, this is too slow. It must be in all this complicated math area. And I don't understand the math very well. And I don't want to change it. But this is got to be here, right? It's slow. And I put it into the profiler. And the thing that turned out was, we were spending 80% of our time just doing a like finding the index of an element in a list. Yeah. Which is not a little
+00:00:22 building an architecture for that scale. That's why it's great to have Julian Danzhao on this show.
 
-00:03:35 insane.
+00:00:27 We'll dive into his book, The Hacker's Guide to Scaling Python, as well as some of his performance work he's been doing over at Datadog.
 
-00:03:36 Yeah. My favorite I've been programming code is from the lock Knuth, which is, early optimization is the root of all evil. Like, it's, yeah, what do you know? And I mean, nothing. I will quote it every week or so now.
+00:00:34 This is Talk Python to Me, episode 312, recorded April 8th, 2021.
 
-00:03:48 Yeah, it's fantastic. It's fantastic. Yeah. In my case, we switched it to a dictionary, and it went five times faster. And that was it. Like it was incredibly easy to fix. But understanding that that was where the problem was, I would have never guessed. So yeah, it's hard to understand. And we're gonna talk about finding these challenges, and also some of the design patterns, you've written a really cool book called the hackers guide to scaling Python. And we're gonna dive into some of the ideas you cover there. also talk about some of your work at data dog, that where you're doing some of the profiling stuff, not necessarily for you internally, although I'm sure there's some, but it also could be for so many people, like you guys basically have profiling as a service and, you know, runtime as a service runtime analysis, that service, which is great. And we'll get into that. But before we do, let's start with your story. How did you get into programming in Python?
+00:00:39 Welcome to Talk Python to Me, a weekly podcast on Python, the language, the libraries, the ecosystem,
 
-00:04:32 Oh, that's a good question. So actually, having started like, 15 years ago, or so I actually started to learn for the first programming language like, you know, get a scripting language like we used to call them at least a few years ago, and I liked Perl, but I wanted to learn like object oriented programming, and I never understood object oriented programming like the remote. It was so weird for me. I really could because I was young, and I don't know somebody talked to me about Python. I bought the book, like the only book about Python. And I kept it around for a year or so because I had no project at all, like no idea. Most of my job back then was to be a sysadmin. So not really anything to do with Python. And some of them are like I was working on dBm length aligners distribution. And I was like, Oh, I need to do something like a new project. And I'm going to do that with Python. And I started to run Python this way with my project on one side, the book on the other side, I was like, That's amazing. I love it. And I never stopped doing Python after that.
+00:00:57 and the personalities. This is your host, Michael Kennedy. Follow me on Twitter where I'm at,
 
-00:05:30 Yeah, that's fantastic. It feels like it very much was a automate the boring stuff, type of introduction, like there's these little problems and bashes too small or too hard to make it solve those problems. What else could I use? and Python was a good fit for that.
+00:01:02 mkennedy, and keep up with the show and listen to past episodes at talkpython.fm,
 
-00:05:44 Yeah, that's a great way. I mean, usually, I have a lot of people coming to me over the years and being like, I want to contribute to a project, I want to start something in Python, like, what should I do? Like, I don't know, like, what's your problem you want to solve? Right? If you want to find a boring thing you want to automate or anything was the best idea you can have to? If it's an open source project that exists already? Great. I mean, good for you. It's even better. But I mean, just write a script or whatever you want to do start hacking and learning. That's not the best ways to scratch your own itch.
+00:01:06 and follow the show on Twitter via at Talk Python.
 
-00:06:12 Yeah, absolutely. It's so easy to think of, well, I want to build this great big thing. But we all have these little problems that need solving. And it's good to start small and practice small and build up and I find it really valuable. People often ask me like, Oh, I want to get started. What should I do? Should I build a website like this? Maybe machine learning thing like that? I'm like, Whoa, like, that's Yes, you definitely want to get there. But you're really, really just starting, like, don't kill yourself by trying to take on too much at once. So yeah, it sounds like it worked well for you. How about now? What are you doing day to day I hinted at data dog.
+00:01:09 This episode is brought to you by 45 Drives and us over at Talk Python Training. Please check out
 
-00:06:41 Yeah, so I've been doing Python for the next 10. Year after on Python, I've been working on OpenStack, which is a huge Python project, implementing a open cloud system where you can host your own AWS particularly. And so everything is in Python there. So I work on very large ones, the largest, I think Python project, which is OpenStack for a few years. And then I decided to go for a challenge. And then I was looking into building a profiling team building a profiler, a continuous profiler, which means you would not profile your script on your laptop, but you would prefer your application running on your production system for real. And I was like, but not something I think anyone did before in Python, at least. So I want you to do that. And but what I like to do like two years ago, and I'm still doing,
+00:01:14 what we're offering during those segments. It really helps support the show. Julian,
 
-00:07:29 that's really interesting, because normally, you have this quantum mechanics problem with profilers and debuggers, especially profilers, like the line by line ones, so much where it runs at one speed normally, then you hit it with like C profile or something, and it's five times slower, or whatever it turns out to be and you're like, Whoa, this is a lot slower. Hopefully, it gives you just a factor of slowness over it. Like if it says it's been 20%, here and 40%. There. Hopefully, it's still true at normal speed. But sometimes it really depends, right? Like if you're calling a function that goes out of your system, and that's 20%. And then you're doing a really tight loop with lots of code. The profiler will introduce more overhead in your tight loop part now than it will in the external system where adds basically zero overhead. And so that's a big challenge of understanding profiling results in general. And it's a really big reason to not just run the profiler constantly in production. Right?
+00:01:18 welcome to Talk Python to Me.
 
-00:08:28 Yeah, exactly. And people do that. No, I mean, if you have the right profile, the way c profile works, I mean, we can dig a bit into whether Alexi profile the way it works, like it's going to intercept everything yet, it's what we call a deterministic profiler, where if you run the same program twice, you will get the same c profiler for sure. Like it's intercepting all the function calls that you have. So if you have a ton of function calls, it makes things like you were seeing five times slower, for sure, at least. So yeah, yeah. And it'll inject a little bits of byte code at the beginning and of every function, all sorts of stuff. And it actually changes what happens, right? Yeah, exactly. So we can change the timing, it gets it. I mean, it's so it's a good solution to like ballpark estimate of what's going on. And it gives you pretty good results. And usually it's a good tool, like I use it a lot of times over the years. And it always gave me a good information of the primary supervisor, but you can't use it in production because it's too slow. It's also not providing information like it gives you the war channel that you use, but not sorry, the CPU time of the for each of your threads, etc, whatever you're going to use. So information or is not really fine grained, it's a rough world jam. It's probably not streaming either, right? It probably it runs, I think gives you the answer. Exactly. It's not some sort of real time stream of what's happening. So I mean, one of the kids like who I mentioning previously, where I mean, you know, obvious part of the colloquy scenario but you can recreate in a one minute script or something you know, it's slow and it should take only 40 seconds you can run super fast around it on one minute on your laptop and the okay I'm going to trim out this piece of God punish you want to see What's happening prediction with a real workload for real and like you were saying streaming the data to see in real time what's going on, while super far doesn't fit. And also, any deterministic profiler, which tries to catch everything your program does will not work with good performance. So you have to do another approach, which is what most profiling profilers for continuous profiling do, which is statistical profiling, where you actually somewhere your program and you try to look what it does most of the time, and most of them, so it's not a true representation. It's not like the reality 100%. It's a good statistical approach of what your program is doing. Most of the time, I see is that more of the sampling style profilers? where it's like, every 200 milliseconds, like, what are you doing now? What are you doing now? Exactly? Like a really annoying young child, like, what are you doing now? And it's gonna miss some things, right? If there's a function, you call and it's really quick, it's like, well, you never called that function as far as the profilers concerned, because it just didn't line up. But if you do it enough, over time, you'll get to see a good picture of exactly, you don't care about the stuff that happens really fast, what you care about the stuff that happens really slow. And those are going to show up pretty largely in these sorts of sampling. Exactly. So if you see profile, you will see this very small function code because it catches everything. But reality for the purpose of optimizing your program, you actually don't care. You don't care if you don't see them statistically, but because they're not important. So that's not what you want to optimize in the unless not where your problem lies, probably. It's in the black outliers are ones that you see often in your profile to one using UC, like 80% of the time where the professor asks you program, what are you doing? It's always it's unfortunate being called was the one you want to look at? Yeah.
+00:01:19 Thank you.
 
-00:11:38 So I think that fits quite well, with the production style. I know, it's gonna ask you about your book, but we're sort of down in this profiling story. That's fine. And, you know, I've used data dogs, tools for error handling, and like exception, you know, let me know when there's an error type thing. So I have that set up on like, talk Python, the podcast site and the talk by then training courses site. And of course, when you turn it on, you get all these errors that are like happening in the site. But nobody's complained to you that you didn't realize there's some edge case or whatever, it is really fantastic. But something I've never looked at is the real time profiling stuff that you're working on these days. So maybe just I have no idea what this is, like, I can imagine maybe what it's like, but you give me a sense of what kind of stuff do I get out of it?
+00:01:20 It's great to have you here. I think we've got a bunch of fun stuff to talk about. It's really
 
-00:12:21 Sure. Yeah. So what's the first thing you'll get? It's two profiles. So you get framed shots, essentially, which are, you know, these kind of shots where, I mean, you look like flames, usually, because there are like orange and red and going up and down. And the high being that that for your stack trace, and with being the percent of time of resources that you use, so usually, it's time you're going to meet her, for example, we meet her wartime institutions or watch recei is if your function using a lot of war time, is it waiting for something is waiting for a second to be read, for a lock to be acquired. But one of the profile we gather is our CPU is actually using. So if you want to know if you are programming CPU bound, you will see which function is actually using the most CPU in your program, right? Because I could go to like my hosting provider, and I could check a box and say, No, no, I don't want to pay $20 a month, I want to pay $50 a month to make this go two and a half times faster. If I'm CPU bound, that might actually work. But if I'm not, it probably has no effect, or small effects. Right? Exactly. This portion of talk, by the way is brought to you by 45 DRS 45 DRS offers the only enterprise data storage servers powered by open source. They build their solutions with off the shelf hardware and use software defined open source designs that are unmatched in price and flexibility. The Open Source solutions 45 DRS uses are powerful, robust and completely supported from end to end. And best of all, they come with zero software licensing fees, and no vendor lock in 45 drives offer servers ranging from four to 60 bays and can guide your organization through any sized data storage challenge, check out what they have to offer over at talkpython.fm/45 drives. If you get in touch with them and say you heard about their offer from us, you'll get a chance to win a custom front plate. So visit talkpython.fm/ 45 drives or just click the link in your podcast player. So knowing that answer, the only thing that would be really helpful. Can I scale this vertically? Or do I have to change something else? Yeah, yeah, it's it was three I'm profiling where I mean, most of our users when they come to us alive, we save 1000s of dollars, because we actually understood that we got the button lucky are there and we were able to downsize our deployment because we optimize this function. And we understood that this was blocked by this IO wherever and when you understand all of that with profiling, whatever the language is, by the way, and being Python or Java or anything, you actually say a lot a lot. We have terrific stories that like our blood of our customers or internal users, saving 1000s of dollars just because they were able to understand what was going on in our program and and Getting up was not the solution, optimizing the right function while the solution so you'll get CPU or charm. And we also do memory profiling. So you will see all of the memory allocations that are done by Python, which are kind of tie to the CPUs as we go, the more objects are going to allocate them when I mean allocate, I mean, even if they don't stay around, instead, you want to create a new string and your object or whatever, even for a few seconds, milliseconds, it costs to memory like you have to call malloc. Under the hood, you have to allocate memory, which takes time. So you will see that so if you reserve objects that are not for us, for example, you might want to see that that is when we shipped two weeks ago as a profiler, we were you actually see a sample of your hip like member you use, okay, in real time, and what has been allocated on the heap? And can you tell me how many of each type of object I have like you've got? I wish 20 Meg's in less? You've got 10 Meg's and strings? No, no, I mean, in theory, yes. In practice, no. And I'm surely fighting upstream with the CPython folks to to be able to do that. Is there a limitation on CPython right. Now, technically, we can't really do that. But I'm able to give you the line number of the file, the function name and the thread, but I also look at the memory. And yeah, I wish I could know the class name. But would you like for the javas? That's, and I want to add that in Python. So like, we bought my butter for next year? Yeah. But I mean, if you have a memory leak, for example, which is quite common, right, where you keep adding more objects on top of each other, at some point, your memory grow forever, and you don't know where they come from. So with such a tool, a profiler, you're about to see which stack trace is going to add more and more and more memory forever. And you'll be able to say, No, it won't give you the solution to your problem, it will give you where to look at which usually is still pretty good. Yeah, yeah, it's like 90% of the problem, too. Can you talk a little bit about the internals of like, how this works? I'm guessing it's not using C profile? No, directly? Is it using other open source things to
+00:01:25 interesting to think about how we go about building software at scale. And one of the things that just,
 
-00:16:56 sort of put this service together? Or is it not so sometimes everything is open source, so we want you to look at it, it's on on our D. DeGeneres repository on GitHub. So the way it works for this view, and then what I'm profiler is pretty easy. A lot of people know about that, you can actually ask c Python to give you the list of running threads. So if you do that 100 times per second, you get the list of running threads. And you can get the stack trace by running like function name, line number, like running, so you should not run out of time, get a pretty good picture of what your programming threads are doing most of the time. So I mean, it's a variable. So it works, it's pretty easy, then there's a few tricks to get the CPU time etc, using the different API. But that's most of it. And for memory, they're actually a good thing that has been done by a friend, Victor's chinnor, which is one of the CPython, he's done a great amount of performance improvement, like really important stuff. Yeah. And one of the things that you didn't buy from freelook, for us, or it was a long time ago is to add this module trace malloc, which we don't use, I mean, I actually built on top of it at some point, but we don't use anymore. We were the lightweight version of it. But it open the memory API of CPython, where you can actually plug your own memory allocator to C, Python. And that's what we do with our profiler. We replace the memory allocator bar, tiny rubber, but caches every location and then to profiling on top of it. Right, exactly. So when it says allocate this, you say, record this was allocated. Exactly. And then allocate it right. So I'm like that. Yeah. Is this the thing you were talking about? On the screen? That's DD trace pie? Or is it? Yeah, exactly. You have a room directory in cybers, the profiling directory and all the goodies were so you can take a look at the way it works internally. Yeah, I mean, the way we build it is to be able to be easy to ship to deploy, you don't require any extra permission. Like there are a lot of different way of doing profiling using both of our Linux capabilities. There are a lot of things that are external and not necessarily portable outside Linux. But the problem is that most of them require extra permission, like being rude or anything like using the REST API requires you extra permission, which is not, which is great. I mean, resolution may be better technically, for some points, compared to what we do there. But there are very complicated to deploy. So what was the thing? That drivers, I think, for writing this, right, so a simple pip install plugin a liner to and off you go. Right, exactly. I mean, it's pretty simple. And so for exporting that data, we use a p prof format from Gu, which is pretty standard. So you can actually use this profile if you want. Even if you're not a direct customer, and you want to give it a try, you can actually export the data to a profile and see what the data you want or the whole the analytics that we provide and as a fancy frame shop with all their rainbow colors, but you can use the people of goodwill, which is pretty okay. Oh, interesting. So you can get basically the raw data out of it just by using it directly. It's just you guys provide Yeah, the nice gathering? Yeah, exactly. Yeah, you have to store the file. Exactly. We provide the streamlining. Well through Patreon, and we provide a ton of modalities. But if you are curious and want to take a look at how it works, and where you can provide a man, it's a good way to do it too. Alright. Also, I do want to dig into your profile or your scaling book, which is what we're going to spend a lot of time on. Sure. One final question, how can I def profiles, like from one version to another? Because one of the things that drives me crazy is, yeah, I've done a bunch of recording, I got my numbers, and then I'm gonna make a change. Is it better? Is it worse? What has gotten better? What has gotten worse? Like? Is there a way to say compare? Yeah, that's something we are building a data dog and our back end site to be able to track all your releases and tell you where this is going faster versus going slower, and which functions or methods are being the culprit like of your slowness, or whatever. So yeah, I mean, that's definitely something we want to do. Yeah, that'd be so neat, because you do maybe take a whole week or two, and you sit down and you make your code fast, and you get it all polished. And then over time, it kind of degrades right, as people add new stuff to it. And they don't really necessarily do so thinking about performance. So it'd be cool to like, okay, here's how it's degraded, and we can just focus our energy on making this part better again, I think that'd be great. Yeah. All right. Well, tell us about your book, I find it fascinating. I kind of gave it a bit of an intro duction the idea of scaling it, but official title is the hackers guide to scaling Python. And the subtitle is build apps that scale to billions, millions of users billions of requests, billions of whatever, I guess, but yeah, most apps don't do this. So I think they would be a lot of people be interested hear about it, right? I mean, most of them do this. But so many of us don't really need to do that. So that's not I wrote that book, I think four years ago. Now, because I was working, like I said, on OpenStack, where I've actually tried to scale the things to periods where we'll be running like it will be hops running on 1000s of nodes,
+00:01:30 I don't know how you feel about it, reading your book, I feel like you must have some opinions on
 
-00:21:48 right. And maybe any individual app is not scaling to that level. But you guys basically being the platform as a service. Yeah, in aggregate have a huge amount of load put on it. Right, exactly. Okay. And which I've left for like, when authors who write the book, a lot of people were playing outside Python, or Python round, he goes, why Python is slow. You can't do anything meaningful with Python. Right? So slow, you have to switch to go. And that was another thing I was. Yeah, that's the first thing you have to do is if I understand this, yeah, that Python is slow. So you have to switch to go. Right. That's, I hear this all the time. Yeah, exactly. So I so conference with God in the OpenStack project, somebody rewrote one of the software of OpenStack. In go, because it was faster and was like, Nope, I mean, the Python architecture you use is slow. That's why it's the programming slowest, nothing ready to Python like, and there's no need to switch to go like, I mean, it's not 42 the language, he said the architecture was a different. So that's what kind of motivated me at the beginning to write that book to be able to share what everything I learned for the years before building OpenStack in part of it, and learning on what works and doesn't work as getting Python and to stop people switching to go for batteries. And there are good reasons for go for sure. But
+00:01:35 this. But when I go to a website that is clearly not a small little company, it's obviously a large
 
-00:23:01 yeah, sometimes know. Exactly, not just because there's so so well, you know, another example of this is people switching to node j s, because it's, it could handle more connections right now. And the reason it can handle more connections, is because it's written in an asynchronous way, a non blocking way. And so if you write blocking Python, it doesn't matter. If you write blocking C, it's not going to take it as well as if you write non blocking Python, right. And so you know, things like async i O. And those types, ASCII servers and whatnot, can automatically sort of put you back in the game, compared to those systems that the magic of magic in quotes, the magic of node was they made you do that from the start? They're like, Oh, you can't call synchronous function. So the only way you do this is you write crazy callbacks until better ways, like with promises and futures, and then async and await get into the language. But no, they forced people to go down this pattern that allowed for scale, then you can say, Oh, look, our apps scale really well. And it's just that I think a lot of times people start with the easy way, which makes a lot of sense in Python, but that's not necessarily the scalable way. So yeah, start one way, but as you identify these problems, you know, maybe bring in some of the ideas of your book, right?
+00:01:40 company with money to put behind professional developers and stuff. And you click on it,
 
-00:24:08 Yeah, totally. I mean, one of the first thing I'd like to say about that is like, Python is not fast or slow. First, it's I would say like English is slower English is fast, doesn't make any sense. You have people speaking English very fast or not. It's like Python the long way round C, Python is slow. Okay, it's not the best VMware actually, I think it's far from being the best VM author, machine of the long way. Like, if you look at the state of the art of an O VI, for JavaScript, or, or growl or whatever, for Java, or the JVM itself is pretty great nowadays. And, I mean, if you look at all about Python, I mean, CPython is really looking bad, I think, but very over upside, which gives you good things when you use Python and our good reason to keep using Python and CPython in vn. So I think it's a trade off and people are not always putting the wrong All right, wait at the right place for doing that trade off.
+00:01:45 and it takes four seconds for every page load. It's just like, how is it possible that you're
 
-00:25:02 Yeah, I agree. One trade off might be Oh, you could write it in, let's say rust or something, for example, make it go faster. But then you're giving up the ability for people to come with just a very partial understanding of Python itself and still being really productive, right? Like, people don't come to rust and Java with very partial understandings of it and be super productive. They just don't, right, you got to dig in a big bite of that hole. All the computer science ideas, there was like Python concert so simple and clean. And I think that's part of the magic. But some of the, I guess some of the patterns of that simple world don't always make sense, right? I do like that. You pointed out that not everyone needs highly scalable apps, right? Because it's really cool to hear, oh, they're doing this thing with Instagram, right? Like Instagram turned off the garbage collector. And now they're getting like better memory reuse across the web workers. And so maybe we should do that, too. It's like, Well, hold on now. Yeah, how much are you spending on infrastructure? Can you afford just 20 more dollars and not have to deal with this ever? Right? I mean, they run their own version of CPython, that's a fork where they turn off the garbage collector, right? Like, do you really need to go that far? No. So I kind of put that out there just kind of a heads up for people before they dive in. Because kinda like design patterns. Like, I feel like when you learn some of the stuff, you're like, oh, let's just put all this into place. And then you can end up with a more complicated system that didn't really need all those putting together at once. And maybe like, there's no app that actually incorporates every single idea that you've mentioned here. Just they're all good ideas in their context, but not necessarily. You wouldn't order everything on a menu and put it all on one plate and then try to eat it.
+00:01:51 building this software with so much? Oh, this is the face of your business. And sometimes they decide
 
-00:26:35 Now, right? Especially because if you start like, for example, the other thing people do usually is I, you read a program, okay? It's not fast enough. Let's not say it's slow. It's not fast enough for you, you're like, Okay, I want to make it faster. So if you can, you can paralyze thing, you're like, Okay, I could run this engine bar, you go. Again, we used to use threads. Alright, but easy. Where's the threading API, there are the conclusions. In future API in Python, it's pretty easy to do. But it adds so much complexity to your program, you have to be sure it's really worth it. Because now you know, you're entering the world of concurrency. And when you're entering yameen, you have to use locks, you have to be sure about your program is not having side effects between threads as a bad time or anything. And it adds so much complexity, it's actually very hard to make this kind of program right and to make sure it works. And there are so many new edge cases you're adding by adding concurrency being friends or anything else. But you have to be sure it's worth it. And for a lot of people out there, it's really not worth it, you could have a pretty simple application with just one process or a couple of process behind a unicorn, or you're using a walker and be fine forever. But it's mechanisms to try to optimize like I was saying, like early optimization through the follicle, don't do it like unless you are sure and you actually, you know why it's slow, you know where to, to optimize, which might be a good user for profiler or not, depending on what you're trying to change, optimize. But make sure that you understand the trade offs you are doing, I saw so many people rushing into threads or anything like that, and writing code that is invalid. And I want to crash in production because of race condition, etc. And whenever I thought about, and it takes them months, years to get things right, again, because it's very complex and writing, like manipulate God is not something humans do very well. So yeah, if you can afford to not do it, don't do it.
+00:01:56 to fix it with front end frameworks. So then you get like a quick splash of like a box with a little UI,
 
-00:28:25 Well, I think going back to the earlier discussion with profiling and stuff, either in production or just with C profiling measure first, right? Because, yeah, and then you know, so much better what can be applied to solve that problem? Because if the slow thing is you're waiting on the database, well, you sure don't need more threads to worry about the hand, right? You might consider caching, that could be an option. You might consider indexes to make the database faster. But you could really easily introduce lots of complexity into the system by applying the wrong fix, and not really get a whole lot better, though. Yeah. All right. Let's talk about scaling. I think scaling is just the definition of scaling is really interesting, because a lot of people see your that like, I want an app that scales or like, man, YouTube is so awesome. It scales to, you know, million requests a second or whatever, I want that. And then they have one, they have their app running, and they click the link, and it takes three seconds, or they they run the function, it takes three seconds. Well, if that app scaled Well, it would mean it could run in three seconds for 100 people as well as it could run in three seconds for one person. Like that doesn't necessarily mean faster. So there's like this. Yeah, this distinction I think people need to make between high performance fast code quickly responding and then scaling. Like, it doesn't degrade as it takes on more users. Right? Maybe when I riff on that a little bit.
+00:02:01 and then it says loading for four seconds, which to me feels no better. So I don't know, I feel like
 
-00:29:46 Yeah, there are three dimensions basically, which is like we were saying what is more users, which is more in parallel, let's say and what is faster or like having the page being loaded faster. So there are two different things. If you want to really optimize One particular use case like page being loaded or whatever, it's really a good practice. I mean, you can't really scale that request on multiple nodes. Let's it's very complicated. But I like to load a page or REST API or anything like that. You really want to prefer that part of the code to be sure,
+00:02:07 building scalable software is really important. And still people are getting it quite wrong quite often.
 
-00:30:16 yeah. And that's a case where profiling locally with C profile might actually be really good, right? Like one request is actually quite slow. Yeah, like, you could learn a lot about that, running that in a profiler. And adding the horizontal scalability stuff might actually make it a tiny bit slower for each individual requests, but allow many more of them to happen. So you got to figure out which part you're working on, right?
+00:02:11 Yeah, I mean, I think it's all also, there's a lot of things that you want to do when you do that,
 
-00:30:37 Yeah, keeping email, like if you see profile on your laptop is going to be from the agency profile on AWS, or anything you run, because like your database is going to be different, the latency going to be different. So it's hard to reproduce the same condition on your developer laptop that you have in production during the same system. So I mean, it's really a good way to get to 80% of the job. But in some cases, it's great to have continuous profiling on your production system that like gives you a good way to optimize your code and to make sure that this dimension of being faster is covered, then the dimension of Wow, let's scale to foreign of users and still have the free second load for everyone, then that's another problem. And that's where you actually don't need a profiler. But you need a good architectural program and your code, yeah, and be able to spawn a new process, a fresh, new node new anything, one can process things in parallel for you, and take up all like spiritual programming from parts, and I think a good architecture and there, you can do it with Python, with any programming language, you honestly, you can do it also that with Python, originally, to switch to any other language, if you know what you're doing, right,
+00:02:17 which is like, I mean, write proper code for sure. But also you want to be able to
 
-00:31:43 it makes such an important difference there. Alright, so let's go. And that'd be fun to go through a couple of the chapters of your books and just maybe book and just talk about some of the big ideas there. And the first you kind of build your way up to larger systems, right? Like you start out, where are you talking about what is scaling, but the next one that you really focused on is, how do I scale to take full advantage of my current computer, like, the one I'm recording on here is my Mac Mini and one, it has four cores over there, I have my simracing setup, it has 16 cores. Let's suppose I'm running on that one by run my Python code over there, and I create a bunch of threads and it says a bunch of Python things, there's a good chance it's using 116 of that CPU, right?
+00:02:22 meter everything, like to understand where the bottleneck might be. And that's not the easy part,
 
-00:32:21 Yeah, exactly. It says, I mean, people will start with Python, usually, it's that issue in pretty soon where you want to run multiple. I mean, you want to miss both threads in parallel, for example, to make sure your code is faster. And then which is a proper way. I mean, outside Python is a poor way to scale like running your threads allows you to run another execution thread of your programming on diversity view. I mean, and Fred, we're not used that much 20 years ago, because all computer on every computer on your one core, right? I mean, your personal computer, it was, right, a bunch of them with only one core and nobody cared about the threads. No, but everybody 16 cores in their pockets is like, Whoa, we should keep our friends. Right. So Exactly. Yeah. So I mean, if that's where you started, like 10 years ago, we're seeing more and more people being interested in using threads in Python, because Well, I mean, then we this competition, and I could do it twice to go faster. So I'm spinning on your friends. And then we got accepted. If you do that in Python, it doesn't work very well, because we're this global interpreter lock Gil, which actually makes sure that your Python code works nice on multiple threads. It's about every Fred running Python code executing bytecode, they have to acquire this lock, and l to wait forever until we're finished or until they get interrupted. Which means you can only have one thread in Python running at a time on the Python VM. Yeah, and your productive weight or do overs, which are not Python related, which is what a lot of C extension like NumPy or over 16 you may be using are doing very well using the Gil and doing things which are not Python, but still doing things that are useful for you. But if I guess like you were about to release the Gil and let the rest of the Python program runs, but if your program is wonderful person, Python, you don't use any kind of C extension, known as you've got anything, then all your friends are this giant bottleneck, which is a Gil, which block and referred. So if you run, I think my record is like 1.6 cores with a ton of threads on the Python program like you can't really use, I never managed to use two cores with a single Python program and a lot of threads. It's very hard to get to that two cores being useful when you have 30 to 64 cores, machine by two rounds over to us it's a pretty waste of resources.
+00:02:28 like writing code and fixing bugs, we all know to do that. But then if we are asking you to optimize,
 
-00:34:38 Yeah. So this is super interesting. And people often see this as like Python doing a threading restriction. And what's really interesting is the Gil is really about protecting the memory allocation and cleanup, it's incrementing and decrementing. That ref count. So you don't have to take a lock every time you touch an object or assign a variable which would make it really slow. It'd be more scalable, but it would be slower. Even in that single use case, right?
+00:02:34 that's one of the things that I usually use as an example when I talk about profiling is like,
 
-00:35:04 Yeah, the experiences to do that. And essentially what you have in Java, there are this kind of monitor, I think they call it where you have a locker object, and it works well for them. But that's me the details. But for Python, there have been a few experiment to do that. And yeah, it makes everything very, very slower, unfortunately. So it's not a good option to do to to go that road. And I mean, there have been, if you look at the history of the gear, there has been a product called the galacta. me a few years ago to remove the gear, I mean, there'll be plenty of experiments to try to get rid of that. And the other problem that if we ever do that, at some point, it will break the language. And a lot of us are on the language, because like in Python, when you add an item to a list, it is thread safe by definition, because the Gil for sure. But if we start by saying, well, each time you want to add an item to a list, you need to use a lock to do that. The way we do it implicitly, but is very slow. Oh, you do it explicitly as a programmer, then it's going to be very tedious for sure. And it's not going to be compatible with the Python window right now. Which is not a good option. So we're stuck. Yeah. Well, there is have you been tracking the work on have 554, multiple sub interpreters with that Erickson has been doing? Yeah, a little bit. I think that offers some really interesting opportunities there. Yeah, I think it's a different approach. But it's a mix, like it's a trade off between multi threading and multi processing. Yeah, it's like a blend like a half and half of them. Yeah, yeah. And but I think it's the most promising thing we have right now. Because I don't think the Gil is going to go away anytime soon, unless somebody really take like a giant project and do that. But there's nobody unfortunately, outside inside of the Python community. Divers, no company is going to sponsor any kind of effort like that a lot of the Python upstream stuff, from what I see are run by people, you know, willing to do that on their free time. And some are sponsored for sure, or either by company, but a lot of them are not. And then there are nobody, like a giant big tech company trying to push something like that forward. So it's probably what's also not I think, Python. So with the materials, what I think is probably the next best thing we'll get, I think it is as well, because I just don't see the Gil going away, unless we were to say we're going to give up reference counting. Yeah. And if you give up reference counting, and then you add like a jet, and you get like I mean, that's a really different change. And you think of all the trouble just changing strings from Python two to Python three. Yeah. Like this is right. It's crazy. Okay, we're not finished yet. I still have to mention a lot of Python two code, to be honest. Yeah,
+00:02:39 well, if I were to ask you tomorrow, like I want you to tell me which part of your code is using
 
-00:37:35 I'm not ready to do Python four yet. So yeah, I don't think we're ready for either. So I think several interpreters is interesting. And some interpreters are interesting, because they take the ways in which you sort of do multiprocessing, which does work for scaling out, right, you kind of do message passing, and each process owns its own data structures and stuff like that. And it just says, Well, you don't have to create processes to make that happen. So it's faster, basically.
+00:02:44 20% of the CPU, you really don't know. Like you can guess, you can probably do a good guess most of
 
-00:38:01 Yeah, and I think one of the problems with multiprocessing is also serializing. The data between the different process which there is always I think Stack Overflow is filled with that people are complaining about unable to peakers the data between multiple processes, which is very true. So I think I hope that having the system at the bottom thing will solve part of what's not only to serialize everything as window of performance, I don't have to say for sure. But also in terms of performance, you don't have to serialize and say another thing every time you want to pass something to a sub process with a very huge sale. Yeah.
+00:02:50 the time. But for real, you don't know, you have no clue until you actually look at the data,
 
-00:38:33 So in danger of not making it all the way through the other topics. Let me ask you, a couple other real quick questions or comments, let you call out a couple of things. One like this CPU scaling is a problem. Except for when it's not like sometimes it's not a problem at all. And the example I'm thinking of if I'm writing an API, if I'm writing a website, we need those things, the way that you host those is you go to a server, or you use a platform as a service, which does this for you. And you, you run it in something like micro whiskey or G unicorn or something. And what they do immediately is they say, well, we're not really going to run it in the main process, the main process is going to look at the other ones, I want to create four or eight or 10 copies of your app running all at the same time, it will like send the request off to these different processes. And then all of a sudden, hey, if you have less than 10 cores, you're scaling again.
+00:02:54 use a profiler or any tool for that being that will give you this information.
 
-00:39:21 Yeah, so that's why I mean, threads are great for things like IO, etc. But if you don't really want to scale for CPU and cores, threads are not the right solution. And it's way better to use multiple processes. So either way, I mean, unicorn uisge very good solution for web apps, or for alternative to like, I mean to that but yeah, or a framework like like celery for for doing jazz, for example, which is about out of the box was born, which processes to enter all of your tasks on multiple CPUs. And usually, once you I mean, if you don't use any kind of asyncio like framework or donado or anything like that, where you only do One process running one task at a time. And you can respond to multiple processes even more productive when you have cores. If you have 16 cores, you can start, I don't know, 100 processes, if you have enough memory for sure. Which memory is really not a problem, unless you're definitely Why should you for sure. But like for a REST API, it's really not a problem. You're not using gigabytes of memory per process and progress. So yeah, it's fine spending a lot of unique on walkers. Yeah, it depends on that for sure. So two things that I ran across that were interested in this chapter that you covered, were futurist and cutely, then I'm not sure how you say that. Second one. But can you tell people about these two little helper library packages? Yeah, sure, is actually, it's a tiny wrapper around functional features that you might know. And in Python, the thing he does a few things that are not there, like the ability to have statistics about your pool of threads or your cloth of anything, you use processor, which is give you a pretty good ID a lot of application on where the like, I can scale on 3264. And you have a setting usually to scale that. And you don't really know as a user, or even as a developer, or many friends, you're supposed to start and turn down your your workload, you're like just typing a number randomly and see if it works or not. And I think statistic around VR is pretty useful. There are some feature if I remember correctly, where you can actually control the backlog. Like usually you have a pool of threads or processes or a pool of anything trying to handle your task. But the more you are, I mean, you can grow forever. So I think the ability to control your backlog as I okay, I have enough to ask in the queue. No, you have to do something like I'm not going to take any more time. So what's the pattern you see a lot in queue system? Do people want the general queue system that is under accuses them with like, Where's the queue, I'm going to take things out of it and process them. And they don't think about covering two sides of the queue. So the queue can grow forever, which in theory is great. But in practice, you don't have infinite resources to store the queue and venture processes. So you want to be able to reject works. Talk
+00:02:59 Yeah, we're really bad in using our intuition for those things. I remember the most extreme example
 
-00:42:02 Python, to me is partially supported by our training courses. Do you want to learn Python, but you can't bear to subscribe to yet another service at Talk Python Training we hate subscriptions to that's where our course bundle gives you full access to the entire library of courses. But one fair price. That's right, with the course bundle, you save 70% off the full price of our courses, and you own them all forever. That includes courses published at the time of the purchase, as well as courses released within about a year of the bundle to stop subscribing and start learning at talkpython.fm/everything. One of the big complaints or criticisms, I guess, I should say is in these async systems, they don't provide back pressure. Yeah, right, a bunch of work comes into the front and it piles into asyncio, which then piles massively on top of the database, and then the database dies. And there's no place further back before the dying of the database where it kind of slows down. And so this is something that will allow you to do that for threading and multi processing, right?
+00:03:05 I ever had of this was I was working on this project that was doing huge amounts of math,
 
-00:43:04 Yeah, exactly. And which is one of the other chapter of the book, which was titled is designed for failure. And you could write another book on that, which is, when you write your application, usually you write something in a very optimistic way, because you are in a good mood and like everything's going to work, right? Well, you test to a small data and a few clients. Right? Exactly. And the more you scale, like, the more you add Fred, the more you add processes, we're going to add nodes on your network, you're going to use Kubernetes to spawn hundreds of nodes a version of your application, and the more likely it is to feel like somebody is going to unplug your cable somewhere, anything can happen for sure. And you're not designing for that. Usually you're designing in a very optimistic way. Because most of the time it works. And when when it doesn't, if you really want to go at scale, I mean, what do you want to go for, and you want to work, even in extreme condition, like when the weather is really rainy? It's a lot of work. So that's why I was saying at the beginning, like it's a trade off to even threat scores, when you have to wonder what happens when I come started a new friend anymore, because I know my system is up, right? Which is pretty rare. Nowadays, you have a lot of friends or family. But if you want to, I mean, very limited resource system or whatever. Like what do you under that? Yeah, threads pre allocate a lot of memory like stack space and stuff. Yeah. Have you heard of locusts@locust.io? Have you seen the thing? No, I don't think so. Yeah. So speaking of back pressure, and just knowing what your system would take this thing is super, super cool. It's a Python load testing thing that allows you to even do distributed load. But what you do that's really interesting is you create a class in Python. And you say you give it tasks. And then those tasks have URLs. And then you can say, well, this one I want 70% of the time, the user is going to go there and then they're going to go here and then I want you to kind of delay to like they click around like maybe you every 10 seconds or so. So randomly around that time haven't click around. And it's just a really good library for tool for people are like, Oh, I didn't test it with enough users because I'm just me. But what is it? Like something like this would be a really good option? I think, yeah, that's a good event to gather data for profiling after. That's pretty good. If I were to do something that looks delicious. Oh, yeah, yeah. Yeah. That's interesting. Yeah. Right, because you want to profile a realistic scenario. So instead of hitting with one person, you hit it with like, 100. Yeah. And then get the profiling results of that. Okay. That's a good idea. Yeah. That's really the good thing with countries profiling, what you are able to see for real what happens, but if you know to reproduce, it was also a valuable option. Yeah. Okay. Very interesting. Alright, so CPU scaling is interesting. And then Python around 3435 came out with this really interesting idea of Yeah, asyncio, and especially async, and await that makes asyncio so much better to work with. And what's interesting is that has nothing to do with threading. Like that doesn't suffer any of the problems of almost the problems of like the Gil, and so on, because it's all about waiting on things. And when you're waiting, usually you release the Gil. Yeah, so Fred's are a good solution for IO, when you can't actually use something like async i O, because let's be honest, I mean, issues your own library, which was designed five years ago, it's not designed to be a single, so right, or you're using an old ORM. And the old ORM doesn't have an async version of it. And it's either rewrite it in a new one. Yeah. Or use the old, not anything, right. Something like that. Maybe threads? I don't know. Yeah. Usually. I mean, it's a good bad example. This one's What's the good example. Technically, but usually the premise people writing but queries, better queries in index, I'll probably solve that most the time. Yeah, exactly. But in theory, you're right. Technically, it's a good example. And yeah, I mean, event loops like async i O, it's magic. Because like you were saying, it's like the node thing that brought that back to life where it has been used and where for the last 40 years? I don't know. Yeah. And it's like, suddenly, everybody's like, well, it was amazing. And so you would write anyway, any web servers was last for two years. But it's great. No, it's written in Python. So it's pretty easy to use. And it's a very, very well, I mean, I think it progressed a lot of whether you're like a couple of years or years ago, where everybody was using flask, or Django, which is still true. But there's a lot a lot of better alternative in this sense about Blackstar Latics Java first API that you can use to build an API website based on a single view. Yeah, this whole async i o world is really flourished since you wrote the book, hasn't it?
+00:03:08 wavelet decomposition, kind of like Fourier analysis, but I think kind of worse. And I thought,
 
-00:47:18 Yeah, I would rather actually learn, I think you're writing the book. And there was nothing It was very, like, the membrane is like, I want to use Redis, or like you were saying a database, and there's nothing. So all these very low level stuff. And like, it's not going to be like, yeah, I can use it. But it's going to take me hours of work to get anything close to what I would do the synchronous version. So nowadays, yeah, it's totally better. I actually do a lot of work, I think I do myself, it's, I mean, everything's very for every thing doing so get to far layovers, and everything is available, there are sometimes progression of the same library, because a lot of them don't agree on auto already. So whatever, which, I mean, it gives you a choice. So as far as grades, and it's a very, very good way to not use threads. So use it as a concurrency program where you can have multiple tasks from a single you're running not as the same time in our space time dimension, but like being sorry, means pose being resumed later. So you have to still take care and you actually use lock to your scenario. Yeah, but it's still a little less of a problem an issue with threads, and you're not going to use more than one CPU for sure. So designed to do that, but you will be about maybe more easily because you will have less overhead than with threads to be able to use 100% of your CPU like we were able to, to max out your resource or CPU resource. And then when you do that with one Python process, we'll just start a new one using celery unicorn, whatever or coated on you were mentioning which is a good tool to do that. Yeah, which is actually able to to spawn multiple process management for Yukos journalist reporting, when you have a Gmail, you want to do a lot of work, like the salary model for Q is a pretty good example when you have multiple workers. And each worker is in some thread. Doing things in the background if you're not using a framework, such as salary and equity returns a good small library to do that when you can multi class and each class being spawn as a process basically, and be managed by a master process like you would do with whiskey or unicorn and magical char, restarting that method die to die. So that's a lot of work to do. You can certainly do that yourself. But because you're done does work for you out of the box. He does. Yeah, yeah, that's a cool way to create those sub processes and stuff. But yeah, I think a cinco is a lot of promise it's coming alive. It's really been growing. Sequel alchemy just released.
+00:03:14 okay, this is too slow. It must be in all this complicated math area. And I don't understand the
 
-00:49:39 Yeah,
+00:03:20 math very well. And I don't want to change it. But this has got to be here, right? It's slow.
 
-00:49:40 they're 1.4 version, which actually so sequel alchemy now just in like couple of weeks ago now supports a weight session query of thing. Not exactly that syntax, but almost they've slightly adjusted it, but pretty cool. All right. And then what are the things that you talked about with scaling that I agree on? That is super important is statelessness So yeah, if you want to, I suspect going from one to two is harder than going from two to 10. In terms of scaling right now, soon as you're like, Okay, this is gonna be in two places, that means it has to be stateless in its communication. Alright, all these things, if you're just putting stuff in memory and sharing the pointers and kind of story in a persistent memory session for somebody while then putting that in two places is really fraught.
+00:03:23 And I put it into the profiler. And the thing that turned out was, we were spending 80% of our time
 
-00:50:23 Yeah, it's really the thing where I like to say that if you start using multiple processes, you actually probably ready to under multiple nodes like of our network, because using multiple threads, you will always be the same program. So it's tempting to share the state of everything between your different threads. And when you have concurrency issue and unique lock, etc. But a lot of people go that road being I don't know, maybe a bit naive and seeing all of us is not really like my program. But if you are ready to go to step where you actually okay to split your work into multiple process, which might have to communicate between website for sure. And they can start by communicating over the same host. But then you just add networks in between the process and you can scale to multiple nodes, and then over whatever number of nodes you want, then the Prime Minister under connectivity issue, but you don't have issue run on single hose, which will process your data, you don't have somebody unplugging, right invisible cable. But if you reach $1, that network failure, which will happen for sure, between your different processes, when you can scale pretty easily on different nodes. But as you were saying, it's like, you have to switch your padding when you write your program, which is being as stateless as possible, which is why I wrote a chapter on functional programming. Because while I love functional programming, I love Lisp. And I would do this if it was more popular, but I have to do Python. So I do Python is a great list. And then pusher program gives you a pretty good way of writing code and give you a good mindset. I was I would say, to write code that avoids to do side effects. And that makes your program stateless most of the time, which makes it very easy to scale.
+00:03:29 just doing and like finding the index of an element. Yeah, in a list.
 
-00:51:58 Right? The more stateless ness you can have, the easier it's going to scale. And yeah, you get it down to a point where maybe the state is now stored in a Redis server that's shared between them. Or some were even in a database, like a real common examples, just put it in a database, right. So like on the training site that I have people come in, the only piece of state that is shared is who is logged in. And when it comes back, it goes back to the databases. Okay, well, who is this person? Actually? Do they have a course? Can they access this course? Like all those things are asked every time and my first impression of like writing code like that was like, if I have to query the database for every request to get back all the information about whatever it is I care about, for I'm tracking on this request. It's gonna be so slow, except for it's not really it works really well. Actually, it definitely lets you scale better. Yeah, yeah. Yeah, that's pretty interesting. Okay. So stateless programming, which means like functional programming, you want to, like call out that example of remove last item that you have on the screen here, the first page of that book? Yeah,
+00:03:32 Yeah, which is not obvious at all.
 
-00:52:56 I think it will give people a sense of what you're talking about. Yeah, exactly as I was trying to explain in Russia was a pure non pure function where you actually have one function doing the side effect. I mean, when you pass argument like functional programming, if you never have it, it's pretty simple. You mentioned about all your functional black boxes, and what you are going to put something in it. And when you get something out, you can't reuse the thing that you put inside, you're going to use only what's being liquid. So when you don't do a pure function and function programming, you're going to pass a list, for example, and you're going to modify it and not returning anything, because you actually modify the list what you pass as an argument, which is not functional at all, because you actually maybe like list dot store, it would be an example. Right? Like, exactly, yeah, the thing you're calling sort on is changing the list itself. Yeah, yeah. Which is, yeah, that's trade off, because these dots are usually faster than sorted, putting sorted on the list, but it's not functional. But if you consolidate or if you reach on the list minus the last item, or a function last remove the last item, when it's functional, you're not returning the same list, creating a new list with a different would put like the last item being removed, but it is stateless. Like you can lose the first what you put as an input, you don't care anymore, you add something that is outside any shoe design, all your program I got is pretty easy to imagine having a large input of data provided to cue learning a worker taking that doing whatever we need to do, and then putting something and putting that into whatever cue database whatever I want to do. And that's the basis of any thing that scares is due to be able to do that to be able to scale into a synchronous task in the background.
+00:03:35 And we it's insane.
 
-00:54:31 Yeah, I think lists that sort versus sorted of less is like the perfect comparison there those Yeah. All right. You touched on queues. And I think queues have this possibility to just allow incredible scale, right? Instead of every request trying to answer the question or to do with a task it's meant to do entirely. All it has to do is start a task and say, Hey, that started off we go and put it into something like rabbit, you celery red is key. Something like that. Some other thing that's going to pull it out of there and get to it when it gets done, right.
+00:03:36 Yeah. My favorite, I think, programming quote is from Donald Knuth, which is,
 
-00:55:04 Yeah, exactly. It really depends on what you do and what you're trying to solve with your application library, whatever. But other general thing, it's a pretty good way and architecture of a program to add that, like, if you find a better REST API, which is what people do most of the time. Now, I mean, you can definitely process a request right away. And if it's, if you know that it's going to take less than one second, okay, it's fine, you can do that right away, very easy to know is going to take 10 seconds, 20 seconds, it's very, very impractical, impractical for a client to keep the connection open for 30 seconds for good and bad reasons. But the problem right now almost anyone's gonna think it's broken. Yeah, even if it technically would have worked, like, it's been 10 seconds. And it's something wrong, this is not okay. Right. Like, it's just not the right response. Yeah. And I'm in creation can be cured. So if you need 20 seconds to do anything, and then it is being cured at 18 seconds, when you lost your time and the claim, let's retry. So he has to repost the same payload, and then you have to reprocess it for 20 seconds. So you are actually losing time. So it is right better to take the input is already in a queue reply with 200, okay, I got the payload, I'm going to take care of it. And then I will notify you with the web hook, I'm going to give you the result at this address, whatever mechanism you can use to do is synchronous. But I mean, building this kind of system in seconds, when when you as you walk out taking message from the queue, processing them putting the results somewhere else, it's certainly way a really good way to scale your application. And you can start without, I mean, you can start with by finding stuff like there's a queue in Python, various multi process, and you don't have to like deep rabbit mq, whatever you can actually start if you know your program is not you can even just have a background thread and a list. Yeah, exactly. I mean, you can start with something very simple for responder, you don't have to use a huge framework or whatever, if you know the pattern. And you know, it applies to what you're doing, you actually can use it. And you know, for example, that you will never need more than one OST one node, one computer will be enough forever for your program. While you don't need to deploy your network based queue system, like readies rabbit or whatever, you can use Python itself using multi process Q. And that will solve all your problem perfectly. Yeah, that's a great example. And multiprocessing has an actual queue data structure that properly shares across with notifications and everything across these multi process processes. Where the multi process thing can just say, I'm gonna block until I get something from the queue. And then as soon as you put it in, it picks it up and goes, but otherwise it just chills in the background. Yeah, very nice. All right, moving on designing for failure. That's a good one. You know, the thing that comes to mind is the at the extreme end of this, when I talked about scalability, I maybe said YouTube in a million requests a second, this one is chaos, monkey and Netflix. No, you have to design for that. Like I was saying, like people that try to write their code with a very optimistic mindset, like, everything's going to be fine. And I don't really care about order and exceptions where you actually want to write proper exceptions, like proper classes of exceptions, and proper and legal succession in your program and making sure that when you follow up, or when you use a lot Redis and use a Redis library, you want to be sure to be aware. And that's something that's not very obvious, honestly, because it's obviously not really well documented, like getting rid of the API of a Redis library and see, okay, it takes that type as an argument, and you need to return that type. But you don't know which exception is going to be raised. So sometimes you have to to see it with your own eyes in production, like oh, is broken is going to raise connection error. Okay, no, I
+00:03:41 value optimization is the root of all evil. Like it's, yeah, widely known. I mean, I think I will
 
-00:58:39 know, I need to fix it. Do all the tricky part of that is not necessarily seeing the exception and knowing it. But now what Yeah, like when I get the connection error means I can't talk to the database, it's overloaded, or it's rebooting because it's passion. But then what happens, right, like, how do I not just go? Well, there was an error, tell the data, dog people, there is an error. So we know and then crash for the user like they what do you do beyond that?
+00:03:46 quote it every week or so now.
 
-00:59:02 Yeah. And the answer is not. I mean, it's not obvious. It really depends on what you're doing. Like, if you are in a REST API, and your database connection is broken, you're gonna connect to the database. I mean, what are you going to retry for? How much? I mean, how many times for how many seconds are going to retry because the other guy is waiting on the other side of the line? Right? So you can't do that for 10 seconds too long. So you have to do that a few times, then what do you do to return a 500 error or and crash? Or do you return something that is the actual retry letter? I mean, there's a lot of you have to think about all of that, like when to say to the client to retry if they can retry or just yeah, crushed by some selections sometimes. And there are so many partners, most of the time network errors, but maybe disk fool or whatever. And you have to so you can think about everything at the beginning for sure. So you have to have a good report system and they will redeploy. I totally agree about the reporting system is hugely valuable and notifications as well because if you don't look at the
+00:03:48 Yeah, it's fantastic. It's fantastic. Yeah. In my case, we switched it to a dictionary and it went
 
-00:59:56 reporting system, the log is full of errors and nobody will look for a week But are you a fan of the retry decorators Are you know, I'm talking about some of those things you can say, Here's like an exponential back off. Like you just retry five times and like first after like a second, and then five seconds and 10 seconds. What do you think
+00:03:53 five times faster. And that was it. Like it was incredibly easy to fix. But understanding that
 
-01:00:12 I'm the author of tenacity, which is one of the most widely used? Yeah. Okay. So that answers that question. You You're a fan. Exactly. Okay, cool. I am a fan. And it's all 80% of the problem. I mean, when it's up to you to know how to retry, but it's a very, very good pattern to use. And tenacity provides that as a decorator, which is not the best strategy, if you want to have different strategy, or like these functions will be rich, why this number of time depending on what the color is, but most of the time is good enough, actually is good enough. Like most of time, it's better to use that in a naive way, where you just retry five times for five seconds or whatever, but not doing anything. Because if you know, it's also not a silver bullet, like I see sometimes people using it to like, well, if anything wrong up, but I'm just going to retry, which is like, please use proper exception types, like the right thing and retry for the right reason, not for everything, because right, like maybe retry with connection timeout. But some other thing that crashes, like authorization failure, like that's never going to get better. Exactly, exactly. But sometimes you see people writing quiet, I'm going to reach for an exception, whatever is raised, I'm going to read, which is really not a good idea. Because Yeah, it's going to be fine. For network error or the light, we're saying if it's out dication, you don't want to retry. So I mean, be careful with that. But then if you know that you go to Iowa or most of the time, because the network is done one day when it's fine to to divide, and it's a really, really good way to design easily for this kind of thing. It doesn't solve everything. And for I don't know, if you have a large job, for example, but you you know, it's going to take 10 minutes to compute, etc. I mean, obvious, I think rather, this kind of retries is going to serve you because in a framework accelerate. For example, if your job fails, after five minutes, for whatever reason, is just going to put it back into the queue and retry later, which will last the five first minutes because you're used. Yeah. And you can end up in these poison message scenarios where it tries it fails. It goes back and tries and fails. It goes back and tries. And then
+00:03:57 that was where the problem was, I would have never guessed. So yeah, it's hard to understand. And we're
 
-01:02:09 yeah, then it's not so great. All right, just a little bit of time for some more deployment. Yeah. Talk about in your book, you talk about deploying on a platform as a server as a past like Heroku. There's always VMs these days, we have Docker and Kubernetes. I mean, honestly, it's not simple to know what to do as somebody who's a newcomer, I think,
+00:04:02 going to talk about finding these challenges and also some of the design patterns. You've written a
 
-01:02:26 yeah, and I think it was around since I wrote the book, bats nowadays, I still I mean, Eric, we're still there and pretty widely used, because it's a good solution. The thing is, like deploying Python application, like for myself, I'm a pretty good Python programmer. But then outside of Python, like infrastructure, and Kubernetes, I barely know anything about it as like, it's a full time job. And it's not my job, it's another side of another job. So I could learn for sure. And I could be an expert in in Kubernetes, and deployment of anything, but I mean, it's fine to do that, if you want to do that. But a plasma Python debugger, I don't really want to do it to use any kind of platform as a service like Heroku, where I can actually, like the using the Kubernetes container approach of deploying, and spending a lot of ways to scale is not my responsibility, but I can outsource it to somebody that knows how to do that. So there's plenty of option. I think I wrote up a ruku openshift. Does that, you know, no, I mean, Amazon or Microsoft, or Google or other solution to do that. You they are they must have something? Yeah, yeah. And I mean, normally, there's no reason if you really know that your application is going to scale. And you don't want to spend a lot of time on infrastructure and learning. I mean, given it is Docker, or whatever I mean, you can spin easily depiction on top of, of a Roku, and then click a button to have two nodes, three nodes, four nodes, the nodes, and then wallet is expensive. But that's another issue. Yeah, the platform as a service, often they exchange, complete ease of use with maybe two things, one with cost. And then the other is with flexibility, right? Like you kind of got to fit their way like well, the way the databases are managed database service. And if you don't like that, well, then I don't know. You got to just use our managed service. You know what I mean? Things like that are kind of somewhat fixed. But yeah, I think it's really good for a lot of people.
+00:04:07 really cool book called The Hacker's Guide to Scaling Python. And we're going to dive into some of the
 
-01:04:11 Yeah, exactly. I
+00:04:11 ideas you cover there. Also talk about some of your work at Datadog that where you're doing some of the
 
-01:04:11 mean, covers 90% of the market, right. I mean, most people are glad that we're going to start with even if it's not a bad product, but like you're starting your company, you're doing a small project, and maybe one day you will be the next you have to scale but I thought Xiaomi will solve the problem, you'll get plenty of money to solve it. But until then you don't have a lot of time. And a lot of money is actually pretty cheap compared to the time you would spend learning the ropes of Kubernetes mean secure deployment at scale of Kubernetes. I'm sure it's pretty more competitive than writing a simple flask application. So it's a trade off. I think it's a pretty good trade off if you really want to start saying okay, I think at some point, we need to scale our country and on my laptop anymore. I need to run that somewhere. or using a platform like that is a pretty good trade off.
+00:04:15 profiling stuff, not necessarily for you internally, although I'm sure there is some,
 
-01:04:53 Yeah. And I think it's so easy to dream big and think oh, I'm gonna have to scale it. So if I'm going to deploy this, what is it going to be like? If I get the first 100,000 users, you should be so lucky that you have that problem, right. So things get built, and they just stagnate or they don't go anywhere or that reason they stagnate is you're not adding features fast enough, because you spent so much time building complicated architectures. For a case in the future, when reality is on the past, you could just pay 10 times as much for two weeks, and then completely move to something else. And you could buy yourself that time for $500. Right? But you could spend months building something right? Like that's going to support some insane future that doesn't exist. And so a lot of people, they'd be better off to just move forward, and then evolve and realize it's not forever. It's a path towards where you're going to be. Yep. And then learn marketing to help people.
+00:04:19 but it also could be, you know, for so many people, like you guys basically have profiling as a service
 
-01:05:47 project
+00:04:24 and, you know, runtime as a service, runtime analysis of the service, which is great. And we'll get into
 
-01:05:47 that is the problem. Yes, that's the hard part. Now, that might be my next book about like doing marketing to get people on your project to be able to scale them. Yeah, I'll definitely read that book.
+00:04:29 that. But before we do, let's start with your story. How do you get into programming in Python?
 
-01:05:57 All right. All right, we're,
+00:04:32 That was a good question. So actually, I think I started like 15 years ago or so. I actually started
 
-01:05:58 we got some more topics to cover. But we're down to just one and I think we have a little time to touch on. Because it's like magic sauce for database. The magic sauce is indexes. For many other things, the magic sauce is caching, right? If this thing is really slow, I'll give you an example from talk Python, or maybe even better from Python bytes. That's a more interesting examples are that RSS feed for that thing is made up out of the word delimited, because we've got too many, but for a while it's made of 200 episodes, each episode is like five pages of markdown. In order to render that RSS feed on demand, I've got to render, I've got to go to the database, query 200 things and then mark down to five of them 200 times and then put that into an XML document and return that. And that is not super fast. But you know what, if I take that result I would ever return and save it in the database and just generate it once a minute, then it's fine, right? Those, it's like magic, it goes from one second to one millisecond. And you just get so much scale from it.
+00:04:37 to learn Per, the first programming language, like, you know, kind of scripting language,
 
-01:06:56 Yeah, that's exactly what you're saying. Like it's pretty good border and when you have to optimize. So what would be more for the performance dimension when you want to go to be faster, not necessarily to scare a number of user, even if it's sometime correctly, like if you have 200 people requesting the same time, your RSS feed, and you have to do that the same time it will return that's pretty useless. So I mean, caching is pretty good pattern. There is nothing actually very specific to Python, where I mean, even in this chapter of the book, it's actually pretty like I'm talking about how to use mem cache already. So whatever you want to cache your operative words of good solution to get over the network, you can start by caching locally in your own process, like memorizing, right, like a Python dictionary is a really good cache, right? For certain things. Exactly. And there are in Python three, something they are in, there was a LRU cache, and there is a lot of LRU cache decorators really nice. Yeah, gosh, tools, the cache was library. In Python, there's a lot of different algorithm if you want to cache locally in your own Python program, like if you know, you're going to call this method 100 of times for and there is going to be the same. Just cash it is expensive to compute. I mean, expensive to compute, maybe why expensive, which of CPU better for me might be like expensive for database, or sometimes the expansiveness is going to be the network, like you're going to request some data over the network. And it's very far, or it's very slow system, or very unreliable system. Yeah. So using caching system is a pretty good solution to avoid the scheduler, which is also linked to the design for failure we talked about before, right? If you're consuming third party services, you can't necessarily depend on their uptime on their reliability on the response time, all those types of things. I'll give you another example of expensive. So when you go to our courses, we've got 12 video servers throughout the world, and we want to serve you the video from the one closest to you.
+00:04:42 like we used to call them at least a few years ago. And I like Perl, but I wanted to learn like
 
-01:08:48 So we have a service that we call that takes your IP address, figures out where you are, and then chooses a video server for you that so you get the best time that costs a little tiny bit of money each time. But with enough requests, it would be you know, hundreds, maybe even I don't know, definitely into the hundreds per month of where is this person API charges. And so we just cache that, like, if this IP address is from this city, or this country, we just put that in our database. And first we check the database, do we know where this IP address is no, go to the service. Otherwise, just get it from the database. It's both faster, and it literally doesn't cost as much it's less expensive in the most direct meaning of that.
+00:04:48 object-oriented programming. And I never understood Perl object-oriented programming. Like their model
 
-01:09:26 And then you're issuing on the first and biggest issue in computer science, which is cache invalidation, which is why in your case, the IP might not turn off of country pretty often. It can change it not very often, but it can change. Yeah. So for our just for our example, what I did is it's in MongoDB, so I set up a an index that will remove it from the database after six months. Yeah. Which is fine. But But arbitrary, right? Yes, totally. I could be wrong for a while. I mean, exactly. But the failure cases it's slow streaming with buffering potentially. It's not complete failure completely the wrong answer. Right. So for us, it's acceptable. Yeah, exactly. It's a bit of a trade off, which is totally fine for us guys. And a lot of things that you do when you want to scale is trade off. And sometimes you don't get things that you're right. But it's fine. It's just not the best experience for your user in your case, but it's fine, you can live with it. And I said, I think it's a change of mindset when you go from, I'm writing a Python program, which has to be perfect and walks 100% of the time. And when we want to scale, you have to do a lot of freedom for like, if we work fine for 80% of the people, and for some cases, 5% of the time, while that might be not optimal, but it's fine. And that's a lot of doing finger scale are Johnny regionalliga is mindset to what it was always it's always true. And sometimes it's not really true. I mean, if you had a way for you to be aware and notified that IP address challenges country, you could invalidate your cash and then make it Yeah, totally real reliable. I mean, for a few seconds, maybe won't be up to date, but that will be close to perfection. Yeah, but you don't have that system. So you have to do what you did, which is a good trade off. I mean, it's pragmatic. You have to be very pragmatic when you do things at scale. Yeah. And also kind of design for failure. Like, what's the worst case? If that goes wrong? Yeah. Right. It's like streaming halfway around the world or something. Whereas other things like if the database goes down, you've got to deal with that entirely differently. Yeah, that's a hard one to fix, though I didn't really know what to do. Well, I mean, caching, like you could judge, for example, you should know that this goes on you get That's true. You could cache hold the reversion and reply to the client, like, it might be an older version, I'm sorry, like, what the time system is where or, I mean, they don't know what you build, obviously, you have to know the use case. And if it is up to do but caching could be a solution. And then the premise, right? That's a good idea. Because you might actually be able to say, if I'm going to go to Redis. And if it's not there, then I'm going to go to database, a mini the requests that come in, might never need to go to the database again. You know, if you say, Oh, whoops, the database is down, we're just going to serve what's out of the cache, it could go for a while until there's some write operation, as long as it's read only, it might not matter, which is what services like CloudFlare does for the web, for example, like we do caching protects you. And if you're down, we're just going to show the Page Layout few seconds ago until your backup and nobody will notice. Yeah, interesting. Yeah, you can apply that. And everything you have to keep in mind when you do caching is to be able to invalidate your cache. Like if you're caching database, and something changed in the database, you have to out this callback mechanism where your database can say to your cache, by the way, what changes you need to update it, if you are able to like you need to be aware of that always you have to put arbitrary timestamp, like you said for your like six months is going to be six months advances, which is fine for such a use case. But for a lot of your again, like your RSS feed like Moonwalker, we will probably if you weren't doing six months,
+00:04:54 was so weird for me, maybe because I was young and I don't know. Somebody talked to me about Python.
 
-01:12:43 yeah, that would be bad. All of a sudden, now there's 24 new episodes all of a sudden or something. Yeah. So this is where you write that cron job that just restarts Redis once an hour, and you'll be fine. Now just kidding. You're right. Like this cache invalidation really, really is tricky. Because if you check the database, then you're not really caching anymore. Right? You might as well not have the cache. So yeah, it's super tricky, but definitely a bit of the magic sauce. All right, I think that there's plenty more we could cover in the book and about scaling and architecture. And it'd be really fun, but we're way over time. So we should probably just wrap it up with a couple of questions here that always ask at the end of the show. Did you lean if you're going to write some Python code? What editor?
+00:04:59 I bought the book, like the Auree book about Python. And I kept it around for a year or so because I had
 
-01:13:22 do you use? Emacs? Emacs user for the last 10 years, I think I still have to commit access to Emacs itself. So Oh, cool. You did say you love Lisp. And you get a Yeah, have your code powered by Lisp. Exactly. Yeah, I stopped that. I wrote a lot of these guys 10 years ago. Yeah, cool. And then notable pi package, if you want, you can shout out tenacity which we covered or something else if you'd like tenacity, and I query, which I love. jQuery is a tiny wrapper around the logging system, or parents or the stories that I never remember how to configure the logging system in Python, like I do involve logging in a lot. Like, I don't know, to configure it to work like I want. So jQuery does that. It's pretty easy to use it as a function of functional approach, like diversity in its design. And it's tricky, like two lines to use a login STEMI or something that works out of the box with colors, etc. So like
+00:05:05 no project at all, like no idea. Most of my job back then was to be a sysadmin. So not really anything
 
-01:14:11 it. Oh, fantastic. Yeah, I always forget how to set the logging system in use something else as well. I don't I don't need to remember this. Fantastic. All right. So thank you for being here. Thank you for talking about this and covering all these ideas. They're fascinating. And they always require some trade offs, right? Like, it's when should I use this thing or that thing? But if people want to get started, one, where do they find your book? To? What advice in general do you have for them going down this path,
+00:05:11 to do with Python. And someday I'm like, I was working on DPN, like the distribution. And I was
 
-01:14:37 you can find my book getting python.com if you want to take a look, it's a pretty good read. I think it'll give you the right mindset to understand what the traduction you might need to be to do program and I think that's whiteboards on to that like, what are you ready to change and how to design your program and what are you going to what is going to be your real use case? Like why do you want to scale and are you going to scale for real Are you Just thinking that you will need to scale in the future and do the right trade off. And don't over complicate things, because you're just going to shoot yourself in the foot by doing that.
+00:05:17 like, oh, I need to do something like a new project. And I'm going to do that with Python. And I started
 
-01:15:08 Yeah, it's super tricky. I would just add on to that what you think you might need to scale in the future is a web app or web API use locust to actually measure it. And if what it is something more local, like data science type of thing or something computationally locally, run c profiler with it. And just measure right however you go about your measuring. Yeah. Fantastic. All right. Thank you, Julian. It's been great to chat with you and sharing these ideas. Great book.
+00:05:22 to learn Python this way with my project on one side, the book on the other side. I was like,
 
-01:15:32 Thank you, Micah. Yep. Bye.
+00:05:27 that's amazing. I love it. And I never stopped doing Python after that.
 
-01:15:35 This has been another episode of talk Python to me. Our guests in this episode was Julian banjo, and it's been brought to you by 45 drives in us over at Talk Python Training. solve your storage challenges with hardware powered by open source, check out 45 drives storage servers at the hawk python.fm slash 45 drives and skip the vendor lock in and software licensing fees. On level up your Python we have one of the largest catalogs of Python video courses over at talk Python. Our content ranges from true beginners to deeply advanced topics like memory and async. And best of all, there's not a subscription in sight. Check it out for yourself at training dot talk python.fm Be sure to subscribe to the show, open your favorite podcast app and search for Python. We should be right at the top. You can also find the iTunes feed at /itunes, the Google Play feed at /play and the direct RSS feed at /rss on talk python.fm. We're live streaming most of our recordings these days. If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at talkpython.fm/youtube. This is your host Michael Kennedy. Thanks so much for listening. I really appreciate it. Now get out there and write some Python code
+00:05:31 Yeah, that's fantastic. It feels like it very much was a automate the boring stuff
+
+00:05:36 type of introduction. Like there's these little problems and bash is too small or too hard to make
+
+00:05:41 it solve those problems. What else could I use? And Python was a good fit for that.
+
+00:05:44 Yeah, it's a great way. I mean, usually I have a lot of people coming to me over the years and
+
+00:05:48 being like, Julian, I want to contribute to a project. I want to start something in Python.
+
+00:05:52 Like, what should I do? And like, I don't know. Like, what's your problem you want to solve?
+
+00:05:55 Like if you want to find a boring thing you want to automate or anything, that's the best idea you can have to
+
+00:06:00 if it's an oposal project that exists already. Great. I mean, good for you. It's even better.
+
+00:06:05 But I mean, just write a script or whatever you want to start hacking and learning. That's the best
+
+00:06:10 ways to scratch your own itch. Yeah, absolutely. It's so easy to think of, well, I want to build this
+
+00:06:15 great big thing, but we all have these little problems that need solving. And it's good to start
+
+00:06:20 small and practice small and build up. And I find it really valuable. People often ask me like,
+
+00:06:24 oh, I want to get started. What should I do? Should I build a website like this? Maybe machine learning
+
+00:06:28 thing like that? I'm like, whoa, whoa, whoa. Like that's, yes, you definitely want to get there,
+
+00:06:32 but you're really, really just starting. Like, don't kill yourself by trying to take on too much
+
+00:06:36 at once. So yeah, it sounds like it worked well for you. How about now? What are you doing day to day?
+
+00:06:39 I hinted at Datadog. Yeah. So I've been doing Python for the next 10 years. After I learned Python,
+
+00:06:45 I've been working on OpenStack, which is a huge Python project, implementing an open cloud system
+
+00:06:51 where you can host your own AWS basically. And so everything is in Python there. So I work on very
+
+00:06:59 large, one of the largest, I think, Python project, which has opened the site for a few years. And then
+
+00:07:04 I decided to go for a change. And Datadog was looking into building a profiling team,
+
+00:07:10 building a profiler, a continuous profiler, which means you would not profile your script on your
+
+00:07:15 laptop, but you would profile your application running on your production system for real.
+
+00:07:20 And I was like, that's not something I think anyone did before in Python at least. So I want to do that.
+
+00:07:26 And that's what I started to do like two years ago. And I'm still doing that.
+
+00:07:29 That's really interesting because normally you have this quantum mechanics problem with profilers and
+
+00:07:35 debuggers, especially profilers, like the line by line ones so much where it runs at one speed normally,
+
+00:07:41 and then you hit it with like C profile or something, and it's five times slower or whatever
+
+00:07:46 it turns out to be. And you're like, whoa, this is a lot slower. Hopefully it gives you just a factor
+
+00:07:53 of slowness over it. Like if it says it's been 20% here and 40% there, hopefully it's still true at
+
+00:08:00 normal speed. But sometimes it really depends, right? Like if you're calling a function,
+
+00:08:04 that goes out of your system and that's 20%, and then you're doing a really tight loop with lots
+
+00:08:09 of code, the profiler will introduce more overhead in your tight loop part than it will in the external
+
+00:08:15 system where it adds basically zero overhead. And so that's a big challenge of understanding profiling
+
+00:08:21 results in general. And it's a really big reason to not just run the profiler constantly in production.
+
+00:08:27 Right?
+
+00:08:28 Yeah, exactly. And people do that now. I mean, if you have the right profiler, so the way I see
+
+00:08:34 profile works, I mean, and we can dig a bit into that, but like C profile, the way it works,
+
+00:08:38 like it's going to intercept everything. It's what we call a data mystic profiler, where if you run the
+
+00:08:43 same program twice, you will get the same C profile output for sure. Like it's intercepting all the
+
+00:08:48 function calls that you have. So if you have a ton of function calls, it makes things like you were
+
+00:08:53 saying five times slower for sure, at least. So yeah.
+
+00:08:56 Yeah. And it'll inject a little bits of bytecode at the beginning and end of every function, all sorts of
+
+00:09:01 stuff. And it actually changes what happens, right?
+
+00:09:03 Yeah, exactly. So you can change the timing. It can change. I mean, it's so it's a good solution to like
+
+00:09:08 ballpark estimate of what's going on and it gives you pretty good results. And usually it's a good tool.
+
+00:09:12 like I use it a lot of times over the years and it always gave me a good information. The problem with
+
+00:09:18 C profiles is that you can't use in production because it's too slow. It's also not providing
+
+00:09:22 information. Like it gives you the whole time that you use, but not necessarily the CPU time of each of
+
+00:09:27 your thread, et cetera, that you're going to use. So the information is not really fine grained. It's
+
+00:09:32 a rough whole time.
+
+00:09:34 Yeah. It's probably not streaming either. Right. It probably it runs and then gives you the answer.
+
+00:09:39 Exactly. It's not some sort of real time stream of what's happening.
+
+00:09:42 So, I mean, for one of the kids, like we were mentioning previously where, I mean, you know,
+
+00:09:46 this part of the code, like this scenario that you can recreate in a one minute script or something,
+
+00:09:52 you know, it's slow and it should take only 30 seconds. You can run C profile around it on one
+
+00:09:56 minute on your laptop and be, okay, I'm going to optimize this piece of code. But if you want to see
+
+00:10:00 what's happening on production with a real workload for real and like you were saying,
+
+00:10:04 streaming the data to see in real time what's going on, or C profile doesn't fit. And also
+
+00:10:10 any data mystic profiler, which tries to catch everything your program does will not work with
+
+00:10:16 good performance. So you have to do another approach, which is what most profiling profilers for
+
+00:10:21 continuous profiling do, which is statistical profiling, where you actually sample your program
+
+00:10:26 and you try to look what it does most of the time and the most often. So it's not a true
+
+00:10:31 representation. It's not like the reality 100%. It's a good statistical approach of what your
+
+00:10:36 program is doing most of the time.
+
+00:10:37 I see. Is that more of the sampling style of profilers where it's like every 200 milliseconds,
+
+00:10:43 like, what are you doing now? What are you doing now?
+
+00:10:45 Exactly.
+
+00:10:45 Like a really annoying young child. Like, what are you doing now?
+
+00:10:48 Exactly.
+
+00:10:49 And it's going to miss some things, right? If there's a function you call and it's really quick,
+
+00:10:53 it's like, well, you never called that function as far as the profiler is concerned,
+
+00:10:56 because it just didn't line up. But if you do it enough over time, you'll get to see a good picture
+
+00:11:01 of exactly. You don't care about the stuff that happens really fast, but you care about the stuff
+
+00:11:05 that happens really slow. And those are going to show up pretty largely in these sorts of sampling.
+
+00:11:09 Exactly. So if you see profile, you will see this very small function because it catches
+
+00:11:14 everything. But reality for the purpose of optimizing your program, you actually don't care.
+
+00:11:19 You don't care if you don't see them statistically, but because they're not important. So that's not
+
+00:11:23 what you want to optimize in the end. That's not where your problem lies, probably. It's in the
+
+00:11:28 like outliers, the one that you see often in your profile, the one using, you see like 80% of the
+
+00:11:33 time when the profiler asks your program, what are you doing? It's always the same function being called,
+
+00:11:37 what's the one you want to look at?
+
+00:11:38 Yeah. So I think that fits quite well with the production style. I know I was going to ask you about
+
+00:11:43 your book, but we're sort of down in this profiling story.
+
+00:11:46 That's fine.
+
+00:11:47 And you know, I've used Datadog's tools for error handling and like exception, you know,
+
+00:11:53 let me know when there's an error type thing. So I have that set up on like Talk Python,
+
+00:11:56 the podcast site and the Talk Python training courses site. And of course, when you turn it on,
+
+00:12:00 you get all these errors that are like happening in the site, but nobody's complained to you that
+
+00:12:04 you didn't realize there's some edge case or whatever. And it's really fantastic. But something
+
+00:12:08 I've never looked at is the real time profiling stuff that you're working on these days. So maybe just,
+
+00:12:14 I have no idea what this is like, I can imagine maybe what it's like, but you know,
+
+00:12:17 give me a sense of what kind of stuff do I get out of it?
+
+00:12:21 Sure. Yeah. So what you'll get, the first thing you'll get is to profile. So you'll get flame charts,
+
+00:12:25 essentially, which are, you know, this kind of charts where, I mean, they look like flames,
+
+00:12:30 usually because they are like orange and red and going up and down and the height being the depth
+
+00:12:36 of your stack trace and the width being the percent of time of resources that you use. So usually it's
+
+00:12:42 time you're going to meter. For example, we meter a wall time in CPU. So what you'll see is if your
+
+00:12:47 function using a lot of wall time, is it waiting for something? Is it waiting for a socket to be read,
+
+00:12:52 for a lock to be acquired? But one of the other profile we gather is how much CPU is actually using.
+
+00:12:58 So if you want to know if your program is CPU bound, you will see which function is actually
+
+00:13:03 using the most CPU in your program.
+
+00:13:04 Right. Because I could go to like my hosting provider and I could check a box and say, no,
+
+00:13:09 no, I don't want to pay $20 a month. I want to pay $50 a month to make this go two and a half times
+
+00:13:14 faster. If I'm CPU bound, that might actually work. But if I'm not, it probably has no effect or small
+
+00:13:20 effects, right?
+
+00:13:21 Exactly.
+
+00:13:24 This portion of TalkPytherMade is brought to you by 45Drives. 45Drives offers the only enterprise
+
+00:13:30 data storage servers powered by open source. They build their solutions with off the shelf hardware
+
+00:13:35 and use software defined open source designs that are unmatched in price and flexibility.
+
+00:13:40 The open source solutions 45Drives uses are powerful, robust, and completely supported from
+
+00:13:47 end to end. And best of all, they come with zero software licensing fees and no vendor lock-in.
+
+00:13:53 45Drives offers servers ranging from four to 60 bays and can guide your organization through
+
+00:13:57 any sized data storage challenge. Check out what they have to offer over at talkpython.fm
+
+00:14:03 slash 45Drives. If you get in touch with them and say you heard about their offer from us,
+
+00:14:08 you'll get a chance to win a custom front plate. So visit talkpython.fm/45Drives or just click
+
+00:14:14 the link in your podcast player. So knowing that answer, knowing that would be really helpful.
+
+00:14:21 Can I scale this vertically or do I have to change something else? Yeah.
+
+00:14:25 Yeah. It's a whole story on profiling where, I mean, most of our users, when they come to us,
+
+00:14:31 like we save thousands of dollars because we actually understood that we got a button like
+
+00:14:35 here or there and we were able to downsize our deployment because we optimized this function
+
+00:14:39 and we understood that this was blocked by this IO or whatever. And when you understand all of that
+
+00:14:45 with profiling, whatever the language is, by the way, and being Python or Java or anything,
+
+00:14:49 you actually save a lot, a lot. We have terrific stories about customers or internal users
+
+00:14:54 saving thousands of dollars just because they were able to understand what was going on in their
+
+00:14:58 program. And scaling up was not the solution, optimizing the right function was the solution.
+
+00:15:03 So yeah, you'll get CPU, WorldCharm, and we also do memory profiling. So you'll see all the memory
+
+00:15:08 allocations that are done by Python, which are kind of tied to the CPU usage because the more objects
+
+00:15:13 you're going to allocate, and when I mean allocate, I mean, even if they don't stay around, instead you
+
+00:15:18 want to create a new string, a new object or whatever, even for a few seconds, milliseconds,
+
+00:15:24 it costs you memory, like you have to call malloc, and there's a way you have to allocate memory,
+
+00:15:28 which takes time. So you will see that. So if you use a lot of objects that are not reused,
+
+00:15:33 for example, you might want to see that. The latest one we shipped two weeks ago is the
+
+00:15:39 heap profiler, where you actually see a sample of your heap, like the memory you use in real time,
+
+00:15:44 and what has been allocated on the heap.
+
+00:15:47 Can you tell me how many of each type of object I have?
+
+00:15:50 Like you've got 20 megs in lists, you've got 10 megs in strings?
+
+00:15:55 No, no. I mean, in theory, yes. In practice, no. And I'm actually fighting upstream with the
+
+00:16:00 CPython folks to be able to do that. It's a limitation of CPython right now. Technically,
+
+00:16:04 I can't really do that, but I'm able to give you the line number of the file, the function name,
+
+00:16:08 and the thread that has allocated the memory. And yeah, I wish I could know the class name,
+
+00:16:12 but it would be amazing. Like for example, Java has that, and I want to have that in Python.
+
+00:16:16 That will be my battle for next year.
+
+00:16:18 I mean, if you have a memory leak, for example, which is quite common, right, where you keep
+
+00:16:22 adding more objects on top of each other, and at some point, your memory grows forever,
+
+00:16:26 and you don't know where that comes from. With such a tool, a profiler, you're able to see
+
+00:16:31 which stack trace is going to add more and more and more memory forever, and you'd be able to...
+
+00:16:36 I see.
+
+00:16:37 It won't give you the solution to your problem. It will give you where to look at,
+
+00:16:41 which usually is...
+
+00:16:43 It's still pretty good.
+
+00:16:44 Yeah.
+
+00:16:44 Yeah, it's like 90% of the problem.
+
+00:16:46 So yeah.
+
+00:16:46 So can you talk a little bit about the internals of like how this works? I'm guessing it's not
+
+00:16:51 using Cprofile.
+
+00:16:52 No.
+
+00:16:53 Directly. Is it using other open source things to sort of put the service together, or is it...
+
+00:16:58 No, it's custom stuff. Everything is open source, so we want you to look at it. It's on our
+
+00:17:02 DD trace repository on GitHub. So the way it works for the CPU and WorldTime Profiler, it's pretty easy.
+
+00:17:08 A lot of people know about that. You can actually ask CPython to give you the list of running threads.
+
+00:17:12 So if you do that 100 times per second, you get a list of running threads, and you can get the stack
+
+00:17:18 trace they're running, like the function name, line number that they're running. So if you do that
+
+00:17:21 a lot of time, you get a pretty good picture of what your program and threads are doing most of the time.
+
+00:17:26 So, I mean, in summary, that's how it works. It's pretty easy. Then there's a few tricks to get the
+
+00:17:31 CPU chime, et cetera, using the P thread API, but that's most of it. And for memory, there are actually
+
+00:17:36 a good thing that has been done by a friend, Victor Stinner, which is one of the CPython.
+
+00:17:43 He's done a great amount of performance improvement, like really important stuff, yeah.
+
+00:17:47 And one of the things he did in Python 3.4, so it was a long time ago, is to add this module trace
+
+00:17:52 malloc, which we don't use. I mean, actually built on top of it at some point, but we don't use it
+
+00:17:57 anymore. We built a lightweight version of it, but it opened the memory API of CPython, where we can
+
+00:18:04 actually plug your own memory allocator to CPython. And that's what we do with our profiler. We replace
+
+00:18:10 a memory allocator bar, a tiny wrapper that catches every location and then do profiling on top of it.
+
+00:18:16 Right, exactly. So when it says allocate this, you say record this was allocated.
+
+00:18:21 Exactly.
+
+00:18:22 And then allocate it, right? Something like that.
+
+00:18:24 Yeah.
+
+00:18:24 Is this the thing you were talking about on the screen, this dd trace py, or is it?
+
+00:18:28 Yeah, exactly. You have a dd trace directory inside of the profiling directory and all the code is there.
+
+00:18:35 So you can take a look at how it works internally. Yeah. I mean, the way we build it is to be able to be
+
+00:18:41 easy to ship, to deploy. You don't require any extra permission. There are a lot of different
+
+00:18:47 ways of doing profiling using, for example, Linux capabilities, a lot of things that are external and
+
+00:18:53 not necessarily portable outside Linux. But the problem is that most of the time they require extra
+
+00:18:59 permission, like being a root or anything, like using the ptrace API requires you extra permission,
+
+00:19:04 which is great. I mean, great solution, maybe better technically for some point,
+
+00:19:08 compared to what we do there. But they are very complicated to deploy. So that was another thing
+
+00:19:14 that drives us, I think, for writing this.
+
+00:19:16 All right. So a simple pip install, plug in a line or two, and off you go, right?
+
+00:19:21 Exactly. I mean, it's pretty simple. And so for exporting the data, we use a pprof format from Go,
+
+00:19:29 which is pretty standard. So you can actually use this profiler if you want, even if you're not a
+
+00:19:33 data customer and you want to give it a try, you can actually export the data to a profile and see what
+
+00:19:38 the data, you want the whole analytics that we provide and the fancy flame shaft with all their rainbow
+
+00:19:44 colors. But you can use a pprof Go tool, which is pretty okay.
+
+00:19:47 Oh, interesting. So you can get basically the raw data out of it just by using it directly. It's
+
+00:19:52 just you guys provide the nice gathering. Yeah, exactly.
+
+00:19:55 Yeah, you have to store the file yourself. Exactly. We provide the streamlining to our
+
+00:20:00 backend and we provide ton of analysis. But if you are curious and want to take a look at how it works
+
+00:20:05 and what you can provide, I mean, it's a good way to do it too.
+
+00:20:07 All right. Awesome. I do want to dig into your profile, your scaling book, which is
+
+00:20:11 what we're going to spend a lot of time on. Sure. One final question though, can I diff
+
+00:20:16 profiles like from one version to another? Because one of the things that drives me crazy is
+
+00:20:21 I've done a bunch of recording, I got my numbers, and then I'm going to make a change. Is it better?
+
+00:20:26 Is it worse? What has gotten better? What has gotten worse? Like, is there a way to say, compare?
+
+00:20:30 Yeah. That's something we are building a data log on our backend side to be able to
+
+00:20:34 track your releases and tell you, well, this is going faster. This is going slower and which functions
+
+00:20:40 or method are being the culprit, like of your slowness or whatever. So yeah, I mean, that's
+
+00:20:44 definitely something we want to do. Yeah. And that'd be so neat because you do maybe take a whole week or
+
+00:20:49 two and you sit down and you make your code fast and you get it all polished. And then over time,
+
+00:20:53 it kind of degrades, right? As people add new stuff to it and they don't really necessarily do so
+
+00:20:58 thinking about performance. So it'd be cool to like, okay, here's how it's degraded. And we can just focus
+
+00:21:03 our energy and making this part better again. I think that'd be great. Yeah.
+
+00:21:07 All right. Well, tell us about your book. I find it fascinating. I kind of gave it a bit of an
+
+00:21:11 introduction, the idea of scaling it, but official title is the hacker's guide to scaling Python. And
+
+00:21:18 the subtitle is build apps that scale to billions, billions of users, billions of requests, billions
+
+00:21:23 of whatever, I guess. But yeah, most apps don't do this. So I think they would be, a lot of people
+
+00:21:28 would be interested in hearing about it. Right. I mean, most apps don't do this, but so many apps don't
+
+00:21:32 really need to do that. So that's not a problem. I wrote that book, I think four years ago now,
+
+00:21:37 because I was working, like I said, on OpenStack where I would actually try to scale the things to
+
+00:21:43 billions where it would be running, like it would be apps running on thousands of nodes.
+
+00:21:48 Right. And maybe any individual app is not scaling to that level, but you guys basically being the
+
+00:21:53 platform as a service in aggregate have a huge amount of load put on it. Right?
+
+00:21:58 Exactly. Okay.
+
+00:21:59 And which at that point, like when I started to write the book, a lot of people were
+
+00:22:04 flying outside Python, outside the Python realm, because while Python is slow, you can't do anything
+
+00:22:10 meaningful with Python, right? So slow, you have to switch to Go. And that was a lot of things I was...
+
+00:22:14 You have, that's the first thing you'd have to do is if I understand is that Python is slow,
+
+00:22:19 so you have to switch to Go, right? That's, I hear this all the time.
+
+00:22:21 Yeah, exactly. So I saw conferences about that. In the OpenStack project, somebody rewrote one of the
+
+00:22:26 software of OpenStack in Go because it was faster and was like, nope. I mean, the Python architecture you
+
+00:22:32 use is slow. That's why it's the program is slow. It's not being ready to Python, like, and there's no
+
+00:22:38 need to switch to Go. Like, I mean, it's not related to the language. It's that the architecture was
+
+00:22:42 different. So that's what kind of motivated me at the beginning to write that book, to be able to
+
+00:22:47 share everything I learned for the years before building OpenStack. I mean, part of it and learning
+
+00:22:53 on what works and doesn't work as scale in Python and to stop people switching to Go for bad reasons.
+
+00:22:59 There are good reasons to switch for Go for sure, but sometimes no.
+
+00:23:02 Exactly. Not just because it's necessary. So, well, you know, another example of this is people
+
+00:23:07 switching to Node.js because it's, it can handle more connections, right? And the reason it can handle
+
+00:23:12 more connections is because it's written in an asynchronous way, a non-blocking way. And so if you
+
+00:23:18 write blocking Python, it doesn't matter if you write blocking C, it's not going to take it as well as if you
+
+00:23:22 write non-blocking Python, right? And so things like asyncio and those types, ASGI servers and
+
+00:23:30 whatnot, can automatically sort of put you back in the game compared to those systems that the magic of,
+
+00:23:35 magic in quotes, the magic of Node was they made you do that from the start. They're like, oh,
+
+00:23:39 you can't call synchronous functions. So the only way you do this is you write crazy callbacks and
+
+00:23:44 tell better ways, like with promises and futures, and then async and awake get into the language. But
+
+00:23:49 they forced people to go down this pattern that allowed for scale. And then you can say,
+
+00:23:53 oh, look, our apps scale really well. And it's just that I think a lot of times people start with
+
+00:23:58 the easy way, which makes a lot of sense in Python, but that's not necessarily the scalable way. So
+
+00:24:03 start one way, but as you identify these problems, you know, maybe bring in some of the ideas of your
+
+00:24:07 book, right? Yeah, totally. I mean, one of the first thing I like to say about that is like,
+
+00:24:11 Python is not fast or slow first. It's like, you would say like English is slow or English is fast.
+
+00:24:17 It doesn't make any sense. You have people speaking English very fast over a node. It's like
+
+00:24:21 Python is a long way. When CPython is slow, okay, it's not the best VM out there actually. I think it's
+
+00:24:27 far from being the best VM out there, I mean, by VM and virtual machine of the language. Like if you
+
+00:24:32 look at the state of the art of, I don't know, V8 for JavaScript or or Gral or whatever for Java or the JVM itself is pretty great nowadays. And I mean, if you look at
+
+00:24:43 all of that Python, I mean, CPython is already looking bad, I think. But then it has over upside,
+
+00:24:50 which gives you a good thing when you use Python and a good reason to keep using Python and CPython in
+
+00:24:55 the end. So I think it's a trade-off and people are not always putting the right weights at the
+
+00:25:01 right place for doing that trade-off. Yeah, I agree. One trade-off might be,
+
+00:25:04 oh, you could write it in, let's say Rust or something, for example, make it go faster.
+
+00:25:09 But then you're giving up the ability for people to come with just a very partial understanding of
+
+00:25:13 Python itself and still being really productive, right? Like people don't come to Rust and Java with
+
+00:25:18 very partial understandings of it and be super productive. They just don't, right? You got to dig in
+
+00:25:23 a big bite of that whole, all the computer science ideas there. Whereas like Python can start so simple
+
+00:25:29 and clean. And I think that's part of the magic. But some of the, I guess some of the patterns of
+
+00:25:33 that simple world don't always make sense, right? I do like that you pointed out that not everyone
+
+00:25:38 needs highly scalable apps. Yeah.
+
+00:25:41 Right. Because it's really cool to hear, oh, they're doing this thing with Instagram, right?
+
+00:25:45 Like Instagram turned off the garbage collector and now they're getting like better memory reuse across
+
+00:25:50 their web workers. And so maybe we should do that too. It's like, well, hold on now.
+
+00:25:54 Yeah.
+
+00:25:55 How much are you spending on infrastructure? Can you afford just 20 more dollars and not have to deal
+
+00:25:59 with this ever? Right. I mean, they run their own version of CPython. That's a fork where they turn
+
+00:26:03 off the garbage collector, right? Like, do you really need to go that far?
+
+00:26:06 Yeah.
+
+00:26:07 Yeah.
+
+00:26:07 So I kind of put that out there, just kind of a heads up for people before they dive in. Because
+
+00:26:12 kind of like design patterns, like I feel like when you learn some of this stuff, you're like,
+
+00:26:16 oh, let's just put all of this into place. And then you can end up with a more complicated system
+
+00:26:20 that didn't really need all those put in together at once. And maybe like, there's no app that actually
+
+00:26:25 incorporates every single idea that you've mentioned here. Just they're all good ideas in their context,
+
+00:26:30 but not necessarily, you know, you wouldn't order everything on a menu and put it all on one plate and
+
+00:26:34 then try to eat it.
+
+00:26:34 No. Right.
+
+00:26:36 Especially because if you start, like, for example, the thing people do usually is like,
+
+00:26:40 you have a program. Okay. It's not fast enough. Let's not say it's slow. It's not fast enough for
+
+00:26:45 you. You're like, okay, I want to make it faster. So if you can, you can prioritize thing. You're like,
+
+00:26:50 okay, I could run this and parallel. You go, okay, I'm going to use threads. All right. That's easy.
+
+00:26:56 There's a threading API. There are the concurrents in future API in Python. It's really easy to do,
+
+00:27:02 but it adds so much complexity to your program. You have to be sure it's really worth it because,
+
+00:27:07 yeah, you know, you're entering the world of concurrency and when you're entering,
+
+00:27:11 yeah, I mean, you have to use locks. You have to be sure about your program is not having side effects
+
+00:27:16 between threads at the bad time or anything. And it adds so much complexity. It's actually very hard to
+
+00:27:22 make this kind of program right and to make sure that works. And there are so many new edge cases
+
+00:27:26 you're adding by adding concurrency, being threads or anything else, but you have to be sure it's worth it.
+
+00:27:32 And for a lot of people out there, it's really not worth it. Like you could have a pretty simple
+
+00:27:36 application with just one process or a couple of process behind a unicorn or your Usgy Walker and be
+
+00:27:42 fine forever, but it doesn't make any sense to try to optimize. And like I was saying, like early
+
+00:27:47 optimization, the root of all level, don't do it. Like, unless you are sure and you actually,
+
+00:27:51 you know why it's slow, you know where to, to optimize, which might be a good user for
+
+00:27:56 profiler or not, depending on what you're trying to optimize. But make sure that you understand
+
+00:28:01 the trade-offs you are doing. I saw so many people rushing into threads or anything like that and
+
+00:28:06 writing code that is invalid and I think you crash in production because of race condition,
+
+00:28:10 et cetera, and they never thought about. And it takes them months, years to get things right again,
+
+00:28:14 because it's very complex and writing like multi-freaded code is not something humans do very well.
+
+00:28:21 So if you can't afford to not do it, don't do it.
+
+00:28:25 Well, I think going back to the earlier discussion with profiling and stuff, either
+
+00:28:28 in production or just with C-profiling, measure first, right? Because, and then you know so much
+
+00:28:34 better what can be applied to solve that problem. Because if the slow thing is you're waiting on the
+
+00:28:39 database, well, you sure don't need more threads to worry about that, right? You might consider caching.
+
+00:28:45 That could be an option. You might consider indexes to make the database faster.
+
+00:28:49 But you could really easily introduce lots of complexity into the system by applying the wrong fix and
+
+00:28:56 not really get a whole lot better. So yeah, yeah. All right. Let's talk about scaling. I think scaling is just the definition of scaling. It's really interesting because a lot of people see here that
+
+00:29:07 like, I want an app that scales or like, man, YouTube is so awesome. It scales to, you know,
+
+00:29:11 a million requests a second or whatever. I want that. And then they have one, they have their app running and
+
+00:29:17 they click the link and it takes three seconds or they, they run the function. It takes three seconds.
+
+00:29:23 Well, if that app scaled well, it would mean it could run in three seconds for a hundred people,
+
+00:29:30 as well as it could run in three seconds for one person. Like that doesn't necessarily mean faster.
+
+00:29:34 So there's like this, this distinction I think people need to make between high performance,
+
+00:29:38 fast code, quickly responding, and then scaling. Like it doesn't degrade as it takes on more users,
+
+00:29:44 right? Maybe you want to riff on that a little bit?
+
+00:29:46 Yeah. There are two dimensions, basically, which is like we were saying,
+
+00:29:49 one is more users, which is more in parallel, let's say. And what is faster, like having the
+
+00:29:55 page being loaded faster. So there are two different things. If you want to really optimize
+
+00:30:00 one particular use case, like page being loaded or whatever, it's really a good practice. I mean,
+
+00:30:05 you can't really scale that request on multiple nodes unless it's very complicated, but like to load
+
+00:30:10 a page or REST API or anything like that. Usually you want to profile that part of the code to be sure.
+
+00:30:16 Yeah. And that's a case where profiling locally with CProfile, might actually be really good, right? Like one request is actually quite slow.
+
+00:30:23 Yeah.
+
+00:30:23 Like you could learn a lot about that, running that in a profiler and adding the horizontal
+
+00:30:29 scalability stuff might actually make it a tiny bit slower for each individual request,
+
+00:30:33 but allow many more of them to happen. So you got to figure out which part you're working on,
+
+00:30:36 right?
+
+00:30:37 Yeah. Keeping in mind, like if you see profile on your laptop is going to be different by using
+
+00:30:41 CProfile on AWS or anything you run, because like your database is going to be different.
+
+00:30:45 The latency is going to be different. So it's hard to reproduce the same condition on your
+
+00:30:50 developer laptop that you have in production. You don't have the same system. So, I mean,
+
+00:30:54 it's really a good way and it can do 80% of the job, but in some cases, it's great to have continuous
+
+00:31:00 profiling on your production system. And that gives you a good way to optimize your code and to make sure
+
+00:31:05 that this dimension of being faster is covered. Then the dimension of, well, let's scale to 1000 of
+
+00:31:11 users and still have the three seconds load for everyone. Then that's another problem. And that's
+
+00:31:16 where you actually don't need a profiler, but you need a good architecture of your program and your code
+
+00:31:21 Yeah.
+
+00:31:22 And be able to spawn new process, new threads, new node, new anything that can process things in parallel
+
+00:31:28 for you. And decouple, like split your program in different parts and having a good architecture.
+
+00:31:33 And there you can do that with Python, with any programming language, honestly, but you can do it
+
+00:31:39 also that with Python, there's only to switch to any other language if you know what you're doing.
+
+00:31:42 Right. It makes such an important difference there. All right. So let's go. I thought it'd be fun to
+
+00:31:46 go through a couple of the chapters of your books and just your book and just talk about some of the big
+
+00:31:50 ideas there. And the first, you kind of build your way up to larger systems, right? Like you start out,
+
+00:31:55 we already talked about what is scaling, but the next one that you really focused on is how do I scale to
+
+00:32:01 take full advantage of my current computer? Like the one I'm recording on here is my Mac mini M1.
+
+00:32:06 It has four cores over there. I have my sim racing setup. It has 16 cores. Let's suppose I'm running
+
+00:32:12 on that one. If I run my Python code over there and I create a bunch of threads and it says a bunch of
+
+00:32:16 Python things, there's a good chance it's using one 16th of that CPU, right?
+
+00:32:20 Yeah, exactly. It's it's I mean, people will start with Python. Usually it's that issue. I mean,
+
+00:32:27 pretty soon where you want to run multiple, I mean, you want to run multiple threads in Paralyze,
+
+00:32:32 for example, to make sure your code is faster. And then, which is a proper way. I mean, outside
+
+00:32:37 Python, it's a proper way to scale. Like running a threads, I'll allow you to run another execution
+
+00:32:42 thread of your program in another CPU. I mean, and threads were not used that much 20 years ago,
+
+00:32:48 because all computers, every computer, are only one core, right? I mean, your personal computer,
+
+00:32:51 it was a bunch of them with only one core and nobody cared about the threads. Now that everybody,
+
+00:32:56 16 cores in their pockets, it's like, whoa, who should do multiple threads, right?
+
+00:33:01 So exactly. Yeah. So, I mean, and that's where you started like 10 years ago,
+
+00:33:06 seeing more and more people being interested in using threads in Python because, well, I mean,
+
+00:33:10 I'm doing this computation and I could do it twice to go faster. So I'm spending on new threads and
+
+00:33:14 and we got, except that if you do that in Python, it doesn't work very well because there's this
+
+00:33:20 global interpreter lock, the gil, which actually makes sure that your Python code works nice on
+
+00:33:26 multiple threads. It's about every thread running Python code, executing bytecode, they have to acquire
+
+00:33:31 this lock and L2 it forever until they're finished or until they get interrupted, which means you can only
+
+00:33:38 have one thread in Python running at a time on the Python VM. And the overflare have to wait or do
+
+00:33:45 other stuff which are not Python related, which is what a lot of C extension like NumPy or other C
+
+00:33:51 extension you may be using are doing. They're releasing the gil and doing things which are not Python,
+
+00:33:56 but still doing things that are useful for you. But in that case, they're able to release the gil and
+
+00:34:01 let the rest of the Python program runs. But if your program is 100% Python, you don't use any kind of C
+
+00:34:06 extension, no native code or anything, then all your threads have this giant bottleneck, which is a gil,
+
+00:34:12 which blocks every thread. So if you run, I think my record is like 1.6 cores with a ton of threads on the
+
+00:34:20 Python program that you can't really use. I never managed to use two cores with a single Python program
+
+00:34:26 and a lot of threads. It's very hard to get to that two cores being used. So when you have a 3264 cores machine that you rent
+
+00:34:34 or what you use, it's a pretty waste of resources.
+
+00:34:38 Yeah. So this is super interesting. And people often see this as like Python doing a threading
+
+00:34:44 restriction. And what's really interesting is the gil is really about protecting the memory allocation and
+
+00:34:51 cleanup. It's incrementing and decrementing that ref count. So you don't have to take a lock every time
+
+00:34:57 you touch an object or assign a variable, which would make it really slow. It'd be more scalable,
+
+00:35:01 but it would be slower even in the single use case, right?
+
+00:35:05 I've had a lot of experiences to do that. This is actually what you have in Java. They have this
+
+00:35:08 kind of monitor, I think they call it, where you have a lock per object. And it works well for them,
+
+00:35:13 but that's me the details. But for Python, there have been a few experiments to do that. And yeah,
+
+00:35:18 it makes the thing very, very slower, unfortunately. So it's not a good option to do to go that road.
+
+00:35:23 And I mean, there have been, if you look at the history of the gil, there has been a project called
+
+00:35:27 the gilectomy a few years ago to remove the gil. I mean, there have been plenty of experiments to try to
+
+00:35:33 get rid of that. And the other problem is that if we ever do that at some point, it will break the
+
+00:35:38 language and a lot of assumptions around the language. Because like in Python, when you add an item to a
+
+00:35:43 list, it is thread safe by definition, because of the gil for sure. But if we start by saying,
+
+00:35:48 well, each time you want to add an item to a list, you need to use a lock to do that.
+
+00:35:53 Either we do it implicitly, but it's very slow. Or you do it explicitly as a programmer,
+
+00:35:58 then it's going to be very tedious for sure. And it's not going to be compatible with the Python
+
+00:36:02 we know right now, which is not a good option. So we're stuck.
+
+00:36:06 Yeah. Well, there is, have you been tracking the work on HEP 554, multiple sub-interpreters?
+
+00:36:14 that Eric Snow has been doing?
+
+00:36:15 Yeah, a little bit.
+
+00:36:16 I think that offers some really interesting opportunities there.
+
+00:36:19 Yeah, I think it's a different approach. But it's a mix, like it's a trade-off between
+
+00:36:23 the multi-threading and multi-processing.
+
+00:36:25 Yeah, it's like a blend, like a half and half of them. Yeah.
+
+00:36:28 Yeah. And, but I think it's the most promising thing we have right now, because I don't think
+
+00:36:32 the gil is going to go away anytime soon, unless somebody really take a, like a giant project
+
+00:36:38 and do that. But there's nobody, unfortunately, outside, inside the Python community, like there's no company trying to sponsor any kind of effort
+
+00:36:46 like that. A lot of the Python upstream stuff from what I see are run by people, you know,
+
+00:36:51 willing to do that on their free time. And some are sponsored for sure, or hired by company,
+
+00:36:56 but a lot of them are not. And then there are nobody like a giant big tech company trying to push
+
+00:37:01 something like that forward. So it's probably what's also not helping Python. So it's the multi-interpreter
+
+00:37:07 thing is probably the next best thing we'll get.
+
+00:37:09 I think it is as well, because I just don't see the gil going away unless we were to say we're going to
+
+00:37:13 give up reference counting. Yeah. And if you give up reference counting and then you add like a JIT and
+
+00:37:18 you get like, I mean, that's a really different change. And you think of all the trouble just
+
+00:37:22 changing strings from Python 2 to Python 3. Yeah.
+
+00:37:26 Like this is the next level, right? It's crazy.
+
+00:37:29 Okay. We're not finished yet. I still have to maintain a lot of Python 2 code, to be honest.
+
+00:37:33 So I'm not ready to do Python 4 yet. So yeah.
+
+00:37:37 I don't think we're ready for it either. So I think subinterpreters is interesting. And subinterpreters
+
+00:37:42 are interesting because they take the ways in which you sort of do multi-processing,
+
+00:37:49 which does work for scaling out, right? You kind of do message passing and each process owns its own
+
+00:37:54 data structures and stuff like that. And it just says, well, you don't have to create processes
+
+00:37:58 to make that happen. So it's faster basically. Yeah. And I think one of the problems with
+
+00:38:02 multi-processing is also serializing the data between the different process, which is always,
+
+00:38:09 I think Stack Overflow is filled with that. People are complaining about unable to pick all the data
+
+00:38:13 between multiple processes, which is very tedious. So I think, I hope that having the subinterpreters
+
+00:38:20 thing will solve part of that, not having to serialize everything. Also in terms of performance,
+
+00:38:24 in terms of usage for sure, but also in terms of performance, you don't have to serialize
+
+00:38:28 and serialize everything. Every time you want to pass something to a subprocess, it will be a very
+
+00:38:32 huge failure. Yeah. So in danger of not making it all the way through the other topics. Let me ask you
+
+00:38:38 just a couple other real quick questions or comments that you call out a couple of things.
+
+00:38:43 One, like the CPU scaling is a problem, except for when it's not. Like sometimes it's not a problem at
+
+00:38:48 all. And the example I'm thinking of, if I'm writing an API, if I'm writing a website,
+
+00:38:52 any of those things, the way that you host those is you go to a server or you use a platform as a
+
+00:38:58 service, which does this for you. And you, you run it in something like micro whiskey or G unicorn or
+
+00:39:02 something. And what those do immediately is they say, well, we're not really going to run it in the
+
+00:39:07 main process. The main process is going to look at the other ones. And we're going to create four or
+
+00:39:10 eight or 10 copies of your app running all at the same time. And it will like send the requests off
+
+00:39:15 to these different processes. And then all of a sudden, hey, if you have less than 10 cores,
+
+00:39:20 you're scaling again. Yeah. So that's why, I mean, threads are great for things like IO,
+
+00:39:25 et cetera. But if you don't really want to scale for CPU and cores, threads are not the right solution.
+
+00:39:30 And it's way better to use multiple processes. So either way, I mean, Unicorn, you will give a good solution for web apps or the alternative to like, I mean, to that,
+
+00:39:40 but yeah, or a framework like Celery for doing tasks, for example, which is about out of the box to spawn
+
+00:39:47 multiple processes to handle all of your tasks on multiple CPUs. And usually you won't choose, I mean,
+
+00:39:53 if you don't choose any kind of ishink IO-like framework or tornado or anything like that,
+
+00:39:58 where you only do have one process running one task at a time, you can spawn multiple
+
+00:40:03 processes even more process than you have cores. If you have 16 cores, you can start,
+
+00:40:07 I don't know, 100 processes. If you have enough memory for sure. But memory is really not a problem
+
+00:40:13 unless you, depending on what you do for sure. But like for a REST API, it's really not a big problem.
+
+00:40:18 You're not using gigabytes of memory per process and per regress. So yeah,
+
+00:40:21 it's fine spawning a lot of unicorn workers.
+
+00:40:25 So two things that I ran across that were interesting in this chapter that you covered were
+
+00:40:30 futurist and Kotlin. I'm not sure how you say that second one, but can you tell people about these two
+
+00:40:35 little helper library packages?
+
+00:40:37 Yeah, futurist is actually, it's a tiny wrapper around Confluent.futures that you might know in Python.
+
+00:40:43 The thing, it has a few things that are not there, like the ability to have statistics about your
+
+00:40:49 pool of threads or your pool of anything you use process or, which is give you a pretty good idea.
+
+00:40:56 A lot of applications out there, they're like, I can scale on, I don't know, 32 threads, 64.
+
+00:41:01 And you have a setting usually to scale that. And you don't really know as a user or even as a
+
+00:41:05 developer, how many threads you're supposed to start and to handle your workload. You're like just typing
+
+00:41:11 a number randomly and see if it works or not. And having statistics around that, it's pretty useful.
+
+00:41:15 There are also some features, if I remember correctly, where you can actually control the backlog.
+
+00:41:20 Like usually you have a pool of threads or processes or a pool of anything trying to handle your task.
+
+00:41:26 But the more you add, I mean, it can grow forever. So having the ability to control your backlog and say,
+
+00:41:31 okay, I have enough tasks in the queue. No, you have to do something like, I'm not going to take any more tasks.
+
+00:41:37 So that's the pattern you see a lot in queue system. Usually people, when they design a queue system,
+
+00:41:42 they design the queue system with like, there's a queue, I'm going to take things out of it and process them.
+
+00:41:47 And they don't think about controlling the size of the queue so the queue can grow forever, which in theory is great.
+
+00:41:53 But in practice, you don't have infinite resources to start the queue and then to process it. So you want to be able to
+
+00:41:58 reject works.
+
+00:42:02 Talk Python to me is partially supported by our training courses.
+
+00:42:05 Do you want to learn Python, but you can't bear to subscribe to yet another service?
+
+00:42:10 At Talk Python Training, we hate subscriptions too. That's why our course bundle gives you full access
+
+00:42:15 to the entire library of courses for one fair price. That's right. With the course bundle,
+
+00:42:20 you save 70% off the full price of our courses and you own them all forever. That includes courses
+
+00:42:27 published at the time of the purchase, as well as courses released within about a year of the bundle.
+
+00:42:32 So stop subscribing and start learning at talkpython.fm/everything One of the big complaints or criticisms, I guess I should say is in these async systems that they
+
+00:42:44 don't provide back pressure. Yeah.
+
+00:42:46 Right. A bunch of work comes into the front and it piles into asyncio, which then piles just
+
+00:42:50 massively on top of the database. And then the database dies.
+
+00:42:52 And there's no place further back before the dying of the database where it kind of slows down. And so
+
+00:43:00 this is something that would allow you to do that for threading and multiprocessing, right?
+
+00:43:04 Yeah, exactly. And which is one of the other chapters of the book, which, well, the title is Design for Failure.
+
+00:43:10 And you could write an entire book on that, which is when you write your application, usually you write
+
+00:43:15 something in a very optimistic way because you are in a good mood and you're like, everything's going to work, right?
+
+00:43:20 Well, and you test it with small data and a few clients, right?
+
+00:43:23 Exactly. And the more you scale, the more you add threads, the more you add processes,
+
+00:43:28 you want to add nodes over your network. You're going to use Kubernetes to spawn
+
+00:43:32 hundreds of nodes and versions of your application. And the more likely it is to fail, like somebody's
+
+00:43:37 going to unplug a cable somewhere, anything can happen for sure. And you're not designing for that.
+
+00:43:41 Usually you're designing in a very optimistic way because most of the time it works.
+
+00:43:45 And when, when it doesn't, if you really want to go at scale, I mean, you really want to go far and
+
+00:43:50 you want to work even in extreme conditions, like when the weather is really rainy, it's a lot of work.
+
+00:43:57 So that's why I was saying at the beginning, like it's a trade-off to add even threads because
+
+00:44:01 then you have to handle what happens when I can't start a new thread anymore because I don't know,
+
+00:44:06 my system is out of, which is pretty rare nowadays. You have a lot of space for threads usually,
+
+00:44:10 but if you are on a, I mean, very limited resource system or whatever, like what do you handle of that?
+
+00:44:15 Yeah. And threads pre-allocate a lot of memory, like stack space and stuff.
+
+00:44:18 Yeah.
+
+00:44:19 Have you heard of Locus at locus.io? Have you seen this thing?
+
+00:44:21 No, I don't think so.
+
+00:44:23 Yeah. So speaking of back pressure and just knowing what your system can take,
+
+00:44:26 this thing is super, super cool. It's a Python load testing thing that allows you to even do
+
+00:44:32 distributed load. But what you do that's really interesting is you create a class in Python and
+
+00:44:37 you say you give it tasks and then those tasks have URLs. And then you can say, well,
+
+00:44:42 this one, I want 70% of the time, the user's going to go there and then they're going to go here. And
+
+00:44:46 then I want you to kind of delay to like, they click around, like maybe every 10 seconds or so. So
+
+00:44:51 randomly around that time, have them click around. And it's just a really good library for a tool for
+
+00:44:56 people who are like, well, I didn't test it with enough users because I'm just me, but what is it
+
+00:45:00 actually like something like this would be a really good option, I think.
+
+00:45:03 Yeah, that's a good event to gather data for profiling after that's a pretty good. If you're
+
+00:45:08 able to reproduce something that looks like a production.
+
+00:45:10 Oh yeah. Yeah. Yeah. That's interesting. Yeah. Right. Because you want to profile a realistic
+
+00:45:15 scenario. So instead of hitting with one person, you hit it with like a hundred.
+
+00:45:18 Yeah. And then get the profiling results of that. Okay. That's a good idea.
+
+00:45:21 Yeah. That's really the good thing with continuous profiling is what you're able to see for real
+
+00:45:25 what happens. But if you know to reproduce it, that's also a valuable option.
+
+00:45:29 Yeah. Okay. Very interesting. All right. So CPU scaling is interesting. And then Python around
+
+00:45:34 three, four, three, five came out with this really interesting idea of asyncio and especially async and
+
+00:45:40 await that makes asyncio so much better to work with. And what's interesting is that has nothing to
+
+00:45:45 do with threading. Like that doesn't suffer any of the problems of almost any of the problems of like
+
+00:45:50 the GIL and so on, because it's all about waiting on things. And when you're waiting,
+
+00:45:53 usually you release the gill. Yeah. So threads are a good solution for or I/O when you can't actually use something like asyncio because let's be honest, I mean,
+
+00:46:01 if you're using your own library, which was designed five years ago, it's not designed to be async at all.
+
+00:46:06 So. Right. Or you're using an old ORM and the old ORM doesn't have an async version of it. And
+
+00:46:12 it's either rewriting in a new one. Yeah. Or use the old non-async, right? Something like that.
+
+00:46:16 Maybe threads. I don't know. Yeah. Usually, I mean, ORM, it's a good, bad example in the sense that
+
+00:46:21 it's a good example technically, but usually the problem is people writing bad queries.
+
+00:46:25 Yeah. I know. Better queries than an index. I'll probably solve that most of the time. Yeah.
+
+00:46:29 Yeah. Exactly. But in theory, you're right. Technically, it's a good example. And yeah,
+
+00:46:33 I mean, even if it looks like it's in KIO, it's magic. Cause like you were saying, it's like the
+
+00:46:37 node thing that brought that back to life where it has been used and there for the last 40 years. I don't
+
+00:46:42 know. Yeah. And it's like, suddenly everybody's like, well, that's amazing. And that's how you would
+
+00:46:46 write anyway, any web servers for the last 30 years, but it's great. Now it's built in Python. So it's
+
+00:46:52 pretty easy to use and it's a very, very well, I mean, I think it progressed a lot over the years,
+
+00:46:57 like a couple of years ago where everybody was using Flask or Django, which is still true, but there's a
+
+00:47:03 lot, a lot of better alternative in the sense that like Starlet, et cetera, but the past API that you
+
+00:47:09 can use to build an API website based on S&KIO.
+
+00:47:13 Yeah. And this whole, I think I/O world has really flourished since you wrote the book, hasn't it?
+
+00:47:18 Yeah. Yeah. Yeah. When I wrote the book, I actually learned S&KIO writing the book and there was nothing.
+
+00:47:24 It was very like the main plan is like, I want to use, I don't know, Redis or like we're saying a database and
+
+00:47:29 there's nothing. So, or it's very low level stuff and like, it's not going to be like, yeah, I can use it, but it's going to
+
+00:47:36 take me hours of work to get anything close to what I would do with the synchronous version. So
+
+00:47:41 nowadays, yeah, it's totally better. I'm actually do a lot of work with S&KIO myself.
+
+00:47:46 It's, I mean, everything's there for everything doing socket IO, file IO, everything is available.
+
+00:47:52 There are sometimes multiple versions of the same library because don't agree on how to do Redis or
+
+00:47:59 whatever, which I mean, it gives you choice. So that's, that's great. And it's a very, very good way to
+
+00:48:05 not use threads. So you still have the conference program where you can have multiple tasks from
+
+00:48:09 S&KIO running it, not at the same time in our space time dimension, but like being started means
+
+00:48:15 pause being resume later. So you have to still take care and you actually can use lock to S&KIO.
+
+00:48:20 Yeah.
+
+00:48:21 But it's still a little less of a problem and issue with threads and you're not going to use more than one
+
+00:48:27 CPU for sure. That's not designed to do that, but you will be able maybe more easily because you will have
+
+00:48:33 less overhead than with threads to be able to use 100% of your CPU. Like we will be able to
+
+00:48:38 max out your resource, your CPU resource. And then when you do that with one Python process,
+
+00:48:43 well, just start a new one using salary, unicorn, whatever, or cotillion you were mentioning,
+
+00:48:49 which is a good tool to do that.
+
+00:48:50 Yeah.
+
+00:48:51 Yeah.
+
+00:48:51 Yeah.
+
+00:48:51 Which is actually able to spawn multiple process and manage them for you. Because usually that's
+
+00:48:56 a problem when you have a demand, you want to do a lot of work like the salary model for Q is a
+
+00:49:01 pretty good example. When you have multiple workers and each worker is on thread doing things in the
+
+00:49:06 background. If you're not using a framework such as salary and cotillion is a good small library to do
+
+00:49:12 that when you can want a class and each class being spawned as a process basically and be managed by a
+
+00:49:19 master process like you would do with whiskey or unicorn and managing the child, restarting them if they die,
+
+00:49:24 etc. So that's a lot of work to do. You can certainly do that yourself, but cotillion does that for you out of the box.
+
+00:49:30 Yeah. Yeah. That's a cool way to create those sub processes and stuff. But yeah, I think async.io is a
+
+00:49:35 lot of promise coming along. It's really been growing. SQLAlchemy just released their 1.4 version, which
+
+00:49:42 actually, so SQLAlchemy now just in like a couple of weeks ago now supports a wait session query of thing.
+
+00:49:48 Not exactly that syntax, but almost they've slightly adjusted it, but pretty cool. All right.
+
+00:49:53 And then one of the things that you talked about with scaling that I agree on that is super important
+
+00:49:57 is statelessness. So yeah, if you want to, and I suspect going from one to two is a harder than
+
+00:50:04 going from two to 10 in terms of scaling, right? Yeah. Sooners you're like, okay, this is going to be
+
+00:50:09 in two places. That means it has to be stateless and it's communication. All right. All these things,
+
+00:50:14 if you're just putting stuff in memory and sharing the pointers and kind of storing a persistent memory
+
+00:50:18 session for somebody, well, then putting that in two places is really fraught. Yeah. It's really the
+
+00:50:24 thing where I like to say that if you start using multiple processes, you're actually pretty ready to
+
+00:50:28 handle multiple nodes like over a network because using multiple threads, you are always in the same
+
+00:50:34 program. So it's tempting to share the state of everything between your different threads. And then
+
+00:50:39 you have concurrency issue and you need lock, et cetera. But a lot of people go that road being,
+
+00:50:44 I don't know, maybe a bit naive and saying, oh, that's easy. I don't have to leave my program. But if you
+
+00:50:49 already, you go to the step where you actually, okay, to split your work into multiple process,
+
+00:50:54 which might have to communicate between themselves for sure. And they can start by communicating over
+
+00:50:59 the same host. But then you just add networks in between the process and you can scale to multiple
+
+00:51:06 nodes and then over whatever number of nodes you want. Then the problem is to handle connectivity
+
+00:51:11 issue that you don't have if you run on a single host between process. Usually you don't have somebody
+
+00:51:16 unplugging the invisible cable. But if you're ready to handle that network failure, which will happen
+
+00:51:22 for sure, between your different processes, then you can scale pretty easily on different nodes.
+
+00:51:27 But as you were saying, it's like you have to switch your padding when you write your program,
+
+00:51:32 which is being as stateless as possible, which is why I wrote an entire chapter on functional
+
+00:51:37 programming because, well, I love functional programming. I love Lisp. And I would do Lisp if it was more
+
+00:51:42 popular, but I have to do Python. So I'll do Python. It's a great Lisp. And then functional programming
+
+00:51:46 gives you a pretty good way of writing code and give you a good mindset, I would say, to write code that
+
+00:51:52 avoids to do side effects. And that makes your program stateless most of the time, which makes it very
+
+00:51:57 easy to scale.
+
+00:51:58 Right. The more statelessness you can have, the easier it is going to scale. And you can get it down to a
+
+00:52:03 point where maybe the state is now stored in a Redis server that's shared between them or some
+
+00:52:08 or even in a database, like a real common examples, just put it in a database. Right. So like on the
+
+00:52:14 training site that I have, people come in, the only piece of state that is shared is who is logged in.
+
+00:52:19 And when it comes back, it goes back to the databases. Okay. Well, who is this person? Actually,
+
+00:52:24 do they have a course? Can they access this course? Like all those things are asked every time. And my first
+
+00:52:28 impression of like writing code like that was like, well, if I have to query the database for
+
+00:52:32 every request to get back all the information about whatever it is I care about for them tracking on
+
+00:52:37 this request, it's going to be so slow, except for it's not really, it works really well, actually.
+
+00:52:42 And it definitely lets you scale better. Yeah. Yeah. Yeah. It's pretty interesting. Okay. So stateless
+
+00:52:47 programming, which means like functional programming, you want to just like call out that example of
+
+00:52:51 remove last item that you have on the screen here, the first page of that book. Yeah. I think it
+
+00:52:56 to give people a sense of what you're talking about. Yeah, exactly. It's like, I was trying
+
+00:53:00 to explain in that chapter what's a pure and non-pure function where you actually have one
+
+00:53:04 function doing the side effect. I mean, when you pass argument, like functional programming,
+
+00:53:09 if you never know of it, it's pretty simple. Imagine that all your functional black boxes and
+
+00:53:13 that you are going to put something in it. And when you get something out, you can't reuse the thing
+
+00:53:17 that you put inside. Like you're going to use only what's being with put. So when you don't do a
+
+00:53:22 pure function and function programming, you are going to pass a list, for example,
+
+00:53:26 and you're going to modify it and not returning anything because you actually modified the list
+
+00:53:31 that you passed as an argument, which is not functional at all because you actually...
+
+00:53:35 Like maybe like list.sort would be an example, right? Like it...
+
+00:53:37 Exactly. Yeah.
+
+00:53:38 Yeah.
+
+00:53:38 The thing you're calling sort on is changing the list itself. Yeah.
+
+00:53:41 Yeah. Which is, yeah. And that's straight off because list.sort is really faster than sorted,
+
+00:53:46 putting sorted on the list, but it's not functional. But if you call sorted or if you return the list
+
+00:53:51 minus the last item or a function that removes the last item, then it's functional. You're not
+
+00:53:56 returning the same list. You're writing a new list with a different output, like the last item being
+
+00:54:02 removed, but it is stateless. Like you can lose the first, what you put as an input. You don't care
+
+00:54:07 anymore. You have something that is outside. And if you design all your program like that,
+
+00:54:10 it's pretty easy to imagine having a large input of data, putting that into a queue,
+
+00:54:16 but having a worker taking that, doing whatever they need to do, and then putting something and
+
+00:54:20 putting that into another queue, database, whatever you might want to do. And that's the basis of
+
+00:54:24 anything that scales is due to be able to do that, to be able to scale and do a synchronous task in
+
+00:54:30 the background.
+
+00:54:30 Cool. Yeah. I think list.sort versus sorted of list is like the perfect comparison there.
+
+00:54:36 Yeah.
+
+00:54:36 All right. You touched on queues and I think queues have this possibility to just allow
+
+00:54:42 incredible scale, right? Instead of every request trying to answer the question or do the task it's
+
+00:54:49 meant to do entirely, all it has to do is start a task and say, "Hey, that started. Off we go." And
+
+00:54:55 put it into something like Rabbit queue, Celery, Redis queue, something like that, and some other thing
+
+00:55:01 that's going to pull it out of there and get to it when it gets done, right?
+
+00:55:04 Yeah, exactly. It really depends on what you do and what you're trying to solve with your application,
+
+00:55:09 library, whatever. But as a general thing, it's a pretty good way and architecture of a program to add that.
+
+00:55:16 Like if you find a rest API, which is what people do most of the time now, I mean, you can definitely
+
+00:55:23 process the request right away. And if you know that it's going to take, I don't know, less than one
+
+00:55:28 second, okay, it's fine. You can do that right away. But if you know it's going to take 10 seconds, 20 seconds,
+
+00:55:33 it's very, very impractical for a client to keep the connection open for 30 seconds for good and
+
+00:55:39 bad reasons, but it's a problem.
+
+00:55:41 Right. And almost anyone's going to think it's broken.
+
+00:55:44 Yeah.
+
+00:55:45 Even if it technically would have worked, you're like, "It's been 10 seconds and it's something
+
+00:55:49 wrong. This is not okay, right? Like it's just not the right response." Yeah. And I mean, connection can be cut. So if you need 20 seconds to do anything,
+
+00:55:57 and then it is being cut at 18 seconds, then you lost your time and the client has to retry.
+
+00:56:03 So it has to repost the same payload and then you have to reprocess it for 20 seconds. So you are
+
+00:56:08 actually losing time. So it's way better to take the input, start it in a queue, reply with 200,
+
+00:56:14 okay, I got the payload, I'm going to take care of it. And then I will notify you with the webhook.
+
+00:56:19 I'm going to give you the result at this address, whatever mechanism you can use to do asynchronous.
+
+00:56:24 But I mean, building this kind of system is a kind of slew when you have the worker taking
+
+00:56:29 message from the queue, processing them, putting the results somewhere else. It's sort of a really
+
+00:56:34 good way to scale your application. And you can start without, I mean, you can start with Python
+
+00:56:40 itself. Like there's a queue in Python, there's multi-process and you don't have to like deploy
+
+00:56:44 RabbitMQ, whatever. You can actually start if you know your program is not...
+
+00:56:48 You could even just have a background thread and a list.
+
+00:56:50 Yeah, exactly. I mean, you can start with something very simple for this pattern.
+
+00:56:54 You don't have to use a huge framework or whatever. If you know the pattern and you
+
+00:56:57 know it applies to what you're doing, you actually can use it. And you know, for example, that you
+
+00:57:02 will never need more than one host, one node, one computer will be enough forever for your program.
+
+00:57:08 While you don't need to deploy a network-based queue system like Redis, Rabbit or whatever.
+
+00:57:12 You can use Python itself, use a multiprocess queue, and that will solve all of your problem perfectly.
+
+00:57:18 Yeah, that's a great example. And the multiprocessing has an actual queue data structure that properly shares across with notifications and everything across these multiprocess processes, where the multiprocess thing can just say, I'm going to block until I get something from the queue.
+
+00:57:34 And then as soon as you put it in, it picks it up and goes. But otherwise it just chills in the background.
+
+00:57:38 Yeah. Very nice. All right. Moving on. Designing for failure. That's a good one. You know, the thing that comes to mind is the, at the extreme end of this, when I talked about scalability, I maybe said YouTube in a million requests a second. This one is chaos monkey and Netflix.
+
+00:57:52 Yeah. You have to design for that. Like I was saying, like a lot of people, that's why you write their code with a very optimistic mindset, like everything is going to be fine. And I don't really care about error and exceptions where you actually want to write proper exceptions, like proper classes of exceptions and proper unlink of exceptions in your program.
+
+00:58:11 And making sure that when you, for example, when you use, I don't know, Redis and you use a Redis library, you want to be sure to be aware. And that's something that's not very obvious, honestly, because it's honestly not really well documented. Like you can read the API of a Redis library and see, okay, it takes that type as an argument and you're going to return that type. But you don't know which exception is going to be raised. So sometimes you have to sit with your own eyes in prediction, like, oh, it's broken. It's going to raise connection error. Okay. No, I know I need to fix it.
+
+00:58:40 Well, the tricky part of that is not necessarily seeing the exception and knowing it, but now what?
+
+00:58:46 Yeah.
+
+00:58:46 Like when I get the connection error, it means I can't talk to the database, it's overloaded or it's rebooting because it's patching. But then what happens, right? Like how do I not just go, well, there was an error. Tell the Datadog people there was an error. So we know, and then crash for the user. Like what do you do beyond that?
+
+00:59:02 Yeah. And the answer is not, I mean, it's not obvious. It truly depends on what you're doing. Like if you are in a REST API and your database connection,
+
+00:59:10 it's broken, you can't connect to the database. I mean, what are you going to retry for how much, I mean, how many times, for how many seconds are you going to retry?
+
+00:59:17 Because the other guy is waiting on the other side of the line, right? So you can't do that for 10 seconds too long. So you have to do that a few times. Then what do you do? Do you return a 500 error and crash? Or do you return something that is like a retry later?
+
+00:59:30 I mean, there's a lot of, and you have to think about all of that. Like when to say to the client to retry, if they can retry or just, yeah, crash. That's also an option sometimes. And there are so many patterns, most of the time network errors, but it might be disk full or whatever. And you have to, so you can't think about everything at the beginning for sure. So you have to have a good report system and then it's to redeploy.
+
+00:59:50 I totally agree about the reporting system. It's hugely valuable and notifications as well. Because if you don't look at the reporting system, the log is full of errors and nobody would look for a week.
+
+00:59:59 But are you a fan of the retry decorators? You know, I'm talking about some of those things you can say, here's like an expansional back off. I like you to retry five times and like first after like a second and then five seconds, then 10 seconds. What do you think?
+
+01:00:12 I'm the author of Tenacity, which is one of the most widely used.
+
+01:00:16 Yeah, okay. So that answers that question. You're a fan.
+
+01:00:20 Exactly.
+
+01:00:20 Okay, cool.
+
+01:00:21 I am a fan. And it's all 80% of the problem. I mean, it's up to you to know how to retry. But it's a very, very good pattern to use. I mean, Tenacity provides that as a decorator, which is not the best strategy.
+
+01:00:35 If you want to have different strategy or like this function should be retry this number of times depending on who the color is. But most of the time, it's good enough. Actually, it's good enough. Like most of the time, it's better to use that in a naive way where you just retry five times for five seconds or whatever, but not doing anything.
+
+01:00:51 Because if you know, it's also not a silver bullet. Like I see sometimes people using it to like, well, if anything wrong happened, I'm just going to retry, which is not like, please use proper exception types, like catch the right thing and retry for the right reason, not for everything.
+
+01:01:05 Right. Like maybe retry with connection timeout, but some other thing that crashes, like authorization failure, like that's never going to get better.
+
+01:01:12 Exactly. Exactly. But sometimes you see people writing like, well, I'm going to retry an exception. Whatever is raised, I'm going to retry, which is really not a good idea because yeah, it's going to be fine for network errors.
+
+01:01:24 But like you were saying, if it's an authentication, you don't want to retry. So I mean, be careful in that. But then if you know that you've got an IO error most of the time because the network is done one day, then it's fine to do that.
+
+01:01:36 And it's a really, really good way to design easily for this kind of thing.
+
+01:01:41 It doesn't serve everything. And for, I don't know, if you have a large job, for example, but you know it's going to take 10 minutes to compute, et cetera.
+
+01:01:48 I mean, having there and there, this kind of retry is going to save you because in a framework like Celery, for example, if your job fails after five minutes, for whatever reason, it's just going to put it back in the queue and retry later.
+
+01:02:00 But you lost the five first minutes that you used.
+
+01:02:03 Yeah. And you can end up in these poison message scenarios where it tries, it fails, it goes back. It tries, it fails, it goes back. It tries, and then, yeah, then it's not so great.
+
+01:02:10 All right. Just a little bit of time for some more deployment.
+
+01:02:13 Yeah.
+
+01:02:14 Talk about, in your book, you talk about deploying on a platform as a server, as a pass, like Heroku. There's always VMs. These days we have Docker and Kubernetes. I mean, honestly, it's not simple to know what to do as somebody who's a newcomer, I think.
+
+01:02:26 Yeah. And I think it says a lot since I wrote the book, but nowadays I still, I mean, Heroku is still there and pretty widely used because it's a good solution. The thing is that deploying Python application, like for myself, I'm a pretty good Python programmer, but then outside of Python, like infrastructure and Kubernetes, I barely know anything about it.
+
+01:02:43 It's like, it's a full-time job and it's not my job. It's another side of another job. So I could learn for sure. And I could be an expert in Kubernetes and deployment of anything. But I mean, it's fine to do that if you want to do that. But as a Python developer, I don't really want to do it.
+
+01:02:59 I'm happy to use any kind of platform, the service like Heroku, where I can actually, like the using the Kubernetes container approach of deploying and spawning a lot of this to scale is not my responsibility, but I can outsource it to somebody that knows how to do that. So there's plenty of options. I think I wrote up on Heroku, OpenShift does that too. I know, I mean, Amazon or Microsoft or Google, all other solutions to do that too.
+
+01:03:24 Yeah, they must have something. Yeah.
+
+01:03:25 Yeah. And I mean, there's no reason if you really know that your application is going to scale and you don't want to spend a lot of time on infrastructure and learning. I mean, Kubernetes, Docker or whatever. I mean, you can spin easily an application on top of Heroku and then click a button to have two nodes, three nodes, four nodes, ten nodes, and then wallet. And it's expensive. That's another issue.
+
+01:03:47 Yeah, the platform as a service, often they exchange complete ease of use with maybe two things, one with cost, and then the other is with flexibility, right? Like you kind of got to fit their way. Like, well, the way you use the database is our managed database service. And if you don't like that, well, then I don't know, you got to just use our managed service. You know what I mean? Things like that are kind of somewhat fixed. But yeah, I think it's really good for a lot of people.
+
+01:04:11 Yeah, exactly. I mean, it covers 90% of the market, right? I mean, most people are going to start with, even if it's not a bad project, but like you're starting your company, you're doing a small project, and maybe it's one day you will be the next girl you have to scale.
+
+01:04:24 But at that time, you'll solve the problem. You'll get plenty of money to solve it. But until then, you don't have a lot of time, you don't have a lot of money. It's actually pretty cheap compared to the time you would spend learning the ropes of Kubernetes. I mean, a secure deployment at scale of Kubernetes, I'm sure it's pretty more complicated than writing a simple Flask application. So it's a trade-off. I think it's a pretty good trade-off if you really want to start saying, okay, I think at some point I will need to scale. I can't run on my laptop anymore. I need to run that somewhere. While using a platform like that is a pretty good trade-off.
+
+01:04:54 Yeah. And I think it's so easy to dream big and think, oh, I'm going to have to scale. So if I'm going to deploy this, what is it going to be like if I get the first 100,000 users? You should be so lucky that you have that problem, right?
+
+01:05:05 Exactly.
+
+01:05:05 So often things get built and they just stagnate or they don't go anywhere. Or the reason they stagnate is you're not adding features fast enough because you spent so much time building complicated architectures for a case in the future.
+
+01:05:17 When reality is on the past, you could just pay 10 times as much for two weeks and then completely move to something else and you could buy yourself that time for $500, right?
+
+01:05:27 But you could spend months building something, right? Like that's going to support some insane future that doesn't exist.
+
+01:05:34 And so a lot of people, they'd be better off to just move forward and then evolve and realize it's not forever.
+
+01:05:40 It's a path towards where you're going to be.
+
+01:05:42 Yeah. And then learn marketing to have people coming onto that project.
+
+01:05:47 That is the problem. Yes, that's the hard part.
+
+01:05:50 Yeah. That might be my next book about like doing marketing to getting people on your project to be able to scale them.
+
+01:05:55 Yeah, I'll definitely read that book if you write it.
+
+01:05:58 All right. We got some more topics to cover, but we're down to just one that I think we have a little time to touch on because it's like magic sauce.
+
+01:06:04 For a database, the magic sauce is indexes.
+
+01:06:07 For many other things, the magic sauce is caching, right?
+
+01:06:11 If this thing is really slow, I'll give you an example from TalkPylon or maybe even better from Python Bytes.
+
+01:06:15 That's a more interesting example.
+
+01:06:17 The RSS feed for that thing is made up out of, I think we had to limit it because we got too many, but for a while it's made up of 200 episodes.
+
+01:06:24 Each episode is like five pages of markdown.
+
+01:06:26 In order to render that RSS feed on demand, I've got to render, I've got to go to the database, query 200 things, and then markdownify them 200 times and then put that into an XML document and return that.
+
+01:06:39 And that is not super fast.
+
+01:06:41 But you know what? If I take that result, I would have returned and save it in the database and just generate it once a minute, then it's fine, right?
+
+01:06:48 It's like magic. It goes from one second to one millisecond, and you just get so much scale from it.
+
+01:06:56 Yeah, that's exactly what you're saying.
+
+01:06:58 It's a pretty good pattern when you have to optimize.
+
+01:07:01 So that would be more for the performance dimension when you want to code to be faster, not necessarily to scale the number of users.
+
+01:07:08 Even if that's sometimes connected, like if you have 200 people requesting at the same time, your RSS feed and you have to do that the same time, 200 times, that's pretty useless.
+
+01:07:17 So, I mean, caching is a pretty good pattern.
+
+01:07:19 There's nothing actually very specific to Python there.
+
+01:07:22 I mean, even in this chapter of the book, it's actually pretty, like I'm talking about how to use memcache already.
+
+01:07:27 So whatever you want to cache, there are pretty good solutions to cache over the network.
+
+01:07:32 You can start by caching locally in your own process, like memorizing.
+
+01:07:35 Right, like a Python dictionary is a really good cache, right? For certain things.
+
+01:07:40 Exactly. And there are, in Python 3 something, they added the, they were the LRU cache and they added a lot of...
+
+01:07:46 Yeah, the LRU cache decorator is really neat.
+
+01:07:48 Yeah. Cache tools, the cache tools library in Python.
+
+01:07:51 There's a lot of different algorithms if you want to cache locally in your own Python program.
+
+01:07:57 Like if you know you're going to call this method hundreds of times for...
+
+01:08:00 And the result is going to be the same.
+
+01:08:01 Just cache it. It's expensive to compute.
+
+01:08:04 I mean, expensive to compute might be more expensive in terms of CPU, but it also might be expensive for database.
+
+01:08:10 Or sometimes the expansiveness is going to be the network.
+
+01:08:14 Like you're going to request some data over the network and it's very far or it's a very slow system or very unreliable system.
+
+01:08:22 Yeah.
+
+01:08:23 So using caching system is a pretty good solution to avoid this capability, which is also linked to the design for failure we talked about before.
+
+01:08:29 Right. If you're consuming third-party services, you can't necessarily depend on their uptime, on their reliability, on their response time, all those types of things.
+
+01:08:37 I'll give you another example of expensive.
+
+01:08:38 So when you go to our courses, we've got, well, video servers throughout the world and we want to serve you the video from the one closest to you.
+
+01:08:47 So we have a service that we call that takes your IP address, figures out where you are, and then chooses a video server for you so you get the best time.
+
+01:08:56 That costs a little tiny bit of money each time, but with enough requests, it would be hundreds, maybe even, I don't know, definitely into the hundreds per month of where is this person API charges.
+
+01:09:08 And so we just cache that.
+
+01:09:10 Like if this IP address is from this city or this country, we just put that in our database.
+
+01:09:14 And first we check the database.
+
+01:09:16 Do we know where this IP address is?
+
+01:09:17 No.
+
+01:09:18 Go to the service.
+
+01:09:19 Otherwise, just get it from the database.
+
+01:09:20 It's both faster and it literally doesn't cost as much.
+
+01:09:23 It's less expensive in the most direct meaning of that.
+
+01:09:26 And then you're eating on the first and biggest issue in computer science, which is cache invalidation, which is what in your case, the IP might not change of country pretty often.
+
+01:09:36 It can change.
+
+01:09:37 Not very often, but it can change.
+
+01:09:39 Yeah.
+
+01:09:39 So for our, just for our example, what I did is it's in MongoDB.
+
+01:09:42 So I set up a, an index that will remove it from the database after six months.
+
+01:09:47 Yeah.
+
+01:09:47 Which is final, but arbitrary, right?
+
+01:09:50 Yes.
+
+01:09:50 It's totally, I could be wrong for a while.
+
+01:09:52 I mean, exactly.
+
+01:09:53 But the failure case is it's slow streaming with buffering.
+
+01:09:56 Potentially it's not complete failure, completely the wrong answer.
+
+01:10:00 Right.
+
+01:10:00 So for us, it's acceptable.
+
+01:10:01 Yeah, exactly.
+
+01:10:02 So you made a trade off, which is totally fine for your risk.
+
+01:10:04 And that's a lot of things that you do when you want to scale is straight off.
+
+01:10:07 And sometimes you don't get things totally right, but it's fine.
+
+01:10:11 It's just not the best experience for your user in your case, but it's fine and you can live with it.
+
+01:10:16 And I think it's a change of mindset when you go from, I'm writing a Python program, which has to be perfect and works 100% of the time.
+
+01:10:25 And then when you want to scale, you have to do a lot of stuff where like, it will work fine for 80% of the people.
+
+01:10:29 And for some cases, 5% of the time, while that might be not optimal, but it's fine.
+
+01:10:36 And that's a lot of doing things at scale are changing this mindset to, well, it works always.
+
+01:10:42 It's always true.
+
+01:10:43 And no, sometimes it's not really true.
+
+01:10:45 I mean, if you had a way for you to be aware and notified that an IP address changed its country, you could invalidate your cache and then make it totally reliable.
+
+01:10:55 I mean, for a few seconds, maybe it won't be up to date, but that would be close to perfection.
+
+01:10:58 Yeah.
+
+01:10:59 But you don't have that system.
+
+01:11:00 So you have to do what you did, which is a good trade-off.
+
+01:11:03 I mean, it's pragmatic.
+
+01:11:03 You have to be very pragmatic when you do things at scale.
+
+01:11:06 Yeah.
+
+01:11:06 And also kind of designed for failure.
+
+01:11:08 Like what's the worst case if that goes wrong?
+
+01:11:10 Yeah.
+
+01:11:11 Right.
+
+01:11:11 It's like streaming halfway around the world or something.
+
+01:11:13 Whereas other things, like if the database goes down, you've got to deal with that entirely differently.
+
+01:11:18 Yeah.
+
+01:11:19 That's a hard one to fix though.
+
+01:11:20 I didn't really know what to do there.
+
+01:11:21 Well, I mean, caching, like you could cache, for example, if your database goes down, you can.
+
+01:11:26 That's true.
+
+01:11:26 You could cache older version and reply to the client.
+
+01:11:30 Like it might be an older version.
+
+01:11:32 I'm sorry.
+
+01:11:32 Like what the time system is there.
+
+01:11:34 Or I mean, depending on what you build, obviously you have to know the use case and the trade-offs
+
+01:11:37 you're going to do.
+
+01:11:38 But caching could be a solution.
+
+01:11:39 And then the problem is that you have to.
+
+01:11:41 That's a good idea because you might actually be able to say, if I'm going to go to Redis
+
+01:11:45 and if it's not there, then I'm going to go to database.
+
+01:11:47 Many of the requests that come in might never need to go to the database again.
+
+01:11:51 You know, if you just say, oh, whoops, the database is down.
+
+01:11:53 We're just going to serve what's out of the cache.
+
+01:11:55 It could go for a while until there's some write operation.
+
+01:11:58 As long as it's read-only, it might not matter.
+
+01:12:00 Which is what services like Cloudflare does for the web, for example.
+
+01:12:03 Like we do caching, protect you.
+
+01:12:05 And if you're down, they're just going to show the page they had a few seconds ago until you're
+
+01:12:10 back up and nobody will notice.
+
+01:12:11 Yeah, interesting.
+
+01:12:12 Yeah, you can apply that.
+
+01:12:14 And the thing you have to keep in mind when you do caching is to be able to invalidate your
+
+01:12:17 cache.
+
+01:12:18 Like if you're caching database and something changed in the database, you have to have this
+
+01:12:22 callback mechanism where your database can say to your cache, hey, by the way, that changed,
+
+01:12:26 you need to update it if you're able to, like, you need to be aware of that.
+
+01:12:29 Otherwise, you have to put arbitrary timestamp, like you said, for your, like, six months.
+
+01:12:34 It's going to be six months and that's it, which is fine for such a use case.
+
+01:12:37 But for a lot of people can, like, your RSS feed, but wouldn't work very well probably
+
+01:12:42 if you were doing six months.
+
+01:12:43 Yeah, that would be bad.
+
+01:12:44 All of a sudden, oh, there's 24 new episodes all of a sudden or something.
+
+01:12:49 Yeah.
+
+01:12:49 So this is where you write that cron job that just restarts Redis once an hour and you'll
+
+01:12:54 be fine.
+
+01:12:55 No, just kidding.
+
+01:12:55 You're right.
+
+01:12:56 This caching validation really, really is tricky because if you check the database, then you're
+
+01:13:01 not really caching anymore, right?
+
+01:13:03 You might as well not have the cache.
+
+01:13:04 So yeah, it's super tricky, but definitely a bit of the magic sauce.
+
+01:13:07 All right.
+
+01:13:08 I think that there's plenty more we could cover in the book and about scaling and architecture
+
+01:13:12 and it'll be really fun, but we're way over time.
+
+01:13:14 So we should probably just wrap it up with a couple of questions here that I always ask
+
+01:13:19 at the end of the show.
+
+01:13:19 So Julian, if you're going to write some Python code, what editor do you use?
+
+01:13:23 Emacs.
+
+01:13:24 I've been an Emacs user for the last 10 years.
+
+01:13:26 I think I still have the commit access to Emacs itself.
+
+01:13:29 Oh, cool.
+
+01:13:30 You did say you love Lisp and you get to have your code powered by Lisp.
+
+01:13:34 Exactly.
+
+01:13:34 I stopped, but I wrote a lot of Lisp like 10 years ago.
+
+01:13:38 Yeah, cool.
+
+01:13:38 And then notable PyPI package, if you want, you can shout out Tenacity, which we covered
+
+01:13:43 or something else if you'd like.
+
+01:13:45 Tenacity and Daiquiri, which I love.
+
+01:13:47 Daiquiri is a tiny wrapper around the logging system of Python.
+
+01:13:50 So the story is that I never remember how to configure the logging system in Python.
+
+01:13:54 Like I do import logging and I'm like, I don't know how to configure it to work like I want.
+
+01:13:59 So Daiquiri does that.
+
+01:14:00 It's pretty easy to use.
+
+01:14:02 It has a functional approach like Tenacity in its design and it's making like two lines
+
+01:14:07 to use the logging system.
+
+01:14:08 You have something that works out of the box with colors, et cetera.
+
+01:14:11 So I like it.
+
+01:14:12 Oh, fantastic.
+
+01:14:12 Yeah.
+
+01:14:13 I always forget how to set it below.
+
+01:14:14 I get to send me something else as well.
+
+01:14:17 It's just like, I don't need to remember this.
+
+01:14:19 Fantastic.
+
+01:14:20 All right.
+
+01:14:20 So thank you for being here.
+
+01:14:22 Thank you for talking about this and covering all these ideas.
+
+01:14:24 They're fascinating.
+
+01:14:25 And they always require some trade-offs, right?
+
+01:14:28 Like it's when should I use this thing or that thing?
+
+01:14:30 But if people want to get started, one, where do they find your book?
+
+01:14:34 Two, what advice in general do you have for them going down this path?
+
+01:14:37 You can find my book, goingbython.com.
+
+01:14:39 If you want to take a look, it's a pretty good read, I think, to give you the right mindset
+
+01:14:43 to understand what the trade-offs you might need to be to do a program.
+
+01:14:47 And I think that's what boils down to that.
+
+01:14:49 Like, what are you ready to change and how to design your program?
+
+01:14:52 And what are you going to, what is going to be a real use case?
+
+01:14:56 Like, why do you want to scale?
+
+01:14:57 And are you going to scale for real?
+
+01:14:59 Or are you just thinking that you will need to scale in the future and do the right trade-off
+
+01:15:04 and don't overcomplicate things because you're just going to shoot yourself in the foot by doing that?
+
+01:15:08 Yeah, it's super tricky.
+
+01:15:09 I would just add on to that.
+
+01:15:11 What you think you might need to scale in the future is a web app or web API.
+
+01:15:15 Use Locust to actually measure it.
+
+01:15:17 And if what it is something more local, like a data science type of thing or something
+
+01:15:21 computationally locally, run Cprofile with it and just measure, right?
+
+01:15:25 However you go about your measuring.
+
+01:15:27 Yeah.
+
+01:15:27 Fantastic.
+
+01:15:28 All right.
+
+01:15:28 Thank you, Julian.
+
+01:15:29 It's been great to chat with you and sharing these ideas.
+
+01:15:31 Great book.
+
+01:15:32 Thank you, Michael.
+
+01:15:33 Yep.
+
+01:15:33 Bye.
+
+01:15:33 This has been another episode of Talk Python to Me.
+
+01:15:37 Our guest in this episode was Julian Danzow, and it's been brought to you by 45 Drives and
+
+01:15:43 us over at Talk Python Training.
+
+01:15:45 Solve your storage challenges with hardware powered by open source.
+
+01:15:49 Check out 45 Drives storage servers at talkpython.fm/45 Drives and skip the vendor lock-in
+
+01:15:56 and software licensing fees.
+
+01:15:57 Want to level up your Python?
+
+01:15:59 We have one of the largest catalogs of Python video courses over at Talk Python.
+
+01:16:03 Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+01:16:08 And best of all, there's not a subscription in sight.
+
+01:16:11 Check it out for yourself at training.talkpython.fm.
+
+01:16:14 Be sure to subscribe to the show.
+
+01:16:16 Open your favorite podcast app and search for Python.
+
+01:16:19 We should be right at the top.
+
+01:16:20 You can also find the iTunes feed at /itunes, the Google Play feed at /play,
+
+01:16:25 and the direct RSS feed at /rss on talkpython.fm.
+
+01:16:30 We're live streaming most of our recordings these days.
+
+01:16:33 If you want to be part of the show and have your comments featured on the air,
+
+01:16:36 be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+01:16:40 This is your host, Michael Kennedy.
+
+01:16:42 Thanks so much for listening.
+
+01:16:44 I really appreciate it.
+
+01:16:45 Now get out there and write some Python code.
+
+01:16:47 I'll see you next time.
+
+01:17:07 Thank you.
 

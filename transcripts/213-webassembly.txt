@@ -1,0 +1,1640 @@
+00:00:00 On the last episode, we explored Pyodide, a project whose goal is to bring the CPython
+
+00:00:04 scientific stack to the browser via WebAssembly. This time, I meet up with Brett Cannon,
+
+00:00:09 one of the more well-known and prolific core developers, to explore what role WebAssembly
+
+00:00:14 has for CPython in general and what opportunities might exist for Python and WebAssembly at the
+
+00:00:19 moment. This is Talk Python to Me, episode 213, recorded on-site at PyCon on May 3rd, 2019.
+
+00:00:26 Welcome to Talk Python to Me, a weekly podcast on Python, the language, the libraries, the
+
+00:00:45 ecosystem, and the personalities. This is your host, Michael Kennedy. Follow me on Twitter,
+
+00:00:49 where I'm @mkennedy. Keep up with the show and listen to past episodes at talkpython.fm,
+
+00:00:54 and follow the show on Twitter via at Talk Python. This episode is brought to you by
+
+00:00:58 Microsoft. Be sure to check out what they're offering during their segments.
+
+00:01:02 It really helps support the show. Hey, folks. Thanks for listening in today.
+
+00:01:06 Just a quick heads up on the audio on this one. We recorded it live on the Expo floor hall at PyCon
+
+00:01:11 in Cleveland this year. I think the audio is actually amazing and came out great, but you will hear our
+
+00:01:16 voices straining a bit to talk over the crowd, and my voice in particular has a little road wear from
+
+00:01:21 all that conferencing. So sorry for my fading voice, but you'll enjoy the conversation with
+
+00:01:26 Brett for sure. Brett, welcome back to Talk Python.
+
+00:01:30 Thank you, Michael. Glad to be here.
+
+00:01:31 It's great to have you here. It's been too long. I mean, what has it been like? Three episodes?
+
+00:01:35 Has it even been that many? I don't know if it's even gone that far.
+
+00:01:38 I know. I don't think it has. But we're back together because we had a great show talking about
+
+00:01:44 the steering council, the future of Python governance, and all that kind of stuff. And then we hung up.
+
+00:01:49 Well, we stopped the recording. And I just threw this offhand comment about, oh, and what do you
+
+00:01:54 think about WebAssembly? Yeah. I mean, this happens every time I come on your show. We end up chatting
+
+00:01:59 after the hangup. And then it comes up, oh, we should have brought that up while we actually had
+
+00:02:03 the microphones recording. Yeah. And so we're going to be here at PyCon. We're recording live from the
+
+00:02:08 PyCon Expo Hall Center here. And that's what the background noise is everyone hears. So we're
+
+00:02:14 going to talk a little bit about WebAssembly. And I guess maybe we should start with what is this
+
+00:02:19 WebAssembly? Why is it interesting? To me, it seems like WebAssembly is starting to gain some traction.
+
+00:02:25 Yeah. So I'm going to preface all of this as I'm a fan and keep up on this out of interest. I actually
+
+00:02:32 almost made something similar to this, my PhD thesis, except my PhD supervisor, Eric Wellstetter,
+
+00:02:38 was smart enough to say, no, that's a bit ambitious for one PhD because that's going to take three or
+
+00:02:44 four other PhD students. And he didn't want to dedicate that much time of his life to the topic.
+
+00:02:48 I'll be your advisor, but come on, not for life.
+
+00:02:51 Exactly. So I'm just going to fully admit, I could quite possibly say something wrong about this.
+
+00:02:55 But basically to explain what WebAssembly is, is the browser vendors all got together realizing that
+
+00:03:00 while JavaScript is nice, it's not the end of the world and the best answer necessary for everyone.
+
+00:03:05 and they want a more lower level kind of target for languages in browser. And so they basically
+
+00:03:11 designed an assembly language specifically for the web. And the key thing here is you can think of it as
+
+00:03:18 basically like x86 or ARM or RISC or any of those other chips that have the low level assembly commands
+
+00:03:25 that the CPU actually executes. But the key thing here is it was designed to be performant,
+
+00:03:31 but also verifiable to be safe because as we know on the web, you can't trust everything that
+
+00:03:36 could send to your browser. So they very much made sure it was fast and verifiable, which is
+
+00:03:39 and cross-platform, which is also very cool.
+
+00:03:41 Yeah, I think that's the first danger when you think, all right, we have this binary thing and
+
+00:03:47 we're going to download it and execute it in your browser. They're like, oh my God, is this ActiveX?
+
+00:03:52 Is this calm? Is this the thing that's going to hack all the machines?
+
+00:03:56 We all know you do not download a random binary off the internet and run it and expect not to get
+
+00:04:03 some nasty malware installed on your machine. And the same goes for WebAssembly. You don't want
+
+00:04:07 a buffer overflow in your browser, right? That's hard enough just for the browser vendors to do with
+
+00:04:13 the render. The last thing you want is the JavaScript or anything else you download to just make
+
+00:04:16 a button flash to actually cause a buffer overflow and suddenly take over your machine.
+
+00:04:22 Right. So WebAssembly is kind of this assembly language. It's faster, it's binary, but it's run
+
+00:04:29 within the same sandbox as JavaScript.
+
+00:04:31 Yes, from my understanding.
+
+00:04:32 More or less.
+
+00:04:33 Yeah.
+
+00:04:33 But there's some really interesting things. A lot of things that compile to see can be made to compile
+
+00:04:38 to WebAssembly.
+
+00:04:39 Yeah. And that was actually the original way they tested this idea was there was a project called
+
+00:04:43 asim.js and they created a tool for LLVM called mscripten. And what they did was they just came
+
+00:04:50 up with a subset of JavaScript that you could actually compile C down to. And it was basically
+
+00:04:55 typed arrays to simulate a stack in memory and a bunch of other stuff. And they basically made it
+
+00:05:02 work. And they were able to show that if you added certain markers to tell the JavaScript's
+
+00:05:07 execution engines that, hey, you know what? This is actually asim.js, not normal JavaScript.
+
+00:05:11 They could actually get really good performance out of it. And that was enough of a motivation
+
+00:05:14 for them to go like, okay, let's make this a real thing. Let's not do kind of a weird little
+
+00:05:18 subset of JavaScript. Let's like do a proper assembly language that will still get us the
+
+00:05:22 exact same compile target and safety with even better performance.
+
+00:05:27 Right. Let's not try to treat JavaScript truly as assembly language, but make something that
+
+00:05:31 executes like binary bits, right?
+
+00:05:33 Exactly. Everyone's already compiled to JavaScript and knows it's possible, but let's actually take
+
+00:05:37 it to the next level and actually compile to a reasonable target.
+
+00:05:40 That's awesome. Did you happen to catch the birth and death of JavaScript by Gary Barnhart?
+
+00:05:45 No, I didn't.
+
+00:05:46 Oh my gosh. So this is such an insightful thing. So people out there listening, they're interested.
+
+00:05:50 They should definitely Google that. Maybe I'll put it in the show notes.
+
+00:05:53 It's a talk he did at PyCon, I think 2015. And it imagines a future where JavaScript takes over the
+
+00:06:01 world, talks about the future, like 2030, going down this Asm.js world and things being compiled
+
+00:06:07 deeper and deeper and deeper in the world, just being all JavaScript. And it's both super insightful
+
+00:06:11 because it talks about these things and predicts stuff. He's got examples of like having Quake,
+
+00:06:17 which is written in C run in Chrome, but then recompile Chrome to run in Firefox. So like
+
+00:06:23 Firefox is running Chrome, Chrome is running Quake, all like nested together in this, like it's
+
+00:06:28 turtles all the way down with JavaScript.
+
+00:06:30 Well, actually, I don't know if you caught Dan Callahan's keynote at PyCon US in 2018,
+
+00:06:34 but he did something similar where he showed a VR of a computer in a basement running similar
+
+00:06:41 Windows 3.1 running a browser in it. So you can go very deep with this stuff.
+
+00:06:46 Right. And so many of those were these sort of these proof of concepts into some JavaScript
+
+00:06:51 world. But WebAssembly is like, well, that's cool. Let's make that official.
+
+00:06:54 Yes.
+
+00:06:54 That's the stage for what the heck is WebAssembly. Now the big question is, CPython, right in its name,
+
+00:07:01 we know it's written in C. What are the possibilities for it being interacting with,
+
+00:07:08 doing interesting things with WebAssembly?
+
+00:07:10 There's basically two current projects that I'm aware of. So one is Pyodide,
+
+00:07:15 which I believe you'll have an episode out on this, if not already.
+
+00:07:18 Due to time shifting. It's not out yet, but it's out before this. So people will have heard of that.
+
+00:07:23 So go back and listen to that episode. But basically, someone at Mozilla has taken CPython
+
+00:07:27 and the scientific Python stack, so SciPy, NumPy, Pandas, all those.
+
+00:07:32 Which are heavily C underneath, right?
+
+00:07:34 Oh, and more, right? Because this also includes Fortran stuff.
+
+00:07:37 Like, this is deep level stuff, right?
+
+00:07:39 SciPy is crazy to compile.
+
+00:07:41 But what they did was, is they actually compiled that whole stack down to WebAssembly.
+
+00:07:46 And they got it running.
+
+00:07:47 And if I remember correctly from the blog post, they said it was three or four to 12 times slower,
+
+00:07:54 which is not great.
+
+00:07:56 I mean, compared to some things, but it was still actually fairly performant to the point that they actually,
+
+00:08:01 Mozilla has a demo, I believe, of Jupyter Notebook style workflow for data science exploration that actually works reasonably well.
+
+00:08:09 Yeah.
+
+00:08:10 And what's cool about that project is they've actually compiled the libraries that you need.
+
+00:08:14 So you can import NumPy, you can import Pandas in the browser.
+
+00:08:19 It'll go get the WebAssembly equivalent, suck that down on demand, by the way, which is cool.
+
+00:08:24 It doesn't even suck it all down in front.
+
+00:08:26 It's like, wait till you hit the import statement.
+
+00:08:28 And it sucks it down and it runs.
+
+00:08:30 So that's pretty cool.
+
+00:08:31 But to me, what that feels like, and not to take anything away from it, it's super cool,
+
+00:08:34 is that feels like, let's take the compilers we have and point them at the version we have
+
+00:08:40 and make them run in this place best we can.
+
+00:08:43 But it's not saying, what if we imagined what a CPython-developed for WebAssembly could be?
+
+00:08:51 Yes.
+
+00:08:52 It's very much a, let's take what we have already and see if we can make it work.
+
+00:08:56 Not a, let's make this a target of something.
+
+00:08:59 And what does that look like?
+
+00:09:01 That's a good question.
+
+00:09:02 That is a good question.
+
+00:09:03 So I think it's, I mean, it's super noble.
+
+00:09:04 It's awesome that they've done it.
+
+00:09:06 And like having Quake run in the browser, it proves it could be done.
+
+00:09:09 Yes.
+
+00:09:09 But size, size matters sometimes on the web.
+
+00:09:12 Right.
+
+00:09:12 And they fully admit in the PyoDiode project, I believe the download for the interpreter is
+
+00:09:17 40 megs, roughly.
+
+00:09:19 So it's not small.
+
+00:09:21 We might all be living with one multi-meg pages now, unfortunately.
+
+00:09:26 But they're not 40 megs.
+
+00:09:28 No one's that crazy.
+
+00:09:29 So there's definitely issues.
+
+00:09:31 Now, I'm also going to say that not all use cases for WebAssembly necessarily require a
+
+00:09:36 smaller download size.
+
+00:09:36 So for instance, if we were doing an Electron app.
+
+00:09:39 Like Visual Studio Code.
+
+00:09:40 Visual Studio Code.
+
+00:09:41 Or something else.
+
+00:09:42 Slack or any other Electron app I can see out on the shore floor from someone sponsoring PyCon.
+
+00:09:47 They don't have that download size restriction.
+
+00:09:50 They could totally just embed a 40 meg version and be done with it.
+
+00:09:53 Right.
+
+00:09:53 The Electron JS apps, for people who don't know, already embed the binaries of Chrome plus the
+
+00:09:59 binaries of Node.
+
+00:10:00 So throw in a few more megabytes of WebAssembly.
+
+00:10:03 Who cares, right?
+
+00:10:03 Whatever.
+
+00:10:04 But obviously, if we wanted this to be on the web or in more size restricted situations,
+
+00:10:10 like we're talking more embedded space or you're embedding it in a smaller, more native desktop
+
+00:10:16 app, like think Blender or something.
+
+00:10:19 That's where you start to care about the size.
+
+00:10:20 So directly compiling and see Python.
+
+00:10:22 While great is a great solution for today, it might not be if we want to potentially expand
+
+00:10:29 the possibilities in the future.
+
+00:10:30 Right.
+
+00:10:31 And Python is doing awesome.
+
+00:10:32 I mean, we've seen the stack overflow, the incredible growth of Python article.
+
+00:10:36 Yep.
+
+00:10:37 I mean, look around PyCon this year.
+
+00:10:39 Like to me, when I walked in here, I felt like, wow, Python's grown up a little bit.
+
+00:10:43 Like these booths are a little more corporate, a little more pro.
+
+00:10:46 They're like taller.
+
+00:10:46 I don't know what that means, but they're like twice as tall as last year.
+
+00:10:49 Yeah.
+
+00:10:49 I mean, I was kind of shocked when I came in here and I saw stuff hanging from the ceiling.
+
+00:10:53 I saw people with walls put up and these aren't just like custom for the booth walls.
+
+00:10:59 I mean, this is really slick stuff coming in here.
+
+00:11:02 So yeah, Python's definitely come a long way since I started using it.
+
+00:11:05 Yeah.
+
+00:11:05 And so my point is, that's amazing.
+
+00:11:07 But how far would it go if it could be in mobile, if it could be on the front end of web,
+
+00:11:14 if it could be the foundation of these Electron JSA?
+
+00:11:17 I mean, there's like lots of growth.
+
+00:11:19 There's headroom here for more.
+
+00:11:20 Yeah.
+
+00:11:21 And if you get a chance, watch Russell Keith McGee's keynote from PyCon US 2019.
+
+00:11:28 It was on Friday.
+
+00:11:29 He did a really good job of outlining why this is a potentially great growth opportunity for Python.
+
+00:11:36 We're in a lot of spaces, right?
+
+00:11:38 As I said, we're embedded.
+
+00:11:39 We do scripting.
+
+00:11:41 We do some desktop apps.
+
+00:11:43 We do web.
+
+00:11:44 We do data science.
+
+00:11:46 But for instance, we haven't really tapped into the mobile space or the web space front end.
+
+00:11:51 Obviously, we got backhand covered.
+
+00:11:53 So there's definitely opportunity for us to grow the community and help bring more people in.
+
+00:11:57 Because I've been told we have one of the best communities in the world.
+
+00:12:00 So I'd like to honestly do this just so we can get more people actually in and participating and off of communities that they might not be happy with.
+
+00:12:07 Yeah.
+
+00:12:07 And to me, it feels like WebAssembly kind of holds the key to unlocking some of those possibilities.
+
+00:12:12 Yeah.
+
+00:12:13 I think it's a definite possibility.
+
+00:12:15 I don't think we can necessarily claim it's definitely a panacea or that it's an obvious black swan event.
+
+00:12:20 Another reference to Russell's keynote.
+
+00:12:22 But I think there's definitely enough there to make it a very interesting possibility worth looking into.
+
+00:12:27 Okay.
+
+00:12:28 So I guess let's think about you are on the core dev team.
+
+00:12:32 You are also on the steering council.
+
+00:12:34 You obviously don't make all the decisions, but you're in a place to have some internal insights.
+
+00:12:38 What would need to happen?
+
+00:12:39 Or is there any possibility of CPython having an official WebAssembly story?
+
+00:12:46 I don't know.
+
+00:12:48 So in any official capacity, I have to say, I don't know.
+
+00:12:52 Personally, I would love to see it.
+
+00:12:54 One thing I can say is we've had some very initial discussions on the steering council about kind of coming up with a vision document of what would it take to make Python two times faster?
+
+00:13:05 Right.
+
+00:13:05 And kind of like outlining like what do we view as necessary?
+
+00:13:09 What do we view as acceptable?
+
+00:13:10 What do we view as total fertile ground?
+
+00:13:13 And we don't care what you do.
+
+00:13:15 And we've just started talking about this.
+
+00:13:17 So there's nothing specific there.
+
+00:13:19 But I mean, you could theoretically think of some company going like, oh, okay, I've read this document.
+
+00:13:24 I see kind of where you're going.
+
+00:13:25 We're going to take a stab at it and we're going to try to make a WebAssembly Python.
+
+00:13:29 Now, who knows what that means?
+
+00:13:31 That could either mean let's see what happens if we didn't do see Python to WebAssembly, but we still had an interpreter that was more restricted to make the size smaller.
+
+00:13:39 Or someone could even do a straight Python to WebAssembly compilation target.
+
+00:13:43 Now, I don't know what we'd have to give up for that.
+
+00:13:45 For instance, for my reading of the spec, WebAssembly doesn't provide a way to directly execute on the fly compiled WebAssembly like actual assembly does.
+
+00:13:55 Right.
+
+00:13:55 That's how JITs work.
+
+00:13:56 They actually write to a memory point and you basically treat it like a function pointer in C and that just magically gets executed.
+
+00:14:02 There is no equivalent from what I can tell in WebAssembly.
+
+00:14:05 So that would potentially make eval and exec a problem if we were trying to compile Python straight to WebAssembly.
+
+00:14:11 But I think there's opportunity there to explore all this stuff and see where it goes because there's general excitement from what I've been seeing and hearing from people about this idea, not just for Python, but the overall tech community as a really clear, cool opportunity.
+
+00:14:26 I mean, Cloudflare is doing JavaScript on the edge computing, but it's JavaScript, but you can compile the WebAssembly.
+
+00:14:32 And then recently Fastly came out and just said, we're doing straight WebAssembly.
+
+00:14:36 That's all we're doing for their edge computing.
+
+00:14:38 There just seems to be a real kind of conglomeration of people, at least in the web space around this as a thing.
+
+00:14:44 And obviously, we all know the web's got a lot of money and a lot of push.
+
+00:14:47 So I think it's worth at least considering and taking a look.
+
+00:14:50 Yeah, that's a super interesting point.
+
+00:14:51 There's definitely a huge, huge number of users there.
+
+00:14:54 I mean, Flask, we consider Flask to be like one of the more popular things, right?
+
+00:14:58 It's got 41,000 GitHub stars.
+
+00:15:00 Just Vue.js has 140,000.
+
+00:15:04 I mean, like the scale is massive, right?
+
+00:15:06 So the days are early, I think.
+
+00:15:08 So if we could tap into the whole WebAssembly space at the early days, you know, how much could we make Python a first class citizen there?
+
+00:15:17 Yeah, I mean, and that's really what I would love someone who has the time and resources to actually look into, right?
+
+00:15:24 Like really doing the research, finding out how possible it is.
+
+00:15:27 What would we gain?
+
+00:15:28 What could we make it as fast to see Python if it is slower or faster by how much?
+
+00:15:34 It's something I would just love for someone to just go out and try.
+
+00:15:39 Yeah, it's super interesting.
+
+00:15:40 I mean, we talked about Pyodide, and that's really great.
+
+00:15:42 But that's super focused on getting the scientific stack on the client side in the browser.
+
+00:15:47 Yeah, and I believe Mozilla even admits that it's fully a proof of concept.
+
+00:15:50 It's to show that this is possible.
+
+00:15:52 I don't know how far they plan to take it.
+
+00:15:54 So I don't know where they could even push it.
+
+00:15:56 But I mean, it'd be great to see.
+
+00:15:57 Yeah, another one that's really interesting that's not anything to do with Python but comes from your home base in the Microsoft world is Blazor.
+
+00:16:05 Are you familiar with Blazor?
+
+00:16:06 A little bit.
+
+00:16:07 Yeah, so Blazor is take the .NET CLR, which is also JIT-based, and take C Sharp and turn that into a front-end single-page app framework through WebAssembly.
+
+00:16:18 So if they were able to get the CLR and all the UI bits down, it seems like the CLR and CPython are sort of comparable in size and complexity, ignoring the libraries.
+
+00:16:29 I think it definitely shows that with the resourcing, it's definitely possible to use WebAssembly as a target, even as it is, which the WebAssembly team and the website and everything are very clear that this is very much a minimum viable product.
+
+00:16:43 And they are still very much working towards it.
+
+00:16:45 Like, they just announced something called WASI, W-A-S-I, which adds a system interface.
+
+00:16:50 That's what the S-I stands for, to WebAssembly, because they realize that with a portable target, you can now actually start using this for more desktop application and execution, right?
+
+00:16:58 So basically, if you start to treat WebAssembly as kind of the world's common interpreter layer, and you start targeting that, it starts to really open up.
+
+00:17:06 And in order to make that work, you really have to have that layer of basically POSIX on Unix would cover.
+
+00:17:11 And so they're very much working towards that.
+
+00:17:14 It's still early days, but once again, there's definite possibility there.
+
+00:17:17 Absolutely.
+
+00:17:18 So let's bring it back to your original statement.
+
+00:17:19 What if you could make CPython two times, well, Python two times faster?
+
+00:17:24 What are some of the ideas you have there?
+
+00:17:25 For Python, it's in general or specifically for WebAssembly?
+
+00:17:28 Let's start with in general.
+
+00:17:29 I think the key thing there is going to be really outline exactly what is like things we just cannot give up, right?
+
+00:17:37 Like compatibility, at what level?
+
+00:17:41 Where would we go?
+
+00:17:42 Like, okay, if we gave this up, the community would just never even contemplate it.
+
+00:17:47 It just would break way too much code, whatever.
+
+00:17:48 It just wouldn't work.
+
+00:17:49 Right.
+
+00:17:49 If C extensions went away, that's probably a bridge too far.
+
+00:17:52 Exactly.
+
+00:17:52 Right.
+
+00:17:53 Like, what would we be okay with transitioning, right?
+
+00:17:57 Like we've done two to three and we know how difficult that was, but we also know why that was difficult.
+
+00:18:01 If we had ways to automate bridging and such so that that pain wasn't there, that's a possibility.
+
+00:18:08 I think it's PEP554 that is multiple sub-interpreters.
+
+00:18:11 Yeah.
+
+00:18:11 Eric Snow's PEP.
+
+00:18:12 Yep.
+
+00:18:12 Would it be possible to maybe use that as a compatibility layer these days?
+
+00:18:17 Right?
+
+00:18:18 Like you take the stuff that runs over here and you got to do an eval.
+
+00:18:20 So we're going to do the eval and another.
+
+00:18:22 That's an interesting idea.
+
+00:18:23 I honestly have not thought about it.
+
+00:18:24 That's all I know.
+
+00:18:25 I haven't really thought much about it either.
+
+00:18:26 But it seems like you might be able to have like a compatible older CPython that handles the cases that's not as fast.
+
+00:18:33 And then like a proper, maybe like a jitting.
+
+00:18:36 That comes tricky because all that's running in the same process.
+
+00:18:39 So suddenly you're getting a multiprocessing scenario and that always has its own kind of worms that if you're not really aware of how it's working and what the edge cases are, it can really show my problem.
+
+00:18:49 So I don't know.
+
+00:18:50 Maybe it's not worth pursuing.
+
+00:18:51 Yeah, probably not.
+
+00:18:52 Yeah.
+
+00:18:52 I know a lot of people want that idea of when we're doing the two to three bridging and no one ever really got to work properly.
+
+00:18:58 So I'm going to assume in any other scenario, it just ain't going to work.
+
+00:19:00 It just wasn't worth the trouble.
+
+00:19:01 Okay.
+
+00:19:02 Interesting.
+
+00:19:03 I honestly don't know.
+
+00:19:04 Like I know there's Rust Python and people are working on that.
+
+00:19:06 I've always been curious to see what Rust could give us in terms of safety and performance.
+
+00:19:10 I also know though, some people don't want to go that route because at least in CPython's case, Rust is not available on every platform where there's a C compiler.
+
+00:19:18 And so there and the embedding story is there, but it's not necessarily quite as straightforward if you don't put in the work to do that.
+
+00:19:25 I mean, you can give FFIs through C through Rust, but that's an extra layer of work.
+
+00:19:30 Right.
+
+00:19:30 Maybe slower too with another layer.
+
+00:19:32 So I think the key thing here is also don't focus too much on CPython itself.
+
+00:19:36 I mean, if we're talking website, we're talking basically a whole new thing.
+
+00:19:40 So I totally up and just even first proof of concept for whatever.
+
+00:19:43 I would want people to try anything and don't tie yourself to CPython as necessarily the starting point.
+
+00:19:48 Tie yourself to CPython as kind of the way to test your compatibility.
+
+00:19:52 Although I would still say, don't tie yourself to every edge case and every little potential bug.
+
+00:19:58 Because Guido has even said before he retired that really small edge casey parts of the language that no one really uses would be up for consideration from being deprecated and removed from language if it made a massive performance difference.
+
+00:20:11 So people have also never done that exploration.
+
+00:20:13 So we even have that potential, regardless of WebAssembly, of ways to potentially speed up Python.
+
+00:20:20 This portion of Talk Python To Me is brought to you by Microsoft.
+
+00:20:23 For ultimate developer productivity in the cloud, use Azure extensions for Visual Studio Code.
+
+00:20:28 You can deploy and debug your serverless Python apps directly from your editor.
+
+00:20:32 On Azure, you can run your Python apps as serverless code on Linux web apps and functions or on top of managed Kubernetes and easily connect data from database services, including Postgres and MySQL.
+
+00:20:44 You can also use Azure DevOps to create cross-platform builds of your Python packages with hosted macOS, Linux, and Windows build machines.
+
+00:20:52 And publish them to Azure Artifacts for your own hosted PyPI feed.
+
+00:20:56 Azure DevOps is free for open source projects and many are using it already.
+
+00:21:00 Get started for free at talkpython.fm/Microsoft.
+
+00:21:04 We've had a lot of progress, right?
+
+00:21:07 Yes.
+
+00:21:08 From 3.5, maybe 3.4, let's say 3.4 to 3.7.
+
+00:21:11 Yes.
+
+00:21:12 The stuff that Victor Stenner was doing and other people, you would hear, oh, dictionaries got this much faster.
+
+00:21:18 Function calls got 20% faster, bound methods or whatever, right?
+
+00:21:21 Year over year, that stuff's compounding as well, right?
+
+00:21:24 And I don't think we've even necessarily hit all the low-hanging fruit, but I do believe that we're reaching a point where I think on the team,
+
+00:21:30 we're realizing that our goal from years back of keeping the interpreter simple, specifically to make it easier to contribute to,
+
+00:21:40 by making it easier to comprehend how it works.
+
+00:21:42 Basically, Python's so big, we can't really do that anymore.
+
+00:21:45 I think we've hit the point now where we don't worry about whether a single individual can fully comprehend how the entire interpreter works,
+
+00:21:52 because we realize that so many people rely on it.
+
+00:21:54 We need to keep it maintainable, obviously, but we don't need to keep it simple.
+
+00:21:59 And that's a very key distinction.
+
+00:22:01 And so I think there's opportunity there, once again, if someone had the time and resources to really dig into that
+
+00:22:06 and see what would be possible to actually speed up CPython itself and obviously whatever crazy thing someone might do.
+
+00:22:13 What's the possibility, likelihood of some kind of JIT making it a point?
+
+00:22:18 I know you worked on Pigeon.
+
+00:22:19 Yep.
+
+00:22:19 Which maybe, I lived in a different country when we last spoke about Pigeon.
+
+00:22:24 Maybe tell people quickly about what that is.
+
+00:22:25 Pigeon, for those of you who don't know, and it's spelled P-Y-J-I-O-N, was a project with Dino Veland, who was a co-worker at the time, now at Facebook, and myself worked on back in 2016, I believe?
+
+00:22:38 Yeah, I think it was 2016, yeah.
+
+00:22:39 Where we looked at what it would take to jet CPython executable bytecode using .NET.
+
+00:22:46 And we got the project to the point where we developed a PEP for adding a hook into CPython to allow you to override the eval loop,
+
+00:22:55 the actual function that you pass commands through.
+
+00:22:58 Which is like 3,000 lines switch.
+
+00:23:00 It's an impressive thing.
+
+00:23:01 It's a very large thing.
+
+00:23:03 Eval.c, yeah, that's it.
+
+00:23:04 Eval.c has got a, it's quite the impressive function.
+
+00:23:07 But basically, we tried a way to hook into it such that if we took some Python bytecode and compiled it down into .NET IR,
+
+00:23:14 which is stack-based as well, which made the translation, I'm not going to say straightforward, but at least possible,
+
+00:23:19 we did it and we managed to hit the Python benchmark suite pretty much even.
+
+00:23:24 Unfortunately, once, after we did our PyCon talk, work got in the way and we just weren't able to pursue it any farther.
+
+00:23:31 Yeah, I remember you said it got even and that's pretty good.
+
+00:23:33 How much more do you think it could have gotten better?
+
+00:23:35 A lot?
+
+00:23:36 Or is it kind of like...
+
+00:23:37 That's one of those things where with JITs, you just never know.
+
+00:23:40 Like if you talk to the PyPy folks, they'll fully admit, I'm sure, that PyPy is excellent and can go really fast if it works for you.
+
+00:23:46 But for some people, they need very deterministic performance because JITs always work on hot code and such.
+
+00:23:51 And it can be very variant based on the current workload.
+
+00:23:53 Right.
+
+00:23:53 With the reference counting in CPython, it's pretty predictable.
+
+00:23:57 Yeah, exactly. So I don't know what PyJint could have been had we put more time into it because JITs, by definition, are very load dependent.
+
+00:24:06 And so there's just no way to even speculate.
+
+00:24:08 How much does a GC and generational garbage collectors are required around JITs?
+
+00:24:14 I mean, most of that unpredictability has more to do with the garbage collection side of things than they do with the JIT.
+
+00:24:20 Because you could pre-JIT stuff and things like that if you had to.
+
+00:24:24 I don't think it necessarily really ties into it specifically.
+
+00:24:26 So for those of you who don't know, CPython uses reference counting to do its memory management, which basically means we keep track of the number of places an object is referred to in your Python code.
+
+00:24:35 So every time you do an assignment, the count goes up by one.
+
+00:24:38 And every time a variable goes away, goes down by one.
+
+00:24:42 And basically when an object hits zero, we garbage collect it.
+
+00:24:44 Yeah.
+
+00:24:44 It's very straightforward.
+
+00:24:45 But the nice thing about it is it's very deterministic, right?
+
+00:24:49 So if you define your dunder del on an object, you can actually see that execute fairly quickly after you actually delete the object.
+
+00:24:56 With garbage collection, you don't get that.
+
+00:24:57 So really the bigger problem with that has always been the C API.
+
+00:25:00 Because it's very directly exposed for C extensions to be able to properly manage the memory that they need for any objects they create.
+
+00:25:07 And that has always been a stumbling block for things like the GIL because in order to control that kind of stuff, there's overhead.
+
+00:25:15 And the real key thing is the global interpreter lock exists specifically for reference counting because that's how we make sure you don't accidentally stomp on each other when like two threads try to both increment or decrement.
+
+00:25:27 And you don't want to lose all of those because if you get the count wrong, that's a memory and that's not a good time.
+
+00:25:32 It's either a crash or it's a memory like depending on which way the race condition runs.
+
+00:25:35 Yeah, whichever badness you want, choose one.
+
+00:25:37 Yeah, okay.
+
+00:25:38 You just don't get to choose though because one of the threads will choose for you, which is the problem.
+
+00:25:41 So I honestly don't know from a JIT perspective if it really specifically matters depending on how you decide to handle it.
+
+00:25:48 But getting off of a rust kind of opens things up because it gets rid of that single point of contention with the gill.
+
+00:25:53 Right, okay.
+
+00:25:54 That's interesting.
+
+00:25:56 I think the GIL gets more negativity than it deserves, honestly.
+
+00:25:59 It's one of those things where if you're IO bound, it doesn't matter.
+
+00:26:02 And if you're CPU bound, it can, but only if your load is that high that this is really a critical thing.
+
+00:26:08 Right.
+
+00:26:08 So there may be some C library that's already doing parallelism for you or...
+
+00:26:12 Yeah.
+
+00:26:12 And if you look at Eric Snow's work with subinterpreters, there's the potential there that if Eric can get it all working to have per interpreter gills,
+
+00:26:23 which would then give you per thread interpreters, which would then let you have GIL release because basically each interpreter in its own thread running on our gill, which should still have its contention.
+
+00:26:34 But it's equivalent to basically running completely free threads, which would help a lot.
+
+00:26:40 And it doesn't require us to completely rewrite every extension.
+
+00:26:43 And we don't have to try to detangle all this world.
+
+00:26:47 And we get to keep the very straightforward and determinist reference counting.
+
+00:26:50 That's all really interesting.
+
+00:26:51 And I guess sort of a roundabout.
+
+00:26:53 The reason I was asking about a lot of these things is if your goal is to make Python run twice as fast, there's all these options, but there's all these limitations because of the history of the implementation of C for Python and the C, you know, Val.c and all that.
+
+00:27:08 What if it was written in something like Rust or something else?
+
+00:27:12 I guess let me also preface that with like Rust is all about compiling to WebAssembly.
+
+00:27:17 So could you get your one benefit and then unlock this other WebAssembly world at the same time?
+
+00:27:22 I think it's definitely possible from my understanding.
+
+00:27:25 I don't know what kind of restrictions your Rust code has to be placed on it in order to compile down to WebAssembly.
+
+00:27:31 But I think it's definitely there.
+
+00:27:32 For some people, CPython is just a Python interpreter.
+
+00:27:36 And it's not a critical aspect that it has this extensive C API that allows you to do these C extensions.
+
+00:27:42 And for others, it is.
+
+00:27:43 And that also varies based on people who embed CPython and a C or C++ application and those who don't.
+
+00:27:49 Like design apps that have an automation or whatever.
+
+00:27:52 Yeah, like Blender is a perfect example.
+
+00:27:54 Blur Maya, a lot of the 3D, the special effects tooling in movies often embed CPython specifically because they want Python embedded as a scripting tool.
+
+00:28:03 So for those people, that would matter if the hypothetical Rust implementation didn't provide those kind of hooks.
+
+00:28:10 But for others, it wouldn't.
+
+00:28:12 This is one of those things where for me personally, I've always viewed it as Python the language as implemented by CPython the interpreter.
+
+00:28:21 And so I view the key component as the language.
+
+00:28:24 And we just happen to have this CPython implementation, which, by the way, is really great for embedding as a thing.
+
+00:28:31 But I don't think that necessarily means that CPython, in my personal view, as like special or in some way untouchable or unreplaceable in terms of at least having other options.
+
+00:28:42 I mean, PyPy exists and it does have users, right?
+
+00:28:45 There's a reason it's there.
+
+00:28:46 It doesn't work for everybody.
+
+00:28:47 And that's fine.
+
+00:28:48 The key question is, is does the community and do other people who have the time and resources to put in the work to look at making Python faster, whether it's through WebAssembly or through Rust or through helping make CPython go faster, do they have the stomach and the, honestly, gumption to take some of these paths and try to make it happen?
+
+00:29:06 That I don't know.
+
+00:29:07 And honestly, I can't answer that until the community as a whole kind of comes forward and says, we're going to give this a shot and we see what happens.
+
+00:29:13 Yeah, I mean, that's a really big question.
+
+00:29:15 We just kind of put to bed this whole Python 2, Python 3 saga.
+
+00:29:20 And I know it's a totally different story, but it's kind of just churn and fatigue for some folks.
+
+00:29:26 And so, you know, how much do you want to like rattle that cage?
+
+00:29:30 Maybe just let things settle for a while.
+
+00:29:32 I don't know.
+
+00:29:32 I know for a long time, a lot of people have hoped that once Python 2 was laid to rest, that the mental, honestly, the cumulative mental capacity of the community would suddenly be freed up because suddenly all this Python 2 stuff would kind of just go away.
+
+00:29:48 The weight is off us.
+
+00:29:49 Yeah, the bite of our collective brain that had to still deal with Python 2 would now be free to just try to make Python 3, which then honestly is just going to be Python, just make Python faster and better.
+
+00:30:00 And I would like to think and hope that that's going to happen, but I honestly don't know.
+
+00:30:04 Once again, that's going to come down to the community coming forward and saying, you know what?
+
+00:30:08 We want to help make this happen and we're going to work with everyone as necessary to make that a thing.
+
+00:30:13 Yeah, well, maybe we're entering a period of where lots of flowers will bloom.
+
+00:30:16 Some of them will wither.
+
+00:30:18 Some of them will grow into trees or whatever.
+
+00:30:20 But, you know, for example, taking CPython itself and just compiling it to WebAssembly and getting it to run, say, in like an Electron JS app, like that would be a huge win for deployment, I think, because all you deploy is this little WebAssembly binary and it just loads up in the Chrome.
+
+00:30:36 And maybe that unlocks one area of growth.
+
+00:30:38 Maybe Pyodide does something for the data science and there's a bunch of different areas.
+
+00:30:43 And eventually we find what's working, find ways to adapt them.
+
+00:30:47 I don't know.
+
+00:30:47 What do you think?
+
+00:30:47 I'm honestly, one thing I'm curious about with WebAssembly is whether the phone OSs are going to start potentially adopting it as a target as well, right?
+
+00:30:55 Like I could imagine a world where Android and iOS suddenly started allowing WebAssembly as a compiled target versus specifically Swift and the raw C stuff on iOS.
+
+00:31:06 Or the equivalent on Android or its art on JIT.
+
+00:31:09 And I don't know if WebAssembly will catch that much.
+
+00:31:13 But if it does, that really opens it even to an even greater extent in terms of the usefulness and potential importance of WebAssembly.
+
+00:31:19 Because if you get that, then suddenly you have the web and you have mobile.
+
+00:31:23 And with Wazoo, you get desktop.
+
+00:31:25 That's a crazy amount of the user base in terms of just flat out computer users.
+
+00:31:31 It's just crazy.
+
+00:31:32 Yeah.
+
+00:31:32 I mean, the three places I see missing the huge growth opportunities are desktop, mobile, and front end and web browsers.
+
+00:31:38 Yeah.
+
+00:31:38 That kind of hits them all.
+
+00:31:39 Yeah.
+
+00:31:39 Yeah.
+
+00:31:40 And once again, I'm just going to keep harping on this.
+
+00:31:43 It's really going to come down to the community coming forward.
+
+00:31:45 And I do want to say I personally really hope that whatever the community does do, we're able to work together as a community.
+
+00:31:52 Like, I don't want to see fragmentation of, oh, I've done this thing, this version of Python that's slightly different.
+
+00:31:58 And, oh, this person over here has done a version of Python that's slightly different.
+
+00:32:01 And we haven't talked as a community about what we care about.
+
+00:32:03 And try to also pull everyone together to kind of work towards a common goal versus, oh, I think we should do it this way.
+
+00:32:09 No, I think we should do it that way.
+
+00:32:10 Okay.
+
+00:32:10 Well, I'll re-implement Python with a garbage collector over here.
+
+00:32:13 And, oh, here.
+
+00:32:14 And I'll do it a different way over here.
+
+00:32:16 And there's no way for them to work together.
+
+00:32:18 I understand experimenting with different ways, but I would still want them to hopefully end up in the same spot together such that we're just not wasting time and energy.
+
+00:32:26 Because as you commented earlier, we already did that with the Python 2 to 3 transition.
+
+00:32:30 It was somewhat painful, but we got through it.
+
+00:32:32 And there was reasons for it.
+
+00:32:33 And I don't regret it.
+
+00:32:34 But I also don't want to ever purposely do that again if we can avoid it.
+
+00:32:40 And so my big hope is we can get the community to come together as a group to try to decide how we want to make this happen.
+
+00:32:46 Yeah, I definitely second that.
+
+00:32:47 I don't want to dictate much is my key point.
+
+00:32:49 And I can't speak for my other steering council members, but I don't think they want to either.
+
+00:32:54 I think our key goal in anything, if anything does come out, is how can we help shepherd the community towards a single point and try to give guidance to help make sure that everyone is able to work together as a community.
+
+00:33:05 I think that sounds great.
+
+00:33:06 One of the things that might be cool, you talked about maybe eval not working, for example.
+
+00:33:11 And is that a problem?
+
+00:33:13 I don't even know how much of a problem that would be.
+
+00:33:16 I don't know.
+
+00:33:16 I mean, for instance, for a long time, named tuples required it.
+
+00:33:19 Yes, I remember.
+
+00:33:20 Yeah.
+
+00:33:20 Yeah.
+
+00:33:21 And a lot of people didn't know that.
+
+00:33:22 And then that just got changed, I believe, in 3.6, perhaps?
+
+00:33:27 Maybe 3.7?
+
+00:33:28 Yeah.
+
+00:33:28 Versus blur for me.
+
+00:33:29 Yeah.
+
+00:33:29 So yes, for the longest time component that a lot of people use in the starting library would not have worked.
+
+00:33:34 So it really, it's one of those things, as I said, I don't know.
+
+00:33:38 Edge case stuff.
+
+00:33:39 I think the team would be open to ditching things that really can be shown as like, yeah, not a lot of people use this.
+
+00:33:46 And boy, is it a pain to implement.
+
+00:33:47 Let's really consider getting rid of it because it's just not important enough to keep around for that performance boost.
+
+00:33:52 One of the thoughts I was having is, what if there's like a, something like a subset standard Python language, like, okay, maybe we can't have meta classes, or we can't have eval, or something that's kind of edge.
+
+00:34:05 Or maybe, I don't know.
+
+00:34:06 But if you target like this subset, it's guaranteed to run in some WebAssembly world, in CPython, maybe in PyPy, maybe like we're a...
+
+00:34:15 Well, so have you heard about mypyC?
+
+00:34:16 I've heard of it, yeah.
+
+00:34:17 Yeah.
+
+00:34:17 So for those of you who don't know, the mypy team has implemented a tool called mypyC, where basically they can take a subset of Python that's fully typed, run it through mypy, and they use mypy as actually a compiler front end to drive it to a Python C extension backend,
+
+00:34:35 and actually emit a Python extension for your Python code.
+
+00:34:38 And it was originally written for mypy, I assume because Dropbox wanted mypy to run faster.
+
+00:34:43 But they've actually gotten mypy to run four times faster than what Guido's told me.
+
+00:34:48 Wow.
+
+00:34:48 At Dropbox by doing this.
+
+00:34:50 Now, they fully admit it.
+
+00:34:52 It was fully written for mypy, and it's got a very specific subset, and it's very targeted.
+
+00:34:55 But that does tie into your whole, like, what happens if we make it so that, if you care, just type Python end to end for your code, and then pass it through something like mypyC.
+
+00:35:05 And hit that target.
+
+00:35:06 I mean, some people have done that with Cython, but Cython is very much...
+
+00:35:09 It's kind of got its own little bit of syntax.
+
+00:35:10 It's got its own syntax.
+
+00:35:11 It's got its own syntax.
+
+00:35:12 You've got to, like, do its style, you know.
+
+00:35:14 Well, they've actually added type hint support for it.
+
+00:35:17 Which is awesome, yeah.
+
+00:35:17 Which is great.
+
+00:35:18 But Cython is also typically targeted much lower constructs like C-level ints, right?
+
+00:35:24 And void stars and structs and that kind of thing.
+
+00:35:27 While mypyC is targeting a higher level, not such a C-level bridge like Cython, but very much specific.
+
+00:35:32 This is just normal Python.
+
+00:35:34 We just want Python faster.
+
+00:35:35 Yeah.
+
+00:35:36 So it's a slightly different opportunity from what Cython's been targeting all these years.
+
+00:35:39 And done a good job at them.
+
+00:35:41 Cython definitely deserves credit for what they've done.
+
+00:35:42 Absolutely.
+
+00:35:43 So there's a lot of possibilities.
+
+00:35:44 I don't know if WebAssembly has to be here or not, but it seems like it could be.
+
+00:35:48 I think it's definitely worth a consideration.
+
+00:35:49 I think, as you...
+
+00:35:51 Hopefully people can tell through the excitement in our voices.
+
+00:35:53 I think both Michael and I obviously think it's a great thing.
+
+00:35:58 And I think it's a very cool piece of tech.
+
+00:36:00 And I like the motivation behind it.
+
+00:36:01 And I think they seem to be driving it for the right reasons.
+
+00:36:04 And I think it's definitely worth looking at.
+
+00:36:06 I think it's just a question of what benefits will Python get as a community?
+
+00:36:10 And will that be enough to cover...
+
+00:36:12 Tick five boxes or tick two boxes?
+
+00:36:15 Right, right, right.
+
+00:36:16 Or 10 boxes even because we just don't know.
+
+00:36:17 It's enticing enough that I really do hope someone gives it a solid go.
+
+00:36:21 Yeah, I concur.
+
+00:36:22 And one of my bits of excitement is around how it seems to let languages interoperate.
+
+00:36:28 If you can get something to get down to WebAssembly, you can get it to play with other things that it might not, right?
+
+00:36:34 If I can compile CPython to WebAssembly, I can now get it to do JavaScript-y things with JavaScript and work with other stuff and Rust.
+
+00:36:42 If I can get it there, I can get it in the space as well.
+
+00:36:44 There seems like it could be a cool integration layer.
+
+00:36:47 Oh, most definitely.
+
+00:36:48 If you look at the WebAssembly spec, what it actually specs out in the MVP,
+
+00:36:51 is basically unassigned and assigned ints, both 32 and 64, floats and functions, plus imports at the module level.
+
+00:37:01 But the key point is because they're specifying at the function level, if you wrote something in JavaScript and had it compiled down to a WebAssembly function...
+
+00:37:09 If you could export that function.
+
+00:37:10 Exactly.
+
+00:37:11 So now at the WebAssembly level, it's available.
+
+00:37:13 So as long as your code, as long as Python knows how to work with WebAssembly code, it can do that.
+
+00:37:18 And actually, there is a WebAssembly implementation called Wasmr, which I believe you talked about on Python Bytes.
+
+00:37:24 Yes, we did talk about it on Python Bytes.
+
+00:37:26 And Wasmr is super exciting.
+
+00:37:27 Tell people about that.
+
+00:37:28 Yeah.
+
+00:37:29 It's like the reverse of what we're talking about in a sense.
+
+00:37:31 Yeah, yeah, exactly.
+
+00:37:31 So it's a WebAssembly implementation.
+
+00:37:33 But one of the interesting things they've done is they've defined their own basic kind of C API.
+
+00:37:37 And so what they're letting other languages that can do C API work is they allow you to actually use it like an extension.
+
+00:37:45 So what Wasmr has is they actually have a C extension for Python that will actually let you load WebAssembly code into Wasmr.
+
+00:37:52 And then make calls through Python into Wasmr itself to do execution on your behalf and then come back.
+
+00:37:57 Kind of like what your idea was earlier, Michael, about could we somehow use a sub-interpreter to do backwards compatibility?
+
+00:38:03 This is actually using kind of like almost a multiprocessing kind of like out through an extension call to have some WebAssembly get executed on your behalf and then come back into Python.
+
+00:38:11 Yeah, it's really cool.
+
+00:38:13 To me, when I saw it, I felt like it's a little bit like what Node.js did.
+
+00:38:16 So JavaScript was stuck in the browser and it lived in the browser and it's a web thing.
+
+00:38:19 But then Node.js came along.
+
+00:38:20 All of a sudden, we could take this stuff and bring it to run on the desktop or on a server.
+
+00:38:26 And it brought it.
+
+00:38:26 So this lets us take anything that would run in WebAssembly and now bring it into your Python application on the server side.
+
+00:38:33 And run it.
+
+00:38:33 And that's just that's a pretty exciting, different take on this angle here.
+
+00:38:37 Yeah, I mean, I think it's a very clever way to try to start that bridging of showing people the benefits of WebAssembly, but also just making it useful today.
+
+00:38:47 Right.
+
+00:38:47 Because like there's plenty of great stuff being written in JavaScript or any other language that can target WebAssembly, Rust.
+
+00:38:54 And there's no reason why you can't reach for it through that mechanism.
+
+00:38:57 So I think, once again, it acts even just at some levels of proof of concept to show what the possibilities are.
+
+00:39:03 If as a technical community, all up, what would happen if all languages and tooling and all that started to actually start to tackle the WebAssembly as a target and try to actually work towards that as a common goal?
+
+00:39:16 It's early days, but it's exciting to imagine what might happen.
+
+00:39:18 It feels very utopian, amazing if we could have it.
+
+00:39:22 And it's kind of cool and exciting because it seems not totally bonkers to actually aim for it.
+
+00:39:27 So, yeah.
+
+00:39:28 People have always said that JavaScript is the assembly language of the Web, but maybe WebAssembly actually is going to be what we get to.
+
+00:39:33 This portion of Talk Python is sponsored by Microsoft and Visual Studio Code.
+
+00:39:40 Visual Studio Code is a free, open-source, and lightweight code editor that runs on Mac, Linux, and Windows with rich Python support.
+
+00:39:48 Download Visual Studio Code and install the Python extension to get coding with support for tools you love like Jupyter, Black Formatting, Pilot, pytest, and more.
+
+00:39:56 And just announced this month, you can now work with remote Python code bases using the new Visual Studio Code remote extensions.
+
+00:40:04 Use the full power of Visual Studio Code when coding in containers, in Windows subsystem for Linux, and over SSH connections.
+
+00:40:10 Yep, that's right.
+
+00:40:11 Auto completions, debugging, the terminal, source control, your favorite extensions.
+
+00:40:15 Everything works just right in the remote environment.
+
+00:40:18 Get started with Visual Studio Code now at talkpython.fm/Microsoft.
+
+00:40:23 I think that pretty much covers it for WebAssembly.
+
+00:40:27 I do like these two projects that are out there, and I want to see more.
+
+00:40:30 I guess maybe we should throw a little love to Rust Python as well, which is a cool project.
+
+00:40:35 And you mentioned it earlier, but its goal is to, let's see if we can rewrite CPython in Rust.
+
+00:40:40 And there's a lot of options.
+
+00:40:41 Like, what if we reimagined what CPython was supposed to do with some compatibility in mind?
+
+00:40:47 Or, I don't know, something like, but for WebAssembly, right?
+
+00:40:50 There's some options.
+
+00:40:51 Yeah, and the only clarification I make is I don't think it's a target from CPython to Rust.
+
+00:40:56 I think they're doing a full Python itself, re-implementation, right?
+
+00:41:00 So it's not like they're taking CPython and slowly implementing bits of Rust, kind of like what Mozilla is doing with Firefox.
+
+00:41:07 And it's kind of like an inside-out kind of growth of Rust.
+
+00:41:11 They're doing it fully Rust from scratch.
+
+00:41:13 Yeah.
+
+00:41:13 I mean, with the amount of tooling and work that Rust is pulling into the WebAssembly world as something they very specifically care about,
+
+00:41:19 it does potentially open that implementation if they manage to reach a level of compatibility that people are happy with to get us Python in WebAssembly, potentially.
+
+00:41:29 Yeah, it's very exciting.
+
+00:41:30 Awesome.
+
+00:41:31 All right, well, let's talk about just a couple of other things while I got you stuck here on the Expo floor hall.
+
+00:41:36 Sure.
+
+00:41:36 We talked about the 2 to 3 thing.
+
+00:41:37 Yep.
+
+00:41:38 Let's just talk a little bit about sunsetting the whole Python 2 thing next.
+
+00:41:42 Yes.
+
+00:41:43 Where are we right now?
+
+00:41:44 It is May.
+
+00:41:45 Seven months from now, we're going to be officially at the sunset.
+
+00:41:48 Like, what's the plan?
+
+00:41:50 Is that just going to happen?
+
+00:41:52 Is there something happening to, like, shepherd that?
+
+00:41:55 The steering council is just starting to get ourselves out from the pile of open peps that we started off dealing with when we first got elected.
+
+00:42:03 And so we're just starting to have conversations among ourselves of, okay, what do we think we can do if we can somehow help direct some energy in the world and such?
+
+00:42:13 And so we've just started just, like, very much, I mean just, started having conversations with the PSF about seeing if we could potentially get some funding for, like, a PM to help us with the sunsetting of Python 2.7.
+
+00:42:26 Because, like, if you go to the python.org website, it says Python 2, Python 3 everywhere.
+
+00:42:30 But you know what?
+
+00:42:30 Come January 1st, 2020, it just should say Python.
+
+00:42:33 All the little, oh, two here, three there, all that should just go away because now it's just Python 3, which will just be Python.
+
+00:42:41 Well, the biggest one is if I go search for a function that's in the standard library and I click on the result in Google, there's a high probability that says 2.7 or pull down the dropdown to get to the 3.7 or whatever.
+
+00:42:52 Yeah, and how do we handle that, right?
+
+00:42:54 Do we do it with redirects?
+
+00:42:55 Do we just totally get rid of it?
+
+00:42:56 What are our options?
+
+00:42:58 I don't know.
+
+00:42:59 But it's definitely something we should look into.
+
+00:43:01 And I think we're hoping we can get some, basically, professional help to get that done.
+
+00:43:04 Because, obviously, that's going to be potentially a slight slog and asking a bunch of volunteer core developers to go through the website and all our documentation and just remove every mention of 2.7.
+
+00:43:15 I don't think that's going to go well.
+
+00:43:17 Command F.
+
+00:43:18 Yeah.
+
+00:43:18 Put 2.7.
+
+00:43:19 Type 3.7.
+
+00:43:20 Let's really test VS Code's global search and replace.
+
+00:43:24 The other thing, though, is there's going to be some decisions that have to be made.
+
+00:43:28 And someone's going to have to stay on top of this, right?
+
+00:43:29 This is very much going to be a detail-oriented thing to keep a massive to-do list of things to get done.
+
+00:43:34 And once again, asking a single volunteer to try to act as the contact point coordinator for that is probably going to be way too much.
+
+00:43:39 So I'm hoping this initial conversation will go somewhere and we're going to hopefully be able to get a PM or something to help us kind of make this happen.
+
+00:43:47 Yeah, it sounds like a great plan.
+
+00:43:49 And also, honestly, I guess it's kind of a nice first step to see what it's like for there to potentially be hired help to help Python Dev.
+
+00:43:54 And who knows where that can lead.
+
+00:43:56 That can lead to a lot of good places.
+
+00:43:57 I mean, we saw the whole PyPI.org relaunch because there was a little funding brought in there.
+
+00:44:03 And that had been kind of been chipped at for a long, long time.
+
+00:44:06 And then, you know, six months later.
+
+00:44:08 I've personally said that I think there's possibility, but we've not had those conversations yet.
+
+00:44:13 Among even the steering council, let alone Python Dev all up, what that potentially could look like or mean.
+
+00:44:18 But I think there's some potential opportunity there.
+
+00:44:20 Yeah.
+
+00:44:20 If this works out, everyone's amenable.
+
+00:44:22 And honestly, once again, we can get the funding.
+
+00:44:25 Yeah.
+
+00:44:25 Minor thing, funding.
+
+00:44:26 Yeah.
+
+00:44:26 Money.
+
+00:44:27 It's just a thing.
+
+00:44:28 Just paper.
+
+00:44:28 Come on.
+
+00:44:29 Yeah.
+
+00:44:29 All right.
+
+00:44:29 And then you're on the VS Code team, specifically the Python side.
+
+00:44:33 You guys probably made some announcements or have something going on here.
+
+00:44:36 Anything you want to share?
+
+00:44:37 Actually, it was kind of cool.
+
+00:44:38 We've been working with the VS Code team for a while now to land some support for remote editing.
+
+00:44:44 Actually, it was mainly driven by the VS Code team.
+
+00:44:46 They basically talked to us about some of our needs to make sure they got addressed.
+
+00:44:49 We helped test it for them because the Python extension is the number one extension of VS Code.
+
+00:44:53 That doesn't come with it out of the box.
+
+00:44:55 Yeah.
+
+00:44:55 One of the things that drives me crazy, people say, I'm going to use some really subpar editor because I need something that's always available to me no matter what.
+
+00:45:04 Even if I'm going to use SSH in over terminal.
+
+00:45:06 So I'm going to choose a least common denominator option rather than maybe among all the tooling.
+
+00:45:11 So what's really great is VS Code has developed a system, but it leaves them in the insiders build right now while they work out any kinks from the public announcement.
+
+00:45:19 But basically, they've launched three extensions that let you use Windows 10's WSL support, Docker, both remote and local, and SSH.
+
+00:45:28 And so basically what it does is it runs more or less a headless VS Code on the remote location of where your code is to get proper IntelliSense, paths, all that stuff that's normally really hairy to do on the translation side.
+
+00:45:42 If your development platform is different from the development position of your code, they just basically run VS Code on that point.
+
+00:45:49 And then you basically get a GUI front end on your actual desktop, which it's a really slick solution.
+
+00:45:55 And I'm honestly really appreciative of the VS Code team for letting us actually announce that here at PyCon.
+
+00:46:00 It was not a thing that they announced anywhere else.
+
+00:46:02 We actually got to announce it here because VS Code team itself has been very supportive of us and the work we've done on the extension.
+
+00:46:08 So thanks to them for that.
+
+00:46:09 Yeah.
+
+00:46:09 Well, that sounds pretty awesome.
+
+00:46:11 I mean, that's part of the Electron.js suite aspect, right?
+
+00:46:14 It's kind of already like two tier.
+
+00:46:16 It's just now the tier is far, far away.
+
+00:46:18 Yeah, exactly.
+
+00:46:19 I mean, the analogy I use, and I think it's kind of, it feels a little like it cheapens it a little too much for the amount of work in the VS Code teams.
+
+00:46:27 But it's almost like running an X11, right?
+
+00:46:29 We've got the headless version running on the remote machine and you just get it on the other end.
+
+00:46:33 Yeah, pretty cool.
+
+00:46:34 So yeah, it's awesome.
+
+00:46:35 I'm extremely happy, if for any other reason, that it closed out our top two feature requests on our issue tracker
+
+00:46:40 that have been there since they joined the team and the extension moved over under Microsoft.
+
+00:46:45 Yeah.
+
+00:46:45 Now you can stop talking about it.
+
+00:46:46 Yeah.
+
+00:46:47 Now we just got to start with the next new number one and number two feature request.
+
+00:46:51 Can you make it write my code for me?
+
+00:46:52 Yeah.
+
+00:46:52 No.
+
+00:46:53 No, we don't.
+
+00:46:53 I don't know if we want that.
+
+00:46:54 No, probably not.
+
+00:46:55 Probably not.
+
+00:46:56 But people keep saying it's going to happen.
+
+00:46:57 I don't know.
+
+00:46:57 We'll see.
+
+00:46:58 Yeah.
+
+00:46:58 I actually had a prof in my master's program at CalPots, San Luis Obispo, who said, oh, yeah,
+
+00:47:03 like in 10 years, code will be running itself.
+
+00:47:05 And I hate to break it to you, Dr. Fisher.
+
+00:47:08 It's 10 years now.
+
+00:47:09 It didn't quite happen.
+
+00:47:10 And yeah, I'm quickly approaching 20 and it still doesn't quite look like it's going to happen.
+
+00:47:15 Yeah, there's a lot happening here at PyCon and a lot of people typing a lot of keyboards
+
+00:47:18 doing cool stuff.
+
+00:47:19 Yeah.
+
+00:47:19 All right, Brett.
+
+00:47:19 Well, thanks for coming back and following up this discussion because it was a lot of
+
+00:47:22 fun.
+
+00:47:22 And I think WebAssembly and Rust have some pretty amazing possibilities.
+
+00:47:26 We'll see where it goes.
+
+00:47:28 I think the future is bright if the community decides to make it so.
+
+00:47:31 And so I'm optimistic and hopeful that it will.
+
+00:47:34 And I'm really excited to see where things potentially end up.
+
+00:47:37 All right, cool.
+
+00:47:38 Well, thanks for being on the show and enjoy the conference.
+
+00:47:40 Thanks, Michael.
+
+00:47:40 You too.
+
+00:47:40 Bye.
+
+00:47:41 Bye.
+
+00:47:41 This has been another episode of Talk Python to Me.
+
+00:47:45 Our guest on this episode was Brett Cannon, and it's been brought to you by Microsoft.
+
+00:47:49 If you're a Python developer, Microsoft has you covered.
+
+00:47:53 From VS Code and their modern editor plugins to Azure Pipelines for continuous integration
+
+00:47:58 and serverless Python functions on Azure.
+
+00:48:00 Check them out at talkpython.fm/Microsoft.
+
+00:48:04 Want to level up your Python?
+
+00:48:06 If you're just getting started, try my Python Jumpstart by Building 10 Apps course.
+
+00:48:11 Or if you're looking for something more advanced, check out our new async course that digs into
+
+00:48:16 all the different types of async programming you can do in Python.
+
+00:48:19 And of course, if you're interested in more than one of these, be sure to check out our
+
+00:48:23 Everything Bundle.
+
+00:48:24 It's like a subscription that never expires.
+
+00:48:26 Be sure to subscribe to the show.
+
+00:48:28 Open your favorite podcatcher and search for Python.
+
+00:48:31 We should be right at the top.
+
+00:48:32 You can also find the iTunes feed at /itunes, the Google Play feed at /play,
+
+00:48:37 and the direct RSS feed at /rss on talkpython.fm.
+
+00:48:41 This is your host, Michael Kennedy.
+
+00:48:43 Thanks so much for listening.
+
+00:48:44 I really appreciate it.
+
+00:48:45 Now get out there and write some Python code.
+
+00:48:47 I really appreciate it.
+
