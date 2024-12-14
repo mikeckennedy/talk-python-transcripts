@@ -42,7 +42,7 @@
 
 00:01:38 that automatically transcribe and understand audio data at a large scale.
 
-00:01:43 To learn more, visit talkpython.fm/Assembly AI.
+00:01:43 To learn more, visit talkpython.fm/assemblyai.
 
 00:01:47 Ned, welcome back to Talk Python to me.
 
