@@ -16,7 +16,7 @@
 
 00:00:48 Follow me on Mastodon, where I'm @mkennedy and follow the podcast using @talkpython.
 
-00:00:53 Both on bostodon.org.
+00:00:53 Both on fosstodon.org.
 
 00:00:56 Be careful with impersonating accounts on other instances.
 
@@ -36,7 +36,7 @@
 
 00:01:26 Use Sentry.
 
-00:01:27 Get started at talkpython.fm/Sentry.
+00:01:27 Get started at talkpython.fm/sentry.
 
 00:01:30 Transcripts for this episode are sponsored by Assembly AI, the API platform for state-of-the-art AI models
 
@@ -1312,13 +1312,13 @@
 
 00:31:40 to write back. Hey, we already saw your error and have already rolled out the fix. Imagine their surprise.
 
-00:31:46 Surprise and delight your users. Create your Sentry account at talkpython.fm/Sentry. And if you sign up with
+00:31:46 Surprise and delight your users. Create your Sentry account at talkpython.fm/sentry. And if you sign up with
 
 00:31:53 the code talkpython, all one word, it's good for two free months of Sentry's business plan, which will give
 
 00:32:00 you up to 20 times as many monthly events as well as other features. Create better software, delight your
 
-00:32:06 users, and support the podcast. Visit talkpython.fm/Sentry and use the coupon code talkpython.
+00:32:06 users, and support the podcast. Visit talkpython.fm/sentry and use the coupon code talkpython.
 
 00:32:16 We talked about contributions and how people appreciate getting credit for participating.
 
@@ -2346,7 +2346,7 @@
 
 01:12:02 Take some stress out of your life. Get notified immediately about errors and performance issues
 
-01:12:08 in your web or mobile applications with Sentry. Just visit talkpython.fm/Sentry and get started
+01:12:08 in your web or mobile applications with Sentry. Just visit talkpython.fm/sentry and get started
 
 01:12:15 for free. And be sure to use the promo code talkpython, all one word. Want to level up your Python?
 

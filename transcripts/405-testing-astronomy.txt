@@ -1,650 +1,896 @@
-00:00:00 So you know about dependencies and testing, right?
+00:00:00 So you know about dependencies and testing, right? If you're going to talk to your database in your
 
-00:00:02 If you're going to talk to your database in your app, you have to decide how to approach that with your test.
+00:00:04 app, you have to decide how to approach that with your test. There are a lot of solid options you
 
-00:00:07 There are a lot of solid options you might pick from, and they vary by goals.
+00:00:09 might pick from, and they vary by goals. Do you mock out the dB layer for isolation, or do you use
 
-00:00:12 Do you mock out the DB layer for isolation?
+00:00:15 a test dB to make it as real as possible? Or do you even just punt and use the real dB for expediency?
 
-00:00:14 Or do you use a test DB to make it as real as possible?
+00:00:22 What if your dependency was a huge array of radio telescopes in a rack of hundreds of bespoke
 
-00:00:18 Or do you even just punt and use the real DB for expediency?
+00:00:29 servers? That's the challenge on deck for today, where we discuss testing radio astronomy with
 
-00:00:22 What if your dependency was a huge array of radio telescopes and a rack of hundreds of bespoke servers. That's the challenge on deck for today, where we discuss testing radio astronomy with pytest and our guest, James Smith. He's a digital signal processing engineer at the South African Radio Astronomy Observatory and has some great stories and tips to share. This is Talk Python to Me, episode 405, recorded February 13th, 2023.
+00:00:36 pytest and our guest, James Smith. He's a digital signal processing engineer at the South African
 
-00:01:02 Welcome to Talk Python to Me, a weekly podcast on Python. This is your host, Michael Kennedy.
+00:00:41 Radio Astronomy Observatory and has some great stories and tips to share. This is Talk Python
 
-00:01:10 Follow me on Mastodon, where I'm @mkennedy and follow the podcast using @talkpython, both on fosstodon.org. Be careful with impersonating accounts on other instances, there are many. Keep up with the show and listen to over seven years of past episodes at talkpython.fm.
+00:00:47 to Me, episode 405, recorded February 13th, 2023.
 
-00:01:26 We've started streaming most of our episodes live on YouTube. Subscribe to our YouTube channel over at talkpython.fm/youtube to get notified about upcoming shows and be part of that episode.
+00:00:59 Welcome to Talk Python to Me, a weekly podcast on Python. This is your host, Michael Kennedy. Follow
 
-00:01:39 This episode of Talk Python to Me is brought to you by Taipy.
+00:01:10 me on Mastodon, where I'm @mkennedy and follow the podcast using at Talk Python, both on fosstodon.org.
 
-00:01:42 They're here to take on the challenge of rapidly transforming a bare algorithm in Python into a full-fledged decision support system.
+00:01:17 Be careful with impersonating accounts on other instances. There are many. Keep up with the show
 
-00:01:48 Check them out at talkpython.fm/taipy and it's brought to you by Sentry.
+00:01:22 and listen to over seven years of past episodes at talkpython.fm. We've started streaming most of our
 
-00:01:55 Don't let those errors go unnoticed.
+00:01:28 episodes live on YouTube. Subscribe to our YouTube channel over at talkpython.fm/youtube to get
 
-00:01:57 Use Sentry.
+00:01:34 notified about upcoming shows and be part of that episode. This episode of Talk Python To Me is brought
 
-00:01:58 Get started at talkpython.fm/sentry.
+00:01:40 to you by Typy. They're here to take on the challenge of rapidly transforming a Bayer algorithm in Python
 
-00:02:01 James, welcome to Talk Python to Me.
+00:01:46 into a full-fledged decision support system. Check them out at talkpython.fm/Typy, T-A-I-P-Y.
 
-00:02:04 Normally, I talk Python to computers, Michael, but this will be a first.
+00:01:53 And it's brought to you by Sentry. Don't let those errors go unnoticed. Use Sentry. Get started at
 
-00:02:08 You are a human, right?
+00:01:59 talkpython.fm/sentry. James, welcome to Talk Python to Me.
 
-00:02:10 You gotta ask chatGTP about that, we'll see.
+00:02:04 Normally, I talk Python to computers, Michael, but this would be a first. You are a human, right?
 
-00:02:12 There's a lot of people who are interested in talking about Python.
+00:02:09 I am. Well, you know, you got to ask ChatGCP about that. We'll see. There's a lot of people who are
 
-00:02:16 When I first put this podcast together, I thought, "Who's going to be the target audience?" I thought people were really into Python.
+00:02:14 interested in talking about Python. When I first put this podcast together, I thought, well, who's
 
-00:02:22 People make things like Flask and stuff.
+00:02:19 going to be the target audience? I thought people were really into Python. Like people will make
 
-00:02:24 It's kind of a big part of the world.
+00:02:23 things like Flask and stuff. And they're just, you know, it's kind of a big part of the world,
 
-00:02:26 But there's a ton of people who are scientists, or just curious about programming, who listen as well.
+00:02:27 but there's a ton of people who are scientists or just curious about programming who listen as well.
 
-00:02:32 It really surprised me how many people you can talk Python to, They seem to appreciate it.
+00:02:32 So it really surprised me how many people you can talk Python to and how much they seem to appreciate it.
 
-00:02:37 So it's cool.
+00:02:37 So it's cool. Indeed. Yeah. But I also spend a fair amount of time talking Python to computers as well.
 
-00:02:38 - Indeed.
+00:02:43 Sometimes more fun, sometimes more frustrating. You never know.
 
-00:02:39 - Yeah, but I also spend a fair amount of time talking Python to computers as well.
+00:02:46 Yes, we're familiar with that. I'm sure. I'm sure. Well, you have this extra angle of it's not just
 
-00:02:43 Sometimes more fun, sometimes more frustrating.
+00:02:53 talking to pure software, right, that lives in an internet API vacuum, but you have physical things,
 
-00:02:45 You never know.
+00:03:01 many, many physical things in radio astronomy and large arrays of telescopes and receivers and
 
-00:02:47 - Yes, we're familiar with that.
+00:03:07 as we're going to talk about lots of different things. And I think that's one of the really
 
-00:02:49 - I'm sure, I'm sure.
+00:03:10 interesting aspects of this episode to talk to you is Python against real world things out there and
 
-00:02:50 Well, you have this extra angle of it's not just talking to pure software, right?
+00:03:17 real time as well. Perhaps sort of to jump back and put the listeners in a bit of context. I work at
 
-00:02:56 That lives in some internet API vacuum, but you have physical things, many, many physical things in radio astronomy and large arrays of telescopes and receivers and as we're gonna talk about, lots of different things.
+00:03:23 the South African Radio Astronomy Observatory. Our sort of primary project is called Meerkat. It's a
 
-00:03:09 And I think that's one of the really interesting aspects of this episode to talk to you is Python against real world things out there and real time as well.
+00:03:28 precursor of one of the world's biggest radio telescopes, which is planned. So the project is called SKA.
 
-00:03:19 - Perhaps sort of to jump back and put the listeners in a bit of context, I work at the South African Radio Astronomy Observatory.
+00:03:35 So it stands for Square Kilometer Array, which refers to the size of the collecting area of the
 
-00:03:25 Our sort of primary project is called MeerKAT.
+00:03:40 telescope that will eventually be built. It's in its beginning stages now. And that has a lot of moving
 
-00:03:28 It's a precursor of one of the world's biggest radio telescopes, which is planned.
+00:03:44 parts right from the actual antennas that are pointing into the sky and recording radio emissions
 
-00:03:33 So the project is called SKA, so it stands for Square Kilometer Array, which refers to the size of the collecting area of the telescope that will eventually be built.
+00:03:51 from the universe somewhere through down to the point where a scientist actually sits down with the data
 
-00:03:42 It's in its beginning stages now.
+00:03:57 product in order to analyze and to write his paper that he's hoping to publish and win his Nobel Prize.
 
-00:03:44 And that has a lot of moving parts, right from the actual antennas that are pointing in into the sky and recording radio emissions from the universe somewhere, through down to the point where a scientist actually sits down with a data product in order to analyze to write his paper that he's hoping to publish and win his Nobel Prize.
+00:04:04 And so everything from the beginning of the end there needs some software control. And Python is the
 
-00:04:04 And so everything from the beginning of the end there needs some software control.
+00:04:10 sort of weapon of choice for all of those applications.
 
-00:04:09 And Python is the sort of weapon of choice for all of those applications.
+00:04:13 Yeah, it's pretty interesting to see what you're going to talk about. You gave a couple of
 
-00:04:13 - Yeah, it's pretty interesting to see what you're going to talk about.
+00:04:17 presentations at PyCon South Africa. Is that right?
 
-00:04:17 You gave a couple of presentations at PyCon South Africa, is that right? - Zeday.
+00:04:21 That's right. Yes. Last year.
 
-00:04:21 - Zeday. - That's right, yes.
+00:04:23 Yeah, fantastic. And people all, of course, link to those in the show notes and people can check them
 
-00:04:23 Last year. - Yeah, fantastic.
+00:04:28 out. You got a lot of cool graphics and stuff there. And the fact that you built this real time
 
-00:04:24 And people, of course, link to those in the show notes and people can check them out.
+00:04:33 aspect involving Python, which is not its normal use, perhaps, I think is really something that
 
-00:04:28 a lot of cool graphics and stuff there.
+00:04:40 we're going to have a good time talking about as well as just how do you test something like a large
 
-00:04:31 The fact that you built this real-time aspect involving Python, which is not normal use perhaps, I think is really something that we're gonna have a good time talking about, as well as just how do you test something like a large receiver array rather than, you know, is the user logged in in the database, yes or no, and let's mock that out, right?
+00:04:44 receiver array rather than, you know, is the user logged in in the database? Yes or no. And let's
 
-00:04:52 This is both, I think, very similar and yet very different, right?
+00:04:51 mock that out, right? This is both, I think, very similar and yet very different, right?
 
-00:04:55 - Yes, it can be.
+00:04:56 Yes, it can be. And there's a lot that you can do, but there's also some interesting gotchas,
 
-00:04:57 And there's a lot that you can do, but there's also some interesting gotchas which we can talk about there.
+00:05:01 which we can talk about there. So, I mean, I don't know where you want to start.
 
-00:05:04 So, I mean, I don't know where you wanna start.
+00:05:06 Let's get a real quick introduction with you before we get too far down in this topic. And so,
 
-00:05:06 - Let's get a real quick introduction with you before we get too far down in this topic.
+00:05:10 tell people how you got into programming and astronomy and all that kind of stuff.
 
-00:05:10 And so tell people how you got into programming and astronomy and all that kind of stuff.
+00:05:15 Well, programming, well, both of those have become, both of those started out as hobbies and they've
 
-00:05:15 - Well, programming, well, both of those have become, both of those started out as hobbies and they've sort of become my job, which means I don't do them as a hobby anymore, which is always fun.
+00:05:20 sort of become my job, which means I don't do them as a hobby anymore, which is always fun. When I was
 
-00:05:25 I was younger in school, I made the mistake during a summer holiday of telling my dad that I was bored. And so he handed me a book and this book was programming in C, I think. I forget exactly.
+00:05:25 younger in school, I made the mistake during a summer holiday of telling my dad that I was bored.
+
+00:05:29 And so, yeah, he handed me a book and this book was programming in C, I think, I forget exactly.
 
 00:05:36 And being young and naive, I thought this was a great idea and started working my way through it.
 
-00:05:41 So since then, I've been programming more or less continuously. It was sort of the mid to late 2000s that Python started to become more prominent and I picked that up and haven't looked back. Astronomy was also another hobby. In my student days, I spent many South African, cold South African nights looking at the stars. And then a job opportunity opened up at Sareo to do electronic engineering, which was the field that I trained in university.
+00:05:41 So, since then, I've been programming more or less continuously. It was sort of the mid to late
 
-00:06:08 That was about seven years ago. And so I've been combining these sort of programming and electronic engineering and my astronomy hobby, which has shifted now into radio instead of optical. But yeah, I basically come from that. Fantastic.
+00:05:47 2000s that Python started to become more prominent and I picked that up and haven't looked back.
 
-00:06:20 I remember getting a book in C, thinking, "Oh, I'm going to learn programming," and then read it like, "Okay, this..." When I was pretty young, I was like, "Okay, this is a little bit much to bite off at the moment," but came back to it as well.
+00:05:52 Astronomy was also another hobby. In my student days, I spent many South African,
 
-00:06:32 But that's how it was, right?
+00:05:57 cold South African nights looking at the stars. And then a job opportunity opened up at Sereo to do
 
-00:06:33 We used to get books pre-internet, YouTube, and where you just fired up and say, "Teach me programming in the next half hour." - With listings of code and you have to type them in, and then you miss a semicolon somewhere and scratch your head for half a day.
+00:06:03 electronic engineering, which was the field that I trained in university. That was about seven years
 
-00:06:46 (laughing)
+00:06:09 ago. And so I've been combining these sort of programming and electronic engineering and my
 
-00:06:47 - That's right.
+00:06:14 astronomy hobby, which has shifted now into radio instead of optical. But yeah, I basically come from
 
-00:06:48 - But I think that was a good preparation, though.
+00:06:19 that. Fantastic. I remember getting a book in C thinking, oh, I'm going to learn programming and then
 
-00:06:49 I mean, as great as Python is, it is somewhat high level, and I think it's helpful to have a sort of a, even if you don't often work at that level, to have an understanding of what's going on at a slightly lower level than what the computer is doing.
+00:06:26 read it like, okay, this, when I was pretty young, I was like, okay, this is a little bit much divide
 
-00:07:00 - It's valuable to have that experience, but I'm also, even though I did it professionally for a couple years, happy that I'm not, I don't have to continuously work at that level, right?
+00:06:30 off at the moment, but came back to you as well. But that's how it was, right? We used to get books
 
-00:07:09 You can just be so more productive in a higher level language like Python, indeed.
+00:06:34 pre-internet, YouTube, and where you just fired up and say, teach me programming in the next half
 
-00:07:13 - Totally. - Yeah.
+00:06:40 hour. With listings of code and you have to type them in and then you miss a semicolon somewhere
 
-00:07:14 So I think you introduced this a little bit, But tell people about SARAO, this project, how'd you get to that place?
+00:06:45 and scratch your head for half a day. That's right. But I think that was a good preparation
 
-00:07:21 Yeah.
+00:06:49 though. I mean, as great as Python is, it is somewhat high level. And I think it's helpful to
 
-00:07:22 Sarao, well, I got there by responding to a job advert and interviewing and what have you.
+00:06:53 have a sort of a, even if you don't often work at that level, to have an understanding of what's going
 
-00:07:29 Sarao sort of started out as a response to the international kind of scientific project to build a square kilometer array telescope.
+00:06:58 on at a slightly lower level than what the computer is doing. It's valuable to have that experience,
 
-00:07:35 The idea is to make it the most sensitive radio telescope that has ever been built.
+00:07:02 but I'm also, even though I did it professionally for a couple of years, happy that I'm not,
 
-00:07:40 And when you're doing that kind of project, you want to build it in an ideal setting, like optical telescopes, if you want to do proper science, you want to do it far away from cities where there's no light pollution.
+00:07:06 I don't have to continuously work at that level, right? You can just be so more productive in
 
-00:07:50 Similarly, radio telescopes, you want to do them where there's no radio interference.
+00:07:10 a higher level language like Python. Indeed. Totally. Yeah. So I think you introduced this a
 
-00:07:54 So cell phones, TV signals, Wi-Fi, that kind of stuff.
+00:07:17 little bit, but tell people about Seraro, this project, how'd you get to that place?
 
-00:07:57 The Southern Hemisphere also has a bit of an advantage in that we can see parts of the galaxy that the Northern Hemisphere can't.
+00:07:21 Yeah. Seraro, well, I got there by responding to a job advert and, you know, interviewing and what
 
-00:08:03 And so, as this project progressed, various sites were identified and ultimately the decision was made to put part of the telescope in South Africa and part of it in Australia.
+00:07:27 have you. Seraro sort of started out as a response to the international kind of scientific project to
 
-00:08:13 And Sarao is really the, just the organization around developing the South African part of that telescope.
+00:07:33 build a square kilometer array telescope. The idea is to make it the most sensitive radio telescope that
 
-00:08:19 That's where we are.
+00:07:38 has ever been built. And when you're doing that kind of project, you want to build it in an ideal
 
-00:08:20 - It's a very cool project.
+00:07:43 setting, just like optical telescopes. If you want to do proper science, you want to do it far away
 
-00:08:21 I think a square kilometer array of telescope, that's pretty impressive, right?
+00:07:48 from cities where there's no light pollution. Similarly, radio telescopes, you want to do them
 
-00:08:26 And also something that's much easier to do with radio than with optical, I would imagine.
+00:07:52 where there's no radio interference. So cell phones, TV signals, wifi, that kind of stuff.
 
-00:08:31 - Yes, when it comes to telescopes, bigger is better, but there reaches a point of where building a bigger one becomes expensive and very difficult.
+00:07:56 The Southern hemisphere also has a bit of an advantage in that we can see parts of the galaxy that the
 
-00:08:40 And so a trick that you can use in radio is called interferometry. So if you measure your radio waves at different points and you measure them in phase with each other or what they call coherently, then you can get away with making a lot of smaller telescopes to build up the same kind of area, which will give you the same effect as a bigger one, but much cheaper because you can do a lot of smaller, cheaper telescopes.
+00:08:02 Northern hemisphere can't. And so as this project progressed, various sites were identified.
 
-00:09:02 If that in a nutshell is really why these telescope arrays exist, it's very difficult to do that with optical telescopes because the wavelength is so short, the frequency is so high, that getting, getting the, it is possible, it can be done, but getting the signal coherent or in phase is very, very difficult.
+00:08:07 And ultimately the decision was made to put part of the telescope in South Africa and part of it in
 
-00:09:18 - I see.
+00:08:12 Australia. And Seraro is really the, just the organization around developing the South African
 
-00:09:19 - That's why we do it in radio.
+00:08:17 part of that telescope. That's where we are.
 
-00:09:20 - Yeah, you don't have much time.
+00:08:20 It's a very cool project. I think a square kilometer array of telescope, that's pretty impressive,
 
-00:09:21 There's not much of a gap between how you've got to coordinate the signals across the radio, but it's even worse in optical, I see.
+00:08:25 right? And also something that's much easier to do with radio than with optical, I would imagine.
 
-00:09:27 - Exactly, exactly.
+00:08:31 Yes. When it comes to telescopes, bigger is better, but there reaches a point of where building a bigger
 
-00:09:28 - Nice.
+00:08:37 one becomes expensive and very difficult. And so a trick that you can use in radio is called
 
-00:09:29 So people who listened to the episode about imaging the black hole, we talked a lot about that.
+00:08:43 interferometry. So if you measure your radio waves at different points and you measure them in phase
 
-00:09:34 So, you know, I don't necessarily need to, think we need to cover too much depth about it.
+00:08:48 with each other or what they call coherently, then you can get away with making a lot of smaller
 
-00:09:39 But one thing I think that people might find interesting is, I think, remember from your talk that you said, this is part, some of the work that you're doing is part of the deep space network for communicating with, is that right?
+00:08:53 telescopes to build up the same kind of area, which will give you the same effect as a bigger one,
 
-00:09:50 With NASA.
+00:08:58 but much cheaper because you can do a lot of, a lot of smaller, cheaper telescopes. If that in a nutshell
 
-00:09:52 - South African radio astronomy has its origins in the deep space network.
+00:09:03 is really why, why these telescope arrays exist. It's very difficult to do that with optical telescopes
 
-00:09:55 So if you're trying to communicate with spacecraft that are outside of earth orbit, you need a very powerful, or something that looks a bit like a radio telescope in much, except that you're transmitting as well, because you need to be able to talk to the, know, Voyager or your Mars Rover that's out there in space. But very inconveniently for scientific purposes, the earth rotates. So for about a third of the day, if you have a telescope in California, for example, I think is where one of NASA's big ones are, you know, half of the day you can't really talk to your, to your spaceships. And NASA built a network of telescopes around the world and one was in Australia and one was here in South Africa. And some of the early Mars missions were actually used the telescope in South Africa for communication.
+00:09:08 because the wavelength is so short, the frequency is so high that getting, getting the, it is possible,
 
-00:10:38 But that was, I think in the seventies, I forget my history exactly, but they got a better one in Spain.
+00:09:13 it can be done, but getting the signal coherent or in phase is very, very difficult.
 
-00:10:43 And so the one in South Africa was kind of converted into a facility just for science.
+00:09:18 I see.
 
-00:10:48 And it's been operated by our national research foundation, which evolved into Sarao for the last sort of few years.
+00:09:18 That's why we do it in radio.
 
-00:10:55 And that's what kind of gave us our leg up.
+00:09:19 Yeah. You don't have much time. There's not much of a gap between how you've got to coordinate the
 
-00:10:56 - Yeah, exactly.
+00:09:24 signals across the radio, but it's even worse in optical. I see.
 
-00:10:57 It was already built and it was there.
+00:09:27 Exactly. Exactly. Nice. So people who listened to the episode about imaging the black hole,
 
-00:10:59 And they're like, you know what?
+00:09:32 we talked a lot about that. So, you know, I don't necessarily need to think we need to cover
 
-00:11:00 Instead of just let it, put it on mothballs, why don't you guys do science with it, right?
+00:09:37 too much depth about it. But one thing I think that people might find interesting is I think,
 
-00:11:04 That's cool.
+00:09:42 remember from your talk that you said, this is part, some of the work that you're doing is part
 
-00:11:04 And we've been using it quite well since then.
+00:09:47 of the deep space network for communicating with, is that right? With NASA.
 
-00:11:06 They've done, I wouldn't say groundbreaking science.
+00:09:51 South African radio astronomy has its origins in the deep space network.
 
-00:11:09 I don't know that any Nobel prizes have happened, but we have some great radio astronomers, originate from South Africa, that have used data from this telescope.
+00:09:55 So if you're trying to communicate with spacecraft that are outside of earth orbit,
 
-00:11:15 So, yeah.
+00:09:58 you need a very powerful, something that looks a bit like a radio telescope in much,
 
-00:11:16 - Excellent.
+00:10:03 except that you're transmitting as well, because you need to be able to talk to the,
 
-00:11:17 All right, let's talk about first the real-time aspect, this thing that you focus on called the correlator, right?
+00:10:07 you know, Voyager or your Mars rover that's out there in space, but very inconveniently for
 
-00:11:24 And maybe give us this side of the story, because I think this alone is pretty interesting, what you've built here with Python, you and your team.
+00:10:12 scientific purposes, the earth rotates. So for about a third of the day, if you have a telescope
 
-00:11:32 So from a conceptual point of view, in the episode a few weeks ago, when you interviewed Dr. Sarah Asun, I don't know if I'm pronouncing her name correctly, the Event Horizon telescope worked by pointing different telescopes around the world at the same object. Or all radio, shall I say, all radio telescopes arrays, whether they're very long baseline, like what she used, or much shorter, have something called a correlator. And this is the thing that basically combines the signals from the individual telescopes in a way that is, that enables downstream users or scientists to actually make sense of this data. So in order for that to work, the data needs to be in phase, it needs to be coherent. And at very long baselines, they do this by having each station having their very own atomic clock to generate very precise reference signals.
+00:10:18 in California, for example, I think is where one of NASA's big ones are, you know, half of the
 
-00:12:20 - So as a reminder for people maybe didn't hear that episode is, you know, the earth - Earth is curved, as we all know, hopefully.
+00:10:23 day you can't really talk to your, to your spaceships. NASA built a network of telescopes
 
-00:12:26 And the radio waves come in, and as it hits that sphere, they hit the different parts of the array.
+00:10:28 around the world. And, and one was in Australia and one was here in South Africa. And some of the
 
-00:12:32 The more spread out it is, even more exaggerated.
+00:10:32 early Mars missions were actually used the telescope in South Africa for, for communication. But that was,
 
-00:12:34 But it hits the different parts of the array at different times, so you have to offset those back in the signal to say, well, it came in at this angle, and it came in at this time, and the speed of light says this one is a nanosecond behind that one.
+00:10:38 I think in the seventies, I forget my history exactly, but they got a better one in Spain.
 
-00:12:46 So you gotta figure out how to realign those so it looks like a flat surface that they hit all simultaneously to look like a single picture, right?
+00:10:42 And so the one in, the one in South Africa was kind of converted into a facility just for science.
 
-00:12:54 So that's basically the job of this thing.
+00:10:47 And that's been operated by our national research foundation, which evolved into Sareo for the last
 
-00:12:57 - So partially, you can do the first bit with just with geometry.
+00:10:54 sort of few years. And that's what kind of gave us our leg up.
 
-00:13:00 We know what the rotation of the earth is.
+00:10:56 Yeah, exactly. It was already built and it was there. And they're like, you know what,
 
-00:13:03 We know where our different telescopes are.
+00:11:00 instead of just let it put it on mothballs, why don't you guys do science with it? Right? That's cool.
 
-00:13:05 And so we can calculate roughly what the time difference will be.
+00:11:04 And, and we've been using it quite well since then. They've done, I wouldn't say groundbreaking
 
-00:13:08 The job of the correlator is once you've got those signals and you've applied your sort of rough delay offset to each of those signals, the correlator will find the correlations between the incoming signals simply by multiplying the signals together.
+00:11:08 science. I don't know that any Nobel prizes have happened, but we have, we have some good radio
 
-00:13:20 Mathematically is not terribly complicated.
+00:11:12 astronomers originally from South Africa that have used data from this telescope. So yeah.
 
-00:13:22 It's really just multiplication of each pair of antennas.
+00:11:16 Excellent. All right. Let's talk about first the, the real time aspect, this thing that you focus
 
-00:13:26 But it's with that, you may remember from your high school mathematics, the trigonometric identity.
+00:11:22 on called the correlator, right? And maybe, maybe give us this side of the story. Cause I, I think this
 
-00:13:31 When you multiply two sine waves together, you get a somewhat a difference product.
+00:11:28 alone is, is pretty interesting and what you've built here with Python, you and your team.
 
-00:13:36 And it's a similar kind of concept, applying to not just to abstract sine waves, but to radio waves that are at various frequencies.
+00:11:32 So from a conceptual point of view in the episode a few weeks ago, where you interviewed Dr. Sarah
 
-00:13:44 The main engineering challenge is just doing this fast enough for practical purposes.
+00:11:38 Asun, I don't know if I'm pronouncing her name correctly. The Event Horizon telescope worked by pointing
 
-00:13:49 So in the example of the Event Horizon Telescope with very long baseline interferometry, it's not possible to do it in real time because your individual elements are just too far apart.
+00:11:44 different telescopes around the world at the same object or all radio to all, shall I say,
 
-00:13:59 You can't get all the data together.
+00:11:49 all radio telescopes arrays, whether they're very long baseline, like what she used or much shorter
 
-00:14:00 - Not for math, but because the actual data quantity, getting them all back and forth across the world is too hard. - Exactly.
+00:11:54 have something called a correlator. And this is the thing that basically combines the signals from
 
-00:14:08 Exactly.
+00:12:00 the individual telescopes in a way that is a, that enables downstream users, scientists to actually
 
-00:14:09 So there's specialized hardware that takes those signals and writes them basically just straight onto hard drives.
+00:12:06 make sense of this data. So in order for that to work, the data needs to be in phase. It needs to be
 
-00:14:15 Then these hard drives are physically taken to a central location.
+00:12:12 coherent. And at very long baselines, they do this by having each station, having their, their, their very
 
-00:14:19 I think Sarah did talk about that in her episode.
+00:12:17 own atomic clock to generate very precise reference signals.
 
-00:14:22 - Yeah, I think it was Boston and maybe Cambridge and London, something.
+00:12:20 So as a reminder for people, maybe didn't hear that episode is, you know, the earth is curved as we
 
-00:14:27 - One was in Europe, yes.
+00:12:24 all know, hopefully, and the radio waves come in and as it hits that sphere, they hit the different
 
-00:14:28 - No, it was Max Planck Institute in Germany is what it was, I believe.
+00:12:31 parts of the array. The more spread out, it is even more exaggerated, but it hits the different parts
 
-00:14:30 - That's right, yeah.
+00:12:35 of the array at different times. So you have to offset those back in the signal to say, well, it came in at
 
-00:14:31 One was in the States, one was in Europe.
+00:12:41 this angle, and it came in at this time. And the speed of light says this one is, you know, a nanosecond
 
-00:14:33 - This portion of "Talk Python to Me" is brought to you by Taipy.
+00:12:45 behind that one. So you got to figure out how to realign those. So it looks like a flat surface that they hit
 
-00:14:38 Taipy is the next generation open source Python application builder.
+00:12:51 all simultaneously to look like a single picture, right? So that's the job. That's basically the job of this thing.
 
-00:14:42 With Taipy, you can turn data and AI algorithms into full web apps in no time.
+00:12:57 So partially, you can do the first bit with just with geometry, we know what the rotation of the earth
 
-00:14:47 Here's how it works.
+00:13:02 is, we know where our different telescopes are. And so we can calculate roughly what the time difference
 
-00:14:48 You start with a bare algorithm written in Python.
+00:13:07 will be. The job of the correlator is once you've got those signals, and you've applied your sort of
 
-00:14:51 You then use Taipy innovative toolset that enables Python developers to build interactive end-user applications quickly.
+00:13:11 rough delay offset to each of those signals, the correlator will find the correlations between the
 
-00:14:58 There's a visual designer to develop highly interactive GUIs ready for production, and for inbound data streams, you can program against the Taipy Core layer as well.
+00:13:17 incoming signals, simply by multiplying the signals together. Mathematically, it's not terribly
 
-00:15:07 Taipy Core provides intelligent pipeline management, data caching, and scenario and cycle management facilities.
+00:13:22 complicated. It's really just multiplication, you know, of each pair of antennas. But it's with that,
 
-00:15:13 That's it, you'll have transformed a bare algorithm into a full-fledged decision support system for end-users.
+00:13:27 you may remember your from your high school mathematics, the trigonometric identity,
 
-00:15:19 Taipy is pure Python and open source, and you install it with a simple pip install taipy. For large organizations that need fine-grained control and authorization around their data, there is a paid Taipy Enterprise Edition, but the Taipy core and GUI described above is completely free to use. Learn more and get started by visiting talkpython.fm/taipy.
+00:13:31 when you apply to when you multiply two sine waves together, you get a sum and a difference
 
-00:15:43 The link's in your show notes. Thank you to Taipy for sponsoring the show.
+00:13:35 product. And it's a similar kind of concept applying to not not just to abstract sine waves,
 
-00:15:46 Yes, and then the same, well, similar equipment does the reverse process. It reads the data off and then it basically batch processes it. This happens in software, so you cross multiply all of the signals together. That's great if you have a limited number of telescopes, up to a few dozen or so, as with the Event Horizon Telescope. In the MeerKAT case, we've got 64 of them and we're building a few more. And as it becomes the full square kilometer array we're going to be talking about hundreds or possibly even thousands of individual telescope elements. So recording everything onto a hard drive at that data rate becomes impractical.
+00:13:41 but to radio waves that are at various frequencies. The main engineering challenge is just doing this
 
-00:16:24 So the approach that we take is we use what we call a real-time correlator. It processes and reduces the data as a sort of first stage in real-time live before recording to the disk and as a part of that step we integrate for a little while. So if you think about it from point of view if you've done some photography at night time you want to do a a long exposure, so you open your camera shutter for a long time to get them all signal.
+00:13:46 fast enough for practical purposes. So in the in the example of the event horizon telescope with very
+
+00:13:53 long baseline interferometry, it's not possible to do it in real time, because
+
+00:13:56 your individual elements are just too far apart, you can't get all the data together.
+
+00:14:01 Not for math, but because the actual data quantity getting them all back and forth across the world is
+
+00:14:06 too hard. Exactly. So there's specialized hardware that takes those signals and writes them basically just straight onto hard drives. Then these hard drives are physically taken to a central location. I think Sarah did talk about that in her episode.
+
+00:14:22 Yeah, I think it was Boston and maybe Cambridge and London, something.
+
+00:14:26 One was in Europe, yes.
+
+00:14:28 No, it was Max Planck Institute in Germany is what it was, I believe.
+
+00:14:30 That's right. Yeah. One was in the States. One was in Europe.
+
+00:14:34 This portion of Talk Python to me is brought to you by TypePy. TypePy is the next generation open source Python application builder. With TypePy, you can turn data and AI algorithms into full web apps in no time. Here's how it works. You start with a bare algorithm written in Python. You then use TypePy's innovative tool set that enables Python developers to build interactive end user applications quickly. There's a visual designer to develop highly interactive GUIs ready for production. And for inbound data streams, you can program
+
+00:15:04 against the TypePy core layer as well. TypePy core provides intelligent pipeline management, data caching, and scenario and cycle management facilities. That's it. You'll have transformed a bare algorithm into a full-fledged decision support system for end users. TypePy is pure Python and open source, and you install it with a simple pip install TypePy. For large organizations that need fine-grained control and authorization around their data, there is a paid TypePy Enterprise Edition. But the TypePy core and GUI described above,
+
+00:15:34 is completely free to use. Learn more and get started by visiting talkpython.fm/taipy. That's T-A-I-P-Y. The links in your show notes. Thank you to TypePy for sponsoring the show.
+
+00:15:46 Yes, and so, and then the same, well, similar equipment does the reverse process. It reads the data off, and then it basically batch processes it. This happens in software, so you cross-multiply all of the signals together.
+
+00:16:00 That's great if you have a limited number of telescopes, up to a few dozen or so, as with Event Horizon Telescope. In the Meerkat case, we've got 64 of them, and we're building a few more.
+
+00:16:12 And as it becomes the full square kilometer array, we're going to be talking about hundreds or possibly even thousands of individual telescope elements.
+
+00:16:20 So recording everything onto a hard drive at that data rate becomes impractical.
+
+00:16:23 So the approach that we take is we use what we call a real-time correlator.
+
+00:16:27 It processes and reduces the data as a sort of first stage in real-time, live, before recording to the disk.
+
+00:16:34 And as a part of that step, we integrate for a little while.
+
+00:16:37 So if you think about it from point of view, if you've done some photography at nighttime, you want to do a long exposure, so you open your camera shutter for a long time to get the more signal.
 
 00:16:47 It's very similar to that.
 
 00:16:48 So we would integrate over, you know, half a second or a second or, you know, eight seconds.
 
-00:16:52 And that gives you a much reduced, there's still a lot of data that comes out of the other side, but it's much, much smaller than if you were recording straight onto hard drives from the telescope, the way that they do in Event Horizon Telescope.
+00:16:53 And that gives you a much reduced, there's still a lot of data that comes out of the other side, but it's much, much smaller than if you were recording straight onto hard drives from the telescope, the way that they do in Event Horizon Telescope.
 
-00:17:05 - Right, that is interesting.
+00:17:05 Right. That is interesting.
 
 00:17:06 I guess it is just like taking a picture, just a different frequency, right?
 
 00:17:10 But same basic idea?
 
-00:17:11 - Exactly, exactly.
+00:17:11 Exactly. Exactly.
 
-00:17:12 - Nice, and so there's a lot of data coming through here.
+00:17:12 Nice. And so there's a lot of data coming through here.
 
-00:17:15 You talked about how Event Horizon couldn't even ship it around the world quick enough, or even though they were very, very far apart and pretty remote, but there's a lot of data here.
+00:17:15 You talked about how Event Horizon couldn't even ship it around the world quick enough or, you know, even though they were very, very far apart and pretty remote.
+
+00:17:22 But there's a lot of data here.
 
 00:17:23 And so maybe give people a sense of the data center.
 
-00:17:26 Excuse me, give people a sense of the data center.
+00:17:26 Excuse me.
 
-00:17:28 And like, you've got this array of, I don't remember how many of these correlators, server, U1 slices you've got, but it's not just one corner, a PC in the corner, is it?
+00:17:27 Give people a sense of the data center.
 
-00:17:38 - No, no.
+00:17:28 And like, you've got this array of, I don't remember how many of these correlator server U1 slices you've got.
 
-00:17:40 Although with the way that technology progresses, maybe one day, no. So our current generation Correlator uses an FPGA based computing platform. We call it Scarab. There's a bit of a tradition to name radio astronomy compute things after insects. So the previous generation one was called Roach. This one is called Scarab. They stand for something. Reconfigurable Open Architecture for Computing Hardware, I think was the Roach. And Scarab, the first three letters is ISKA. Yeah, there we go. There's the scarab. And what that is, is an FPGA is a field programmable gate array. So it's a little piece of reconfigurable silicon that has, it's like having a hardware accelerated signal processing. It's very fast and it's wired straight into Ethernet for interconnect. So in our data center in the Karoo in South Africa, we've got about 280 of these individual scarabs and each of them has a role to play in the signal processing pipeline. They talk to each other via Ethernet and they're controlled by a central master controller computer that runs Python. So it uses an asynchronous little routine to coordinate the activities of each of these scarabs. The processing parameters need to be updated from time to time. So for example, as the earth turns, the geometric delay between a given pair of telescopes will change slightly. And so that gets updated periodically in the scarab so that it can carry on processing the data at the full rate that the telescope is taking data in.
+00:17:35 Yeah, no, no.
+
+00:17:35 But it's not just one corner, PC in the corner, is it?
+
+00:17:38 No, no.
+
+00:17:39 Although with the way the technology progresses, maybe one day.
+
+00:17:43 No.
+
+00:17:43 So our current generation correlator uses an FPGA-based computing platform.
+
+00:17:49 We call it Scarab.
+
+00:17:50 There's a bit of a tradition to name radio astronomy compute things after insects.
+
+00:17:55 So the previous generation one was called Roach.
+
+00:17:57 This one is called Scarab.
+
+00:17:59 They stand for something.
+
+00:18:01 Configurable open architecture for computing hardware, I think, was the Roach.
+
+00:18:04 And Scarab, the first three letters are SKA.
+
+00:18:08 Yeah, there we go.
+
+00:18:09 There's the Scarab.
+
+00:18:10 And what that is, is an FPGA is a field programmable gate array.
+
+00:18:14 So it's a little piece of reconfigurable silicon that has, it's like having a hardware accelerated signal processing.
+
+00:18:20 It's very fast and it's wired straight into Ethernet for interconnect.
+
+00:18:23 So in our data center in the Karoo in South Africa, we've got about 280 of these individual Scarabs.
+
+00:18:29 And each of them has a role to play in the signal processing pipeline.
+
+00:18:33 They talk to each other via Ethernet and they're controlled by a central master controller computer that runs Python.
+
+00:18:40 So it uses an asynchronous little routine to coordinate the activities of each of these Scarabs.
+
+00:18:46 The processing parameters need to be updated from time to time.
+
+00:18:50 So, for example, as the Earth turns, the geometric delay between a given pair of telescopes will change slightly.
+
+00:18:56 And so that gets updated periodically in the Scarab so that it can carry on processing the data at the full rate that the telescope is taking data in.
 
 00:19:06 So to give you an idea of that, each telescope is producing data at about 35 gigabit per second.
 
-00:19:12 - 35 gigabit a second?
+00:19:12 35 gigabit a second?
 
-00:19:13 - Yeah, times 64.
+00:19:13 Yeah.
 
-00:19:14 - Yeah, that's a lot of data.
+00:19:13 Times 64.
 
-00:19:18 - After the processing, the other end of the correlator, so we get about four or five gigabit per second, so that's reduced.
+00:19:14 Yeah.
 
-00:19:24 Due to kind of the long exposure effect, it's averaged over a few seconds, so it's four or five gigabits per second out the other end.
+00:19:15 Yeah, that's a lot of data.
 
-00:19:31 And then that gets stored on hard drives for processing and imaging so that scientists can do their science later on.
+00:19:17 After the processing, the other end of the correlator, so we get about four or five gigabit per second.
+
+00:19:23 So that's reduced due to kind of the long exposure effect.
+
+00:19:26 It's averaged over a few seconds.
+
+00:19:27 So it's four or five gigabit per second out the other end.
+
+00:19:30 And then that gets stored on hard drives for processing and imaging so that scientists can do their science later on.
 
 00:19:36 But that's the initial stage of the signal processing pipeline.
 
-00:19:39 - Yeah, so you've got 64 of these running in concert.
+00:19:39 Yeah.
 
-00:19:43 What is uptime in DevOps look like for you all?
+00:19:39 So you've got 64 of these running in concert.
+
+00:19:42 What does uptime in DevOps look like for you all?
 
 00:19:46 Is this continuously 24 hours a day recording or is it offline for a certain number of hours?
 
-00:19:52 - Yes, it is.
+00:19:52 Yes, it is.
 
-00:19:53 And the limiting factor I'm happy to say is usually not the correlator.
+00:19:53 And the limiting factor, I'm happy to say, is usually not the correlator.
 
 00:19:57 We don't need all 280 scarabs to run.
 
-00:20:01 We can run with about 190 of them with full science capability, so there is capacity for spares.
+00:20:00 We can run with about 190 of them with full science capability.
 
-00:20:06 And when you have a system with this many moving parts, there is downtime.
+00:20:04 So there is capacity for spares.
 
-00:20:10 You know, people actually need to go and change the oil in the motors on the telescope and routine maintenance kinds of things like that.
+00:20:05 And when you have a system with this many moving parts, there is downtime.
+
+00:20:09 You know, people actually need to go and change the oil in the motors on the telescope
+
+00:20:13 and routine maintenance kinds of things like that.
 
 00:20:16 I don't remember our numbers exactly, but I believe it's above 75% of the time that the telescope is busy and doing science.
 
-00:20:24 This is more recent.
+00:20:23 This is more recent.
 
-00:20:25 It's only in the last sort of few years that the technology platform has become a bit more mature.
+00:20:24 It's only in the last sort of few years that the technology platform has become a bit more mature.
 
-00:20:30 In the early stages, it was really still sort of engineering commissioning, but I think we're using above 75% of time now for actual science observations.
+00:20:29 In the early stages, it was really still sort of engineering commissioning.
 
-00:20:37 - That's pretty impressive for considering all the pieces involved.
+00:20:32 But I think we're using above 75% of time now for actual science observations.
 
-00:20:40 And what are these scarabs?
+00:20:37 That's pretty impressive for considering all the pieces involved.
 
-00:20:42 Each one is basically assigned to an individual telescope, part of the array?
+00:20:41 And one of these scarabs, each one is basically assigned to an individual telescope, part of the array?
 
-00:20:46 - Partially.
+00:20:46 Partially.
 
-00:20:47 So the first one will do what is called channelization.
+00:20:46 So the first one will do what is called channelization.
 
-00:20:51 So it's much easier to operate on narrow signals of, you know, very close to a sine wave.
+00:20:50 So it's much easier to operate on narrow signals of, you know, very close to a sine wave.
 
-00:20:56 So the telescope will sample a little bit more than a gigahertz with the bandwidth and that will be chopped up into, you know, a few thousand channels.
+00:20:56 So the telescope will sample a little bit more than a gigahertz width of bandwidth.
 
-00:21:04 Then those channels will get sort of dished out and another scarab later on will cross multiply the corresponding frequency channels from every single telescope together.
+00:20:59 And that will be chopped up into, you know, a few thousand channels.
+
+00:21:03 Then those channels will get sort of dished out.
+
+00:21:07 And another scarab later on will cross multiply the corresponding frequency channels from every single telescope together.
 
 00:21:14 So this architecture is called FX.
 
-00:21:16 So first frequency generalization, then cross-correlation, cross-correlation, pardon me, before you get your ultimate, well, product which gets stored in the archive and on which then further science process is done.
+00:21:16 So first frequency channelization, then cross correlation, pardon me.
 
-00:21:27 - People start to ask questions and draw graphs and things.
+00:21:21 Before you get your ultimate, well, product which gets stored in the archive and on which then further science process.
 
-00:21:31 - Exactly.
+00:21:27 Yeah, people start to ask questions and draw graphs and things.
 
-00:21:31 - Yeah, so one of the parts that you employ to make this run fast is, I think you said you use CUDA, CUDA cores on NVIDIA GPUs or something like that.
+00:21:30 Exactly.
 
-00:21:41 Is that right?
+00:21:31 Yeah. So one of the parts that you employ to make this run fast is, I think you said you use CUDA cores on NVIDIA GPUs or something like that.
 
-00:21:41 Do I remember this correctly?
+00:21:41 Is that right? Do I remember this correctly?
 
-00:21:42 - Yes, that's right.
+00:21:42 Yes, that's right.
 
-00:21:43 So the Scarab that you showed on the screen, that's our previous but current generation correlator is working on that platform.
+00:21:43 So the scarab that you showed on the screen, that's our previous but current generation correlators is working on that platform.
 
 00:21:51 It has its pros and cons.
 
-00:21:53 It's kind of a bespoke piece of hardware.
+00:21:52 It's kind of a bespoke piece of hardware.
 
 00:21:54 It is reconfigurable, but there are not that many customers for this particular board.
 
 00:21:59 The problem with doing your own hardware is that it takes a lot of time, particularly if you're an organization that you want to do science.
 
-00:22:06 So for the next expansion of MeerKAT, to build more antennas, we need more processing capability to be able to handle more bandwidth. We've kind of figured out that where they are now, GPUs can do the work. GPUs have actually been powerful enough to do the work for a while now. The problem has actually been the memory bandwidth to actually get your data from your telescope onto your GPU to do the number crunching. So for Scarab, it was very easy. It has some 40 gigabit ethernet and that's wired straight into the FPGA. So there's no operating system taking its time, there's no PCI Express that needs to be negotiated.
+00:22:06 So for the next expansion of Meerkat, to build more antennas, we need more processing capability to be able to handle more bandwidth.
+
+00:22:13 We've kind of figured out that where they are now, GPUs can do the work.
+
+00:22:19 GPUs have actually been powerful enough to do the work for a while now.
+
+00:22:22 The problem has actually been the memory bandwidth to actually get your data from your telescope onto your GPU to do the number crunching.
+
+00:22:30 So for scarab, it was very easy.
+
+00:22:32 It has some 40 gigabit Ethernet, and that's wired straight into the FPGA.
+
+00:22:35 So there's no operating system taking its time.
+
+00:22:38 There's no PCI Express that needs to be negotiated.
 
 00:22:41 The data just comes straight off the network and it can do its processing.
 
-00:22:45 Previously computers were not fast enough to get the numbers on and off the card.
+00:22:44 Previously, computers were not fast enough to get the numbers on and off the card.
 
-00:22:48 But since PCIE 4 has become a thing and sort of the GeForce RTX 3000 series cards, which we're using PCIE 4, we can do it on GPUs now.
+00:22:48 But since PCIe 4 has become a thing and sort of the GeForce RTX 3000 series cards, which we're using PCIe 4, we could do it on GPUs now.
 
 00:22:59 So we haven't deployed one yet.
 
 00:23:01 What I spoke about is the prototype that we've developed.
 
-00:23:03 And that's part Python and part CUDA, right?
+00:23:03 That's part Python and part CUDA, right?
 
-00:23:07 Yes, yes. So the CUDA is actually quite small. As I mentioned earlier, the processing is quite quite simple. So there's a stage for channelizing. So that uses a piece of math called a Fourier transform. And there's been years of research gone into that to make it very computationally efficient. It's very fast. The other part is simply multiplying lots of numbers together.
+00:23:07 Yes, yes.
 
-00:23:27 And that's something that GPUs are really, really good at. So we've made good use of technology advances driven by things like AI and machine learning, which relies on really large matrix multiplications. So we just piggyback off of that technology. And the bonus is we don't have to develop our own hardware anymore, which is nice.
+00:23:08 So the CUDA is actually quite small.
 
-00:23:44 And those things are only getting faster, right? If you could have done it on a 3070 or whatever, an NVIDIA 3070, then, you know, it's getting faster and going to get easier and easier as things go. You might need a small power generator to run one of those cards these days. They're kind of insane, but...
+00:23:10 As I mentioned earlier, the processing is quite simple.
 
-00:24:00 The 30 series are a little bit easier than the 40 series. To give you an idea, in our - Our prototype system, we're using 3070 TIs at the moment, and one of those GPUs does the work of four Scarabs.
+00:23:14 So there's a stage for channelizing.
 
-00:24:10 - Wow.
+00:23:17 So that uses a piece of math called a Fourier transform.
 
-00:24:10 - So it's the rate that technology moves forward.
+00:23:19 And there's been years of research going into that to make it very computationally efficient.
 
-00:24:13 To be fair, the Scarab is about six or seven years old.
+00:23:23 It's very fast.
 
-00:24:16 It was revolutionary at the time, but commercial technology has moved forward a lot.
+00:23:24 The other part is simply multiplying lots of numbers together.
 
-00:24:20 - Yeah, it sure has.
+00:23:27 And that's something that GPUs are really, really good at.
 
-00:24:22 You talked, just a bit of a sidebar, you talked about one of the challenges being getting the data in and out of the GPUs from a bandwidth perspective.
+00:23:29 So we've made good use of technology advances driven by things like AI and machine learning, which relies on really large matrix multiplications.
 
-00:24:30 Do things like systems on a chip in this Apple unified memory where the bandwidth, the memory of the CPU is the memory of the GPU.
+00:23:37 So we just piggyback off of that technology.
+
+00:23:40 And the bonus is we don't have to develop our own hardware anymore, which is nice.
+
+00:23:44 And those things are only getting faster, right?
+
+00:23:45 If you could have done it on a 3070 or whatever, an NVIDIA 3070, then, you know, it's getting faster and going to get easier and easier as things go.
+
+00:23:53 You might need a small power generator to run one of those cards these days.
+
+00:23:58 They're kind of insane.
+
+00:23:59 But the 30 series are a little bit easier than the 40 series.
+
+00:24:02 To give you an idea, in our prototype system, we're using 3070 Ti's at the moment.
+
+00:24:07 And one of those GPUs does the work of four scarabs.
+
+00:24:09 Wow.
+
+00:24:10 So it's the rate that technology moves forward.
+
+00:24:13 To be fair, the scarab is about six or seven years old.
+
+00:24:16 It was revolutionary at the time.
+
+00:24:17 But, you know, commercial technology has moved forward a lot.
+
+00:24:20 Yeah, it sure has.
+
+00:24:21 You talked, just a bit of a sidebar.
+
+00:24:23 You talked about one of the challenges being getting the data in and out of the GPUs from a bandwidth perspective.
+
+00:24:30 Do things like systems on a chip and this Apple unified memory, where the bandwidth, the memory of the CPU is the memory of the GPU.
 
 00:24:39 Does that, have you guys considered playing with that?
 
 00:24:41 Is that interesting?
 
-00:24:42 - We have had a look.
+00:24:42 We have had a look.
 
 00:24:44 That's, so Apple's model is something that's not really reached mainstream yet.
 
-00:24:49 And Apple doesn't really sell a computer in a form factor that would be amenable to deployment in a data center environment.
+00:24:48 And Apple doesn't really sell a computer in a form factor that would be amenable to employment in a data center environment.
 
-00:24:54 - Yeah, you have to put a bunch of minis on their edge or something, yeah.
+00:24:54 Yeah.
 
-00:24:57 - Exactly, yes.
+00:24:54 You'd have to put a bunch of minis on their edge or something.
 
-00:24:59 So it's something that we've got an eye on, but we haven't got a usable kind of hardware prototype at this point.
+00:24:57 Yeah.
 
-00:25:04 We're currently using AMD EPIC platforms.
+00:24:57 Exactly.
+
+00:24:58 Yes.
+
+00:24:58 So it's something that we've got an eye on, but we haven't got a usable kind of hardware prototype at this point.
+
+00:25:03 We're currently using AMD EPYC platforms.
 
 00:25:06 They have lots of PCIe lanes and lots of memory channels.
 
-00:25:10 So that lets you get data on and off, you know, from your network to your GPU very quickly.
+00:25:09 So that lets you get data on and off, you know, from your network to your GPU very quickly.
 
-00:25:15 Advances such as direct memory addressing and other such things, I forget all the terminology now.
+00:25:15 Advances such as direct memory addressing and other such things.
 
-00:25:22 But basically, the faster that you can get it off the, into the GPU's RAM so that the GPU can do its thing, the better.
+00:25:19 I forget all the terminology now.
 
-00:25:27 Yeah, it's an interesting trade-off to consider because the GPUs, even in the new higher end Apple stuff, is still quite a bit slower than NVIDIA.
+00:25:21 But basically, the faster that you can get it off the, into the GPU's RAM so that the GPU can do its thing, the better.
 
-00:25:36 But the memory is instant, so there's, you know, where we have trade-off, cross the line.
+00:25:27 Yeah.
 
-00:25:41 It's gonna be interesting as this kind of architecture evolves.
+00:25:27 Yeah.
 
-00:25:43 - Yeah, we've definitely got eyes on that, and we'll see how it goes.
+00:25:27 It's an interesting trade-off to consider because the GPUs, even in the new higher-end Apple stuff, is still quite a bit slower than NVIDIA.
 
-00:25:47 - All right, for doing the CUDA stuff, what's the Python side look like?
+00:25:36 But the memory is instant.
+
+00:25:37 So like there's, you know, where does that trade-off cross the line?
+
+00:25:41 It's going to be interesting as this kind of architecture evolves.
+
+00:25:43 Yeah.
+
+00:25:44 We've definitely got eyes on that.
+
+00:25:45 And we'll see how it goes.
+
+00:25:47 All right.
+
+00:25:47 For doing the CUDA stuff, what's the Python side look like?
 
 00:25:51 Is that, what library is she using and stuff?
 
-00:25:53 - So the Python, that's got to kind of do, So the GPUs are very good at crunching numbers, but they're not very good at anything else.
+00:25:53 So the Python, that's got to kind of do, so the GPUs are very good at crunching numbers, but, you know, they're not very good at anything else.
 
 00:26:01 So there's a lot of steps in that for a GPU to be able to do all of those calculations.
 
 00:26:06 You have a high-speed network, 100 gigabit, 200 gigabit, that's very fast.
 
-00:26:11 And so you need software to be able to run your network stack, receive data, and that comes into system RAM.
+00:26:11 And so you need software to be able to, you know, run your network stack, receive data, and that comes into system RAM.
 
-00:26:19 You need to be able to DMA it into the GPU's memory.
+00:26:18 You need to be able to DMA it into the GPU's memory.
 
-00:26:21 You need to be able to know when the work is finished so that you can copy the data back, packet that up in Ethernet packets again and send it out.
+00:26:21 You need to be able to know when the work is finished so that you can copy the data back, packet that up in Ethernet packets again, and send it out.
 
-00:26:30 And so there's a lot of things that we use in Python to enable that.
+00:26:29 And so there's a lot of things that we use in Python to enable that.
 
-00:26:34 The first and most sort of obvious one would be a library called PyCuda, which allows you to wrap up Cuda functions in a nice Python handle and interact with your GPU in a way that's more amenable to Python code.
+00:26:33 The first and most sort of obvious one would be a library called PyCuda, which allows you to wrap up CUDA functions in a nice Python handle and interact with your GPU in a way that's, you know, more amenable to Python code.
 
-00:26:48 There we go, that's the one.
+00:26:48 There we go.
 
-00:26:49 - Yeah, very cool.
+00:26:49 That's the one.
 
-00:26:50 - So the other one, the thing that you've got to think about carefully then is coordinating your activities where your GPU is executing, CUDA calls the streams, if you're working in an OpenCL kind of abstraction, it calls it command queues.
+00:26:49 Yeah, very cool.
+
+00:26:50 So the other one, the thing that you've got to think about carefully then is coordinating your activities where your GPU is executing.
+
+00:26:59 PyCuda calls the streams, if you're working in an OpenCL kind of abstraction, it calls it command queues.
 
 00:27:04 So they work almost like threads on a computer.
 
-00:27:07 So you need to have some sort of way of coordinating so that when you start one calculation, you want to make sure that the data is there, that it can work on it.
+00:27:06 So you need to have some sort of way of coordinating so that when you start one calculation, you've got to make sure that the data is there, that it can work on it.
 
 00:27:16 And similarly, you don't want to start copying it back before the calculation is finished.
 
-00:27:21 So PyCUDA makes this quite easy.
+00:27:20 So PyCuda makes this quite easy.
 
-00:27:23 you could use, I think, Nvidia calls it events, but they're basically semaphores and markers to help you to coordinate between your different threads for sending, processing, and receiving data from the GPU.
+00:27:23 You could use, I think, NVIDIA calls it events.
 
-00:27:34 It's similarly getting it off the network and onto the network again.
+00:27:25 But they're basically semaphores and markers to help you to coordinate between your different threads for sending, processing and receiving data from the GPU.
 
-00:27:37 - Yeah, PyCuda looks great.
+00:27:34 And similarly getting it off the network and onto the network again.
 
-00:27:39 Another thing you spoke about that was pretty interesting is your use of async and await.
+00:27:37 Yeah.
 
-00:27:44 Do all the network stuff, which I think is, it's clearly a good choice and fits right here, but I feel like a lot of people don't consider it fast enough or good enough?
+00:27:37 PyCuda looks great.
 
-00:27:53 Network, but not just that, also the GPU.
+00:27:38 Another thing you spoke about that was pretty interesting is your use of async and await.
 
-00:27:56 You have a few functions and they're running loops.
+00:27:43 Do all the network stuff, which I think is, it's a clearly a good choice and fits right here.
 
-00:27:58 So the way that we've structured our code, and you can, we've got, I'll share a link with you, there's documentation in Read the Docs as well, explaining this, but we have one loop that just waits for traffic to come in off the network, but bundles it up, and this is kind of one of the trick things you need to do things in batches.
+00:27:49 But I feel like a lot of people don't consider it fast enough or good enough.
 
-00:28:16 If you involve the Python interpreter, every time a packet hits the NIC, then it'll end up being very slow.
+00:27:53 Network, but not just that.
+
+00:27:54 Also the GPU.
+
+00:27:55 You have a few functions and they're running loops.
+
+00:27:58 So the way that we've structured our code and you can, you can, we've got, I'll send, I'll share a link with you.
+
+00:28:03 There's documentation in Read the Docs as well explaining this.
+
+00:28:07 But we have one loop that just waits for traffic to come in off the network, bundles it up.
+
+00:28:12 And this is kind of one of the trick things you, you need to do things in batches.
+
+00:28:16 If you involve the Python interpreter, every time a packet hits the neck, then it'll end up being very slow.
 
 00:28:22 So we have a lower level library written in C++ that batches up a whole chunk in the order of about 100 or 200 megabytes worth of data.
 
 00:28:29 And you use that await keyword to let you know when there's a chunk of data ready.
 
-00:28:34 So when there's a chunk of data ready--
+00:28:34 So when there's a chunk of data ready.
 
-00:28:35 - I see, you wait until enough is buffered up and then you pull it back on the resume or whatever, okay.
+00:28:35 I see.
 
-00:28:41 - Exactly, so you mark that for upload, you put an event in the stream or the command queue and let that run.
+00:28:35 You wait until enough is buffered up and then you pull it back on the resume or whatever.
 
-00:28:49 And then in the next, you're using the await, so you're waiting for that event.
+00:28:41 Okay.
+
+00:28:41 Exactly.
+
+00:28:42 So you, you, you mark that for upload.
+
+00:28:44 You put an event in the, in the stream or the command queue and let that run.
+
+00:28:48 And then in the next, you're busy, you're using the await.
+
+00:28:51 So you're waiting for that event.
 
 00:28:53 And when you see that, you know that the data is uploaded to the GPU.
 
-00:28:56 You trigger the processing, whichever processing task needs to happen, and put another event and then pass it on to the next.
+00:28:56 You trigger the processing, whichever processing task needs to happen and put another event and then pass it onto the next.
 
 00:29:02 So the third loop waits for that final event.
 
-00:29:05 When it sees it, it knows that the processing is done, and you can initiate the copy of the GPU RAM back to the system.
+00:29:05 When it sees it, it knows that the processing is done and you can initiate the copy of the GPU RAM back to the system.
 
-00:29:12 And then you can transmit that out on the network.
+00:29:11 And then you can send the transmit that out on the network.
 
-00:29:16 So those two things working in tandem.
+00:29:15 So those two things working in tandem.
 
-00:29:18 - Yeah, I didn't expect the GPU to have this async interface, but it does make a lot of sense.
+00:29:17 Yeah.
 
-00:29:23 There's a lot of parallels in a GPU.
+00:29:18 I didn't expect the GPU to have a, this async interface, but it does make a lot of sense.
 
-00:29:25 - I don't think that it's natively in PyCuda.
+00:29:23 There's a lot of, a lot of parallels in a GPU.
+
+00:29:25 I don't think that it's natively in PyCuda.
 
 00:29:28 I think that's a wrapper that we've done around it.
 
 00:29:30 It's been a little while since I've touched that particular code, but there's no reason that you can't do that at all.
 
-00:29:35 And it's a process that we find has been very, very useful.
+00:29:35 And it's an approach that we find has been very, very useful.
 
-00:29:37 - Okay, but your assessment overall is that async and await, pythons, async.io has been a solid choice for this whole platform.
+00:29:37 Okay.
 
-00:29:44 - It's been, I've seen this approach used in other places as well, even since before Async.io has been part of core Python, using things like Flask or Tornado.
+00:29:37 But your assessment overall is that async and await Pythons, asyncio has been a solid choice for this whole platform.
+
+00:29:44 It's been, I've seen this approach used in other places as well.
+
+00:29:48 Even since before asyncio has been part of core Python using things like Flask or Tornado.
 
 00:29:53 So the approach, it's a very good approach.
 
 00:29:55 It's very helpful.
 
-00:29:56 Debugging Async stuff when it goes wrong is a little bit more tricky, but when it works, it works very, very well.
+00:29:56 Debugging async stuff when it goes wrong is a little bit more tricky, but when it works, it works very, very well.
 
-00:30:01 - Yeah, that's for sure.
+00:30:01 Yeah, that's for sure.
 
-00:30:02 You get the highs and bugs, keep it in the science space.
+00:30:02 You get the Heisenbugs keeping in the science space.
 
-00:30:05 Okay, so-- - Exactly.
+00:30:05 Okay.
 
-00:30:07 - Quick audience question, I think is gonna be interesting.
+00:30:05 So.
 
-00:30:10 Before we move on to the testing of this whole system.
+00:30:06 Exactly.
 
-00:30:12 So out in the audience, Slavik asks, What do you think about simple distributed radio astronomy experiments for like citizen science?
+00:30:07 Quick audience question, I think it's going to be interesting before we move on to the testing of this whole system.
+
+00:30:12 So out in the audience, Slalwak asks, what do you think about simple distributed radio astronomy experiments for like citizen science?
 
 00:30:20 Are they possible?
 
-00:30:22 That's a very good question.
+00:30:21 That's a very good question.
 
-00:30:23 Yes, they are.
+00:30:22 Yes, they are.
 
-00:30:24 It's possible to do amateur radio astronomy using a relatively affordable SDR dongles.
+00:30:24 It's possible to do amateur radio astronomy using a relatively affordable STR dongles.
 
-00:30:29 SDR standing for Software Defined Radio.
+00:30:29 STR standing for software defined radio.
 
-00:30:32 It's been a little while since I've looked at this, I must confess, as I've mentioned earlier since I do this professionally, I don't bother with it that much anymore.
+00:30:31 It's been a little while since I've looked at this.
 
-00:30:38 You have a square kilometer array you're building, you don't worry too much about it.
+00:30:33 I must confess, as I've mentioned earlier, since I do this professionally,
 
-00:30:42 Exactly.
+00:30:36 I don't bother with it that much as a hobby anymore.
 
-00:30:43 I've got a big telescope at work.
+00:30:38 You have a square kilometer array you're building.
 
-00:30:44 I don't need a small one at home.
+00:30:40 You don't worry too much about it.
 
-00:30:45 You can do science, it's difficult in most practical cases because most people live in cities where there's a lot of interference.
+00:30:41 I've got a big telescope at work.
+
+00:30:43 I don't need a small one at home.
+
+00:30:45 You can do science.
+
+00:30:46 It's difficult in most practical cases because most people live in cities where there's a lot of interference.
+
+00:30:51 Yeah.
 
 00:30:52 But it definitely can be done.
 
-00:30:54 One of the fun projects that I've seen has been using a satellite dish like what you would connect to satellite TV, but with a little bit of electronic knowledge and you don't need a degree, you can just be on a hobbyist level to do that.
+00:30:53 One of the fun projects that I've seen has been using a satellite dish like what you would connect satellite TV,
 
-00:31:05 You can build a square law receiver, so it's very much just is there signal or isn't there, you're not going to be decoding any TV streams.
+00:30:59 but with a little bit of electronic knowledge and you don't need a degree.
 
-00:31:13 you can measure, for example, the temperature of the sun using this and you can measure its angular dimensions by simply pointing it and then letting the sun drift through a few times. Yeah, so there are fun projects that can be done. As to say whether it can be useful as citizen science, in other words, useful from a scientific point of view over more than just something interesting to do, I'd have to go and have a look. I'm not 100% sure. It's very difficult to get meaningful results without very, very expensive equipment.
+00:31:03 You can just be on a hobbyist level to do that.
 
-00:31:40 That's why we've got such expensive facilities being built.
+00:31:05 You can build a square law receiver.
 
-00:31:45 This portion of Talk Python to Me is brought to you by Sentry.
+00:31:07 So it's very much just, is there signal on?
+
+00:31:09 Isn't there?
+
+00:31:10 You're not going to be decoding any TV streams.
+
+00:31:12 But you can measure, for example, the temperature of the sun using this.
+
+00:31:15 And you can measure its angular dimensions by simply pointing it and then letting the sun drift through a few times.
+
+00:31:22 Yeah.
+
+00:31:22 So there are fun projects that can be done.
+
+00:31:24 As to say whether it can be useful as citizen science.
+
+00:31:28 In other words, useful from a scientific point of view over more than just something interesting to do.
+
+00:31:33 I'd have to go and have a look.
+
+00:31:35 I'm not 100% sure.
+
+00:31:36 It's very difficult to get meaningful results without very, very expensive equipment.
+
+00:31:39 That's why we've got such expensive facilities being built.
+
+00:31:45 This portion of Talk Python to me is brought to you by Sentry.
 
 00:31:48 How would you like to remove a little stress from your life?
 
@@ -652,147 +898,245 @@
 
 00:31:57 Would you even know it until they sent you that support email?
 
-00:32:00 How much better would it be to have the error or performance details immediately sent to you, including the call stack and values of local variables and the active user recorded in the report. With Sentry, this is not only possible, it's simple. In fact, we use Sentry on all the Talk Python web properties. We've actually fixed a bug triggered by a user and had the upgrade ready to roll out as we got the support email. That was a great email to write back. Hey, we already saw your error and have already rolled out the fix. Imagine their surprise.
+00:32:00 How much better would it be to have the error or performance details immediately sent to you,
 
-00:32:30 Surprise and delight your users. Create your Sentry account at talkpython.fm/sentry, And if you sign up with the code Talk Python, all one word, it's good for two free months of Sentry's business plan, which will give you up to 20 times as many monthly events as well as other features.
+00:32:04 including the call stack and values of local variables and the active user recorded in the report?
 
-00:32:49 Create better software, delight your users, and support the podcast.
+00:32:10 With Sentry, this is not only possible, it's simple.
 
-00:32:53 Visit talkpython.fm/Sentry and use the coupon code Talk Python.
+00:32:13 In fact, we use Sentry on all the Talk Python web properties.
 
-00:33:00 One thing you did point out, I can't remember which in the two talks it was, but you did say that you can go and rent at least optical telescopes remotely, right?
+00:32:17 We've actually fixed a bug triggered by a user and had the upgrade ready to roll out as we got the support email.
 
-00:33:09 Yes, most optical telescopes are operated remotely, but a lot of ones that you can, that are commercially available as well, you know, head over to telescopes.com and you can buy ones that can be electronically controlled. And those you can do interesting, is it telescopes or telescope.com? Yeah, that's the one. You can buy ones that are electronically controlled.
+00:32:24 That was a great email to write back.
 
-00:33:28 Those can actually be useful for citizen science. There's a lot of, for example, astronomy organizations that do regular observations of variable stars or binary stars and they rely a lot on data submitted by amateurs. While any particular observation will not necessarily be that useful, but in aggregate thousands of these observations are very helpful for doing the science that they would be doing then. That could typically be run by university faculty and over, you know, they would aggregate these observations over long periods of time from different locations to… Yeah, that sounds like a cool research project.
+00:32:26 Hey, we already saw your error and have already rolled out the fix.
 
-00:33:59 To draw some scientific conclusions about what's happening with these stars.
+00:32:29 Imagine their surprise.
 
-00:34:02 - Very neat. - It's a good question though.
+00:32:30 Surprise and delight your users.
 
-00:34:03 Yeah, it is indeed. Thanks.
+00:32:33 Create your Sentry account at talkpython.fm/sentry.
+
+00:32:37 And if you sign up with the code talkpython, all one word, it's good for two free months of Sentry's business plan,
+
+00:32:44 which will give you up to 20 times as many monthly events as well as other features.
+
+00:32:48 Create better software, delight your users, and support the podcast.
+
+00:32:53 Visit talkpython.fm/sentry and use the coupon code talkpython.
+
+00:32:58 One thing you did point out, I can't remember which in the two talks it was,
+
+00:33:03 but you did say that you can go and rent at least optical telescopes remotely, right?
+
+00:33:09 Yes.
+
+00:33:09 Most optical telescopes are operated remotely, but a lot of ones that are commercially available as well,
+
+00:33:15 head over to telescopes.com, and you can buy ones that can be electronically controlled.
+
+00:33:20 And those you can do interesting, is it telescopes or telescope.com?
+
+00:33:24 Wow.
+
+00:33:24 Yeah, that's the one.
+
+00:33:25 You can buy ones that are electronically controlled.
+
+00:33:27 Okay.
+
+00:33:27 Those can actually be useful for citizen science.
+
+00:33:29 There's a lot of, for example, astronomy organizations that do regular observations of variable stars or winery stars,
+
+00:33:36 and they rely a lot on data submitted by amateurs.
+
+00:33:38 While any particular observation will not necessarily be that useful, but in aggregate, thousands of these observations are very helpful for doing the science that they would be doing then.
+
+00:33:49 That could typically be run by university faculty, and over, you know, they would aggregate these observations over long periods of time from different locations to...
+
+00:33:57 Yeah, that sounds like a cool research project.
+
+00:33:59 ...to draw some scientific conclusions about what's happening with these stars.
+
+00:34:02 Very neat.
+
+00:34:02 It's a good question, though.
+
+00:34:03 Yeah, it is. Indeed. Thanks.
 
 00:34:04 So let's talk about the testing side.
 
-00:34:08 From my sort of engineering background, one of the sort of key questions that you've got to ask as an engineer is, if you have specifications for a system to build, to design, at what point do you know that it's doing the thing that it's expected to do?
+00:34:08 From my sort of engineering background, one of the sort of key questions that you've got to ask as an engineer is,
+
+00:34:13 if you have specifications for a system to build, to design, at what point do you know that it's doing the thing that it's expected to do?
 
 00:34:20 So you've got a certain set of user requirements.
 
 00:34:22 The user needs to be able to have this level of sensitivity and this level of bandwidth and, you know, accuracy.
 
-00:34:28 Less than this much noise or something, yeah?
+00:34:27 Less than this much noise or something, yeah?
 
-00:34:30 Exactly, in terms of hard numbers.
+00:34:30 Exactly. In terms of hard numbers.
 
 00:34:32 So you need to have some sort of way to prove that the system that you've designed and built is going to meet those specifications.
 
-00:34:38 And so testing is a fundamental part of that.
+00:34:37 And so testing is a fundamental part of that.
 
-00:34:41 Sometimes you can prove by analysis, you know, just by using maths and showing, you know, this is what the system is designed to do.
+00:34:40 Sometimes you can prove by analysis, you know, just by using maths and showing, you know,
 
-00:34:47 But the first prize is if you can run a test and say, "Look, we've got a controlled set of inputs, we can measure the outputs, and we can determine from this that the system is doing what we said it is doing and how well it is." So, you know, what the noise level is or what the sensitivity is, whatever the case is.
+00:34:45 this is what the system is designed to do.
 
-00:35:02 And that's something that is often a little bit neglected in scientific projects, particularly astronomy is that's the one that I've got experience with. Other fields I've seen as well, often physicists and astronomers are very, very clever and they're trained in a lot of fields.
+00:34:47 But the first prize is if you can run a test and say, look, we've got a controlled set of inputs,
+
+00:34:51 we can measure the outputs, and we can determine from this that the system is doing what we said it is doing,
+
+00:34:56 and how well it is, how well it is.
+
+00:34:58 So, you know, what the noise level is or what the sensitivity is, whatever the case is.
+
+00:35:02 And that's something that is often a little bit neglected in scientific projects, particularly astronomy.
+
+00:35:09 That's the one that I've got experience with.
+
+00:35:10 Other fields I've seen as well.
+
+00:35:12 Often physicists and astronomers are very, very clever, and they're trained in a lot of fields.
 
 00:35:16 They tend to build their own instruments and hardware and write their own software.
 
-00:35:19 It has a kind of amateurish aspect to it sometimes, not universally, but this is the tendency until until it's more or less doing what the researcher wants and then he carries on. So many a software project has been written by a PhD student, he's generated some results and you know published his paper, gotten his PhD. That's very difficult to scrutinize because the code is written by someone and the logic lives in someone's head. And so I'm kind of keen on this concept of testing because I think it adds a level of rigor and transparency to the scientific process because if I've got tests in place then anyone can come along and look at how I've tested my instrument and, you know, criticize or evaluate whether it actually does what I say it does when I publish my research.
+00:35:19 It has a kind of amateurish aspect to it sometimes.
 
-00:36:03 So I think the concept is really important.
+00:35:22 Not universally, but this is the tendency.
+
+00:35:25 Until it's more or less doing what the researcher wants, and then he carries on.
+
+00:35:29 So many a software project has been written by a PhD student.
+
+00:35:32 He's generated some results and, you know, published his paper, gotten his PhD.
+
+00:35:38 That's very difficult to scrutinize because the code is written by someone and the logic lives in someone's head.
+
+00:35:43 And so I'm kind of keen on this concept of testing because I think it adds a level of rigor and transparency to the scientific process.
+
+00:35:49 Because if I've got tests in place, then anyone can come along and look at how I've tested my instrument and, you know, criticize or evaluate whether it actually does what I say it does when I publish my research.
+
+00:36:02 So I think the concept is really important.
 
 00:36:05 I do too.
 
-00:36:06 And it's in open source, one of the important signals that people use when they go and look at a package they might consider like PyCuda or Pandas or whatever is, does this thing have tests as part of its design, right?
+00:36:06 And it's in open source, one of the important signals that people use when they go and look at a package they might consider, like PyCuda or Pandas or whatever,
 
-00:36:22 If I'm going to depend on somebody else's library, or if I'm a maintainer and I create a library and someone's going to send me a PR, how do I know whether their changes that they're suggesting to me broke something I didn't see coming, right?
+00:36:16 is does this thing have tests as part of its design, right?
 
-00:36:33 And having unit tests or some kind of test typically driven with pytest for Python is a really important, not just supporting pillar of that project, but also a signal to others from the outside.
+00:36:21 If I'm going to depend on somebody else's library or if I'm a maintainer and I create a library and someone's going to send me a PR,
 
-00:36:45 Like this thing, people care about this.
+00:36:27 how do I know whether their changes that they're suggesting to me broke something I didn't see coming, right?
 
-00:36:47 They've verified it.
+00:36:33 And having unit tests or some kind of test typically driven with pytest for Python is a really important, not just supporting pillar of that project,
 
-00:36:48 They want to keep it strong.
+00:36:42 but also a signal to others from the outside, like this thing, people care about this, they've verified it, they want to keep it strong.
 
-00:36:49 - And it sounds to me like this might also be really important for science in the same way.
+00:36:48 And it sounds to me like this might also be really important for science in the same way.
 
-00:36:55 You talked about people coming to review your work or to try to reproduce it.
+00:36:54 You talked about people coming to review your work or to try to reproduce it.
 
 00:36:59 And if they see the test and they can run the test, it communicates something additional rather than just, well, I thought a lot about it and here's my graph.
 
-00:37:08 - Exactly, yes.
+00:37:08 Exactly, yes.
 
-00:37:09 We want to do groundbreaking science and we want to be able to say that when we make observations that what we're seeing is real science.
+00:37:09 We want to do groundbreaking science and we want to be able to say that when we make observations that what we're seeing is real science
 
-00:37:16 And it's not just some sort of anomaly that we found in the telescope signal chain.
+00:37:16 and it's not just some sort of anomaly that we found in the telescope signal chain.
 
-00:37:20 And the presence of good tests helps with that because then we have rigorous testing that we can say, look, this is the performance characteristics of our system.
+00:37:20 And the presence of good tests helps with that because then, you know, we have rigorous testing that we can say, look, this is the performance characteristics of our system.
 
-00:37:31 You know, it gives a little bit of extra confidence in your scientific results that way.
+00:37:30 You know, it gives a little bit of extra confidence in your scientific results that way.
 
-00:37:35 - Indeed, so how does this look different than like testing flask or something, right?
+00:37:34 Indeed.
 
-00:37:39 'Cause it's not exactly the same and you maybe are leaning on it a little bit more to communicate more information, not just pass or fail.
+00:37:35 So how does this look different than like testing Flask or something, right?
 
-00:37:47 There are a few things. In one sense, we do use unit tests in the same way that a lot of open source projects do.
+00:37:39 Because it's not exactly the same and you maybe are leaning on it a little bit more to communicate more information, not just pass or fail.
+
+00:37:46 There are a few things.
+
+00:37:47 In one sense, we do use unit tests in the same way that a lot of open source projects do.
 
 00:37:53 Just, you know, does each individual component of my module do the thing that I've designed it to do?
 
 00:37:59 But if you go a little bit beyond that, the same sort of philosophy and application can be applied to systems as a whole.
 
-00:38:06 If you have a complicated system with a lot of different parts talking to each other, it can be tricky to a change that you make might not break if you look at it in isolation, but do those interfaces still work?
+00:38:06 If you have a complicated system with a lot of different parts talking to each other, it can be tricky to a change that you make might not break if you look at it in isolation.
+
+00:38:17 But does those interfaces still work?
 
 00:38:19 If you're unit testing something, often you mock out whatever's at the end.
 
-00:38:22 So you pretend that you'll get a real response from a website when you do an API call.
+00:38:23 So you pretend that you'll get a real response from a website when you do an API call.
 
 00:38:29 But if you've touched the code that actually handles that API call, then your unit test is not going to pick that up.
 
 00:38:34 So we've got a relatively rigorous process for what one might call integration testing.
 
-00:38:40 So an entire system gets set up in a simulated environment, but an input like it might get from a real telescope and the ability to watch their output.
+00:38:40 So an entire system gets set up in a simulated environment, but an input like it might get from a real telescope and, you know, the ability to watch that output.
 
-00:38:51 And so we do that on a regular basis.
+00:38:50 And so we do that on a regular basis.
 
-00:38:53 We spin up an entire correlator in a system in the lab, give it a deterministic input, and so we can measure the output and determine whether or not it meets the criteria.
+00:38:52 We spin up an entire correlator in a system in the lab, give it a deterministic input.
 
-00:39:04 - Yeah, cool.
+00:38:59 And so we can measure the output and, you know, determine whether or not it meets the criteria.
 
-00:39:05 Is this like a software emulator in Docker, or is this an actual one of your one you FPGA things that's dedicated to this integration testing?
+00:39:04 Yeah, cool.
 
-00:39:16 - It can be both.
+00:39:05 Is this like a software emulator in Docker or is this an actual one of your 1U FPGA things that's dedicated to this integration testing?
+
+00:39:16 It can be both.
 
 00:39:17 It can be both.
 
 00:39:18 So we've used the same approach to testing the old Scarab correlator.
 
-00:39:23 One of the Scarabs can be configured to emulate a telescope so it can produce a signal similar to what a telescope might be, except not having astronomical signals in the data.
+00:39:23 One of the Scarabs can be configured to emulate a telescope.
 
-00:39:34 it would have a deterministic signal such as, you know, a normal frequency tone or just white noise, depending on what kind of test we want to run on the correlator itself.
+00:39:26 So it can produce a signal similar to what a telescope might be, except not having astronomical signals in the data.
+
+00:39:34 It would have a deterministic signal such as, you know, a normal frequency tone or just white noise, depending on what kind of test we want to run on the correlator itself.
 
 00:39:43 You don't replay the wow signal to it?
 
-00:39:47 We could, but it's faster just to generate signals. You're not going to get, with a strongly deterministic signal, in other words, if you know exactly what you're putting in, you can see what you're getting out as well. The wow signal, not as useful for determining the noise level.
+00:39:45 We could, but it's faster just to generate signals.
+
+00:39:49 You're not going to get with a strongly deterministic signal.
+
+00:39:52 In other words, if you know exactly what you're putting in, you can see what you're getting out as well.
+
+00:39:57 The wow signal, not as useful for determining the noise level.
 
 00:40:01 Yes, exactly.
 
 00:40:02 More fun, not as useful.
 
-00:40:03 So one of the things you did is you changed some of the output from pytest to be more representative of talking about how you've met your requirements and stuff.
+00:40:03 Yeah.
+
+00:40:04 So one of the things you did is you changed some of the output from pytest to be more representative of talking about how you've met your requirements and stuff.
 
 00:40:16 Maybe tell folks about how that works.
 
-00:40:18 Yeah, that was an interesting exercise.
+00:40:17 Yeah, that was an interesting exercise.
 
-00:40:20 Serao uses a process called systems engineering, which was developed in Bell Labs, I think in the 40s.
+00:40:20 Soraya uses a process called systems engineering, which was developed in Bell Labs, I think in the 40s.
 
-00:40:26 It was quite a while ago, and it's been strongly influenced by the sort of military processes.
+00:40:26 It was quite a while ago.
 
-00:40:31 And it's people in a software environment would recognize it as like a waterfall pattern where you'd have a big design up front.
+00:40:27 And it's been strongly influenced by the sort of military processes.
 
-00:40:38 So you'd have a lengthy analysis of what the requirements of your system are, and, you know, allocated different performance characteristics to different components.
+00:40:31 People in a software environment would recognize it as like a waterfall pattern where you'd have a big design up front.
 
-00:40:48 And once you've done with the design, you need reams and reams of documentation to prove that your design meets the specifications as well.
+00:40:38 So you'd have a lengthy analysis of what the requirements of your system are and, you know, allocated different performance characteristics to different components.
+
+00:40:47 And once you've done with the design, you need reams and reams of documentation to prove that your design meets the specifications as well.
 
 00:40:55 Graphs, tables, pictures, numbers, all of these kinds of things.
 
@@ -800,103 +1144,193 @@
 
 00:41:04 It has a much more simple output.
 
-00:41:06 In other words, it'll give you lots of details if something goes wrong.
+00:41:05 In other words, it'll give you lots of details.
 
-00:41:10 It'll give you a stack trace, it'll give you debug information of what the variables were at the time that there was a problem or that the assertion didn't meet.
+00:41:08 If something goes wrong, it'll give you a stack trace.
 
-00:41:17 But if everything passes...
+00:41:10 It'll give you, you know, debug information of what the variables were at the time that there was a problem or that the assertion didn't meet.
+
+00:41:17 But if everything passes.
 
 00:41:18 It's all green.
 
-00:41:19 Okay, we're good to go.
+00:41:20 Okay, we're good to go.
 
-00:41:20 You got a dot.
+00:41:21 You know, like, okay, the sensitivity is better than X, but how much better, you know?
 
-00:41:21 Yeah, you know, like, okay, the sensitivity is better than X, but how much better?
+00:41:26 And, you know, how does that vary with frequency?
 
-00:41:27 And how does that vary with frequency?
+00:41:29 These kinds of things, what we'd like to know and what we'd like to be able to present to the various stakeholders
 
-00:41:29 kinds of things, what we'd like to know and what we'd like to be able to present to the various stakeholders that are interested in the performance of the telescope. We have a system. Okay. You need to zoom out a little bit there. And I, for those of you who are watching on YouTube, I do apologize for the, it's difficult to put code on a screen in a way that's not going to put your audience to sleep.
+00:41:33 that are interested in the performance of the telescope.
 
-00:41:47 Yeah. And I just grabbed this off of your talk just so we had something to like kind of be concrete about. But you have this interesting reporting aspect that runs along with your test for sure.
+00:41:35 We have a system.
 
-00:41:55 Yes, so pytest has a plugin called Report Log and that if you sort of squint at it and look a little bit carefully, it allows you to kind of record metadata as you're going along. So things that are happening in your test. So there's several things happening at once here and maybe if I could just take a step back, this test that you've got up is a test of linearity. So what does that mean is that if I put in a signal x and I get an output y. So if I put in a signal 2x I should get 2y as the output so that they should be directly proportional to the other. And if there's, if they're not, then there's a non-linearity of some sort in the system. No system is perfectly linear so there will be some sort of margin for error. We don't have a specific spec on this particular linearity test. It's a quick one to run because it takes only a few minutes and it can give us a sort of a first eyeball of is, are things working as we expect them to do. pytest, if for those of you who are not familiar with it, the tests are written in the same syntax as Python functions, except where the inputs of the function are either parameters or fixtures. So parameters can be if there's a parameter space over which your test will run. So in our case, for example, different numbers of frequency channels, different numbers of antennas, this one isn't parameterized, it uses only a few fixtures. The fixtures are things to ensure that you have a test that is reproducible.
+00:41:36 Okay, you need to zoom out a little bit there.
+
+00:41:38 And for those of you who are watching on YouTube, I do apologize for the, it's difficult to put code on a screen in a way that's not going to put your audience to sleep.
+
+00:41:47 Yeah, and I just grabbed this off of your talk just so we had something to, like, kind of be concrete about.
+
+00:41:51 You have this interesting reporting aspect that runs along with your test for sure.
+
+00:41:55 Yes.
+
+00:41:56 So pytest has a plugin called Report Log.
+
+00:41:59 And that, if you sort of squint at it and look a little bit carefully, it allows you to kind of record metadata as you're going along.
+
+00:42:08 So things that are happening in your test.
+
+00:42:10 So there's several things happening at once here.
+
+00:42:12 And maybe if I could just take a step back, this test that you've got up is the test of linearity.
+
+00:42:17 So what does that mean is that if I put in a signal, X, and I get an output, Y.
+
+00:42:22 So if I put in a signal, 2X, I should get 2Y as the output.
+
+00:42:25 So they should be directly proportional to the other.
+
+00:42:28 And if there's, if they're not, then there's a non-linearity of some sort in the system.
+
+00:42:32 No system is perfectly linear, so there will be some sort of margin for error.
+
+00:42:36 We don't have a specific spec on this particular linearity test.
+
+00:42:40 It's a quick one to run because it takes only a few minutes.
+
+00:42:42 And it can give us a sort of a first eyeball of, are things working as we expect them to do.
+
+00:42:47 pytest, if for those of you who are not familiar with it, the tests are written in the same syntax as Python functions,
+
+00:42:53 except where the inputs of the function are either parameters or fixtures.
+
+00:42:57 So parameters can be, if there's a parameter space over which your test will run.
+
+00:43:01 So in our case, for example, different numbers of frequency channels, different numbers of antennas.
+
+00:43:05 This one isn't parameterized.
+
+00:43:07 It uses only a few fixtures.
+
+00:43:09 The fixtures are things to ensure that you have a test that is reproducible.
 
 00:43:16 So in this case, the correlator fixture gives us a correlator.
 
-00:43:20 It spins up in the test cluster that we've got in our lab, and it gives-- so the typehints there gives you the hint that we're getting a remote control, so that little correlator object there gives us the ability to communicate with it and control it.
+00:43:20 It spins up in the test cluster that we've got in our lab.
 
-00:43:32 The next one is a receiver, so that's--
+00:43:23 And it gives, so the typing today gives you the hint that we're getting a remote control.
 
-00:43:36 you know, if a correlator is running, you need to be able to receive what it's outputting so that you can compare it against whatever the spec is.
+00:43:28 So that little correlator object there gives us the ability to communicate with it and control it.
 
-00:43:43 And the third one is the PDF report.
+00:43:32 The next one is a receiver.
+
+00:43:34 So that's, you know, what if a correlator is running, you need to be able to receive what it's outputting so that you can compare it against whatever the spec is.
+
+00:43:42 And the third one is the PDF report.
 
 00:43:45 So the name is a bit of a misnomer.
 
-00:43:47 Initially, I...
+00:43:47 Initially, I, so that little fixture is written using module called PyLatex.
 
-00:43:48 So that little fixture is written using module called PyLaTex.
+00:43:52 So shout out, shout out to the authors of that one.
 
-00:43:52 So shout out to the authors of that one.
+00:43:53 It's very useful.
 
-00:43:54 It's very useful.
-
-00:43:55 And the best way to generate...
-
-00:43:57 You can generate PDFs directly from Python, but it's very low-level and it's difficult.
+00:43:55 And the best way to generate, you can generate PDFs directly from Python, but it's very low level and it's difficult.
 
 00:44:01 So we use LaTeX as a kind of intermediate step to do the typesetting and PDF generation for that.
 
-00:44:07 So with that, you can focus on actually just getting the content and then use LaTeX to arrange things and typeset and make sure that there's, you know, the lines wrap over and what have you. Ultimately, the output will be a PDF with a report of the test as it's run. So this is the configuration that we ran, these are the steps that we followed, and these are our results. Version 2 of that uses an intermediate product. So instead of outputting a PDF straight away, we just serialize the data and put it into a little JSON dictionary.
+00:44:07 So with that, you can focus on actually just getting the content and then use LaTeX to arrange things and typeset and make sure that there's, you know, the lines wrap over and what have you.
 
-00:44:35 The reason for that is sometimes in LaTeX, you got to tweak your formatting or something like and it would be nice to not have to rerun the entire test just to change the font or update the heading.
+00:44:16 Ultimately, they're there.
 
-00:44:44 And so there's actually an intermediate step and there's another step just later that takes that JSON, pauses it and generates the PDF later.
+00:44:17 The output will be a PDF with a report of the test as it's run.
 
-00:44:51 - Right, well, you can also ask questions about it, right?
+00:44:21 So this is the configuration that we ran.
 
-00:44:53 You can analyze the test JSON and maybe draw averages over time or here's how much has varied as we've evolved our system, right, not just pass/fail or what did this one look like?
+00:44:23 These are the steps that we followed.
+
+00:44:24 And these are our results.
+
+00:44:25 Version two of that uses an intermediate product.
+
+00:44:28 So instead of outputting a PDF straight away, we just serialize the data and put it into a little JSON dictionary.
+
+00:44:34 The reason for that is sometimes in LaTeX, you've got to tweak your formatting or something like that.
+
+00:44:39 And it would be nice to not have to rerun the entire test just to change the font or, you know, update a heading.
+
+00:44:44 And so there's actually an intermediate step.
+
+00:44:46 And then there's another step just later that takes that JSON, parses it and generates the PDF later.
+
+00:44:51 Right.
+
+00:44:51 Well, you can also ask questions about it, right?
+
+00:44:53 You can analyze the test JSON and, you know, maybe draw averages over time.
+
+00:44:59 Or here's how much it's varied as we've evolved our system, right?
+
+00:45:04 Not just pass, fail.
+
+00:45:05 What did this one look like?
 
 00:45:06 So JSON's pretty good.
 
-00:45:07 - Exactly, when you incorporate this with other CI/CD tools, you get GitHub Actions or Jenkins or whatever the case is, you can do this repeatedly and then you have records of over time, you know, how your system has evolved versus, you know, what changes you've made and it makes it much easier to reason about and, you know, understand the performance of your system and how it changes over time.
+00:45:08 When you incorporate this with other CI, CD tools, you get up actions or Jenkins or whatever the case is, you can do this repeatedly.
 
-00:45:27 - I think that's really neat.
+00:45:15 And then you have records of over time, you know, how your system has evolved versus, you know, what changes you've made.
+
+00:45:20 And it makes it much easier to reason about and, you know, understand the performance of your system and how it changes over time.
+
+00:45:27 I think that's really neat.
 
 00:45:28 I don't see that being done very often at all.
 
-00:45:30 And I think it's easy to look at this little bit of code that you put up in your presentation and say, oh, okay, well, that's pytest, and now here's a fixture and so on.
+00:45:30 And I think it's easy to look at this little bit of code that you put up in your presentation and say, oh, okay, well, that's pytest.
 
-00:45:39 But like, if you think about what those fixtures are doing, one of those fixtures maybe is controlling one of those one-U FPGA machines to set it up, right?
+00:45:38 And now here's a fixture and so on.
+
+00:45:39 But, like, if you think about what those fixtures are doing, one of those fixtures maybe is controlling one of those 1U FPGA machines to set it up, right?
 
 00:45:48 And then the other one is in our, there's a lot of power and stuff going on with these little, you know, here's a variable we call the correlator.
 
-00:45:55 - Exactly, yeah, so you're right.
+00:45:55 Exactly.
 
-00:45:58 There is a lot of code hidden behind here, but it's code that you're gonna run every time.
+00:45:56 Yeah.
 
-00:46:02 So it doesn't matter what test you're doing, you're gonna wanna spin up a correlator.
+00:45:56 So you're right.
 
-00:46:05 and whether it's an FPGA or a GPU, doesn't really matter.
+00:45:57 There is a lot of code hidden behind here, but it's code that you're going to run every time.
+
+00:46:01 So it doesn't matter what test you're doing, you're going to want to spin up a correlator.
+
+00:46:05 And whether it's, you know, an FPGA or a GPU doesn't really matter.
 
 00:46:09 You want to run through the same sort of steps so that your test is repeatable and that the result corresponds to the input that you give it.
 
-00:46:16 And so the pytest fixtures are great for that because once they allow you to get the boring stuff done, once you're confident that you're doing it right, then you can just keep doing it.
+00:46:15 And so the pytest fixtures are great for that because once they allow you to get the boring stuff done, once you're confident that you're doing it right, then you can just keep doing it.
 
 00:46:24 You use the same correlator fixture for every test.
 
-00:46:27 And if there's an update, if something changes, if there's a change to the hardware that you need or the protocol that communicate with them, then you can update it just in one place and all your tests will benefit from that update straight away.
+00:46:26 And if there's an update, if something changes, if there's a change to the hardware that you need or the protocol that you communicate with them, then you can update it just in one place.
 
-00:46:38 Yeah, it's a very powerful aspect of pytest.
+00:46:34 And all your tests will benefit from that update straight away.
+
+00:46:38 Yeah.
+
+00:46:38 It's a very powerful aspect of pytest.
 
 00:46:41 You've taken it to quite a level here.
 
-00:46:43 One of the things that I kind of wanted to, when I did the talk last year, that I wanted to put forward is that, you know, these concepts of testing, you can apply them to real-world systems as well.
+00:46:43 One of the things that I kind of wanted to, when I did the talk last year that I wanted to put forward is that, you know, these concepts of testing, you can apply them to real world systems as well.
 
-00:46:53 So, if you can talk to it, then you can use pytest to test it.
+00:46:53 So if you can talk to it, then you can use pytest to test it.
 
-00:46:57 If you can talk to it over the network, a serial cable, or, you know, USB or something like that, You can test actual hardware, make it do things, you know, so that you can, you can qualify it.
+00:46:57 If you can talk to it over the network, a serial cable or, you know, USB or something like that, you can test actual hardware, make it do things, you know, so that you can qualify it.
 
 00:47:07 It doesn't, it's not just restricted to, you know, little toy pieces of software, you know, your flask or your tornado or abstract conceptual things that live in the cloud somewhere.
 
@@ -904,89 +1338,109 @@
 
 00:47:18 Yeah.
 
-00:47:19 People say when they talk about tests and stuff, they say, well, look, it is sometimes I say it is your documentation or it is the way you verify things are working.
+00:47:19 People say when they talk about tests and stuff, they say, well, look, it is, sometimes I say it is your documentation or it is the way you verify things are working.
 
-00:47:28 But when you get to the engineering and the science level, and you're trying to verify physical things and stuff, it's cool to see how far you can push it to maybe even answer that question better, right?
+00:47:28 But when you get to the engineering and the science level and you're trying to verify physical things and stuff, it's cool to see how far you can push it to maybe even answer that question better.
+
+00:47:37 Right.
 
 00:47:38 Like with this reporting, for example, over time.
 
-00:47:41 - I think it makes it more transparent as well.
+00:47:40 I think it makes it more transparent as well.
 
-00:47:44 In the open source community, we like to quote Linus' law a lot, we say with enough eyeballs, all bugs are shallow.
+00:47:43 We, in the open source community, we like to quote Linus's law a lot, we say, with enough eyeballs, all bugs are shallow.
 
-00:47:49 But if we're honest with ourselves, like not everyone is gonna go and read the code.
+00:47:49 But if we're honest with ourselves, like not everyone is going to go and read the code.
 
-00:47:52 But on the other hand, if you can see a graph of, So this is the frequency response of the system.
+00:47:52 Yeah.
 
-00:47:58 That makes it much easier for interested parties to actually interrogate and say, look, you know, is this good or is it lacking in some aspects?
+00:47:52 But on the other hand, if you, if you can see, you know, a graph of, you know, this is the frequency response of the system, that makes it much easier for interested parties to actually interrogate and say, look, you know, is this good or is it lacking in some aspects?
 
-00:48:05 So from that point of view, I think it just increases the transparency and allows not only yourself, but the sort of the general, the wider scientific community to have more confidence in the performance of your telescope.
+00:48:05 So from that point of view, I think it just increases the transparency and allows not only yourself, but the sort of the general, the wider scientific community to have more confidence in the, in the performance of your telescope.
 
-00:48:16 - Makes it more approachable too, I think.
+00:48:15 Makes it more approachable too, I think.
 
-00:48:18 - Exactly.
+00:48:17 Exactly.
 
-00:48:19 - Yeah.
+00:48:18 Yeah.
 
-00:48:20 People maybe wouldn't read a unit test and what the heck are they supposed to make out of it anyway?
+00:48:18 People maybe wouldn't read a unit test and what the heck are they supposed to make out of it anyway?
 
-00:48:24 know, they may well look at a graph that was generated by the unit test, right?
+00:48:23 You know, they may well look at a graph that was generated by the unit test, right?
 
 00:48:28 Exactly.
 
-00:48:29 Yeah.
+00:48:28 Yeah.
 
-00:48:30 And this is, it's much easier for me to pass as well because, you know, I get to the office in the morning and, you know, the CI run is done overnight and I can see at a glance, you know, are things working the way that they should.
+00:48:28 And this is, it's much more, it's much easier for me to parse as well because, you know, I get to the office in the morning and, you know, the CI run is done overnight and I can see at a glance, you know, are things working the way that they should?
 
 00:48:39 Yeah.
 
-00:48:40 Cool.
+00:48:39 Cool.
 
-00:48:41 What has been the reaction from other scientists and engineers when you talked to them about this?
+00:48:40 What has been the reaction from other scientists and engineers when you talk to them about this?
 
-00:48:47 How's this perceived more broadly?
+00:48:46 How's this perceived more broadly?
 
 00:48:48 It's been relatively positive.
 
-00:48:50 Scientists want to know when they can get time on the telescope and then I have to tell them well, there's a committee that evaluates scientific proposals. We can't short circuit that unfortunately.
+00:48:49 Scientists want to know when they can get time on the telescope and then I have to tell them, well, there's a committee that evaluates scientific proposals.
 
-00:48:58 MeerKAT has gotten a lot of attention from, well, scientists who are interested in radio astronomy, particularly fields like pulsars and another of our sort of clients is possibly the wrong word, but is the project called Breakthrough Listen. If you've heard of SETI, it's the same crowd that are trying to search for extraterrestrial intelligence. Sometimes Sometimes they're interested in these kinds of things, sometimes not.
+00:48:56 We can't short circuit that, unfortunately.
 
-00:49:23 Often it's a much shorter question of like, "Is it working and can I get some of the data?" If the answer of those two is yes, and they start looking at the data, then you know, this performance figures and test results are sometimes more interesting to them.
+00:48:58 Beercat has gotten a lot of attention from, well, scientists who are interested in radio astronomy, particularly fields like pulsars and another of our sort of clients is possibly the wrong word, but is the project called Breakthrough Listen.
 
-00:49:34 But generally, it's quite well received.
+00:49:14 If you've heard of SETI, it's the same crowd.
 
-00:49:36 - It seems like a cool idea to me.
+00:49:16 Okay.
 
-00:49:38 Do you have, time on telescopes is really precious and rare, hard to come by.
+00:49:16 That are trying to search for extraterrestrial intelligence.
 
-00:49:44 The more powerful the telescope, I imagine the more contention there is for that time.
+00:49:19 Sometimes they're interested in these kinds of things, sometimes not.
+
+00:49:22 Often it's a much shorter question of like, is it working and can I get some of the data?
+
+00:49:25 Yeah.
+
+00:49:26 If the answer of those two is yes and they start looking at the data, then, you know, this performance figures and test results are sometimes more interesting to them.
+
+00:49:33 Sure.
+
+00:49:34 But generally, generally, it's quite well received.
+
+00:49:36 It seems like a cool idea to me.
+
+00:49:37 Do you have, you know, time on telescopes is really precious and rare, hard to come by.
+
+00:49:44 The more powerful the telescope, I imagine, the more contention there is for that time.
 
 00:49:48 Is there a bunch of simulation and software and things that people can hand out to these folks that they can work with beforehand so they become more prepared?
 
-00:49:58 Yes, and well, it mostly consists, it depends on what you're interested in.
+00:49:58 Yes.
 
-00:50:04 MeerKAT has an interesting architecture in that there are some of the clients that have hardware right on site that are subscribing to data and processing it in real time and Breakthrough Listen is one of them.
+00:49:58 And, well, it mostly consists, it depends on what you're interested in.
+
+00:50:04 Meerkat is an interesting architecture in that there are some of the clients that have hardware right on site that are subscribing to data and processing it in real time and Breakthrough Listen is one of them.
 
 00:50:16 You know, they're interested in very, very fast transient stuff.
 
-00:50:19 Other scientists are more, they're not in as much of a hurry.
+00:50:18 Other scientists are more, they're not in as much of a hurry.
 
-00:50:22 They're more interested in the end result, the output of the correlator.
-
-00:50:25 That has been through several stages of pre-processing.
+00:50:22 They're more interested in the end result, the output of the correlator that has been through several stages of pre-processing.
 
 00:50:28 And it depends on what kind of science that they're doing.
 
 00:50:30 And so, as with most telescopes, certainly, but scientific instruments in general, we keep all of the data from observations of past.
 
-00:50:38 Typically there's an embargo on that.
+00:50:37 Typically, there's an embargo on that.
 
-00:50:39 So it could be a period of 12 to 24 months to allow the original originating scientist of the observation enough time to do his analysis and publish his papers.
+00:50:39 So it could be a period of 12 to 24 months to allow the originating scientist of the observation enough time to do his analysis and publish his papers.
 
 00:50:48 But once that is lifted, then that data is available to basically anyone who wants to use it.
 
-00:50:54 So all they will need to do is contact us and we can give them access to historical data sets and they can begin to test their algorithms on actual historical observations.
+00:50:54 So all they need to do is contact us and we can give them access to historical data sets.
+
+00:50:59 And they can begin to test their algorithms on actual historical observations.
 
 00:51:04 Yeah, that seems good.
 
@@ -994,23 +1448,21 @@
 
 00:51:05 All right.
 
-00:51:06 Quick question.
+00:51:06 Quick question, follow-up question here before we kind of wrap things up.
 
-00:51:07 Follow up question here before we kind of wrap things up.
+00:51:10 James asks, what happens to the raw data?
 
-00:51:09 James asks, what happens to the raw data?
+00:51:12 Talking about coming out of the correlator, I suppose, received.
 
-00:51:12 Talking about coming out of the correlator.
-
-00:51:13 I suppose received how much of it is captured and stored versus process down and then storing the result.
+00:51:15 How much of it is captured and stored versus processed down and then storing the result?
 
 00:51:20 Okay.
 
-00:51:21 So as I mentioned earlier, each telescope generates data at about 35 gigabits per second.
+00:51:20 So, as I mentioned earlier, each telescope generates data at about 35 gigabits per second.
 
-00:51:27 That is impractical to store.
+00:51:26 That is impractical to store.
 
-00:51:30 We have logic on site that will buffer up a few seconds worth of data.
+00:51:29 We have logic on site that will buffer up a few seconds worth of data.
 
 00:51:34 And then they have algorithms that are searching through it for interesting things.
 
@@ -1020,185 +1472,267 @@
 
 00:51:43 And that happens a few times a year.
 
-00:51:45 The generally the most interesting pieces are a little bit more downstream.
+00:51:44 Generally, the most interesting pieces are a little bit more downstream.
 
-00:51:49 So 35 gigabits per second times 64 is a large number.
+00:51:48 So 35 gigabits per second times 64 is a large number.
 
 00:51:53 So that's north of two terabits per second that the antennas themselves generate.
 
 00:51:59 The output of a 64 antenna correlator is about four gigabits per second.
 
-00:52:03 You could ingest that on a Mac mini if you somehow had a USB for two--
+00:52:03 You could ingest that on a Mac mini if you somehow had a USB 4 to...
 
-00:52:08 - Just somewhere there to keep plugging and unplugging drives really quickly, yeah.
+00:52:08 Just somewhere there to keep plugging and unplugging drives really quickly, yeah.
 
-00:52:11 to Ethernet, yeah, you'd need to do it pretty quickly, but that is practical. That we have a storage cluster. So we have one on site in the desert in South Africa, it's relatively small only about five petabytes, but that acts as a cache. And then there is a fiber link to Cape Town where we have a data center with with a much larger archive that uses an object store. I believe it's Ceph, it was also an open source thing. And I'm speaking a little bit outside of my expertise now. But that data is retained in well, so far in perpetuity, we haven't gotten to the stage where we start deleting old data yet.
+00:52:11 To ethernet.
+
+00:52:12 Yeah, you'd need to do it pretty quickly.
+
+00:52:13 But that is practical.
+
+00:52:14 That we have a storage cluster.
+
+00:52:17 So we have one on site in the desert in South Africa.
+
+00:52:20 It's relatively small, only about five petabytes.
+
+00:52:22 But that acts as a cache.
+
+00:52:24 And then there is a fiber link to Cape Town where we have a data center with a much larger archive.
+
+00:52:29 That uses an object store.
+
+00:52:31 I believe it's Ceph.
+
+00:52:33 It was also an open source thing.
+
+00:52:34 And I'm speaking a little bit outside of my expertise now.
+
+00:52:37 But that data is retained then.
+
+00:52:39 Well, so far in perpetuity, we haven't gotten to the stage where we start deleting old data yet.
 
 00:52:43 So we've got all of the observations that we've ever run.
 
-00:52:46 And they range in size. It depends on the observation.
+00:52:46 And they range in size.
 
-00:52:49 But sometimes they're a few gigabytes and sometimes they're sort of many terabytes in size.
+00:52:47 It depends on the observation.
 
-00:52:54 Yeah, it's a lot of data. You wouldn't store the two terabit per second, though.
+00:52:49 But sometimes they're a few gigabytes.
+
+00:52:50 And sometimes they're sort of many terabytes in size.
+
+00:52:54 Yeah, it's a lot of data.
+
+00:52:55 You wouldn't store the two terabit per second, though.
 
 00:52:57 That's too much.
 
-00:52:59 I don't know what we would do with that.
+00:52:58 I don't know what we're doing with that.
 
-00:52:59 That's one of the reasons that the correlator exists, to sort of get that down to a manageable, useful level.
+00:52:59 That's one of the reasons that the correlator exists.
+
+00:53:01 To sort of get that down to a manageable, useful level.
 
 00:53:04 Yeah, indeed.
 
-00:53:05 All right. Well, anything else you want to add that we haven't talked about briefly about this testing side of things?
+00:53:05 All right.
+
+00:53:06 Well, anything else you want to add that we haven't talked about briefly about this testing side of things?
 
 00:53:11 Have we covered it pretty well?
 
-00:53:12 - The one thing that we haven't kind of talked about is we talked a little bit about earlier about how critical the performance of this is.
+00:53:12 The one thing that we haven't kind of talked about is we talked a little bit about earlier about how critical the performance of this is.
 
 00:53:18 And one of the things that testing has really enabled is for us to optimize the performance of the system.
 
-00:53:24 And in a way that's, I think, not immediately obvious.
+00:53:23 And in a way that's, I think, not immediately obvious.
 
-00:53:26 If you have a first naive implementation of your signal processing algorithm, that's easy to read, easy to reason about, it's not likely to be the fastest possible way to process the data.
+00:53:26 If you have a first naive implementation of your signal processing algorithm that's easy to read, easy to reason about, it's not likely to be the fastest possible way to process the data.
 
 00:53:36 But it's good to have that.
 
-00:53:38 And then once you have that, then you can write a test for it.
+00:53:37 And then once you have that, then you can write a test for it.
 
 00:53:40 So you can compare a known input to a known output and see if your maths is correct.
 
-00:53:46 That way, when you iterate, perhaps we can change the memory access patterns or, you know, improve the coordination between the threads.
+00:53:45 That way, when you iterate, perhaps we can change the memory access patterns or, you know, improve the coordination between the threads.
 
-00:53:53 It's very easy when you do that to make a mistake and start messing up your results.
+00:53:52 It's very easy when you do that to make a mistake and start messing up your results.
 
 00:53:56 But when you have a unit test and you start messing up results, it can catch it straight away.
 
-00:54:00 So having that testing in place allows us a little bit of, you know, room to experiment to really push this to the limits of what these GPUs are capable of doing in terms of increasing bandwidth or more antennas that we can process or all these kinds of things.
+00:54:00 So having that testing in place allows us a little bit of, you know, room to experiment to really push this to the limits of what these GPUs are capable of doing in terms of increasing bandwidth or, you know, more antennas that we can process or, you know, all these kinds of things.
 
-00:54:15 And you mentioned regressions earlier, that's an excellent thing.
+00:54:15 Yeah.
 
-00:54:19 So you're working on another part of a system and something breaks, having these tests in place will let you know, "Oh, we've messed something up.
+00:54:16 And you, I mean, you mentioned regressions earlier.
 
-00:54:26 Let's revert back and be a little bit more careful next time." So I think it's just a great concept.
+00:54:17 That's so an excellent thing.
 
-00:54:30 In industry, in science, in academia, everyone would benefit from having more embedded tests in place.
+00:54:19 So you're working on another part of a system and something breaks that, you know, having these tests in place will let you know, we've messed something up.
 
-00:54:37 You're not a panacea, you're not gonna anticipate all the possible failure modes in your tests, but it definitely helps catch many of the obvious ones.
+00:54:25 Let's revert back and be a little bit more careful next time.
 
-00:54:45 - Yeah, good advice.
+00:54:28 So I think it's just a great concept in industry, in science, in academia.
+
+00:54:32 Everyone would benefit from having more embedded tests in place.
+
+00:54:36 It's not a panacea.
+
+00:54:38 You're not going to anticipate all possible failure modes in your tests, but it definitely helps catch many of the obvious ones.
+
+00:54:45 Yeah.
+
+00:54:45 Good advice.
 
 00:54:46 Testing science is tricky.
 
-00:54:48 It's usually a stream of numbers in some way, it's not, yes, there was a user, no, it came back none, or there was an exception.
+00:54:47 It's usually a stream of numbers in some way.
+
+00:54:50 It's not, yes, there was a user.
+
+00:54:52 No, it came back none.
+
+00:54:53 Or there was an exception.
 
 00:54:54 It's still shooting out a bunch of numbers.
 
-00:54:57 Are they good?
+00:54:56 Are they good?
 
-00:54:58 Maybe they're better, I don't know, right?
+00:54:58 Maybe they're better.
 
-00:55:00 But having systems in place to record them, to test them, to say if it matches this curve within some tolerance, it's still good.
+00:54:58 I don't know.
 
-00:55:07 - Yes.
+00:54:59 Right.
 
-00:55:08 - It's really important in those areas because it's so hard to look at it and know what the deal is.
+00:54:59 But having systems in place to record them, to test them, to say if it matches this curve within some tolerance, it's still good.
 
-00:55:13 - Exactly.
+00:55:07 Yes.
 
-00:55:14 And I mean, so it is a team effort.
+00:55:07 It's really important in those areas because it's so hard to look at it and know what the deal is.
 
-00:55:15 There's not necessarily any one person that's gonna have the experience to do all of these things.
+00:55:13 Exactly.
 
-00:55:21 So the person who is a very experienced systems engineer who will know, you know, the methods by which we can evaluate the performance is not necessarily gonna be the best coder.
+00:55:13 And I mean, so it is a team effort.
 
-00:55:29 So that's why we have a large team in order to pull all of these things in.
+00:55:15 There's not necessarily any one person that's going to have the experience to do all of these things.
 
-00:55:32 So yes.
+00:55:20 So the person who is a very experienced systems engineer who will know the methods by which we can evaluate the performance is not necessarily going to be the best coder.
 
-00:55:33 So shout out to my colleagues at Serao.
+00:55:28 So that's why we have a large team in order to pull all of these things in.
 
-00:55:36 We're doing good work.
+00:55:32 So, yes.
 
-00:55:37 Or at least I like to think we are.
+00:55:33 Yeah.
 
-00:55:38 - It sure seems like it.
+00:55:33 So shout out to my colleagues at Sorayao.
 
-00:55:39 Cool, all right, well, we're about out of time to talk more about this.
+00:55:35 We're doing good work.
+
+00:55:37 At least I like to think we are.
+
+00:55:38 It sure seems like it.
+
+00:55:39 Cool.
+
+00:55:39 All right.
+
+00:55:40 Well, we're about out of time to talk more about this.
 
 00:55:43 So let me ask you the final two questions before you get out of here.
 
-00:55:45 If you're gonna write some Python code for this crazy big system you've built, what editor do you use?
+00:55:45 If you're going to write some Python code for this crazy big system you've built, what editor do you use?
 
-00:55:52 - I'm a bit old school.
+00:55:52 I'm a bit old school.
 
 00:55:53 I basically just use Vim.
 
-00:55:54 - Vim, right on.
+00:55:54 Vim.
 
-00:55:55 - I feel most comfortable in the terminal, so no fancy GUIs for me.
+00:55:54 Right on.
 
-00:55:59 - Yeah, there you go.
+00:55:55 I feel most comfortable in the terminal.
 
-00:56:00 And then notable PyPI package.
+00:55:57 So no fancy GUIs for me.
 
-00:56:02 Do you want to give a shout out to?
+00:55:58 Yeah.
 
-00:56:03 - Well, a couple of ones that I've already mentioned.
+00:55:59 There you go.
 
-00:56:06 pytest is very important.
+00:55:59 And then notable PyPI package.
+
+00:56:01 Do you want to give a shout out to?
+
+00:56:03 Well, a couple of ones that I've already mentioned.
+
+00:56:05 pytest is very important.
 
 00:56:07 PyCuda has also been critical in our work so far.
 
-00:56:12 So yeah, shout out to those two.
+00:56:11 So, yeah.
+
+00:56:12 Shout out to those two.
 
 00:56:13 Thanks to the open source community for providing that for us.
 
-00:56:16 - Yeah, it's really cool how much of these general open source projects are supporting science and other types of exploration.
+00:56:15 Yeah, it's really cool how much of these general open source projects are supporting science and other types of exploration.
 
-00:56:23 - Cool. - Yeah.
+00:56:23 Cool.
+
+00:56:23 Yeah.
 
 00:56:24 Okay, final call to action.
 
 00:56:25 People are interested in maybe adopting some of your practices.
 
-00:56:29 Maybe they want to learn more about how you did this reporting in pytest, or even as someone in the audience asks, can they get access, how do they get access to the datasets potentially?
+00:56:29 Maybe they want to learn more about how you did this reporting in pytest.
 
-00:56:40 What do you tell them?
+00:56:32 Or even as someone in the audience asks, you know, can they get access?
 
-00:56:41 - The datasets, well, I hope you have a very big hard drive on your laptop.
+00:56:37 How do they get access to the data sets potentially?
 
-00:56:45 If you go to serao.ac.za, there'll be a contact page.
+00:56:40 You know, what do you tell them?
+
+00:56:41 The data sets.
+
+00:56:42 Well, I hope you have a very big hard drive on your laptop.
+
+00:56:45 If you go to seraya.ac.za, there'll be a contact page.
 
 00:56:48 And if you can send us a question and we'll make sure that it gets to the right person.
 
 00:56:52 I'm not sure what the procedure is for access for people outside.
 
-00:56:57 I can get to it when I want to, but then I'm inside the organization.
+00:56:56 I can get to it when I want to, but then I'm inside the organization.
 
 00:57:00 So start with an email.
 
-00:57:02 - But if you ask the question on our contact page, yeah, and then we'll send you to the right place.
+00:57:01 But if you ask the question on our contact page, yeah.
+
+00:57:04 And then we'll send you to the right place.
 
 00:57:06 To learn more, I'll put the GitHub link to the software for the correlator.
 
-00:57:12 It's all there and the documentation is relatively good.
+00:57:11 It's all there and the documentation is relatively good.
 
 00:57:15 If there's something that's missing, you're welcome to just raise an issue on the GitHub repo and then we'll see how we can help.
 
-00:57:21 - Excellent.
+00:57:20 Excellent.
 
-00:57:22 Well, thanks for sharing your story and keep up the good work.
+00:57:21 Well, thanks for sharing your story and keep up the good work.
 
-00:57:24 - Michael, yeah, thanks very much.
+00:57:24 Michael, yeah.
+
+00:57:25 Thanks very much.
 
 00:57:25 It's been great to be here.
 
-00:57:27 - Yeah, it has been great to talk to you.
+00:57:27 Yeah, it has been great to talk to you.
 
-00:57:28 See you all later.
+00:57:28 See you later.
 
-00:57:29 - Cheers.
+00:57:29 Cheers.
 
 00:57:30 This has been another episode of Talk Python to Me.
 
@@ -1208,25 +1742,27 @@
 
 00:57:36 It really helps support the show.
 
-00:57:38 TypeEye is here to take on the challenge of rapidly transforming a bare algorithm in Python into a full-fledged decision support system for end-users.
+00:57:38 Type I is here to take on the challenge of rapidly transforming a bare algorithm in Python into a full-fledged decision support system for end users.
 
-00:57:47 Get started with Taipy Core and GUI for free at talkpython.fm/taipy, T-A-I-P-Y.
+00:57:46 Get started with Type I core and GUI for free at talkpython.fm/type I.
 
-00:57:54 Take some stress out of your life.
+00:57:52 T-A-I-P-Y.
+
+00:57:53 Take some stress out of your life.
 
 00:57:55 Get notified immediately about errors and performance issues in your web or mobile applications with Sentry.
 
-00:58:02 Just visit talkpython.fm/sentry and get started for free.
+00:58:01 Just visit talkpython.fm/sentry and get started for free.
 
-00:58:06 And be sure to use the promo code talkpython, all one word.
+00:58:06 And be sure to use the promo code TALKPYTHON, all one word.
 
 00:58:10 Want to level up your Python?
 
 00:58:12 We have one of the largest catalogs of Python video courses over at Talk Python.
 
-00:58:16 Our content ranges from true beginners to deeply advanced topics like memory and async.
+00:58:15 Our content ranges from true beginners to deeply advanced topics like memory and async.
 
-00:58:21 And best of all, there's not a subscription in sight.
+00:58:20 And best of all, there's not a subscription in sight.
 
 00:58:23 Check it out for yourself at training.talkpython.fm.
 
@@ -1234,9 +1770,9 @@
 
 00:58:31 We should be right at the top.
 
-00:58:32 You can also find the iTunes feed at /itunes, the Google Play feed at /play, and the Direct RSS feed at /rss on talkpython.fm.
+00:58:32 You can also find the iTunes feed at /itunes, the Google Play feed at /play, and the direct RSS feed at /rss on talkpython.fm.
 
-00:58:42 We're live streaming most of our recordings these days.
+00:58:41 We're live streaming most of our recordings these days.
 
 00:58:45 If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
 
@@ -1244,6 +1780,9 @@
 
 00:58:55 Thanks so much for listening.
 
-00:58:56 I really appreciate it. Now get out there and write some Python code.
+00:58:56 I really appreciate it.
 
-00:58:59 [MUSIC]
+00:58:57 Now get out there and write some Python code.
+
+00:58:59 I'll see you next time.
+

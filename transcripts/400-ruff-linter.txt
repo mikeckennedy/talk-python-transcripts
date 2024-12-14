@@ -1,227 +1,2646 @@
-00:00:00 In our code quality tools, linters test frameworks and others play an important role in keeping our code error free and conforming to the rules our teams have chosen. But when these tools become sluggish and slow down development, we often avoid running them, or even turn them off. On this episode, we have Charlie Marsh here to introduce a Ruff a fast Python linter, written in Rust. To give you a sense of what he means by fast, common Python linters can take 30 to 60 seconds to lint, the CPython code base. Ruff takes 300 milliseconds. I ran it on the 20,000 lines of Python code for our courses web app at Talk Python Training and it was instantaneous. With that kind of speed, it's the kind of tool that can change how you work. I hope you're excited to learn about ruff. This is talk Python to me, Episode 400 recorded January 18 2023.
+00:00:00 Our code quality tools, linters, test frameworks, and others, play an important role in keeping our code error-free and conforming to the rules our teams have chosen.
 
-00:01:05 Welcome to Talk Python to me, a weekly podcast on Python. This is your host Michael Kennedy, follow me on Mastodon where I'm @mkennedy and follow the podcast using @talkpython, both on mastodon.org. Be careful within preceding accounts on other instances, there are many keep up with the show and listen to over seven years of past episodes at talk python.fm We started streaming most of our episodes live on YouTube, subscribe to our YouTube channel over at talk python.fm/youtube to get notified about upcoming shows and be part of that episode. This episode is brought to you by Cox automotive, join their team and use your technical skills to transform the way the world buys, sells and owns cars. Find an exciting position that's right for you at talk python.fm/cox. And it's also brought to you by user interviews. earn extra income for sharing your software development opinion at user interviews. Head over to talk python.fm/user interviews to participate today. Before we get to the conversation for this episode, I have a very brief sponsored message from the PyCharm team. As you know, I'm a huge fan of PyCharm, the tool and the team and I'm happy to bring it to you. Do you like storytelling, want a job where you can work with the Python community and help people with their professional development. PyCharm is doing big things this year and they have an exciting job opening you should consider Developer Advocate. It's a good job doing good work with a great company. learn more and apply at talk python.fm/pycharm-advocate-job. The link is in the episode show notes. Charlie, welcome to talk Python to me.
+00:00:08 But when these tools become sluggish and slow down development, we often avoid running them or even turn them off.
 
-00:02:41 Thanks so much. It's my pleasure to be here.
+00:00:15 On this episode, we have Charlie Marsh here to introduce Ruff, a fast Python linter written in Rust.
 
-00:02:43 Yeah, it's a pleasure to have you. We're going to talk about making Python code fast built some pretty interesting tools here with ruff we'll see about integrating rust into ruff. And there's a lot of cool tools around this sort of code quality side of things, right like Black took off in ways I think even that lukesh didn't maybe imagine it would take off. And this is kind of in that same realm. And of course, it plays well with black along the way as well. So we're going to talk all about those things. It's going to be tons of fun to dig into them. But before we get to it, let's start with your story. How'd you get into programming and Python? And rust? Yeah, so
+00:00:21 To give you a sense of what he means by fast, common Python linters can take 30 to 60 seconds to lint the CPython codebase.
 
-00:03:23 I got into programming. I guess the summer before I went to college, when I guess I was supposed to be like doing something fun. I thought when I saw Java, and I was the sort of thing that a lot of people had told me I was like, but I never really had a chance to dig into. I ended up I went to school I majored in computer science, so did a bunch of internships while I was in college. And then when I my sort of junior year internship, in my first year out of school, I worked at a company called Khan Academy, which is like an education technology company. And at the time, it was less true now, but at the time, they were really big python trout. I mean, they had one of the one of the biggest, like App Engine deployments was like Khan Academy and like Snapchat, and like a couple of their couple other maybe Spotify or someone
+00:00:29 Ruff takes 300 milliseconds.
 
-00:04:09 wow, I had no idea. Yeah, I'm obviously I'm familiar with Khan Academy sure a lot of people are Yeah, but I didn't realize that one there was such a GCP customer, and that was probably Flask, Django on GCP. Or what was it?
+00:00:31 I ran it on the 20,000 lines of Python code for our courses web app at Talk Python Training, and it was instantaneous.
 
-00:04:25 It was like flask on App Engine. Yeah, we did not use Django. Yeah, but they actually I mean it's a whole other story but they did a big go rewrite after I left which is also super interesting. I mean, it's not Python but it is still very interesting just like migrating asst populate from any language. Any other language is always pretty interesting. But it Khan Academy. Yeah, I you know, I did. I did some Python. I would say that, like, I mostly did web and we can talk a little bit more about this because, like, really, through my career, I've kind of jumped between a lot of different systems. And so like Khan Academy, I did, I think a year of Android and and did a little bit of iOS did a lot of web did a little bit of Python. And then, most recently, I worked at a company called Spring discovery, which is like a computational biotech company. And everything we were doing was based on computer vision. So we'd like, take really high resolution pictures of cells, and then try to model like the way that they change when you add drugs. Wow. Okay, which is, yeah, it's pretty wild. I mean, I came into that background, I joined as like second engineer and build out a lot of our like data and machine learning platform. That was kind of a crash course in building like a massive system and Python, right, we were doing scientific computing. So it made a lot of sense to use Python. So we ended up using Python or, like, almost everything.
+00:00:39 With that kind of speed, it's the kind of tool that can change how you work.
 
-00:05:38 Yeah, Python is a really good choice for the web. But it's like the de facto choice for data science, right? Like, it's
+00:00:43 I hope you're excited to learn about Ruff.
 
-00:05:45 yes, yeah, exactly. There's
+00:00:45 This is Talk Python to Me, episode 400, recorded January 18, 2023.
 
-00:05:46 not a whole lot of other choices. Whereas on the web, there's, you know, five or six other platforms and languages that are also contenders for that space. Right,
+00:00:58 Welcome to Talk Python to Me, a weekly podcast on Python.
 
-00:05:54 right. So, you know, we built out what I consider to be like a fairly large, Python codebase. It was like a big mono repo. And, you know, I spent around four or five years, you know, building it out, and like really writing a lot of Python every day. That's where like, a lot of my Python experience comes from, and like that experience, specifically also informed a lot of a lot of rough. And you know, I can talk more about for how those experiences intertwine. But that's kind of my Python background,
+00:01:08 This is your host, Michael Kennedy.
 
-00:06:20 it must have been really fun to explore some of this visualizing cells and interacting with microscopes. And that was amazing.
+00:01:09 Follow me on Mastodon, where I'm @mkennedy, and follow the podcast using @talkpython, both on fosstodon.org.
 
-00:06:28 Yeah. Yeah, the coolest part of the job was just that, if you bucket it, like really crudely, like a third of our team, or sort of like software engineers, or like data scientists, machine learning researchers, and then you know, Third, we're wetlab biologists, PhDs. And so every day, I was like, working directly with scientists and like building software, or scientists, which was just like a super cool thing to be able to do as part of a small team. Yeah, but yeah, read a lot of it.
+00:01:17 Be careful with impersonating accounts on other instances.
 
-00:06:56 That's awesome. I worked at a place that was a bunch of PhD researchers doing eye tracking, like not Apple, but your actual eyes, like what are you looking at? Right, the software to actually control the device and get all the information off of it. And then, like, analyze that and put, you know, generate a report for the scientists and stuff. And it's, there's a, there's a special kind of cool for software that touches like reality. Right?
+00:01:20 There are many.
 
-00:07:21 Yeah. I mean, it adds a lot of complication. Of course, cool.
+00:01:21 Keep up with the show and listen to over seven years of past episodes at talkpython.fm.
 
-00:07:27 You don't get exact numbers, you want to test it, like, you got to approximate all the things. But still, yeah, that sounds like a super fun job. How did it inform rough? Like, what are some of the experiences that yeah, totally, just so people know, rough is like a super fast. Give us a quick elevator pitch. So they they know what the heck ruff is? We'll dive more into later.
+00:01:26 We've started streaming most of our episodes live on YouTube.
 
-00:07:46 Sure. Yeah, so ruff is what I call an extremely fast Python linter. If you've used linters, and Python in the past, you've probably used something like placate or Py lint, or maybe like py code style, you know, maybe use other tools to help manage your code style like black or like auto Pip, all this stuff that deals with effectively code style. So Ruff is a linter, it looks at your source code, and it tries to report back and tell you as your flag and tell you about issues with it. And those to be stylistic issues like this variable name is not great. Or they could be you know, like logical issues like your actions variable here. And that isn't defined, right. I think there's a lot that distinguishes rough, but like, the thing that I think caught a lot of people's attention was just how fast it is. So I started hate benchmarks like because no matter how much time you like, put into a benchmark, like it's always wrong, from like a certain perspective. And like, People always complain about them. But I think ruff is comfortably like, somewhere in 10 to 100 times faster. Some people even say like 1000 times faster on their setup. So it can be like really, really dramatically faster. And you can also do a lot of auto fixing, which is kind of a distinctive feature that I don't know that many other tools, there are certainly tools that you code transformation in Python, like Pylint, and flake 8 and such, don't do this. So for lots of errors, that ruff will flag, it can actually fix the code for you and fix the issue for you. Which is okay, a big time saver.
+00:01:30 Subscribe to our YouTube channel over at talkpython.fm/youtube to get notified about upcoming shows and be part of that episode.
 
-00:09:11 I don't know if there's one, but just give people an idea. Like one of the errors or warnings, rather, that it'll give you is you have an F string, but you're not leveraging its F string capabilities, right? It'll just say F quote, and then it has this static text, a literal, literal string. So it doesn't need the F, right, theoretically, you could say Autofix. And it just drops the F for you. It's like, Yeah, you don't need that, right. Yeah. And
+00:01:38 This episode is brought to you by Cox Automotive.
 
-00:09:33 you know, we can also like, go the other direction. So like, if you're doing a bunch of like percent string formatting, or you're using like the dot format, style helpers, we're actually we can fix at least one of those. Right now. Strings are really complicated, but like, we can actually rewrite I think the dot format calls into strings, which is cool, so fantastic. You know, another thing we can do is we can kind of keep your code like modern, in a way we've taken a lot of inspiration from other tools, like Py upgrade to has like so much cool stuff and functionality in it if you haven't seen it, and we've, we take some of the rules from py upgrade and basically re implement them in rust and package them into a single interface in a single tool. So you just install one thing, and you get, you know, 370 Something rolls,
+00:01:40 Join their team and use your technical skills to transform the way the world buys, sells, and owns cars.
 
-00:10:20 I can assert that it is indeed fast. Well, a little bit later, but I ran it on Talk Python Training courses website, I haven't I think that's got 20,000 lines of Python. And it's, it's instant, it's like you press enter, and then out, the stuff is just printing out. These are the things that found which is pretty awesome. So back to your data science work. Yeah. How are you what you're doing influence your creation of ruff? Like, why not just use some, Flake eight or something like that,
+00:01:46 Find an exciting position that's right for you at talkpython.fm/cox.
 
-00:10:51 you know, like I said, I'd like worked in a lot of other ecosystems where, what sort of like stricter languages, right, like Java and whatever else. And some say those ecosystems are better. But I often come at this stuff from a perspective of wanting a lot of, like, static analysis tooling. So we had like, a really heavily typed code base, we use, like, we use mypy, you know, we use black, we use like, flake8, we used eyesore, we used, I don't know, like Doc format, or there's like a lot of different stuff that we use, yeah, you know, really, my job was like, I was the maintainer of this big system. And like, most of like, a lot of people in that team are effectively like, clients of that codebase. So they were kind of like, using the stuff that, you know, I and some others were building as, like a library. And so I had to maintain like, it's really big system. And like, the more static tools you have, you know, in my opinion, it just like, greatly increases the leverage that you can have as a maintainer. So we use a lot of tooling. And I think like a couple things happened. One, you know, I was spending a lot of my time in Python, but I was also doing a lot of web. And so you know, like, one week I'd be doing Python the next I'd be going and doing like React and Typescript and whatever else. And so people complain a lot about web tooling. And like, you know, there are certainly lots of valid complaints about it. But there's been a lot of interesting innovation, I think, in that space. And I was certainly influenced by some of it, just seeing some of the tools that came out, and how fast they were sure. And the fact that a lot of those tools, were not being written in JavaScript, sort of intentionally to make them super performant was pretty interesting to me. So like, I don't know, I don't want like name drop launcher tools. But you know, in the web ecosystem, more tooling is being written in like go, rust, even some other sort of more out there languages like Zig. And to me, that was kind of an interesting thing. It was like, Well, does the Python tooling have to be written in Python? Like, what does? Like why does that have to be the case? And like, what is it by you? And what do you lose? So that was one thing. The other was, we actually started to do a lot of rust, Python, hybrid stuff in our own code base in our code base was fully Python. And over time, we took some of the like, really performance critical pieces, and started to rewrite them in Rust, and expose them to the Python side, using some of these like really great Rustoss Python hybrid tools that, you know, maybe we'll get into later. So like, one example is, we were dealing with image data. So like, a common thing we had to do is just like, download one image files, like really, really fast. And so we, you know, we wrote that in Python, we wrote like a bunch of versions that use all sorts of like, multiprocessing, threading, and like, we tried everything. And then eventually, we like, rewrote it in rust. And so we had a really simple, you know, rust module that would just download files really fast. And we expose that as a Python API. So like, from the Python code, it just looked like Python, but the actual code that was running and the way it was built and executed, all went through rust, right?
+00:01:50 And it's also brought to you by User Interviews.
 
-00:13:41 So you have these big data big, say, big computation problems, where you're like, you know, this, this could be better. The same time, you're looking at what's happening on the web, side, you know, web pack, or whatever it is. And it's like, this is this is way better. We can do this in Python, but we aren't. So let's start right, probably your experience there. And you're like, what else can I build with for us now that I know how I was seeing,
+00:01:53 Earn extra income for sharing your software development opinion at User Interviews.
 
-00:14:01 you know, the way that this innovation was happening in the web, I was seeing specifically the rust Python, like opportunity from what we were doing. And then I was, you know, frankly, like feeling a fair amount of frustration, just with the performance of a lot of the existing tools. Like, I don't know, I'm always really careful with how I talk about this stuff. Because I hate being I'm really like, not a hater. And like, I've actually gotten like, so much value out of like, all of those tools, but I was being like, in well, I should it really take like one to two minutes to lint, my code, like couldn't it be much faster, right? Like, it's like a big codebase. And like, as you add more plugins and everything else, you really like changes, like how you feel about the tool, right? Like it's no longer like something I just run and get feedback. It's like, I'll have to run the linter now. And I was sort of craving that. Yeah. And
+00:01:58 Head over to talkpython.fm/userinterviews to participate today.
 
-00:14:49 if you're doing it on a team, my experience at least has been some people in the team continue to run it because they find more value than stress and others are like, I'm not running stupid thing, but then their problems get pushed on to the people who still care. And so then it creates this kind of like a tension like, Joe's code is always kind of crappy because he won't lint it but then like when I check out his code, my stuff starts reporting. Like, those are the weird dynamics that happen from tools that are like super slow unit tests, or superslow linting are those types of things where certain people stop working with them and others don't? And then then you get these weird questions. So having a fast there's like real value to that. This portion of talk Python to me is brought to you by Cox automotive, with brands like Kelley Blue Book, autotrader, dealer.com, and more. Cox, automotive flips the script on how we buy, sell, own and use our cars. And now the team at Cox Automotive is looking for software engineers, data scientists, Scrum Masters and other tech experts to help create meaningful change in the industry. Do you want to be part of a collaborative workplace that values your time and work life balance? Consider joining Cox automotive visit talkpython.fm/cox today, thank you to Cox automotive for sponsoring the show.
+00:02:03 Before we get to the conversation for this episode, I have a very brief sponsored message from the PyCharm team.
 
-00:16:13 Left spring in like mid to late August, I started working on uff along with like a couple other projects. And I never built a linter before. So like I didn't really know what I was doing. But it felt maybe this is like a little bit of hubris or not, I guess because like it seems to be working. But like I was kind of like, I'll start with a linter because it feels like a tractable like scope of problem. I was like, type checker. I know that's hard. And like I don't really know much about it a linter I feel like I can learn like some of the concepts I have a good understanding of like, of like how it might work
+00:02:09 As you know, I'm a huge fan of PyCharm, the tool and the team, and I'm happy to bring it to you.
 
-00:16:48 to me when I look at I think linting people's code, like abstract syntax trees and stuff. Like, that doesn't sound Yeah, the problem to me, but it's good that you saw it that way. You did it get through it. Yeah, well, the
+00:02:14 Do you like storytelling?
 
-00:16:58 first version I released was, like, very limited. It was sort of, I sort of needed to get it out. Because I wasn't sure that people would actually really care that much about like what I was doing. Yeah. Because like, I'm describe to you a lot of like, pain points. They're also sort of like opinion, right? But like, you know, I wasn't like, like a faster linter. Like, like, who cares? I was sort of, I wasn't sure, yeah. So you know, when I released it, I was like, I want to prove it's possible. I want to like have reasonable confidence that the performance won't get worse, or much worse as I expand it. But I only supported like, I don't know, maybe like 20 rolls, which is fine with me, because I was really trying to prove a point more than, you know, get people to adopt it even
+00:02:15 Want a job where you can work with the Python community and help people with their professional development?
 
-00:17:37 right, well, and a lot of times go into that experience, even if very few people used it, you learn fantastic things, right? Yeah,
+00:02:21 PyCharm is doing big things this year, and they have an exciting job opening you should consider.
 
-00:17:44 I learned so much. And I read a ton of code. Like I read all I've read like a lot of cipher, like a lot of source code now that I read, like all of like, you know, Py flakes, like, Py Doc style, Py code style, like, you know, because I've spent time like trying to reimplement a lot of those a lot of those rules and like understand how they do things are you just learn a lot from like reading and trying stuff? Yeah, Rust does sort of like a whole nother thing where, you know, I did some rusted spring, but I would say that building ruff was really like my rust learning experience. I think I had to kind of try to build something from scratch to like, really understand the language. Sure. Everything I didn't spring, you can do all the tutorials. Yeah. And I was like, I'm trying to get in and out as quickly as possible. No, no, I just like, you know, I didn't do the initial my rust migration. At spring, I worked with another like super talented engineer who did that. And so every time I went into it, I made a bunch of changes to it. But every time I was going in and out, I was like, I just need to like ship this and like, move on. Like, I'm not going to spend a bunch of time like really understanding everything that's going on here. I just want to get it to work. And so I needed to like sit down and like really, like focus and be presented with like a blank slate I think, to learn and just like fail a lot and like build stuff that didn't compile, right. Figure out how to resolve those problems. Yeah, it's honestly it's the top is the top learning curve.
+00:02:27 Developer Advocate.
 
-00:19:05 I'm sure that it is. I started out in C++. And so I know are harder languages and they're easier languages. So as far as I'm never you're not missing that much. I would say Eddie is out there says ruff is so awesome. I actually changed all the switch statements in my Python 310 code back to if else blocks I could switch to Ruff, which is well, pretty awesome.
+00:02:28 It's a good job doing good work with a great company.
 
-00:19:28 That's super nice and slightly embarrassing, because we don't support Match. We don't support match. So this is what the match. That's the one big language language feature that we don't support. Yeah,
+00:02:31 Learn more and apply at talkpython.fm/PyCharm dash Advocate dash Job.
 
-00:19:38 you could just kind of comment it out. Like it just we're gonna just ignore whatever's in the switch. It must be fine. On to the next part. Yeah, exactly. Right. Yeah, I mean, not for your code. But for linting. Let's start our dive in with this comment from Tyler. He says what are the differences between linters like ruff and flaky? Those vs. Code styles are formatters like black and maybe ruff lives in them. middle of that spectrum, I'm not sure.
+00:02:36 The link is in the episode show notes.
 
-00:20:01 Yeah, there's a certainly like, like, like you said, it's like a spectrum. Right? So I guess there's a couple different ways to think about it. And it with those tools, specifically, like some of the responsibilities have, like, in my mind at least shifted a bit over time. So for example, like dlake 8, it does a lot of it doesn't change your code at all. And it'll just tell you about issues. And those issues could be style issues. Like you have extra whitespace here, or Yeah, I don't know what the other things that you're this line is too long. Yeah. But it could also be like a logical issue, which is something that black wouldn't touch. So it might be like this import is unused. So on the one end, you have like, different collections of rules, and maybe not really changing the code, just kind of telling you about it. Black is different in that black. Just reformat your code. So it does not actually aware of like the logic in the code. Like it doesn't know that and imports on us, it doesn't know that function is never called Yeah, it just takes, you know, that abstract, well, not not exactly the abstract syntax tree, but it basically preserves your code as is just tries to restyle it. And so, you know, it's interesting, because like, if you use black, you probably don't need a lot of style linting. Like, if you're using black to format your code, a lot of the rules in flake 8 aren't that relevant anymore?
+00:02:38 Charlie, welcome to Talk Python to me.
 
-00:21:16 They'll say something like, you should have followed the rules of this, but black automatically follows those rules for you. Right? So they're kind of Yeah, you don't need to correct the line length, because Black will wrap it because that's what Black does. Right? Yeah.
+00:02:41 Thanks so much.
 
-00:21:28 Or even like, you know, a scale of like, x equals one with like, no spaces between the x and the equals, and that equals unborn, like the linter will yell at you for that. But Black Sticks is that for you. So a lot of people will turn off those roles. You know, this is why I say the responsibilities have shifted a bit over time. Yeah, I think you're right there Ruff. Like it kind of sits in the middle, we do less stylistic linting for this exact reason. Like I use black alot black is like, immensely popular. So I actually like strong like heavily de prioritized like all the stylistic walls that are made redundant by black. The differences we do do a lot of that automatic fixing. So like we'll we can remove unused imports for you. We can even do like a lot of more complicated rewrites, like if you're using, if you're using like a dictionary constructor, like the actual DICT parenthesis, arguments, we can actually rewrite as a literal, if you have the roles enabled, and you want to do that, you know, there's like a bunch of rules around like comprehensions and literals. And we can do those rewrites, too. So you know, it can do like style and reformatting. But it's somewhere in the middle.
+00:02:42 It's my pleasure to be here.
 
-00:22:33 Yeah, the fact that it makes some changes, but it doesn't go completely all in like black. It's kind of I think it looks a little bit in the middle there. Yeah, one of the things that I think might give people a lot of brought a lot of faith or willingness to give it a try. There's a lot of projects out here that are large projects that people would know that have adopted, actively adopted and started using rough I saw a quote from Sebastian Ramirez from FastAPI. Right now in the audience. We have all Ofec says the next release of hatch, which I hope to do this, this weekend will have all the new projects generated with config for Lintian environment that uses rough, which I think is pretty excellent. We we speak to speak to some of that like about these these projects adopting it and how that's helped you.
+00:02:43 Yeah, it's a pleasure to have you.
 
-00:23:21 Yeah, totally. Yeah, I never expected that like this. Maybe that goes without saying, I think you'd have to be like super arrogant to release something and expect a bunch of these people to use it. Yeah, it's been kind of wild. You know, initially, there were a couple big projects that I would call like, really early adopters. And they helped shape the project a lot. Like Pydantic was very early adopters. Zoo lib was a very early adopter FastAPI was actually like, pretty early adopter, too. And then like pandas, and airflow and stuff, those kinds of are more recent, okay, it's been a very interesting like to reflect on how that's happened. Because on the one hand, it's like, sort of ridiculous that all these projects would migrate over me because I'm on, I don't even really have like a proper versioning system right now. Like I'm on V 00225 or something, I basically release like every day. And I consider like, I don't really make we've made like very few breaking changes. But like, in theory, we could make a change. I don't want to but like, if you ascribe, December, like we can make changes like that. You know, there's not really like docs, like the docs are just like this huge readme. It's kind of wild, right? We don't support like all python 3.10 features, I do not support match events. So on the one hand, it's kind of wild that all these projects would move over. I think there are a couple things that help a lot. So one is that the entire time I've been like very, very focused on compatibility with existing tools. And that comes out a lot of cost. Like if there are things that I like don't agree with, right or whatever else, like I sometimes still support them or implement them. And you know, but the but the upside is like It's very easy for people to migrate,
+00:02:45 I'm going to talk about making Python code fast.
 
-00:25:01 right? it might change nothing, potentially, right? It just, it just goes faster,
+00:02:47 Built some pretty interesting tools here with Ruff.
 
-00:25:06 slowly. And over time, like, you know, we don't have like a third party plugin system, we've just like implemented everything like in rust. Like as part of Ruff, I viewed that as like, I'm just gonna look at the most popular plugins, and then most important roles, and I'm just going to figure out like, what's a blocker? For whom? And like, what do I need to implement in order to like unblock people and like, make sure they can use it? Is there
+00:02:52 We'll see about integrating Rust into Ruff, and there's a lot of cool tools around this
 
-00:25:29 a way for people to let you know which of those are really important to them? Like, for example, if there's some big project out, there's like, we would love to move to rough but there's this one, one plugin we're waiting on? Yeah, I
+00:02:58 sort of code quality side of things, right?
 
-00:25:41 mostly hear about it in issues. And there are a couple issues where it's like, kind of a big GitHub issue. It'll be like, implement this plugin. And a lot of people will come and like, give it a thumbs up or whatever. We have pretty good coverage. Now actually, like, I mean, there is a long tail, like there's a big ecosystem of like flaky plugins, you know, sometimes someone will come along and ask for a plug in that I haven't haven't really like seen before. And then it's just a calculus of like, what do I want to prioritize? Or how much work? Is it?
+00:03:01 Like Black took off in ways, I think, even though Lukash didn't maybe imagine it would take off,
 
-00:26:12 Exactly? Is this a super easy line? thing to do? Like, oh, the line is too long? That's easy, or is it? You know, rewrite this? Yeah. This generator and this other interesting way?
+00:03:06 and this is kind of in that same realm, and of course, it plays well with Black along the
 
-00:26:23 That happened with a lot of people want, like, I don't know how to pronounce this library, but like dark lint, like Dr. Glynde, I don't know. Anyway, that would go
+00:03:13 way as well.
 
-00:26:32 that as well. Yeah, dark, man. Let's go that it's very popular.
+00:03:13 So we'll get to talk all about those things.
 
-00:26:34 But I've looked at the source pretty complicated. So like, I need to, you know, that's something I can just like, turn around the day. But like, you know, I hear like, what people want. And I mean, some of those migrations, though I didn't even know about them until they'd happened. Yeah, of course, people come they submit issues, I look at their profiles, I see what they're working on, I get a sense for what the projects are. So sometimes I know, and then I'm kind of fixing things, knowing that hopefully, it's unlocking them in different ways. But I think like I said, I think the compatibility piece is like really huge. And I actually think that like black and I sort and like the popularity of those things, has made compatibility for me, like a little bit easier, because I can just, like adhere to what they do. And then hopefully, there's like, no code changes.
+00:03:16 It's going to be tons of fun to dig into them, but before we get to it, let's start with
 
-00:27:16 Yeah, they centralized around what, like black is the truth. And then we'll, then we'll, we'll start, we'll debate beyond that. But like, we're just going to accept black because it's no fun to to go, commas of the end of the line, no commas on the trailing thing in the list, you know, like that. Those kinds of debates? Just go on and on. Yeah. And I think Black kind of solves that by just making the decision for you. And not everyone's totally happy with every choice. But it stops the debate. And that actually probably wins the day for most of them. One thing that's interesting here that I'm noticing about these projects in the large open source projects that have adopted ruff, not all of them surely, but many of them like Pydantic, and polars, and so on themselves are adopting rust. Do you see a synergy of those like, Well, where are we writing Pydantic core and Ross like Samuel Colvin is, or the folks behind polars aren't like that's the core of it is about rust. And that's the RS on the end? I think. So there might be a little extra draw there. And I think it's
+00:03:19 your story.
 
-00:28:16 just more like, like, your ritual alignment? Because it
+00:03:20 How did you get into programming in Python and Rust?
 
-00:28:20 doesn't matter. It's not like, No, it doesn't. But spiritually,
+00:03:22 Yeah, yeah.
 
-00:28:25 but there's yeah, there's a little bit of a bug, sorry, bug in the sense of like, like, once people start writing some stuff and Ross and improving their Python, they're kind of like, more open to like, you know, trying out all the things that are written in rust and so on. So it's, I mean, that community is, like, been very interesting to sort of watch and be a part of the like Ruff Python community, it still feels like pretty nascent, but there are tooling is actually like, really great. And, you know, we could talk about that more, but like, yeah, there was definitely like, a bunch of initial setup for actually like distributing Ruff, PyPI and pip install. But now that that's over, it all just works. And I mean, I wouldn't say it's, like, requires no effort, but it's actually pretty amazing. Like how, like the degree of integration and how much you can do now with these tools like PyO3 and, and matcher in and some others.
+00:03:23 So I got into programming, I guess, the summer before I went to college, when I guess I was
 
-00:29:18 That was one of the things that was really nice surprise for me as well. It's how easy it is to install. Right? Like, unless you told me unless it wasn't part of, you know, the elevator pitch, you know, the little one sentence subtitle Yeah, on the project, like you would know, from interacting perspective, which is kind of exactly what you want. I also think that it's really there's some value to having these popular projects adopt ruff because Martin and audience for example, since I found out about rough by looking to see what FastAPI does because presumably, it's a ton of respect for fastApi and Sebastian, his choices. So that's got to sort of create the snowball effect as well. This portion of talk Python to me is brought to you by user interviews. As a developer, how often do you find yourself talking back to products and services that you use? Sometimes it may be frustration over how it's working poorly. And if they just did such and such, it would work better, and it's easy to do. Other times, it might be delight. Wow, they autofill that section for me. How do they even do that? Wonderful. Thanks. While this verbalization might be great to get the thoughts out of your head, did you know that you can earn money for your feedback on real products, user interviews connects researchers with professionals that want to participate in research studies, there is a high demand for developers to share their opinions on products being created for developers. Aside from the extra cash, you'll talk to people building products in your space, you will not only learn about new tools being created, but you'll also shape the future of the products that we all use, it's completely free to sign up and you can apply to your first study in under five minutes. The average study pays over $60 However, many studies specifically interested in developers pay several hundreds of dollars for a one on one interview, are you ready to earn extra income from sharing your expert opinion head over to talk python.fm/userinterviews to participate today? The link is in your podcast player show notes. Thank you to user interviews for supporting the show.
+00:03:29 supposed to be doing something fun.
 
-00:31:24 One thing that's a little bit overlooked about like why that adoption is useful is that it actually like feeds back into the project. And like so many great ways. So, you know, for example, like if dagster adopted Ruff and like they, they have like a really big like Python mono repo with like, I don't know, like 50 or 100 separate like Python modules or packages in there. And they filed like a bunch of issues about around how can we make ruff better for Monorepos. And so now they can run ruff ones. And it runs over all their separate projects that can all have their own configuration. And that's like a really, really powerful thing. And something that like, if I was just sort of sitting around like building ruff, like I don't know, that I would have known to prioritize that or what it should look like. And so like, actually like working with people who want to adopt ruff, and like figuring out what stopped using it provides a ton of value to the project. And just prioritization like a lot of the isort stuff, I pushed on it a lot when I started because ruff import sorting, so you can use it if you want in lieu of isort, and we implement a lot of the same configuration options. Not all the same. eyesore just is like really configurable. So we went, we started to implement them as they get requested. But anyway, I prioritize that stuff, because why people wanted it and they were coming to the issues and being like, hey, it's really helped me adopted blah, blah, blah. So just like getting the feedback and like hearing what's blocking people like that itself is like, so valuable for the project,
+00:03:30 I taught myself Java, and it was the sort of thing that a lot of people had told me I would
 
-00:32:52 right. And you have a lot of people involved in these larger projects. So they and they have specific, polished needs, right? Like, there's a lot of people who work on pandas are FastAPI, and those are mature code bases. It's not just a PEP project, right?
+00:03:36 like, but I never really had a chance to dig into.
 
-00:33:07 Yeah. Yeah. Those
+00:03:38 I ended up, I went to school, majored in computer science, so I did a bunch of internships while
 
-00:33:07 are very mature. Yeah. Yeah, exactly. That's good. But also, it's a challenge. One other thing I would like to point out, you know, you started off by introducing Ruff saying maybe people will be interested, I don't really know if they will, maybe they will. That'd be cool. You know, 6.5 6.4 1000 stars. That's a non trivial amount of interest. That's a lot of love. Yeah.
+00:03:43 I was in college.
 
-00:33:29 Yeah. And like, I don't know, one thing that I, I guess I'm, I feel weird, like highlighting all the big projects, because one thing that I really appreciate, it's just like, anyone who's willing to try a tool like this. Sure, like moving tools, and trying new tools is like a big decision. I just like really appreciate everyone who says nice things about it or ever. And he's like, willing to give a try. Give it a try. Like no matter what they're working on. Yeah, let's have a platform to say that out loud. So
+00:03:44 And then when I, my sort of junior year internship and my first year out of school, I worked at
 
-00:33:56 people hear. Yeah, absolutely. See the other thing I want to highlight about the repo here, not just the stars. But when I look at a project and I want to sort of assess, I really want to adopt this thing. Do I want to make this part of my dependencies, or things or layers that I got to live with here? And if it goes sideways, I got to change something is, you know, how old is the project? How active is the project and so on. So, look, we started this podcast 40 minutes ago, the last commit was 52 minutes ago. Yeah, that's kind of that's awesome. Maybe you're like, but you're looking here. And it's been it's yesterday. It's last week. I want to point out there's just a lot of activity 78 contributors. It's a very lively project, and not just something that's cool. But you know, there's a lot of interest in energy, and it which I think is a very strong signal that it's something people should be comfortable adopting. Thanks. I
+00:03:50 a company called Khan Academy, which is like an education technology company.
 
-00:34:52 appreciate you calling that out. I think I guess companies one that's actually something that when I talked before about why were these big projects adopt this thing that like seems really experimental. That's actually something that comes up a lot is and I'm not in the conversation, but obviously I'm sleuthing a little bit. Yeah, on the PRS, right. And they're saying, well, it doesn't support x, but it's like, really actively developed. And I'm, like very competent, that they will support that, you know, at some point. Yeah. And so like, just like having something that is clearly very actively worked on, I think, is quite like appealing and comforting to people. Yeah, I actually, like do feel bad saying this, but like, one of my favorite, not favorite, but it kind of an interaction that happens on the repo is someone will file an issue. And they'll say, this is actually also a bug that exists in the, let's call it the upstream implementation. So the existing Python version of that tool also has,
+00:03:54 And at the time, this is less true now, but at the time they were a really big Python
 
-00:35:47 like pilot leads or something like that. Yeah, it does this, but we think it's wrong. We didn't agree with it or something, right,
+00:03:59 child.
 
-00:35:54 where there is an issue where, you know, the maintainer is like, oh, yeah, this is broken. Yeah. Okay. It's really not like, the reason I saw that thing is like I you know, every project is different. And like every maintainer, like most, everyone's doing this, like for free, right? Like, I'm not, I'm not here to, like, call out other maintainers. But I think it's a very satisfying interaction for people when they link to an issue it's been open for, for maybe for like years. And then I can actually just, like, fix it in like, like, pretty quickly and ship a release in the same day. And like that, I think that's like, a really, like, powerful thing that resonates with people a lot is just the feeling of like, stuff getting shipped. And like, Yeah, and he's getting, and yeah, I'm like, you know, I'm working on this full time. So like, I'm fortunate to be able to do that. And like, I totally get it that, like, other projects are in different states that by right, I get a lot of, you know, and people are always super appreciative. And so I'll just like funnels into, you know, giving me energy,
+00:03:59 I mean, they had one of the biggest like App Engine deployments.
 
-00:36:49 it is called you a commit machine. Literally, every time I update my logic dependencies, I'm guaranteed to see new stuff on ruff on new version ruff.
+00:04:03 It was like Khan Academy and like Snapchat and like a couple other, maybe Spotify or someone.
 
-00:36:57 I appreciate that, you know, it's I do appreciate that, like, Yeah, I do try to write a lot of code. But you know, it's obviously not, not just me. And like the contributors, the contributors have been awesome. And I think one thing I'm particularly impressed by is just the number of number of people who, like I don't even know if I always believe that when they say this, but like, just the number of people who are like, this is my first time writing rust, like I'm really not good at roster like blah, blah, blah, here's something that they just like, yeah, and they just like, make a great contribution. They're like, Hey, I'm trying to learn Ross. And I obviously love that stuff like that are interested in learning Rust actually think Rust is like a great, great project and like a great place for that. But I mean, there are people who are working on stuff, especially the stuff that I just like, I like big things I can't like, focus all my time on and just like having great contributors who are like, really, you know, like, thoughtful, and like, prolific. Every project is lucky to have people like that. How old is
+00:04:09 Wow, I had no idea.
 
-00:37:53 the project? When did you start it? In August? Yeah, so not that old.
+00:04:11 I mean, I'm just, yeah, I'm obviously I'm familiar with Khan Academy, K-H-A-N, I'm sure a lot of
 
-00:37:57 My brain is like melting, but it's somewhat it. I think it's like, like, somewhere between four and six months.
+00:04:17 people are.
 
-00:38:02 Would you say you're working on this full time? As like your full time job? Yeah. Okay. So how's that work? Is that GitHub sponsors? Or are you employed by someone to completely work out? What's the story? That sounds
+00:04:17 Yeah.
 
-00:38:13 awesome. Still figuring out? You know, I'll probably share more on that soon. Okay, I know, a sponsor is enabled right now still figuring out exactly what, like how I want that all to evolve. Right. I am working on full time. I don't anticipate that changing in any way. Like I I really happy and getting so much I this and are Yeah, I think there are lots of ways to make it work. And if not ruff, I want to be working on like other Python tooling. So you know, I think there's like more stuff to come. Well,
+00:04:17 But I didn't realize that one, they were such a GCP customer and that was Python.
 
-00:38:38 it certainly is neat tooling. Let's go. Let's go through the GitHub page here a little bit. So we've talked about speed a couple of times, we talked about ways in which that happens. You know, Rust is an important part, but it sounds like it's not the only reason that it's fast. You have a chart with the obvious little asterix caveat benchmarks.
+00:04:22 Yes.
 
-00:38:58 It's reproducible, you know, like, readme, but yeah, that's fast
+00:04:22 Was that Flask or Django on GCP or what was it?
 
-00:39:02 in this situation, but my situation is different. In which case, you know, such and such, right, but for some large code base, we've got ruff in point three seconds, auto flake at six pylintat over 60 seconds, just barely. This is on the CPython code base from scratch, which is it's pretty ridiculous. And I already told you the numbers, I don't have a millisecond number, but it appears to be instant on 20,000 lines of Python code that I wrote, and it found some issues, which I thought would already be discovered. So that's, that's pretty excellent. Nice. It's nearly Python 311 100% compatible, right? You said the one major language features the match statement, but other than that, it's, it's compatible, right? Correct.
+00:04:25 It was like Flask on App Engine.
 
-00:39:46 Yeah. Okay. It supports some of the other language features like that are maybe less I profile like the parenthesize with statements and stuff like that, but it doesn't support the pattern structural pattern matching yet
+00:04:27 Yeah.
 
-00:39:59 got it. So Got the auto fix support near parity with flaky rule set, which is cool. You talked about the way that you keep the performance fast but still have Yeah, apparently with like eight is you have native reimplementation of the flake eight plugins. That's right. Yeah.
+00:04:28 We did not use Django.
 
-00:40:15 So we re implement, we re implement everything in Rust. And a lot of the time, that's like me, or whoever's working on it, like looking actually at the plugin, and like, the logic it uses and trying to mimic that in a high fidelity way. And often will like try to use the same test suite, and really try to make sure that we're compatible except in cases where we think there there is like an actual sort of factual error, why ruff is fast, the plugin stuff, there's a lot of interesting stuff to say about like, plugins, because I think Rust is a big part of why ruff is fast. But there are a couple of other big pieces. So we take a lot of care in the code base to, like, only do unnecessary work, if that makes sense. So you know, we support 300 Something rules, but depending on which exact rules you have enabled will skip a lot of unnecessary work. Okay, that can help a lot. So you know, it's basically tailored to how much you're using it. So like, you're not using it as an import sorter is a bunch of stuff that we get skip, we think about it. But the other like really big one is because everything is sort of implemented in like one system, there's a lot of work that would normally be duplicated between a lot of different tools that can actually just be done one. So the way to think of that is like, if you look at like flake eight, with flake 8 doc strings is maybe one example, which is py doc style. So I know it's like a huge, like a tree of tools, you know, if you added that plug in, so pyflakes is going to parse your source code and turn that into an ASD. And then py doc style actually has basically its own parser, that will go back over the source code and look at all the tokens and extract the doc string. And if you have a bunch of different tools, like some of them will share that abstract syntax tree, but a lot of them end up doing work that other tools are also doing
+00:04:29 Yeah.
 
-00:42:04 right, because they can't count on necessarily that being done or that the plugin system doesn't provide work that's already been done to them. So they got to start over anyway. Right? Yeah.
+00:04:29 But they actually, I mean, it's a whole nother story, but they did a big Go rewrite after
 
-00:42:14 Or they might want to do things in like a slightly different, maybe you have like three different plugins, like I guess one example is a lot of plugins, like need some way to tell if a function is like public or private? And it's not like super complicated, but you know, it's not like totally trivial, like you need to account are functions that are in inside of classes, like is it a public method or private method, you consider an item other function, right? So there's like, a lot of rules actually, for like determining what's like public and private. And, you know, you might have one lint rule, that's like, all public methods need to have doc string. And you might have another rule that's like, all public methods, and you'd have type entity. And if you have two separate plugins that are doing that, they both need a way to actually, like extract that information. And, you know, it's not necessarily the case that like, it'll be way faster to do it with one pass. And one, I think it will, it may not be like orders of magnitude. But the only thing is, you have a lot of like consistency. So like, you know, it's defined in one way, you're not going to be at the whims of like, small decisions that the tools have to make for us as like maintainers. And like building rough, you know, there's a lot of stuff you like, don't have to learn multiple times, right? I can leverage that. And like, go and implement other lead roles. And I don't have to like figure out from scratch, how do I determine like, what's public and private? And how do I like extract all the docstrings from a file? Like, we already have all that infrastructure? So it's kind of like I see economies of scale, I guess, to like, implementing new stuff, like it's sort of snowballs a little bit like the tool gets more powerful gets kind of easier to do things. I mean, I think you'd be surprised like how much of building a tool meant, I don't know about you personally. But like, I was surprised by like, how much of building a tool like this is done. It's like settings and like configuration, and like, how do people express their settings? What is the command line interface look like? How do you find all the Python files in the directory? Like, it sounds trivial. But like, yeah, you also want to respect like getting more is do you want users to be able to ignore files, like there's a lot of rules. And so again, it's like CLI look, a new Python tool, you know, that wants to go off and implement something, they might have to implement all that stuff themselves. But for us, it's like, we have all that infrastructure in place. And so if we want to build a new func piece of functionality, it's just sort of defining the rule. And we get all this other stuff for free.
+00:04:34 I left, which is also super interesting.
 
-00:44:27 Yeah, you can definitely build on the layers that are in place because it's it's all together. It's cool. Yeah. All right. Let's let's look through here a little bit. Like I said, there's the testimonials from the different projects like Brian from Beaucaire Sebastian from FastAPI and, and whatnot there. But let's start with installing it. Like I said, you would know that this wasn't just a Python tool you could use pip install ruff is the way to go but when I installed it, I didn't pip install I pip X installed it. Are you a fan of pip X? Yeah, I used to have an X Yeah, to me. It seems like we're For some time, I want to run on different projects. And I just kind of want ruff in my tool set. And so I pick x installed rough. What do you think? Good idea? Is it better to put it say like in a per version at per project?
+00:04:36 I mean, it's not Python, but it is still very interesting.
 
-00:45:12 Like everything? Right? Probably depends. I mean, I definitely saw some of the PEP back. I think the one thing that I the one issue with Ralph, and I guess I recognize widens can be annoying for some people, for sure. Like, we release a lot. And so they projects don't pin their dependencies, then they can start to see like new errors as we add new roles, which, I guess in some sense is like a breaking change, but I don't really consider it as such. It's like, you know, they are here. It's like, they have the like, let's say they have the like, like a simplified rule set enabled, and we add a new rule, and that gets turned on for them. So anyway, the point is, like, people, I guess I recommend pinning rough if you're using it for a project, which I mean, with pipx you're just gonna stay on one burger, right? So
+00:04:38 Just like migrating a system from any language to any other language is always pretty interesting.
 
-00:45:55 you run pip X, upgrade, dash all or whatever, or upgrade that thing. Yeah, exactly. It's doing it's a sense. It's kind of a pin, but it's been globally, and it gets upgraded globally. And that not not per project. Yeah, yeah. For me, that's kind of okay. But if I was on a large team, you know, lots of people who are working on it, you might want to control that more, I can see that
+00:04:43 But at Khan Academy, yeah, you know, I did some Python.
 
-00:46:14 we have a homebrew distribution, and conda distribution on conda. Forge, and then I did those, and then there's everything else was done by other high other people. So I'm like, which is cool, but mostly being like, less familiar. Yeah, sure. I mean, I don't know, publishing on homebrew and kind of word was like, pretty interesting experience. For me, I play because I've never done that, and didn't actually really know that much about how those worked. So yeah, that was cool. Hopefully, it's useful for people who's definitely some complexity with like, the packaging and release stuff, which I don't know if you want to buy that or not. But you know, because we're building rust, there's like a couple of things that we need to do that are a little different from a standard Python back end,
+00:04:46 I would say that like I mostly did web and we can talk a little bit more about this because
 
-00:46:54 maybe just touch on it a bit. Because what do you deliver is a wheel right? But it's got the compiled rust? Yep. bit for me on my arm. 64 macOS build, right? Yeah, that's
+00:04:52 like really through my career, I've kind of jumped between a lot of different ecosystems.
 
-00:47:05 right. Yeah, that's right. So basically, it just means we have to the wheel in some sort of pre compiled version of the package, as opposed to just giving you the source code. Like, if I just gave you the source code, and not the wheel, you'd actually need to have rust installed, because you'd have to actually build the thing and install it, which is, of course, an extremely unreasonable expectation for for the kind of people who are using this for the most part.
+00:04:55 And so like at Khan Academy, I did, I think a year of Android.
 
-00:47:29 Yeah. But before the wheels really became popular, that was part of the step. Right? It would totally build for you. Yeah, yeah. Wouldn't go for you, which was frustrating. But that was part of the step, right? Yeah,
+00:05:00 And did a little bit of iOS, did a lot of web, did a little bit of Python.
 
-00:47:39 yeah, we just build wheels for all the platforms that I know
+00:05:03 And then most recently, I worked at a company called Spring Discovery, which is like a computational
 
-00:47:44 is that I'll see ICD, just push it to some branch and magic happens. And then we'll start appearing in places,
+00:05:09 biotech company.
 
-00:47:50 whenever I cut a release on GitHub, like I just use, like GitHub releases, basically, I just use github releases, it kicks off our release route. And then that fall through GitHub action. So it just as a big matrix, right of all the different operating systems, we only have to build. Thankfully, we only have to build one wheel per operating system, we don't have to build one wheel per Python version, which is something that can happen sometimes. And then you have like a massive closure and number of wheels, that's all facilitated with a tool called matcher. In which I'm a big fan of, which is it's sort of like IRL, like setup tools and a bunch of other stuff bundled together, but specifically for shipping mixed rust Python. So I don't actually I don't have to, like do anything to her as far to make that work. Yeah, my Pyproject.yaml has you no matter and at the top, and I have a rust project. And I call it my turn build and it creates a wheel. So it's all like, I don't know, I think it looks super cool.
+00:05:10 And everything we were doing was based on computer vision.
 
-00:48:45 That sounds very, it sounds super smooth. And super neat. Yeah. And like I said, as a consumer of it, also very smooth, right? It was so quickly, I didn't have to wait on some build, I need build tools or config that I don't care about or don't use, I pretty sure I do have rust, rust C as a CI option I can use here, but you don't want to depend on that right now. So you run it on the command line, you say ruff and you point at either a file or a directory or some pattern of files, right startup type of thing, which is cool. And that gives you the output. You can also do it with a --watch, and just run it constantly, which is pretty cool, right? It's fast enough that as you save it if there's problems that will just appear in the terminal, right? Or wherever you run it. That's kind
+00:05:13 So we'd like take really high resolution pictures of cells and then try to model like the way
 
-00:49:33 of a funny example. Because I based or it's a good example is I I'm pretty sure I took that exactly from probably from TSC, which is the TypeScript compiler. Yeah, they have a watch setting. And I like how it works. And so I wanted that for that. So it's just that's a very literal example of me looking at another tool from the gallery space and being right. Oh, that's really nice. And I wish we had other tools. I have it here.
+00:05:18 that they change when you add drugs.
 
-00:49:57 Yes. Was this terrible and not terribly difficult to implement? Right, you take the pattern, and you put a watch in the OS watch implementation, and you say, Call me back when something changes. And because it's fast, it just reruns, right? But it's still Yeah, that's exactly right. It's very handy, though, that it's there. The other thing that's interesting is, you can do it as a pre commit hook, which is nice. Yeah, that
+00:05:19 Wow.
 
-00:50:19 works pretty well, for people. I think a lot of people seem to use it. I'm glad that it exists. Yeah, well, a bit of a weird setup, because maybe it's actually not that interesting and talked about, but it's in like a separate repo for sort of like theory, like I can't even really remember.
+00:05:19 Okay.
 
-00:50:31 Okay, I think now she can figure it, it has a, let's say, comprehensive CLI set of options, I can remove 15 or so command line options, you can pass it, but you can also put put it into the Pyproject.toml. With things just like tool that ruff put your various settings in there, right. So it just sort of integrates along that or you can have a ruff.taml and then put it in there.
+00:05:20 Which is, yeah, it's pretty wild.
 
-00:50:57 Yeah, so that's something that I took, basically from hatch. So within hatch, you can have a Pyproject.toml or a hotshot.toml, and the hats on tomo kind of like unmasked the configuration. Like if you use a ruff.toml, you don't need to have like tool that ruff at the top and stuff like that. Yeah, I think one thing that I'm quite happy that we have is like the configuration is very, like typesafe. So if you try to, like, you know, so that line select equals E F, those are like error, like rule codes that are defined in ruff. And so if you put, if you replaced F with some string that wasn't, you know, a real rule, you'll get an error immediately saying that your pyproduct toml hadn't valid was valid, and like these ways, blah, blah, blah, interesting, okay. And similarly, we create what are called, like JSON schemas, or the configuration. If you're in PyCharm, and you open up like a byproduct.terminal, and you type tool that Rob, it'll actually like, show you all the options, it'll actually surface, the documentation we have for the options to have nice. So it's pretty cool. Yeah, I'd like more tools to do that. Because I think it's like, super useful. I think poetry has it, but not too many others do get it in VS Code, as well. But you need to install a an extension. It's called like, even better toml, I think, right. Okay. But I'm happy with those things. I think it makes it like, I think small things like that add up and glad we're able to do Yeah, when
+00:05:21 I mean, I came into that with no bio background.
 
-00:52:21 I looked at the configuration settings, like the Exclude directories and various other things like that, it's kind of a lot to put on a command line. It would be nice if you could just put it in, say ruff,toml or pyproject.toml and then we just type rough. The thing is, it sees that and it uses it right?
+00:05:23 I joined as like second engineer and build out a lot of our like data and machine learning
 
-00:52:35 Yeah, I've kind of like intentionally like not put a lot of these arguments on the command line. Like for that reason, like you can imagine taking everything here and exposing it on the command line. But the command line really just deals with like, how should we think execute? And not like, I don't know, what should the Max complexity be? Yeah, complexity, Jack. And so I
+00:05:28 platform.
 
-00:52:54 think that's fair, like put the common stuff in the command line and then say, and if you need to go crazy, here's your --config. Pass that in, right and put it in there. Right? Yeah, one thing that I did want to talk about and you kind of touched on, there's much of the command line arguments, one of the things I didn't want to talk about is the editor integration. There's a huge bunch of rules here. All you got to scroll through the homepage to get get is awesome that or no, no, it's good. I mean, these are like, all the things that checks I don't have to think about anymore, which is great. Eventually, though, she's I forgot it was as long as Eventually though, it has plugins, or maybe that's not quite what I said it has a an extension for VS Code. And it has ways to basically add it as a command to PyCharm right, which is, yeah, those are both awesome editors that are kind of very friendly to thinking about code formatting and exposing the errors that this would as well. So that's great. You might want to just talk about that just real quick.
+00:05:29 That was kind of a crash course in building like a massive system in Python, right?
 
-00:53:52 Yeah, totally. So yeah, we the VS Code extension, that was my first time reading VS Code. And actually the these extensions use, or they conform to something called the language server protocol. And effectively, that's sort of like a standard, I believe, I'll probably like go into the history wrong, but I believe it's Microsoft that like, publishes and maintains that back. The nice thing about that protocol is you can actually use like, the lot like most, almost all of the code behind the VS Code extension is actually published as a language server, rough LSP. And what that means is you can actually get, like the exact same behaviors and all sorts of different editors, if not confined to VS Code. So if you use like Neo Vim, or like Sublime Text, or whatever else, right, well, it's all worth this standard protocol. And they all have ways to tap into that ruff language server protocol. So we have sort of like the standalone LSP, which we have instructions for, like Sublime and and, you know, other tools. And then we have the actual extension, which is published on the marketplace and was things I definitely want to like, keep supporting and I view them has like official arms, right of the project, which I think is nice. So people should know that like, you know, those are official and like, I fixed bugs in them and all that kind of stuff.
+00:05:32 We were doing scientific computing.
 
-00:55:09 Nice. And then for PyCharm, you just add it as an external tool, and then you have the ruff command around or for both of these, if you prefer, you just add it as a pre commit hook. Yeah, it's also Yeah, yeah, that then like, as you interact with it, it'll run the pre commit hook as well, if you try to check things in. Super cool here. I think this is a neat project. I ran it into my project. And I thought, you know, everything is pretty much good to go. Where, you know, when I'm using PyCharm, for example, it'll often tell me when any of these things like it'll say there's a local variable that's unused, or it'll automatically remove unused imports. And yet, I'm looking at 331 issues. 108 are potentially fixable with a --fix option. So it sounds like there's still a lot of value to like, make that part of my tool chain.
+00:05:34 So it made a lot of use Python.
 
-00:56:00 Yeah. You know, and feel free to have some of your own opinions. Well, which of those rules actually matter?
+00:05:35 So we ended up using Python for like almost everything.
 
-00:56:05 Sure. And I suspect you can disable them in your config file, right? You can say this rule I don't care about
+00:05:38 Yeah.
 
-00:56:10 Yeah, and this is another sort of compatibility thing like we API for actually, like turning rolls on and off is like, essentially identical to the floodgate API. So that's also useful for people migrating over
+00:05:38 Yeah.
 
-00:56:21 to the no QA. Is it the like column? Yeah, like comment? No, QA is one option. Yeah,
+00:05:39 Python is a really good choice for the web, but it's like the de facto choice for data
 
-00:56:26 we were. Yep. We respect those two. We also respect like, I saw its action comments. So yeah, we we like do a lot of stuff to try and maintain compatibility. Nice. Maybe another, like interesting thing in that vein is that we ship a tool called Les gay to Ross, which does sort of what it sounds like. So you point it to a flake 8 file, and it spits out a toggle for rough that's compatible. And it also tells you if there were things in the file that we don't support, which is useful to like, Oh, hey, you're using these roles, those actually aren't implemented yet. Yeah, that's also maintained as like part of the project. So I recommend checking it out.
+00:05:44 science, right?
 
-00:57:02 Excellent. Let's try that. I think we're getting short on time, but not short. On topic. There's a whole lot more to dive into. I think it's, it's really cool project. I think it's gonna be a
+00:05:44 Like it's.
 
-00:57:12 big wasm section. Okay, I'm kidding. We don't have time for that. We could do
+00:05:45 Yes.
 
-00:57:17 a wasm section. We even have some great chat gpt questions in the audience. I don't necessarily think that there's time for those, unfortunately. But there is one final question that I want to ask. It's kind of inspired by the audience. But I think it's good for everyone. John Gabriel asked, is there a roadmap or timeline for ruff development out there? Like, what's next, basically,
+00:05:45 Yeah, exactly.
 
-00:57:38 like, I guess the short answer that is no, like, there's not like a published timeline. Unfortunately, like most of this stuff exists in my head. And in issues, like everything happens on issues, like we were just talking about on issues, I'll maybe talk a bit about, like, the things that I'm thinking about. So one is fixing, like the structural pattern matching issue. And so like getting full, like Python compatibility, which is sort of like one bug, but then on locks us doing what I hope will be like a stable release, even if that's not that much changes, and it's just kind of, you know, the marketing of it. But hopefully, we'll fix that. And then we can do like a stable release. The, there are two other kind of big things on my mind. So one is, this is like a really big project, but not not ruff, the thing I'm about to talk about, but I want to extend ruff to do like full code, auto formatting, so that people could use it in lieu of block if they wanted to, I think it's like a really natural fit for what Ruff is doing. And a lot of people asked about it, the way that that will, there's an issue where we talk about this, like on the repo, it's not like some big secret reveal. But the way that I think about that, like, like with all things is I want it to be like sort of incrementally adoptable. Like right now you can use rough with isort, or you can use just Ruff, or you can use rough to your input sorting, but like not as a linter. Like you can kind of pick and choose like what you want to use. And I view like thought of where matter is the same way, like I fully expect that people will keep using ruff and black. But it's just like, the kind of functionality that makes a lot of sense, given what we're already doing, and like the way that the product is evolving. So I need to like a bit careful, because like if like that blog work. And so I'm not like saying exactly when that will be done, but I do want to start working on it. And then the other thing, which is maybe like a little bit less exciting to other people. And it's like, you know, I think at some point I'd like rough to get to a world where it kind of stands alone a little bit more at ease, and you'd quite as much as a compatibility as this compatibility layer. Like right now all the rules kind of map back to, like a are under Tools. And when you're using rock, you're kind of thinking in the mindset of those other tools, like what are the rules and how do I configure them? At some point in the future. I'd actually like, you know, ruff to sort of have its own API like own indexing of the rules and to view that as kind of a compatibility layer that will not go away like this won't put a burden on users. But I'd like to get to a point where like conceptually a lot All this stuff is like, first class and rough. And it's not viewed as representations of other extensions, which I think will enable us to do a lot of cool things. But I'm hopeful that we plan on doing that in a way that has no disruption to users. So we'll continue to support the existing API and such. Yeah, exactly.
+00:05:46 There's not a whole lot of other choices.
 
-01:00:15 Very exciting. Very exciting. Well, congratulations on projects that people seem to love it's got a lot of traction and definitely doing some cool stuff. So for you get out of here though, final two questions. If you're going to write some Python code but editor are using these days,
+00:05:48 Whereas on the web, there's, you know, five or six other platforms and languages that are
 
-01:00:30 I use PyCharm for everything that includes rust, lead, you only rust and my Python and PyCharm.
+00:05:52 also contenders for that space.
 
-01:00:35 Nice. Is there a cool plugin that basically address support to
+00:05:55 Right, right.
 
-01:00:39 yeah, there's just an a fit. There's an official IntelliJ rust plugin.
+00:05:55 So, you know, we built out what I consider to be like a fairly large Python code base.
 
-01:00:42 Got it nice works really well. I've used IntelliJ for like that platform for Dart and flutter. But I haven't tried to plug rust into it. But yeah, it does. It does a lot of things. Cool. And then notable PyPI package something out there, named a couple that do the rust integration nicely. But anything you want to give a shout out to Yeah, I really
+00:06:00 It was like a big monorepo.
 
-01:01:00 want to give a shout out. I've already mentioned it a few times. I think if you're interested in doing Rust Python stuff, you should really look at Maturin Maturin. Alright, It's just, it just like makes the publishing really easy. And you still have to learn rust, which is not easy. I do. It's worthwhile, I think. But it's not easy. But it makes publishing rust code to PyPI Sorry. Really easy. Awesome.
+00:06:02 And, you know, I spent four or five years, you know, building that out and like really writing
 
-01:01:23 Well, great recommendation. Thanks for being here. Final call to action. People want to get started with ruff. What do you tell?
+00:06:08 a lot of Python every day.
 
-01:01:28 The main thing that I would like to say is like if you're interested in contributing, even if you don't know that much Rust and are interested in learning, like, I'd love to see you on the repo. And I hope it's a place that people feel really welcome to like come and contribute even if they aren't 100% Sure if their code is right, or anything like that. So definitely really excited to have more contributors and have more people coming into the project. And of course, you should also try using it yourself.
+00:06:09 That's where like a lot of my Python experience comes from.
 
-01:01:55 All right, excellent. Well, thanks for being here. It was a great, great conversation with you.
+00:06:12 And like that experience specifically also informed a lot of, a lot of growth.
 
-01:01:59 Yeah, thanks so much for having me. It was really, really cool opportunity. Appreciate it. This has been
+00:06:15 And, you know, I can talk more about sort of how those experiences intertwined, but that's
 
-01:02:04 another episode of Talk Python to me. Thank you to our sponsors. Be sure to check out what they're offering. It really helps support the show. Join Cox automotive and use your technical skills to transform the way the world buys, sells and owns cars. Find an exciting position that's right for you at talk python.fm/cox. Earn extra income from sharing your software development opinion at user interviews. Head over to talk python.fm/userinterviews to participate today. On level up your Python we have one of the largest catalogs of Python video courses over at talk Python. Our content ranges from true beginners to deeply advanced topics like memory and async. And best of all, there's not a subscription in sight. Check it out for yourself at training.talkpython.fm Be sure to subscribe to the show, open your favorite podcast app and search for Python. We should be right at the top. You can also find the iTunes feed at /itunes, the Google Play feed at /play and the direct RSS feed at /rss on talkpython.fm. We're live streaming most of our recordings these days. If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at talkpython.fm/youtube This is your host Michael Kennedy. Thanks so much for listening. I really appreciate it. Now get out there and write some Python code.
+00:06:19 kind of my Python background.
+
+00:06:20 It must have been really fun to explore some of this visualizing cells and interacting with,
+
+00:06:26 you know, microscopes and.
+
+00:06:28 That was amazing.
+
+00:06:29 Yeah.
+
+00:06:29 All those kinds of things.
+
+00:06:30 Yeah.
+
+00:06:30 The coolest part of the job was just that if you bucket it like really crudely, like a
+
+00:06:35 third of our team were sort of like software engineers or like data scientists, machine
+
+00:06:38 learning researchers, and then, you know, a third were, you know, wet lab biologists,
+
+00:06:43 PhDs.
+
+00:06:45 And so every day I was like working directly with scientists and like building software for
+
+00:06:49 scientists, which was just like a super cool thing to be able to do as part of a small team.
+
+00:06:53 Yeah.
+
+00:06:53 But yeah, wrote a lot of Python.
+
+00:06:55 That's awesome.
+
+00:06:56 I worked at a place that was a bunch of PhD researchers doing eye tracking, like not Apple,
+
+00:07:03 but your actual eyes.
+
+00:07:05 Like, what are you looking at?
+
+00:07:06 wrote the software to actually control the device and get all the information off of
+
+00:07:10 it and then like analyze that and put, you know, generate like reports for the scientists
+
+00:07:15 and stuff.
+
+00:07:15 And it's, there's a, there's a special kind of cool for software that touches like reality,
+
+00:07:21 right?
+
+00:07:21 Yeah.
+
+00:07:22 I mean, it adds a lot of complication.
+
+00:07:24 Of course it does.
+
+00:07:25 It's very cool.
+
+00:07:26 You don't get exact numbers.
+
+00:07:28 You want to test it like, you got to approximate all the things, but still, yeah, that sounds
+
+00:07:33 like a super fun job.
+
+00:07:34 How did it inform rough?
+
+00:07:36 Like what are some of the experiences that?
+
+00:07:37 Yeah, totally.
+
+00:07:38 Just so people know rough is like a super fast linter.
+
+00:07:42 Just give us the quick elevator pitch.
+
+00:07:43 So they, they, they know what the heck rough is.
+
+00:07:45 We'll dive more into it later.
+
+00:07:46 Sure.
+
+00:07:47 Yeah.
+
+00:07:47 Yeah.
+
+00:07:48 So rough is what I call an extremely fast Python linter.
+
+00:07:51 If you've used linters and Python in the past, you've probably used something like play gate
+
+00:07:56 or pilot, or maybe like PI code style, you know, maybe use other tools to help manage your code
+
+00:08:01 style, like black or like auto peppy, all this stuff that deals with effectively code style.
+
+00:08:07 So rough is a linter.
+
+00:08:09 It looks at your source code and it tries to report back and tell you a sort of flag and
+
+00:08:14 tell you about issues with it.
+
+00:08:15 And those could be stylistic issues.
+
+00:08:17 Like this variable name is not great, or they could be, you know, like logical issues.
+
+00:08:22 Like you reference a variable here and that isn't defined.
+
+00:08:25 Right.
+
+00:08:25 I think there's a lot that distinguishes rough, but like the thing that I think caught
+
+00:08:28 a lot of people's attention was just how fast it is.
+
+00:08:30 So I sort of hate benchmarks, like, cause no matter how much time you like put into a benchmark,
+
+00:08:35 like it's always wrong from like a certain perspective and like people always complain about
+
+00:08:39 them, but I think rough is comfortably like somewhere in 10 to a hundred times faster.
+
+00:08:44 Some people even say like a thousand times faster on their setup.
+
+00:08:47 So it can be like really, really dramatically faster.
+
+00:08:49 And it can also do a lot of auto fixing, which is kind of a distinctive feature that I don't
+
+00:08:55 know that many other tools.
+
+00:08:57 And there are certainly tools that do code transformation in Python, but like Pylon and
+
+00:09:02 Flake 8 and such don't do this.
+
+00:09:04 So for lots of the errors that Ruff will flag, it can actually fix the code for you and fix
+
+00:09:09 the issue for you, which is a big time saver.
+
+00:09:11 I don't know if this is one of them, but just to give people an idea, like one of the errors
+
+00:09:14 or warnings rather that it'll give you is you have an F string, but you're not leveraging
+
+00:09:20 its F string capabilities, right?
+
+00:09:22 I'll just say F quote, and then it has just static text, a little.
+
+00:09:25 Literal string.
+
+00:09:26 So it doesn't need the F, right?
+
+00:09:27 Theoretically, you could say auto fix and just it drops the F for you.
+
+00:09:31 It's like, yeah, you don't need that, right?
+
+00:09:33 Yeah.
+
+00:09:33 And, you know, we can also like go the other direction.
+
+00:09:36 So like if you're doing a bunch of like percent string formatting or using like the dot format
+
+00:09:42 style helpers, we're actually, we can fix at least one of those right now.
+
+00:09:47 And strings are really complicated, but like we can actually rewrite, I think the dot format
+
+00:09:51 calls into strings, which is cool.
+
+00:09:54 Fantastic.
+
+00:09:54 You know, another thing we can do is we can kind of keep your code like modern in a way.
+
+00:09:58 We've taken a lot of inspiration from other tools like Pi Upgrade 2 has like so much cool
+
+00:10:03 stuff and functionality in it if you haven't seen it.
+
+00:10:06 And we take some of the rules from Pi Upgrade and basically re-implement them in Rust and package
+
+00:10:11 them into a single interface and a single tool.
+
+00:10:14 So you just install one thing and you get, you know, 370 something rules.
+
+00:10:20 I can assert that it is indeed fast.
+
+00:10:23 We'll dive into it a little bit later, but I ran it on Talk Python training, the courses
+
+00:10:29 website that I have.
+
+00:10:30 And I think that's got 20,000 lines of Python and it's instant.
+
+00:10:34 It's like you press enter and then out, you know, the stuff is just printing out.
+
+00:10:38 These are the things that found, which is pretty awesome.
+
+00:10:41 So back to your data science work.
+
+00:10:44 Yeah, yeah.
+
+00:10:44 How are you, what you're doing influence your creation of RUF?
+
+00:10:47 Like why not just use Flake 8 or something like that?
+
+00:10:51 You know, like I said, I'd like worked in a lot of other ecosystems where, with sort of
+
+00:10:55 like stricter languages, right?
+
+00:10:57 Like Java and whatever else.
+
+00:10:59 And it's not to say those ecosystems are better, but I often come at the stuff from a perspective
+
+00:11:03 of wanting a lot of like static analysis tooling.
+
+00:11:06 So we had like a really heavily typed code base.
+
+00:11:08 We used, like we used mypy, you know, we used Black, we used Flake 8, we used Eyesore, we
+
+00:11:15 used, I don't know, like doc formatter.
+
+00:11:18 There's like a lot of different stuff that we used.
+
+00:11:19 Yeah.
+
+00:11:19 You know, really my job was like, I was the maintainer of this big system.
+
+00:11:22 And like most of, like a lot of people in the team were effectively like clients of that
+
+00:11:27 code base.
+
+00:11:27 So they were kind of like using the stuff that, you know, I and some others were building
+
+00:11:31 as like a library.
+
+00:11:32 And so I had to maintain like this really big system.
+
+00:11:35 And like the more static tools you have, you know, in my opinion, it just like greatly
+
+00:11:40 increases the leverage that you can have as a maintainer.
+
+00:11:43 So we use a lot of tooling.
+
+00:11:44 And I think like a couple of things happened.
+
+00:11:47 One, you know, I was spending a lot of my time in Python, but I was also doing a lot of
+
+00:11:51 web.
+
+00:11:51 And so, you know, like one week I'd be doing Python, the next I'd be going and doing like
+
+00:11:56 React and TypeScript and whatever else.
+
+00:11:58 And so people complain a lot about web tooling and like, you know, there are certainly lots
+
+00:12:04 of valid complaints about it.
+
+00:12:05 But there's been a lot of interesting innovation, I think, in that space.
+
+00:12:08 And I was certainly influenced by some of it, just seeing some of the tools that came out
+
+00:12:13 and how fast they were.
+
+00:12:14 Sure.
+
+00:12:14 And the fact that a lot of those tools were not being written in JavaScript sort of intentionally
+
+00:12:18 to make them super performant was pretty interesting to me.
+
+00:12:21 So like, I don't know, I don't want to like name drop a bunch of tools, but you know, in
+
+00:12:24 the web ecosystem, more tooling is being written in like Go, Rust, even some other sort of more
+
+00:12:30 out there languages like Zig.
+
+00:12:31 And to me, that was kind of an interesting thing.
+
+00:12:33 It was like, well, does the Python tooling have to be written in Python?
+
+00:12:36 Like what does, like, why does that have to be the case?
+
+00:12:39 And like, what does it buy you and what do you lose?
+
+00:12:41 So that was one thing.
+
+00:12:42 The other was we actually started to do a lot of Rust Python hybrid stuff in our own code base.
+
+00:12:48 You know, our code base was fully Python.
+
+00:12:50 And over time, we took some of the like really performance critical pieces and started to
+
+00:12:56 rewrite them in Rust and expose them to the Python side using some of these like really great
+
+00:13:03 Rust Python hybrid tools that, you know, maybe we'll get into later.
+
+00:13:06 So like one example is we were dealing with image data.
+
+00:13:09 So like a common thing we had to do is just like download a lot of image files, like really,
+
+00:13:14 really fast.
+
+00:13:14 Right.
+
+00:13:15 And so, you know, we wrote that in Python.
+
+00:13:17 We wrote like a bunch of versions that use all sorts of like multiprocessing, threading,
+
+00:13:21 and like we tried everything.
+
+00:13:22 And then eventually we like rewrote it in Rust.
+
+00:13:24 And so we had a really simple, you know, Rust module that would just download files really
+
+00:13:29 fast.
+
+00:13:29 And then we exposed that as a Python API.
+
+00:13:31 So like from the Python code, it just looked like Python, but the actual code that was running
+
+00:13:36 and the way it was, you know, built and executed all went through Rust.
+
+00:13:40 Right.
+
+00:13:41 So you have these big data, big, let's say big computation problems where you're like, you
+
+00:13:46 know, this could be better.
+
+00:13:47 The same time you're looking at this happening on the web side, you know, web pack or whatever
+
+00:13:51 it is.
+
+00:13:52 And it's like, this is way better.
+
+00:13:54 We can do this in Python, but we aren't.
+
+00:13:55 So let's start, right?
+
+00:13:56 Probably you got a little experience there and you're like, what else can I build with Rust
+
+00:13:59 now that I know how?
+
+00:14:00 Yeah.
+
+00:14:01 I was seeing, you know, the way that this innovation was happening in the web.
+
+00:14:04 I was seeing specifically the Rust Python like opportunity from what we were doing.
+
+00:14:09 And then I was, you know, frankly, like feeling a fair amount of frustration just with the
+
+00:14:14 performance of a lot of the existing tools.
+
+00:14:16 Like, I don't know.
+
+00:14:17 I'm always really careful with how I talk about this stuff because I hate being, I'm
+
+00:14:20 really like not a hater.
+
+00:14:21 And like, I've actually gotten like so much value out of like all of those tools.
+
+00:14:25 But I was being like, well, should it really take like one to two minutes to let my code,
+
+00:14:31 like couldn't it be much faster?
+
+00:14:33 Right.
+
+00:14:33 Like it's like a big code base.
+
+00:14:34 And like, as you add more plugins and everything else, it really like changes, like how you
+
+00:14:39 feel about the tool.
+
+00:14:40 Right.
+
+00:14:41 Like it's no longer like something I just run and get feedback.
+
+00:14:43 It's like, oh, I have to run the linter now.
+
+00:14:46 Oh, I have to run the blah blah blah.
+
+00:14:47 And I was sort of craving that.
+
+00:14:49 Yeah.
+
+00:14:49 And if you're doing it on a team, my experience at least has been some people in the team continue
+
+00:14:55 to run it because they find more value than stress.
+
+00:14:58 And others are like, eh, I'm not running that stupid thing.
+
+00:15:00 But then their problems get pushed onto the people who still care.
+
+00:15:04 And so then it creates this kind of like a tension, like Joe's code is always kind of crappy
+
+00:15:08 because he won't lent it.
+
+00:15:09 But then like when I check out his code, my stuff starts reporting.
+
+00:15:13 You know, like those are the weird dynamics that happen from tools that are like super slow
+
+00:15:18 unit tests or super slow linting or those types of things where certain people stop working
+
+00:15:23 with them and others don't.
+
+00:15:24 And then you get these weird tensions.
+
+00:15:26 So having it fast, there's like real value to that.
+
+00:15:30 This portion of Talk Python Nemy is brought to you by Cox Automotive.
+
+00:15:35 With brands like Kelly Blue Book, Autotrader, Dealer.com and more, Cox Automotive flips the
+
+00:15:42 script on how we buy, sell, own and use our cars.
+
+00:15:46 And now the team at Cox Automotive is looking for software engineers, data scientists, scrum
+
+00:15:52 masters and other tech experts to help create meaningful change in the industry.
+
+00:15:57 Do you want to be part of a collaborative workplace that values your time and work life balance?
+
+00:16:02 Consider joining Cox Automotive.
+
+00:16:04 Visit talkpython.fm/cox today.
+
+00:16:08 Thank you to Cox Automotive for sponsoring the show.
+
+00:16:13 I left spring and like mid to late August.
+
+00:16:17 I started working on Ruff along with like a couple other projects and I never built a linter
+
+00:16:22 before.
+
+00:16:22 It was sick.
+
+00:16:23 So like I didn't, yeah, I didn't really know what I was doing, but it felt maybe this is
+
+00:16:28 like a little bit of hubris or not, I guess, because like it seems to be working.
+
+00:16:33 But like I was kind of like, I'll start with a linter because it feels like a tractable
+
+00:16:36 like scope of problem.
+
+00:16:38 I was like, type checker.
+
+00:16:39 I know that's hard and like I don't really know much about it.
+
+00:16:42 A linter.
+
+00:16:42 I feel like I can learn like some of the concepts.
+
+00:16:45 I have a good understanding of like of like how it might work.
+
+00:16:48 To me, when I look at it, I think linting people's code, like abstract syntax trees and
+
+00:16:52 stuff.
+
+00:16:52 I'm like, that doesn't sound like a problem to me.
+
+00:16:54 But it's good that you saw it that way because you did get through it.
+
+00:16:57 Yeah.
+
+00:16:58 Well, the first version I released was like very limited.
+
+00:17:01 It was sort of, I sort of needed to get it out because I wasn't sure that people would
+
+00:17:05 actually really care that much about like what I was doing.
+
+00:17:07 Yeah.
+
+00:17:08 Because like I've described to you a lot of like pain points.
+
+00:17:11 They're also sort of like opinion, right?
+
+00:17:12 But like, you know, I wasn't like a fast forward linter.
+
+00:17:15 Like who cares?
+
+00:17:16 Was sort of, I wasn't sure.
+
+00:17:17 Yeah.
+
+00:17:18 So, you know, when I released it, I was like, I want to prove it's possible.
+
+00:17:22 I want to like have reasonable confidence that the performance won't get worse or much
+
+00:17:26 worse as I expand it.
+
+00:17:28 But I only supported like, I don't know, maybe like 20 rules, which was fine with me because
+
+00:17:32 I was really trying to prove a point more than, you know, get people to adopt it even.
+
+00:17:37 Right.
+
+00:17:37 Well, and a lot of times go into that experience, even if very few people used it, you learn fantastic
+
+00:17:43 things, right?
+
+00:17:44 Yeah.
+
+00:17:45 I learned so much.
+
+00:17:46 And I read a ton of code.
+
+00:17:48 Like I read all, I've read like a lot of, I've read like a lot of source code now.
+
+00:17:54 So I've read like all of like, you know, PyFlakes, like high doc style, high code style, like, you
+
+00:18:01 know, because I've spent time like trying to re-implement a lot of those, a lot of those rules
+
+00:18:04 and like understand how they do things.
+
+00:18:06 And you just learn a lot from like reading and trying stuff.
+
+00:18:09 Yeah.
+
+00:18:09 Rust is sort of like a whole nother thing where, you know, I did some Rust at Spring,
+
+00:18:13 but I would say that building Rust was really like my Rust learning experience.
+
+00:18:17 I think I had to kind of try to build something from scratch to like really understand the language.
+
+00:18:23 Sure.
+
+00:18:23 Everything I did in Spring.
+
+00:18:24 You can do all the tutorials.
+
+00:18:26 Yeah.
+
+00:18:26 And I was like, I was trying to get in and out as quickly as possible.
+
+00:18:29 No, no.
+
+00:18:30 I just like, you know, I didn't do the initial Rust migration at Spring.
+
+00:18:33 I worked with another like super talented engineer who did that.
+
+00:18:37 And so every time I went into, you know, and I made a bunch of changes to it, but every
+
+00:18:41 time I was going in and out, I was like, I just need to like ship this and like move on.
+
+00:18:45 Like, I'm not going to spend a bunch of time like really understanding everything that's
+
+00:18:49 going on here.
+
+00:18:49 I just want to get it to work.
+
+00:18:50 And so I needed to like sit down and like really like focus and be presented with like
+
+00:18:56 a blank plate, I think to learn and just like fail a lot and like build stuff that didn't
+
+00:19:00 compile.
+
+00:19:01 Right.
+
+00:19:01 And figure out how to resolve those problems.
+
+00:19:03 It's honestly, it's a tough, it is a tough learning curve.
+
+00:19:05 I'm sure that it is.
+
+00:19:07 I started out in C++ and so I, I know there are harder languages and they're easier languages.
+
+00:19:12 So I've never written C++.
+
+00:19:15 I'm never.
+
+00:19:17 You're not missing that much.
+
+00:19:18 I would say.
+
+00:19:18 Eddie out there says rough is so awesome.
+
+00:19:20 I actually changed all the switch statements in my Python 310 code back to if else blocks
+
+00:19:25 so I could switch to rough, which is pretty awesome.
+
+00:19:28 That's super nice and slightly embarrassing because we don't support Matt.
+
+00:19:32 We don't support Matt.
+
+00:19:32 We don't support the match.
+
+00:19:34 That's the one big language feature that we don't support yet.
+
+00:19:38 You could just kind of comment it out.
+
+00:19:39 Like it just, we're going to just ignore whatever's in the switch.
+
+00:19:41 It must be fine.
+
+00:19:42 On to the next part.
+
+00:19:43 Yeah, exactly.
+
+00:19:44 Right.
+
+00:19:44 Yeah.
+
+00:19:45 Yeah.
+
+00:19:46 Yeah.
+
+00:19:46 I mean, not for your code, but for linting.
+
+00:19:48 Let's start our dive in with this comment from Tyler.
+
+00:19:51 He says, what are the differences between linters like rough and flake gate?
+
+00:19:55 Those versus code stylers or formatters like black.
+
+00:19:58 And maybe rough lives in the middle of that spectrum.
+
+00:20:00 I'm not sure.
+
+00:20:01 Yeah.
+
+00:20:02 There's certainly like, like, like you said, it's like a spectrum, right?
+
+00:20:07 So I guess there's a couple of different ways to think about it.
+
+00:20:09 And it, with those tools specifically, like some of the responsibilities have like in my
+
+00:20:14 mind, at least shifted a bit over time.
+
+00:20:15 So for example, like flake gate, it does a lot of, it doesn't change your code at all.
+
+00:20:20 And it'll just tell you about issues.
+
+00:20:22 And those issues could be style issues.
+
+00:20:24 Like you have extra white space here or.
+
+00:20:27 Yeah.
+
+00:20:27 I don't know.
+
+00:20:28 What's another big example.
+
+00:20:29 This line is too long.
+
+00:20:30 Yeah.
+
+00:20:30 Yeah.
+
+00:20:31 But it could also be like a logical issue, which is something that black wouldn't touch.
+
+00:20:35 So it might be like this import is unused.
+
+00:20:38 So on the one end you have like, you know, different collections of rules and maybe not really
+
+00:20:43 changing the code, just kind of telling you about it.
+
+00:20:45 Black is different in that black just reformats your code.
+
+00:20:48 So it does, it's not actually aware of like the logic in the code.
+
+00:20:52 Like it doesn't know that an imports unused.
+
+00:20:54 It doesn't know that function is never called.
+
+00:20:57 Yeah.
+
+00:20:57 It just takes, you know, that abstract.
+
+00:20:59 Well, not, not exactly the abstract syntax tree, but it basically preserves your code as
+
+00:21:03 is and just tries to restyle it.
+
+00:21:05 And so, you know, it's interesting because like if you use black, you probably don't need
+
+00:21:09 a lot of style linting.
+
+00:21:11 Like if you're using black to format your code, a lot of the rules.
+
+00:21:14 Like a part that relevant anymore.
+
+00:21:16 They'll say something like you should have followed the rules of this, but black automatically
+
+00:21:21 follows those rules for you.
+
+00:21:22 Right.
+
+00:21:22 So they're kind of, you don't need to correct the line length because black will wrap it
+
+00:21:25 because that's what black does.
+
+00:21:27 Right.
+
+00:21:28 Yeah.
+
+00:21:28 Or even like, you know, if you have like X equals one with like no spaces between the
+
+00:21:33 X and the equals and the equals and the one, like the linter will yell at you for that.
+
+00:21:37 But black fixes that for you.
+
+00:21:39 So a lot of people will turn off those rules.
+
+00:21:41 You know, this is why I say the responsibilities have shifted a bit over time.
+
+00:21:45 Yeah.
+
+00:21:45 I think you're right.
+
+00:21:46 That rough, like it kind of sits in the middle.
+
+00:21:48 We do less stylistic linting for this exact reason.
+
+00:21:51 Like I use black a lot.
+
+00:21:53 Black is like immensely popular.
+
+00:21:55 So I actually like strong, like heavily deprioritized, like all of the stylistic rules that are made
+
+00:22:01 redundant by black.
+
+00:22:02 Okay.
+
+00:22:03 The difference is we do do a lot of that automatic fixing.
+
+00:22:05 So like we'll, we can remove unused imports for you.
+
+00:22:08 We can even do like a lot of more complicated rewrites.
+
+00:22:11 Like if you're using, if you're using like a dictionary constructor, like the actual, you
+
+00:22:16 know, D I C T parentheses arguments, we can actually rewrite as a literal.
+
+00:22:21 If you have the rules enabled and you want to do that, you know, there's like a bunch of
+
+00:22:25 rules around like comprehensions and literals, and we can do those rewrites too.
+
+00:22:28 So, you know, it does, it can do like style and reformatting, but it's somewhere in the
+
+00:22:33 middle.
+
+00:22:33 Yeah.
+
+00:22:33 The fact that it makes some changes, but it doesn't go completely all in like black is
+
+00:22:38 kind of why I think it lives a little bit in the middle there.
+
+00:22:40 Yeah.
+
+00:22:40 One of the things that I think might give people a lot of, brought a lot of faith or a willingness
+
+00:22:46 to give it a try is there's a lot of projects out here that are large projects that people
+
+00:22:52 would know that have adopted, actively adopted and started using rough.
+
+00:22:58 I saw a quote from Sebastian Ramirez from FastAPI right now in the audience.
+
+00:23:03 We have Olfek says the next release of hatch, which I hope to do this weekend will have
+
+00:23:10 all the new projects generated with config for a Linting environment that uses rough, which
+
+00:23:14 I think is pretty excellent.
+
+00:23:15 Can we speak to speak to some of that, like about these, these projects adopting it and
+
+00:23:20 how that's helped you?
+
+00:23:21 Yeah, totally.
+
+00:23:22 Yeah.
+
+00:23:22 I never expected that like this, maybe that like goes without saying, I think you'd have
+
+00:23:27 to be like super arrogant to release something and expect a bunch of these people to use it.
+
+00:23:31 Yeah.
+
+00:23:31 It's been kind of wild.
+
+00:23:32 You know, initially there were a couple big projects that I would call like really early
+
+00:23:37 adopters and they helped shape the project a lot.
+
+00:23:42 like Pydantic was a very early adopter.
+
+00:23:44 Zulip was a very early adopter.
+
+00:23:46 FastAPI was actually like a pretty early adopter too.
+
+00:23:49 Okay.
+
+00:23:50 And then like Pandas and Airflow and stuff, those kind of are more recent.
+
+00:23:55 Okay.
+
+00:23:55 It's been a very interesting, like to reflect on how that's happened because on the one hand,
+
+00:24:01 it's like sort of ridiculous that all these products would migrate over because I'm on,
+
+00:24:06 I don't even really have like a proper versioning system right now.
+
+00:24:09 Like I'm on V00225 or something.
+
+00:24:12 I basically release like every day and I consider like, I don't really make, we've made like
+
+00:24:18 very few breaking changes, but like in theory we could make breaking change.
+
+00:24:22 I don't want to, but like if you have Scribe December, like we could make changes like that.
+
+00:24:27 You know, there's not really like docs, like the docs are just like this huge read me.
+
+00:24:30 It's kind of wild, right?
+
+00:24:32 We don't support like all the Python 3.10 features, right?
+
+00:24:35 We don't support match statements.
+
+00:24:36 So on the one hand, it's kind of wild that all these projects would move over.
+
+00:24:39 I think there are a couple of things that help a lot.
+
+00:24:42 So one is that the entire time I've been like very, very focused on compatibility with existing
+
+00:24:48 tools.
+
+00:24:48 And that comes at a lot of cost.
+
+00:24:51 Like if there are things that I like don't agree with, right?
+
+00:24:54 Or whatever else, like I sometimes still support them or implement them.
+
+00:24:57 And, you know, but the upside is like, it's very easy for people to migrate.
+
+00:25:01 Right.
+
+00:25:02 It might change nothing potentially.
+
+00:25:04 Right.
+
+00:25:05 It just, it just goes faster.
+
+00:25:06 Hopefully.
+
+00:25:06 And over time, like, you know, we don't have like a third party plugin system.
+
+00:25:10 We've just like implemented everything like in Rust, like as part of Rust.
+
+00:25:15 I viewed that as like, I'm just going to look at the most popular plugins and the most important
+
+00:25:20 rules.
+
+00:25:20 And I'm just going to figure out like, what's a blocker for whom?
+
+00:25:24 And like, what do I need to implement in order to like unblock people and like make sure
+
+00:25:28 they can use it?
+
+00:25:28 Is there a way for people to let you know which of those are really important to them?
+
+00:25:32 Like, for example, if there's some big project out there, it's like, we would love to move
+
+00:25:36 to rough, but there's this one, one plugin we're waiting on.
+
+00:25:41 Yeah.
+
+00:25:41 I mostly hear about it in issues.
+
+00:25:43 And there are a couple issues where it's like kind of a big GitHub issue.
+
+00:25:49 It'll be like implement this plugin.
+
+00:25:51 And a lot of people will come and like give it a thumbs up or whatever.
+
+00:25:54 We have pretty good coverage now, actually.
+
+00:25:57 Like, I mean, there is a long tail.
+
+00:25:59 Like there's a big ecosystem of like flaky plugins.
+
+00:26:01 You know, sometimes someone will come along and ask for a plugin that I haven't really like
+
+00:26:06 seen before.
+
+00:26:06 And then it's just a calculus of like, what do I want to prioritize?
+
+00:26:09 How much work is it?
+
+00:26:11 Yeah, exactly.
+
+00:26:12 Is this a super easy thing to do?
+
+00:26:15 Like, oh, the line is too long.
+
+00:26:17 That's easy.
+
+00:26:17 Or is it, you know, rewrite this?
+
+00:26:19 Yeah.
+
+00:26:20 This generator in this other interesting way.
+
+00:26:23 Yeah.
+
+00:26:23 That happened with, well, a lot of people want like, I don't know how to pronounce this library,
+
+00:26:27 but like Dargland, like D-Argland, Dargland.
+
+00:26:30 I don't know.
+
+00:26:31 Anyway.
+
+00:26:31 I would go with that as well.
+
+00:26:32 Yeah.
+
+00:26:32 Yeah.
+
+00:26:33 Dargland.
+
+00:26:33 Let's go with that.
+
+00:26:34 It's very popular, but I've looked at the source.
+
+00:26:35 It's pretty complicated.
+
+00:26:36 So like, I need to, you know, that's not something I can just like turn around in a day.
+
+00:26:40 But like, you know, I hear like what people want.
+
+00:26:43 And I mean, some of those migrations though, I didn't even know about them until they'd happened.
+
+00:26:47 Yeah.
+
+00:26:48 Yeah.
+
+00:26:48 Of course.
+
+00:26:48 People come, they submit issues.
+
+00:26:50 I look at their profiles.
+
+00:26:51 I see what they're working on.
+
+00:26:52 I get a sense for what the projects are.
+
+00:26:53 Right.
+
+00:26:54 So sometimes I know, and then I'm kind of fixing things knowing that hopefully it's unblocking
+
+00:26:59 them in different ways.
+
+00:27:00 But I think, like I said, I think the compatibility piece is like really huge.
+
+00:27:03 And I actually think that like black and eyesword and like the popularity of those things has
+
+00:27:08 made compatibility for me like a little bit easier because I can just like adhere to what
+
+00:27:12 they do.
+
+00:27:13 And then hopefully there's like no code changes.
+
+00:27:16 Yeah.
+
+00:27:16 They centralize around what like black is the truth.
+
+00:27:19 And then we'll, then we'll stop.
+
+00:27:20 We'll debate beyond that.
+
+00:27:21 But like, we're just going to accept black because it's no fun to go commas on the end
+
+00:27:27 of the line.
+
+00:27:27 No commas on the trailing thing in the list.
+
+00:27:29 You know, like that, those kinds of debates just go on and on.
+
+00:27:32 Yeah.
+
+00:27:33 I know.
+
+00:27:33 I think black kind of solves that by just making a decision for you and not everyone's
+
+00:27:38 totally happy with every choice, but it stops the debate.
+
+00:27:41 And that actually probably wins the day for most of them.
+
+00:27:43 One thing that's interesting here that I'm noticing about these projects in the large open
+
+00:27:48 source projects that have adopted rough, not all of them, surely, but many of them like
+
+00:27:54 Pydantic and Polars and so on themselves are adopting Rust.
+
+00:28:00 Do you see a synergy of those?
+
+00:28:02 Like, well, we're rewriting Pydantic core and Rust like Samuel Colvin is, or the folks behind
+
+00:28:07 Polars are like, that's the core of it is about Rust.
+
+00:28:10 And that's the RS on the end, I think.
+
+00:28:13 So there might be a little extra draw there, right?
+
+00:28:15 I think it's just more like, like spiritual alignment.
+
+00:28:19 Yes, exactly.
+
+00:28:20 Because it doesn't matter.
+
+00:28:21 No, it doesn't.
+
+00:28:23 But spiritually.
+
+00:28:24 But there's, yeah, there's a little bit of a bug.
+
+00:28:27 Sorry, bug in the sense of like, like once people start writing some stuff in Rust and
+
+00:28:32 improving their Python, they're kind of like more open to like, you know, trying out other
+
+00:28:37 things that are written in Rust and so on.
+
+00:28:39 So it's, I mean, that community has like been very interesting to sort of watch and be a
+
+00:28:44 part of the like Rust Python community.
+
+00:28:46 It still feels like pretty nascent, but there are, the tooling is actually like really great.
+
+00:28:52 And, you know, we could talk about that more, but like, you know, there was definitely like
+
+00:28:57 a bunch of initial setup for actually like distributing Rust, PyPI and making pip installable.
+
+00:29:03 But now that that's over, it all like just works.
+
+00:29:05 And I mean, I wouldn't say it's like requires no effort, but it's actually pretty amazing.
+
+00:29:10 Like how, like the degree of integration and how much you can do now with these tools like
+
+00:29:15 Py03 and, and MatcherIn and some others.
+
+00:29:18 That was one of the things that was really nice surprise for me as well as how easy it is to
+
+00:29:22 install, right?
+
+00:29:23 Like, unless you told me, unless it wasn't part of, you know, the elevator pitch, you know,
+
+00:29:29 the little one sentence subtitle on the project, like you would know from a interacting perspective,
+
+00:29:34 which is kind of exactly what you want.
+
+00:29:36 I also think that it's really, there's some value to having these popular projects adopt
+
+00:29:40 Ruff because Martin and the audience, for example, says, I found out about Ruff by looking to see
+
+00:29:45 what FastAPI does, because presumably it's a ton of respect for FastAPI and Sebastian, his choices.
+
+00:29:52 So yeah, it's got to sort of create the snowball effect as well.
+
+00:29:56 So this portion of Talk Python to me is brought to you by user interviews.
+
+00:30:02 As a developer, how often do you find yourself talking back to products and services that you use?
+
+00:30:08 Sometimes it may be frustration over how it's working poorly.
+
+00:30:11 And if they just did such and such, it would work better.
+
+00:30:15 And it's easy to do.
+
+00:30:17 Other times it might be delight.
+
+00:30:19 Wow, they auto-filled that section for me.
+
+00:30:21 How did they even do that?
+
+00:30:22 Wonderful.
+
+00:30:23 Thanks.
+
+00:30:23 While this verbalization might be great to get the thoughts out of your head,
+
+00:30:27 did you know that you can earn money for your feedback on real products?
+
+00:30:31 User interviews connects researchers with professionals that want to participate in research studies.
+
+00:30:36 There is a high demand for developers to share their opinions on products being created for developers.
+
+00:30:42 Aside from the extra cash, you'll talk to people building products in your space.
+
+00:30:47 You will not only learn about new tools being created, but you'll also shape the future of the products that we all use.
+
+00:30:53 It's completely free to sign up and you can apply to your first study in under five minutes.
+
+00:30:58 The average study pays over $60.
+
+00:31:00 However, many studies specifically interested in developers pay several hundreds of dollars for a one-on-one interview.
+
+00:31:07 Are you ready to earn extra income from sharing your expert opinion?
+
+00:31:11 Head over to talkpython.fm/user interviews to participate today.
+
+00:31:16 The link is in your podcast player show notes.
+
+00:31:19 Thank you to user interviews for supporting the show.
+
+00:31:24 One thing that's a little bit overlooked about why that adoption is useful is that it actually feeds back into the project in so many great ways.
+
+00:31:34 So, you know, for example, DAG sir adopted ROUGH and they have a really big Python monorepo with 50 or 100 separate Python modules or packages in there.
+
+00:31:48 And they filed like a bunch of issues about around how can we make ROUGH better for monorepos.
+
+00:31:54 And so now they can run ROUGH once and it runs over all their separate projects that can all have their own configuration.
+
+00:32:00 And that's like a really, really powerful thing.
+
+00:32:03 And something that like if I was just sort of sitting around like building ROUGH, like I don't know that I would have known to prioritize that or what it should look like.
+
+00:32:11 And so like actually like working with people who want to adopt ROUGHs and like figuring out what stops using it provides a ton of value to the project and just prioritization.
+
+00:32:21 Like a lot of the iSort stuff, I pushed on it a lot when I started because ROUGH does import sorting.
+
+00:32:25 So you can use it if you want in lieu of iSort.
+
+00:32:28 And we implement a lot of the same configuration options, not all the same.
+
+00:32:33 iSort just is like really configurable.
+
+00:32:35 So we went, we sort of implement them as they get requested.
+
+00:32:37 But anyway, I prioritize that stuff because a lot of people wanted it and they were coming to the issues and being like, hey, this would really help me adopt it, blah, blah, blah.
+
+00:32:46 So just like getting the feedback and like hearing what's blocking people, like that itself is like so valuable for the project.
+
+00:32:52 Right.
+
+00:32:52 And you have a lot of people involved in these larger projects.
+
+00:32:54 So they, and they have specific polished needs, right?
+
+00:32:59 Like there's a lot of people who work on pandas or FastAPI and those are mature code bases.
+
+00:33:05 It's not just a pet project, right?
+
+00:33:07 Yeah.
+
+00:33:07 Yeah.
+
+00:33:08 Those are very mature.
+
+00:33:08 Yeah.
+
+00:33:09 Yeah, exactly.
+
+00:33:10 That's good.
+
+00:33:11 But also it's a challenge.
+
+00:33:12 One other thing I would like to point out, you know, you started off by introducing rough saying, maybe people will be interested.
+
+00:33:18 I don't really know if they will.
+
+00:33:20 Maybe they will.
+
+00:33:20 That'd be cool.
+
+00:33:21 You know, 6.5, 6.4 thousand stars.
+
+00:33:24 That's a, it's a non-trivial amount of interest.
+
+00:33:27 That's a lot of love.
+
+00:33:28 Yeah.
+
+00:33:29 Yeah.
+
+00:33:30 Yeah.
+
+00:33:30 And like, I don't know.
+
+00:33:32 One thing that I, I guess I might feel weird, like highlighting all the big projects.
+
+00:33:36 Cause one thing that I really appreciate is just like anyone who's willing to try a tool
+
+00:33:41 like this.
+
+00:33:41 Sure.
+
+00:33:42 Like moving tools and trying new tools is like a big decision.
+
+00:33:45 I just like really appreciate everyone who says nice things about it or everyone who's
+
+00:33:49 like willing to give a try, give it a try, like no matter what they're working on.
+
+00:33:53 Yeah.
+
+00:33:53 It's not a platform to say that out loud.
+
+00:33:55 So hopefully people hear it.
+
+00:33:57 Yeah, absolutely.
+
+00:33:58 So the other thing I want to highlight about the repo here, not just the stars, but when
+
+00:34:03 I look at a project and I want to sort of assess, I really want to adopt this thing.
+
+00:34:08 Do I want to make this part of my dependencies or things or layers that I got to live with
+
+00:34:13 here?
+
+00:34:13 And if it goes sideways, I got to change something is, you know, how old is the project?
+
+00:34:19 How active is the project?
+
+00:34:20 And so on.
+
+00:34:21 So look, we started this podcast 40 minutes ago.
+
+00:34:26 The last commit was 52 minutes ago.
+
+00:34:28 Oh yeah.
+
+00:34:30 Sorry.
+
+00:34:30 Yeah.
+
+00:34:31 It's kind of.
+
+00:34:32 That's awesome.
+
+00:34:32 I mean, you're like, but you're looking here and it's then it's, it's yesterday.
+
+00:34:36 It's, it's last week.
+
+00:34:37 I want to point out there's just a lot of activity, 78 contributors.
+
+00:34:41 It's a very lively project and not just something that's cool, but you know, there's a lot of interest
+
+00:34:45 and energy in it, which I think is a very strong signal that it's something people should
+
+00:34:51 be comfortable adopting.
+
+00:34:52 Thanks.
+
+00:34:52 I appreciate you calling that out.
+
+00:34:54 I think I guess companies one, that's actually something that when I talked before about
+
+00:34:58 why would these big projects adopt this thing that like seems really experimental, that's
+
+00:35:03 actually something that comes up a lot is, and I'm not in the conversation, but obviously
+
+00:35:07 I'm sleuthing a little bit on the PRs.
+
+00:35:09 Right.
+
+00:35:09 And they're saying, well, it doesn't support X, but it's like really actively developed.
+
+00:35:14 And I'm like very confident that they will support that, you know, at some point.
+
+00:35:18 Yeah.
+
+00:35:19 And so like, just like having something that is clearly very actively worked on, I think
+
+00:35:24 is quite like appealing and comforting to people.
+
+00:35:26 Yeah.
+
+00:35:26 I actually like do feel bad saying this, but like one of my favorite, not favorite, but
+
+00:35:31 it kind of an interaction that happens on the repo is someone will file an issue and they'll
+
+00:35:38 say, this is actually also a bug that exists in the, let's call it the upstream implementation.
+
+00:35:44 So the existing Python version of that tool also has that bug.
+
+00:35:48 Right.
+
+00:35:48 Like Pyland or FlickAids or something like that.
+
+00:35:50 Yeah.
+
+00:35:50 It does this, but we think it's wrong.
+
+00:35:52 We disagree with it or something, right?
+
+00:35:54 Or there's an issue where, you know, the maintainer is like, oh yeah, this is broken.
+
+00:35:58 Yeah.
+
+00:35:58 Yeah.
+
+00:35:58 Okay.
+
+00:35:59 It's really not like the reason I tell that thing is like, I, you know, every project is
+
+00:36:02 different and like every maintainer, like most people, like everyone's doing this like
+
+00:36:06 for free, right?
+
+00:36:07 Like I'm not, I'm not here to like call out other maintainers, but I think it's a very satisfying
+
+00:36:11 interaction for people when, you know, they link to an issue it's been open for, for maybe
+
+00:36:15 for like years.
+
+00:36:16 And then I can actually just like fix it in like, like pretty quickly and ship a release
+
+00:36:21 in the same day.
+
+00:36:22 And like that, I think that's like a really like powerful thing that resonates with people
+
+00:36:27 a lot.
+
+00:36:27 It's just the feeling of like stuff getting shipped and like things getting fixed.
+
+00:36:32 And yeah, I'm like, you know, I'm working on this full time.
+
+00:36:35 So like, I'm fortunate to be able to do that.
+
+00:36:37 And like, I totally get it that like other projects are in different states and stuff.
+
+00:36:41 But I get a lot of, you know, and people are always super appreciative.
+
+00:36:45 And so it all just like funnels into, you know, giving me energy.
+
+00:36:49 Eddie has called you a commit machine.
+
+00:36:51 Literally every time I update my project dependencies, I'm guaranteed to see new stuff on Ruff, a new
+
+00:36:56 version of Ruff.
+
+00:36:57 I appreciate that.
+
+00:36:58 You know, it's, I do appreciate that.
+
+00:37:00 Like, yeah, I do try to write a lot of code, but you know, it's obviously not just, not just
+
+00:37:04 me and like the contributors, the contributors have been awesome.
+
+00:37:07 And I think, I mean, one thing I'm particularly impressed by is just the number of, number of
+
+00:37:12 people who, like, I don't even know if I always believe them when they say this, but like
+
+00:37:16 just the number of people who are like, this is my first time writing Rust or like, I'm
+
+00:37:21 really not good at Rust or like, blah, blah, blah.
+
+00:37:23 And hear something amazing.
+
+00:37:25 Yeah.
+
+00:37:25 And they just like make like great contribution.
+
+00:37:27 They're like, Hey, I'm trying to learn Rust.
+
+00:37:29 And I obviously love that stuff.
+
+00:37:31 Like for interested in learning Rust, I actually think Ruff is like a great, a great project
+
+00:37:35 and like a great place for that.
+
+00:37:37 But I mean, there are people who are working on stuff, especially the stuff that I just
+
+00:37:41 like, it's like big things I can't like focus all my time on and just like having great
+
+00:37:45 contributors who are like really, you know, like thoughtful and like prolific.
+
+00:37:50 Every project is lucky to have people like that.
+
+00:37:52 How old is the project?
+
+00:37:54 When did you start it?
+
+00:37:55 In August.
+
+00:37:55 Yeah.
+
+00:37:56 So it's not that old.
+
+00:37:57 My brain is like melting, but it's somewhere.
+
+00:37:59 Yeah.
+
+00:37:59 I think it's like, like somewhere between four and six months.
+
+00:38:02 Okay.
+
+00:38:02 Did you say you're working on this full time as like your full time job?
+
+00:38:06 Yeah.
+
+00:38:06 Okay.
+
+00:38:06 And so how's that work?
+
+00:38:08 Is that GitHub sponsors or are you employed by someone to completely work out?
+
+00:38:12 What's the story?
+
+00:38:13 That sounds awesome.
+
+00:38:13 Still figuring out, you know, I'll probably share more on that soon.
+
+00:38:17 Okay.
+
+00:38:17 I don't know if sponsors enabled right now.
+
+00:38:19 Still figuring out exactly what, like how I want that all to evolve.
+
+00:38:22 Right.
+
+00:38:22 I am working on it full time.
+
+00:38:24 I don't anticipate that changing in any way.
+
+00:38:25 Like I, I'm really happy in getting so much out of this and yeah, I think there are a lot
+
+00:38:31 of ways to make it work.
+
+00:38:32 And if not rough, I want to be working on like other Python tooling.
+
+00:38:35 So, you know, I think there's like more stuff to come.
+
+00:38:37 Well, it certainly is neat tooling.
+
+00:38:39 Let's go, let's go through the GitHub page here a little bit.
+
+00:38:42 So we've talked about the speed a couple of times.
+
+00:38:45 We talked about ways in which that happens.
+
+00:38:47 You know, Rust is an important part, but it sounds like it's not the only reason that it's
+
+00:38:52 fast.
+
+00:38:52 You have a chart with the obvious like a little asterisk caveat benchmarks.
+
+00:38:58 It's reproducible, you know, like all the stuff's in the readme, but yeah.
+
+00:39:02 That's fast in this situation, but my situation is different in which case, you know, such
+
+00:39:07 and such.
+
+00:39:07 Right.
+
+00:39:07 But for some large code base, we've got rough in 0.3 seconds, autoflake at six, pylint at
+
+00:39:16 over 60 seconds, just barely.
+
+00:39:18 This is on the CPython code base from scratch, which is pretty ridiculous.
+
+00:39:23 And I already told you the numbers.
+
+00:39:24 I don't have a millisecond number, but it appears to be instant on 20,000 lines of Python code
+
+00:39:31 that I wrote.
+
+00:39:32 And it found some issues, which I thought would already be discovered.
+
+00:39:35 So that's pretty excellent.
+
+00:39:36 Nice.
+
+00:39:37 It's nearly Python 3.11 100% compatible, right?
+
+00:39:41 You said the one major language feature is the match statement, but other than that, it's
+
+00:39:46 compatible, right?
+
+00:39:46 Correct.
+
+00:39:47 Yeah.
+
+00:39:47 Okay.
+
+00:39:48 It supports some of the other language features like that are maybe less high profile, like
+
+00:39:52 the parenthesized width statements and stuff like that.
+
+00:39:55 But it doesn't support the pattern of structural pattern matching yet.
+
+00:39:59 Got it.
+
+00:39:59 So it's got the autofix support near parity with the Flake 8 rule set, which is cool.
+
+00:40:04 You talked about the way that you keep the performance fast, but still have parity with Flake 8 is
+
+00:40:11 you have native re-implementations of the Flake 8 plugins.
+
+00:40:14 That's right.
+
+00:40:15 Yeah.
+
+00:40:15 So we re-implement everything in Rust.
+
+00:40:18 And a lot of the time, that's like me or whoever's working on it, like looking actually at the plugin and
+
+00:40:24 like the logic it uses and trying to mimic that in a high fidelity way.
+
+00:40:29 And often we'll like try to use the same test suite and really try to make sure that we're compatible, except in cases where we think there is like an actual sort of factual error.
+
+00:40:39 Yeah.
+
+00:40:39 Why rough is fast?
+
+00:40:41 The plugin stuff, there's a lot of interesting stuff to say about like plugins, because I think Rust is a big part of why rough is fast.
+
+00:40:50 But there are a couple of other big pieces.
+
+00:40:53 So we take a lot of care in the code base to like only do necessary work, if that makes sense.
+
+00:40:59 So, you know, we support 300 something rules, but depending on which exact rules you have enabled, we'll skip a lot of unnecessary work.
+
+00:41:07 Okay.
+
+00:41:08 That can help a lot.
+
+00:41:09 So, you know, it's basically tailored to how much you're using it.
+
+00:41:12 So like if you're not using it as an import sorter, you know, there's a bunch of stuff that we get.
+
+00:41:16 It's just how I would think about it.
+
+00:41:17 But the other like really big one is because everything is sort of implemented in like one system.
+
+00:41:24 There's a lot of work that would normally be duplicated between a lot of different tools that can actually just be done once.
+
+00:41:30 So the way to think of that is like if you look at like flake 8 with flake 8 doc strings, there's maybe one example which uses PyDoc style.
+
+00:41:40 Sorry, I know it's like a huge like a tree of tools.
+
+00:41:42 You know, if you add that plug in.
+
+00:41:44 So PyFlakes is going to parse your source code and turn that into an AST.
+
+00:41:48 And then PyDoc style actually has basically its own parser that will go back over the source code and look at all the tokens and extract the doc string.
+
+00:41:56 And if you have a bunch of different tools, like some of them will share that abstract syntax tree.
+
+00:42:01 But a lot of them end up doing work that other tools are also doing.
+
+00:42:04 Right, because they can't count on necessarily that being done or the plug in system doesn't provide work that's already been done to them.
+
+00:42:12 So they got to start over anyway. Right.
+
+00:42:14 Yeah. Or they might want to do things in like a slightly different maybe you have like three different plugins.
+
+00:42:18 Like I guess one example is a lot of plugins like need some way to tell if a function is like public or private.
+
+00:42:24 And it's not like super complicated, but you know, it's not like totally trivial.
+
+00:42:28 Like you need to account for functions that are in inside of classes.
+
+00:42:32 Like is it a public method or private method to account for functions that are inside of other functions.
+
+00:42:36 Right. So there's like a lot of rules actually for like determining what's like public and private.
+
+00:42:41 And, you know, you might have one lint rule that's like all public methods need to have doc string.
+
+00:42:46 And you might have another rule that's like all public methods need to have type in two things.
+
+00:42:50 And if you have two separate plugins that are doing that, they both need a way to actually like extract that information.
+
+00:42:57 And, you know, it's not necessarily the case that like it'll be way faster to do it with one pass and one.
+
+00:43:03 I think it will. It may not be like or as magnitude.
+
+00:43:06 But the other thing is you have a lot of like consistency. So like, you know, it's defined in one way.
+
+00:43:11 You're not going to be at the whims of like small decisions that the tools have to make.
+
+00:43:16 For us as like maintainers and like building rough, you know, there's a lot of stuff you like don't have to implement multiple times.
+
+00:43:21 Right.
+
+00:43:22 I can leverage that and like go and implement other lint rules.
+
+00:43:24 And I don't have to like figure out from scratch, how do I determine like what public and private in it?
+
+00:43:28 How do I like extract all the doc strings from a file? Like we already have all that infrastructure.
+
+00:43:33 So there's kind of like economies of scale, I guess, to like implementing new stuff.
+
+00:43:38 Like it sort of snowballs a little bit, like the tool gets more powerful, it gets kind of easier to do things.
+
+00:43:43 I mean, I think you'd be surprised like how much of building a tool.
+
+00:43:47 I don't know about you personally, but like I was surprised by like how much of building a tool like this is just done.
+
+00:43:52 It's like settings and like configuration and like how do people express their settings?
+
+00:43:58 What is the command line interface look like?
+
+00:44:00 How do you find all the Python files in a directory?
+
+00:44:03 Like it sounds trivial, but like, you also want to respect like getting more is do you want users to be able to ignore files?
+
+00:44:09 Like there's a lot of rules.
+
+00:44:10 And so again, it's like if I look at a new Python tool, you know, that wants to go off and implement something,
+
+00:44:15 they might have to implement all that stuff themselves.
+
+00:44:17 But for us, it's like we have all that infrastructure in place.
+
+00:44:21 And so if we want to build a new fun piece of functionality, it's just sort of defining the rule and we get all this other stuff for free.
+
+00:44:27 Yeah, you can definitely build on the layers that are in place because it's all together.
+
+00:44:31 That's cool.
+
+00:44:31 Yeah.
+
+00:44:32 All right, let's look through here a little bit.
+
+00:44:34 Like I said, there's the testimonials from the different projects like Brian from Bokeh or Sebastian from FastAPI and whatnot there.
+
+00:44:43 But let's start with installing it.
+
+00:44:45 Like I said, you would know that this wasn't just a Python tool you could use.
+
+00:44:49 pip install rough. That's the way to go.
+
+00:44:51 But when I installed it, I didn't pip install.
+
+00:44:54 I pip x installed it.
+
+00:44:56 Are you a fan of pip x?
+
+00:44:57 Yeah, I use pip x.
+
+00:44:58 Yeah, to me, it seems like rough is something I want to run on different projects.
+
+00:45:02 And I just kind of want rough in my tool set.
+
+00:45:05 And so I pip x installed rough.
+
+00:45:08 What do you think?
+
+00:45:08 Good idea.
+
+00:45:09 Is it better to put it, say, like in a per version of per project?
+
+00:45:12 Like everything.
+
+00:45:13 I think it probably depends.
+
+00:45:15 Yeah.
+
+00:45:15 I mean, I definitely saw a lot of stuff at pip x.
+
+00:45:17 I think the one thing that I, the one issue with rough, and I guess I recognize wines can be annoying for some people, for sure.
+
+00:45:25 Like we released a lot.
+
+00:45:26 And so if projects don't pin their dependencies, then they can start to see like new errors as we add new rules, which I guess in some sense is like a breaking change.
+
+00:45:36 But I don't really consider it as such.
+
+00:45:38 It's like, you know, they have the like, let's say they have the like, like a simplify rule set enabled and we add a new rule and that gets turned on for them.
+
+00:45:47 So anyway, the point is like people, I guess I recommend pinning rough if you're using it for a project, which I mean, with pip x, you're just going to stay on one burger.
+
+00:45:55 Right.
+
+00:45:55 So you run pip x, you upgrade dash all or whatever, or upgrade that thing.
+
+00:45:59 Yeah, exactly.
+
+00:46:00 It's doing it to a sense.
+
+00:46:01 It's kind of a pin, but it's pinned globally and it gets upgraded globally and that not, not per project.
+
+00:46:06 Yeah.
+
+00:46:06 Yeah.
+
+00:46:07 Yeah.
+
+00:46:07 For me, that's kind of okay.
+
+00:46:08 But if I was on a large team, you know, lots of people who were working on it, you might want to control that more.
+
+00:46:13 I can see that.
+
+00:46:14 We have a homebrew distribution and a condo distribution on condo forage.
+
+00:46:20 And then I did those and then there's everything else was done by other people.
+
+00:46:25 So I'm like, which is cool, but most of me, I'm like less familiar with them.
+
+00:46:28 Yeah, sure.
+
+00:46:29 I mean, I don't know.
+
+00:46:30 Publishing on homebrew and condo forage was like pretty interesting experience for me.
+
+00:46:33 I've never done that and I didn't actually really know that.
+
+00:46:36 much about how those worked.
+
+00:46:37 I think so.
+
+00:46:38 Yeah.
+
+00:46:38 Yeah.
+
+00:46:39 That was cool.
+
+00:46:40 Hopefully it's useful for people.
+
+00:46:41 There's definitely some complexity with like the packaging and release stuff, which I don't
+
+00:46:46 know if you want to talk about that or not, but you know, because we're building Rust, there's
+
+00:46:49 like a couple of things that we need to do that are a little different from a standard Python package.
+
+00:46:53 Maybe just touch on it a bit because what you deliver is a wheel, right?
+
+00:46:58 But it's got the compiled Rust bit for me on my ARM 64 macOS build, right?
+
+00:47:04 Yeah, that's right.
+
+00:47:05 Yeah, that's right.
+
+00:47:06 So basically it just means we have to do the wheel in some sort of pre-compiled version of
+
+00:47:11 the package as opposed to just giving you the source code.
+
+00:47:14 And like if I just gave you the source code and not the wheel, you'd actually need to have
+
+00:47:18 Rust installed because you'd have to actually build the thing and install it, which is of course
+
+00:47:23 an extremely unreasonable expectation for the kind of people who are using this for the most part.
+
+00:47:29 Yeah, but before the wheels really became popular, that was part of the step, right?
+
+00:47:33 It would build for you.
+
+00:47:35 Yeah.
+
+00:47:35 Yeah.
+
+00:47:35 Or it wouldn't build for you, which was frustrating, but that was part of the step, right?
+
+00:47:39 Yeah.
+
+00:47:39 Yeah.
+
+00:47:39 We just build wheels for all the platforms that I know of.
+
+00:47:43 It's not something.
+
+00:47:44 Is it all CI/CD?
+
+00:47:45 You just push it to some branch and magic happens and then wheels start appearing in places.
+
+00:47:50 Whenever I cut a release on GitHub, like I just use like GitHub releases, basically.
+
+00:47:54 I just use GitHub releases.
+
+00:47:56 It kicks off our release job and then that's all through GitHub action.
+
+00:47:59 So it just has a big matrix, right?
+
+00:48:01 Of all the different operating systems.
+
+00:48:03 We only have to build, thankfully, we only have to build one wheel per operating system.
+
+00:48:09 We don't have to build one wheel per Python version, which is something that can happen sometimes.
+
+00:48:13 And then you have like a mass explosion of number of wheels.
+
+00:48:16 That's all facilitated with a tool called Maturin, which I'm a big fan of, which is,
+
+00:48:21 it's sort of like, I don't know, like set up tools and a bunch of other stuff bundled together,
+
+00:48:26 but specifically for shipping mixed Rust Python.
+
+00:48:29 So I don't actually have to like do anything for the host part to make that work.
+
+00:48:33 Yeah.
+
+00:48:33 My pyproject.tomol has, you know, Maturin at the top and I have a Rust project and I call
+
+00:48:40 Maturin build and it creates a wheel.
+
+00:48:42 It's all like, I don't know.
+
+00:48:44 I think it's like super cool.
+
+00:48:45 That works.
+
+00:48:45 Yeah, that sounds super smooth and super neat.
+
+00:48:49 Yeah.
+
+00:48:49 And like I said, as a consumer of it, also very smooth, right?
+
+00:48:53 It was still quickly.
+
+00:48:54 I didn't have to wait on some build.
+
+00:48:56 I didn't need build tools or config that I don't care about or don't use.
+
+00:48:59 I'm pretty sure I do have Rust, Rust C as a CLI option I can use here, but you know,
+
+00:49:05 you don't want to depend on that, right?
+
+00:49:06 No.
+
+00:49:07 So you run it on the command line, you say rough and you point at either a file or a directory
+
+00:49:13 or some pattern of files, right?
+
+00:49:15 Yep.
+
+00:49:15 Star type of thing, which is cool.
+
+00:49:18 And that gives you the output.
+
+00:49:20 You can also do it with a --watch and just run it constantly, which is pretty cool,
+
+00:49:25 right?
+
+00:49:25 It's fast enough that basically as you save it, if there's problems that'll just appear
+
+00:49:30 in the terminal, right?
+
+00:49:31 Or wherever you run it.
+
+00:49:32 That's kind of a funny example because I based, or it's a good example because I,
+
+00:49:36 I'm pretty sure I took that exactly from probably from TSC, which is the TypeScript compiler.
+
+00:49:43 Yeah.
+
+00:49:43 They have a watch setting and I like how it works.
+
+00:49:46 And so I wanted that for, so it's just a, that's a very literal example of me looking at
+
+00:49:51 another tool from like another space and being like, oh, that's really nice.
+
+00:49:55 And I wish you had that other tools like it too.
+
+00:49:57 Yeah.
+
+00:49:57 I suppose it's terrible and not terribly difficult to implement, right?
+
+00:50:00 You take the pattern and you put a watch in the OS watch implementation and you say,
+
+00:50:06 call me back when something changes and because it's fast, it just reruns, right?
+
+00:50:09 But it's still, Yeah, it's exactly right.
+
+00:50:11 It's very handy though, that, that it's there.
+
+00:50:13 The other thing that's interesting is you can do it as a pre commit hook, which is nice.
+
+00:50:18 Yeah.
+
+00:50:19 That works pretty well for people.
+
+00:50:20 I think a lot of people seem to use it.
+
+00:50:22 I'm glad that it exists.
+
+00:50:23 Yeah.
+
+00:50:24 A little bit of a weird setup because maybe it's actually not that interesting to talk
+
+00:50:27 about, but it's in like a separate repo for sort of like, I can't even really remember.
+
+00:50:31 Okay.
+
+00:50:32 Interesting.
+
+00:50:34 Now to configure it, it has a, let's say comprehensive CLI set of options.
+
+00:50:39 I can't remember maybe 15 or so command line options.
+
+00:50:42 You can pass it, but you can also put, put it into the pyproject.toml with things just
+
+00:50:48 like tool.rough and then you can put your various settings in there.
+
+00:50:51 Right.
+
+00:50:51 So it just sort of integrates along that, or you can have a rough.toml and then put it in there.
+
+00:50:57 Yeah.
+
+00:50:57 So that's something that I took basically from hatch.
+
+00:51:00 So within hatch, you can have a pyproject.toml or a hatch.toml and the hatch.toml kind of like
+
+00:51:07 tests the configuration.
+
+00:51:08 Like if you use a rough.toml, you don't need to have like tool.rough at the top and stuff like that.
+
+00:51:13 Yeah.
+
+00:51:13 I think one thing that I'm quite happy that we have is like the configuration is very like type safe.
+
+00:51:21 So if you try to like, you know, so that, that line select equals EF, those are like error,
+
+00:51:26 like rule codes that are defined in rough.
+
+00:51:29 And so if you put, if you replaced F with some string that wasn't, you know, a real rule,
+
+00:51:34 you'll get an error immediately saying that, you know, your pyproject.toml had invalid,
+
+00:51:38 was invalid in like these ways, blah, blah, blah.
+
+00:51:40 Interesting.
+
+00:51:41 Okay.
+
+00:51:41 And similarly, we create what are called like JSON schemas or the configuration.
+
+00:51:47 If you're in PyCharm and you open up like a pyproject.toml and you type tool.rough, it'll actually like show you all the options.
+
+00:51:54 It'll actually surface the documentation we have for the options too.
+
+00:51:57 Oh, nice.
+
+00:51:58 Which is pretty cool.
+
+00:51:59 Yeah.
+
+00:52:00 I'd like more tools to do that.
+
+00:52:01 Cause I think it's like super useful.
+
+00:52:03 I think poetry has it, but not too many others do.
+
+00:52:06 You can get it in VS Code as well, but you need to install an extension.
+
+00:52:11 It's called like even better.toml, I think.
+
+00:52:13 Right.
+
+00:52:13 Okay.
+
+00:52:14 But I'm happy with those things.
+
+00:52:15 I think it makes it like, I think small things like that add up and glad we're able to do them.
+
+00:52:20 Yeah.
+
+00:52:21 When I looked at the configuration settings, like the exclude directories and various other
+
+00:52:25 things, like that's kind of a lot to put on a command line.
+
+00:52:27 It would be nice if you could just put it and say rough.toml or pyproject.toml.
+
+00:52:31 And then when you just type rough the thing, it, it sees that and it uses it.
+
+00:52:35 Right.
+
+00:52:35 Yeah.
+
+00:52:36 I've kind of like intentionally like not put a lot of these arguments on the command line.
+
+00:52:40 Like for that reason, like you can imagine taking everything here and exposing it on the command
+
+00:52:44 line, but the command line really just deals with like how should the thing execute and not like,
+
+00:52:49 I don't know, what should the max complexity be?
+
+00:52:51 Yeah.
+
+00:52:51 Yeah.
+
+00:52:52 Yeah.
+
+00:52:52 Yeah.
+
+00:52:52 Yeah.
+
+00:52:52 I think that's fair.
+
+00:52:54 Like put the common stuff on the command line and then say, and if you need to go crazy,
+
+00:52:59 here's your --config, pass that in and put it in there.
+
+00:53:03 Right.
+
+00:53:03 Yeah.
+
+00:53:03 Yeah.
+
+00:53:04 Yeah.
+
+00:53:04 Yeah.
+
+00:53:04 One thing that I did want to talk about and you kind of touched on, there's a bunch of the
+
+00:53:08 command line arguments.
+
+00:53:09 One of the things I did want to talk about is the editor integration.
+
+00:53:12 There's a huge bunch of rules here.
+
+00:53:14 We got to scroll through on the homepage to get, get down to it, which is awesome.
+
+00:53:18 That are no, no, it's good.
+
+00:53:19 I mean, these are like all the things that checks that I don't have to think about anymore,
+
+00:53:22 which is great.
+
+00:53:23 Eventually though, geez, I forgot it was this long.
+
+00:53:28 Eventually though it has plugins or maybe that's not quite what I said.
+
+00:53:33 It has a, an extension of a VS Code and it has ways to basically add it as a command
+
+00:53:40 to PyCharm, right?
+
+00:53:41 Which is, those are both awesome editors that are kind of very friendly to thinking about code
+
+00:53:46 formatting and exposing the errors that this would as well.
+
+00:53:50 So that's great.
+
+00:53:50 You might want to just talk about that just real quick.
+
+00:53:52 Yeah, totally.
+
+00:53:53 So yeah, we have a VS Code extension.
+
+00:53:55 That was my first time writing a VS Code extension.
+
+00:53:57 And actually the, these extensions use, or they conform to something called the language server protocol.
+
+00:54:03 And effectively that's sort of like a standard, I believe I'll probably get like a bunch of
+
+00:54:08 the history wrong, but I believe it's Microsoft that like publishes and maintains that.
+
+00:54:12 It's that.
+
+00:54:13 The nice thing about that protocol is you can actually use like the lot, like most, almost all
+
+00:54:19 of the code behind the VS Code extension is actually published as a language server.
+
+00:54:23 Yeah.
+
+00:54:24 Rough LSP.
+
+00:54:25 And what that means is you can actually get like the exact same behaviors in all sorts of different
+
+00:54:29 editors.
+
+00:54:30 It's not confined to VS Code.
+
+00:54:32 So if you use like NeoVim or like sublime text or whatever else, those all support this standard
+
+00:54:38 protocol and they all have ways to tap into that rough language server protocol.
+
+00:54:44 So we have sort of like the standalone LSP, which we have instructions for like sublime and,
+
+00:54:51 and you know, other tools.
+
+00:54:52 And then we have the actual extension, which is published on the marketplace.
+
+00:54:56 And those are things I definitely want to like keep supporting.
+
+00:54:59 And I view them as like official arms, right?
+
+00:55:02 Of the project, which I think is nice.
+
+00:55:04 So people should know that like, you know, those are official and like, I pick bugs and
+
+00:55:08 man, and all that kind of stuff.
+
+00:55:09 Nice.
+
+00:55:09 And then for PyCharm, you just add it as an external tool and then you have the rough command
+
+00:55:15 around or for both of these, if you prefer, you just add it as a pre-commit hook.
+
+00:55:19 Yeah.
+
+00:55:19 That's also.
+
+00:55:19 Yeah.
+
+00:55:20 That's right.
+
+00:55:20 Yeah.
+
+00:55:20 That then like, as you interact with it, it'll run the pre-commit hook as well.
+
+00:55:24 If you try to check things in.
+
+00:55:26 Super cool here.
+
+00:55:27 I think this is a neat project.
+
+00:55:29 I ran it into my project and I thought, you know, everything is pretty much good to go.
+
+00:55:36 Where, you know, when I'm using PyCharm, for example, it'll often tell me many of these things.
+
+00:55:42 Like it'll say there's a local variable that's unused or it'll automatically remove unused imports.
+
+00:55:47 And yet I'm looking at 331 issues.
+
+00:55:51 108 are potentially fixable with the --fix option.
+
+00:55:55 So it sounds like there's still a lot of value to like make that part of my tool chain.
+
+00:56:00 Yeah.
+
+00:56:00 I mean, you know, and feel free to have some of your own opinions about which of those rules actually matter.
+
+00:56:05 Sure.
+
+00:56:06 And I suspect you can disable them in your config file, right?
+
+00:56:08 You can say this rule I don't care about.
+
+00:56:10 Yeah.
+
+00:56:10 And this is another sort of compatibility thing.
+
+00:56:12 Like we, API for actually like turning rules on and off is like essentially identical to the flight gate API.
+
+00:56:19 So that's also useful for people migrating over.
+
+00:56:21 So the no QA, is it the like comment?
+
+00:56:24 Yeah.
+
+00:56:24 Like comment no QA is one option.
+
+00:56:26 Yeah.
+
+00:56:26 We respect.
+
+00:56:27 Yep.
+
+00:56:27 We respect those too.
+
+00:56:28 We also respect like, I sorts action comments.
+
+00:56:31 So yeah, we, we like do a lot of stuff to try and maintain compatibility.
+
+00:56:36 Nice.
+
+00:56:36 Maybe another like interesting thing in that vein is that we ship a tool called
+
+00:56:40 flight gate to roughs, which does sort of what it sounds like.
+
+00:56:45 So you point it to a flight gate configuration file and it spits out a Tommel for rough,
+
+00:56:50 you know, that's compatible.
+
+00:56:51 And it also tells you if there were things in the file that we don't support, which is useful too.
+
+00:56:55 Like, oh, hey, you're using these rules.
+
+00:56:57 Those actually aren't implemented yet.
+
+00:56:58 Yeah.
+
+00:56:58 That's also maintained as like part of the project.
+
+00:57:00 So, you know, I recommend checking it out.
+
+00:57:02 Excellent.
+
+00:57:03 Well, Charlie, I think we're getting short on time, but not short on topic.
+
+00:57:06 There's a whole lot more to dive into.
+
+00:57:08 I think it's, it's really cool project.
+
+00:57:10 I think it's new.
+
+00:57:12 Are we gonna do a big WASM section?
+
+00:57:12 No, I'm kidding.
+
+00:57:15 I'm kidding.
+
+00:57:15 We don't have time for that.
+
+00:57:16 We could do a WASM section.
+
+00:57:18 We even have some great chat GDP questions in the audience.
+
+00:57:22 I don't necessarily think that there's time for those, unfortunately, but there is one final question that I want to ask.
+
+00:57:27 It's kind of inspired by the audience, but I think it's good for everyone.
+
+00:57:30 Jean Gabriel asks, is there a roadmap or timeline for rough development out there?
+
+00:57:36 Like what's next basically?
+
+00:57:38 Like, I guess the short answer is no, like there's not like a published timeline, unfortunately, like most of this stuff exists in my head and in issues.
+
+00:57:47 Like everything happens on issues.
+
+00:57:49 Like we're just talking a lot on issues.
+
+00:57:51 Yeah.
+
+00:57:51 I'll maybe talk a bit about like the things that I'm thinking about.
+
+00:57:54 So one is fixing like the structural pattern matching issue.
+
+00:58:00 And so like getting full like Python compatibility, which it's sort of like one bug, but then unlocks
+
+00:58:06 us doing what I hope will be like a stable release, even if that's not that much changes.
+
+00:58:10 And it's just kind of, you know, the marketing of it, but hopefully we'll fix that.
+
+00:58:14 And then we can do like a stable release.
+
+00:58:15 The, there are two other kind of big things on my mind.
+
+00:58:18 So one is this is like a really big project, but not, not rough.
+
+00:58:23 The thing I'm about to talk about, but, I want to extend rough to do like full code auto
+
+00:58:27 formatting so that people could use it in lieu of black.
+
+00:58:31 If they wanted to think it's like a really natural fit for what rough is doing.
+
+00:58:36 And a lot of people asked about it.
+
+00:58:37 The way that that will, there's an issue where we talk about this, like on the repo, it's not
+
+00:58:42 like some big secret reveal, but, the way that I think about that, like, like with all things is
+
+00:58:47 I want it to be like, sort of incrementally adoptable.
+
+00:58:50 Like right now you can use rough with ice or.
+
+00:58:52 Or you can use just rough, or you can use rough to your input sorting, but like not as a linter.
+
+00:58:57 Like you can kind of pick and choose like what you want to use.
+
+00:58:59 And I view like the auto formatter is the same way.
+
+00:59:02 Like I fully expect that people will keep using rough and black, but it's just like the kind of
+
+00:59:07 functionality that makes a lot of sense, given what we're already doing and like the way that the
+
+00:59:11 project's evolving.
+
+00:59:12 So I need to like, and you be careful because like, it's like that blog work.
+
+00:59:16 And so I'm not like saying exactly when that will be done, but I do want to start working on it.
+
+00:59:21 And then the other thing, which is maybe like a little bit less exciting to other people.
+
+00:59:24 And it's like, you know, I think at some point I'd like rough to get to a world where
+
+00:59:28 it kind of stands alone a little bit more.
+
+00:59:30 It isn't viewed quite as much as a compatibility as this compatibility layer.
+
+00:59:34 Like right now, all the rules kind of map back to like, Hey, or other tools.
+
+00:59:39 And when you're using rough, you're kind of thinking in the mindset of those other tools,
+
+00:59:43 like what are the rules and how do I configure them at some point in the future?
+
+00:59:47 I'd actually like, you know, rough to sort of have its own API, like own indexing of the rules.
+
+00:59:51 And to view that as kind of a compatibility layer that will not go away.
+
+00:59:55 Like this won't put a burden on users, but I'd like to get to get to a point where like conceptually, a lot of this stuff is like first class and rough.
+
+01:00:02 And it's not viewed as re-implementations of other extensions, which I think will enable us to do a lot of cool things.
+
+01:00:08 But I'm hopeful that I'm doing that in a way that has no disruption to users.
+
+01:00:12 So we'll continue to support the existing API and such.
+
+01:00:14 Yeah.
+
+01:00:15 Yeah, exactly.
+
+01:00:16 Very exciting.
+
+01:00:17 Very exciting.
+
+01:00:18 Well, congratulations on a project that people seem to love.
+
+01:00:21 It's got a lot of traction and definitely doing some cool stuff.
+
+01:00:24 So before we get out of here, though, final two questions.
+
+01:00:27 If you're going to write some Python code, what editor are you using these days?
+
+01:00:30 I use PyCharm for everything.
+
+01:00:32 And that includes Rust.
+
+01:00:33 But I do all my Rust and my Python and PyCharm.
+
+01:00:35 Nice.
+
+01:00:36 Is there a cool plugin that basically adds Rust support to?
+
+01:00:39 Yeah, there's just an official IntelliJ Rust plugin.
+
+01:00:42 Got it.
+
+01:00:43 Nice.
+
+01:00:43 Works really well.
+
+01:00:43 I've used IntelliJ for that platform for Dart and Flutter, but I haven't tried to plug Rust into it.
+
+01:00:50 But yeah, it does a lot of things.
+
+01:00:52 Cool.
+
+01:00:52 And then notable PyPI package, something out there.
+
+01:00:55 You've named a couple that do the Rust integration nicely.
+
+01:00:58 But anything you want to give a shout out to?
+
+01:01:00 Yeah, I really want to give a shout out.
+
+01:01:01 I've already mentioned it a few times.
+
+01:01:02 I think if you're interested in doing Rust Python stuff, you should really look at Matrin.
+
+01:01:06 Matrin.
+
+01:01:07 All right.
+
+01:01:07 M-A-T-U-R-I-N.
+
+01:01:09 It just makes the publishing really easy.
+
+01:01:13 And you still have to learn Rust, which is not easy.
+
+01:01:15 I mean, I do.
+
+01:01:16 It's worthwhile, I think, but it's not easy.
+
+01:01:18 But it makes the publishing Rust code to PyPI, or PyPI, sorry, really easy.
+
+01:01:23 Awesome.
+
+01:01:23 Well, great recommendation.
+
+01:01:25 Thanks for being here.
+
+01:01:26 Final call to action.
+
+01:01:27 People want to get started with Rust.
+
+01:01:28 What do you tell them?
+
+01:01:28 The main thing that I would like to say is if you're interested in contributing,
+
+01:01:32 even if you don't know that much Rust and are interested in learning, I'd love to see you on the repo, and I hope it's a place that people feel really welcome
+
+01:01:42 to come and contribute, even if they are 100% certain if their code is right or anything like that.
+
+01:01:47 So definitely really excited to have more contributors and have more people coming into the project.
+
+01:01:52 And of course, you should also try using it yourself.
+
+01:01:55 All right.
+
+01:01:55 Excellent.
+
+01:01:56 Well, thanks for being here.
+
+01:01:57 It was a great conversation with you.
+
+01:01:59 Yeah, thanks so much for having me.
+
+01:02:00 It was a really cool opportunity.
+
+01:02:02 I appreciate it.
+
+01:02:04 This has been another episode of Talk Python to Me.
+
+01:02:06 Thank you to our sponsors.
+
+01:02:08 Be sure to check out what they're offering.
+
+01:02:10 It really helps support the show.
+
+01:02:11 Join Cox Automotive and use your technical skills to transform the way the world buys,
+
+01:02:17 sells, and owns cars.
+
+01:02:18 Find an exciting position that's right for you at talkpython.fm/cox.
+
+01:02:24 Earn extra income from sharing your software development opinion at user interviews.
+
+01:02:29 Head over to talkpython.fm/userinterviews to participate today.
+
+01:02:34 Want to level up your Python?
+
+01:02:36 We have one of the largest catalogs of Python video courses over at Talk Python.
+
+01:02:40 Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+01:02:45 And best of all, there's not a subscription in sight.
+
+01:02:48 Check it out for yourself at training.talkpython.fm.
+
+01:02:51 Be sure to subscribe to the show, open your favorite podcast app, and search for Python.
+
+01:02:56 We should be right at the top.
+
+01:02:57 You can also find the iTunes feed at /itunes, the Google Play feed at /play, and the direct
+
+01:03:03 RSS feed at /rss on talkpython.fm.
+
+01:03:06 We're live streaming most of our recordings these days.
+
+01:03:09 If you want to be part of the show and have your comments featured on the air,
+
+01:03:13 be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+01:03:18 This is your host, Michael Kennedy.
+
+01:03:19 Thanks so much for listening.
+
+01:03:20 I really appreciate it.
+
+01:03:22 Now get out there and write some Python code.
+
+01:03:23 I'll see you next time.
+
+01:03:44 Thank you.
+
