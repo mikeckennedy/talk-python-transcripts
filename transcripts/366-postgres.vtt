@@ -1,0 +1,3587 @@
+WEBVTT
+
+00:00:00.001 --> 00:00:05.500
+Does your app have a database? Does that database play an important role in how the app operates and
+
+00:00:05.500 --> 00:00:10.960
+how users perceive its quality? Most of you probably said yes to that first question and
+
+00:00:10.960 --> 00:00:15.720
+definitely to the second. But what if your database isn't doing as well as it should?
+
+00:00:15.720 --> 00:00:20.900
+How do you know? And once you know, what do you do about it? On this episode, we're joined by
+
+00:00:20.900 --> 00:00:26.560
+Michael Christofides, co-creator of pgmustard, to discuss and explore the explain command for
+
+00:00:26.560 --> 00:00:32.000
+Postgres and other databases, as well as all the recommendations you might dig into as a result of
+
+00:00:32.000 --> 00:00:38.320
+understanding exactly what's happening with your queries. This is Talk Python to Me, episode 366,
+
+00:00:38.320 --> 00:00:40.340
+recorded May 11th, 2022.
+
+00:00:53.420 --> 00:00:58.380
+Welcome to Talk Python to Me, a weekly podcast on Python. This is your host, Michael Kennedy.
+
+00:00:58.380 --> 00:01:03.320
+Follow me on Twitter where I'm @mkennedy and keep up with the show and listen to past episodes at
+
+00:01:03.320 --> 00:01:09.700
+talkpython.fm and follow the show on Twitter via at Talk Python. We've started streaming most of our
+
+00:01:09.700 --> 00:01:15.560
+episodes live on YouTube. Subscribe to our YouTube channel over at talkpython.fm/youtube to get
+
+00:01:15.560 --> 00:01:21.980
+notified about upcoming shows and be part of that episode. Transcripts for this and all of our episodes
+
+00:01:21.980 --> 00:01:27.260
+are brought to you by Assembly AI. Do you need a great automatic speech to text API? Get human level
+
+00:01:27.260 --> 00:01:34.660
+accuracy in just a few lines of code. Visit talkpython.fm/Assembly AI. Hey there, before we jump into the
+
+00:01:34.660 --> 00:01:39.940
+conversation with Michael, let me just tell you about a new course we just released, Up and Running with
+
+00:01:39.940 --> 00:01:46.480
+Git. Look, you're probably thinking, Michael, there are a ton of Git courses out there. Why create a course on
+
+00:01:46.480 --> 00:01:52.980
+Git? Well, this course takes an unconventional and pragmatic approach to Git and source control that'll
+
+00:01:52.980 --> 00:01:58.520
+get you up to speed super quickly. Many of those Git courses that are out there, they take a least
+
+00:01:58.520 --> 00:02:05.020
+common denominator approach. They decide that you need to learn pure Git. That is, you open up the
+
+00:02:05.760 --> 00:02:12.020
+command prompt and you do Git there and that's it. And yet, is that how most of us work? No, we have
+
+00:02:12.020 --> 00:02:17.680
+really great Git and source control features built right into the tools that we're using. So with Up and
+
+00:02:17.680 --> 00:02:23.860
+Running with Git, that course teaches you how to use Git by leveraging the best UI tools from common
+
+00:02:23.860 --> 00:02:30.680
+editors such as PyCharm and Visual Studio Code, as well as using highly polished Git apps such as
+
+00:02:30.680 --> 00:02:36.400
+Atlassian's source tree. And we even throw in a little terminal magic at the end. If you want a
+
+00:02:36.400 --> 00:02:42.220
+practical and friendly introduction to Git and get stronger with source control, check out Up and
+
+00:02:42.220 --> 00:02:48.100
+Running with Git over at talkbython.fm slash git git. All right, you ready to talk Postgres?
+
+00:02:48.100 --> 00:02:53.280
+Michael, welcome to Talk Bython to me. Thank you. Thank you for having me. It's a pleasure. Yeah,
+
+00:02:53.280 --> 00:02:59.100
+it's a pleasure to have you. I'm honestly pretty psyched to talk about database stuff. I feel like databases are
+
+00:02:59.100 --> 00:03:07.880
+these magical centerpieces of so many applications and yet, yet they are so unoptimized in many
+
+00:03:07.880 --> 00:03:13.040
+situations that if you could just sprinkle a few of these ideas that we're going to talk about on them,
+
+00:03:13.040 --> 00:03:17.520
+they'll make the entire app and the entire experience for everyone involved better, right?
+
+00:03:17.520 --> 00:03:21.980
+Easier for the developers to have code that goes fast if their queries are fast. The customers will be
+
+00:03:21.980 --> 00:03:26.120
+happy that it's not like, wait, did I click the button? Oh yeah, it's still spinning. That's right. You know,
+
+00:03:26.120 --> 00:03:31.740
+like all of these experiences, just like every time I have them, I'm just like, remain calm. Somebody
+
+00:03:31.740 --> 00:03:36.160
+didn't put an index somewhere. There should have been one and this thing will probably work eventually.
+
+00:03:36.160 --> 00:03:41.280
+I don't know if you have those feelings as you go around the web. Yes, 100%. I might have taken it a
+
+00:03:41.280 --> 00:03:47.200
+bit far in trying to fix them, but yes, absolutely. I'm going to send a support request and here's the
+
+00:03:47.200 --> 00:03:52.980
+explain document that I've come up with for you. Fantastic. All right. Well, we're going to dive into
+
+00:03:52.980 --> 00:03:59.280
+specifically Postgres, but we were chatting a bit before we hit record and much of this guidance
+
+00:03:59.280 --> 00:04:03.200
+expands beyond Postgres, right? Even beyond relational potentially.
+
+00:04:03.200 --> 00:04:08.340
+Yeah, absolutely. And going back to something you said just briefly then, the beauty of databases is
+
+00:04:08.340 --> 00:04:13.500
+they've worried so much about performance and you can get up and running. You can get a lot of
+
+00:04:13.500 --> 00:04:18.840
+performance out of them without doing even the basics right sometimes, but at a certain scale that
+
+00:04:18.840 --> 00:04:24.920
+starts to fall down. So yeah, once you're past the first few stages, quite often the performance
+
+00:04:24.920 --> 00:04:30.240
+problems you're hitting tend to be database related. So yeah, that's what I'm excited about. But it's not,
+
+00:04:30.240 --> 00:04:37.400
+yes, most of my recent experiences with Postgres, but the performance is mostly about trying to work
+
+00:04:37.400 --> 00:04:43.020
+out how to do less work or how to not do the work in the first place. And that's the same whether you're,
+
+00:04:43.440 --> 00:04:47.280
+whichever database you're working with or yeah, data in general, basically.
+
+00:04:47.280 --> 00:04:53.320
+Yeah. Databases seem magical. They take all this data and they come up with answers incredibly quickly,
+
+00:04:53.320 --> 00:04:59.000
+but they're not magical. They just have four or five algorithms for sorting and different mechanisms for
+
+00:04:59.000 --> 00:05:03.560
+filtering. And then they know how to sort of estimate and plan those together and take guesses.
+
+00:05:04.140 --> 00:05:10.660
+And our conversation today will be how to understand those different things that databases can do,
+
+00:05:10.660 --> 00:05:15.320
+how we can interrogate them to tell us what they're trying to do, and then what changes we can make to
+
+00:05:15.320 --> 00:05:22.160
+make them faster and some tools along the way. But before we do that, how'd you get into databases and
+
+00:05:22.160 --> 00:05:25.520
+being associated with PG mustard and all the stuff you're doing?
+
+00:05:25.520 --> 00:05:32.820
+Yes. So I, it goes, well, back in the university, I studied mathematics. So that involved a tiny bit
+
+00:05:32.820 --> 00:05:36.920
+of programming, but really not much, just a little bit of statistics that I quickly dropped.
+
+00:05:36.920 --> 00:05:37.540
+Yeah.
+
+00:05:37.540 --> 00:05:40.500
+And a tiny bit of mechanics that I dropped as well. Very pure.
+
+00:05:40.500 --> 00:05:41.420
+Yeah, exactly.
+
+00:05:41.420 --> 00:05:46.600
+There must be something about math in the air. The last three episodes I've done have all been like
+
+00:05:46.600 --> 00:05:50.640
+people with PhDs in math and doing all sorts of interesting stuff. So, and I have a math
+
+00:05:50.640 --> 00:05:51.900
+background as well, but yeah.
+
+00:05:51.900 --> 00:05:52.400
+Amazing.
+
+00:05:52.560 --> 00:05:54.780
+Yeah, it is. So it started, it started in math. Yeah.
+
+00:05:54.780 --> 00:06:01.060
+Yeah, absolutely. No PhD here, but I then went to a, well, I thought I wanted to be a management
+
+00:06:01.060 --> 00:06:06.460
+consultant for my sins back in the day. And then the financial crisis happened. So luckily that got
+
+00:06:06.460 --> 00:06:12.960
+scuppered and I ended up finding a job at a company called Redgate, which I understand you're actually
+
+00:06:12.960 --> 00:06:19.340
+familiar with. So they did database tools and well, predominantly for SQL server, but also developer
+
+00:06:19.340 --> 00:06:26.380
+tools for .NET as you've seen, and then expanded out from there. So I started at a time where their most
+
+00:06:26.380 --> 00:06:33.120
+popular product was called SQL compare for comparing databases. And just a few months into when I was there,
+
+00:06:33.120 --> 00:06:38.320
+they launched a product called SQL source control. So it got into kind of the change management side of things.
+
+00:06:38.320 --> 00:06:44.780
+And luckily got so many opportunities there to do various roles and landed mostly in product management.
+
+00:06:45.340 --> 00:06:51.040
+luckily got a chance to take on their Oracle tools team. So it was a tiny team compared to the rest of the company.
+
+00:06:51.040 --> 00:06:57.420
+And it was the first foray into their tools for Oracle. And we also span off a couple of tools for MySQL as well.
+
+00:06:57.420 --> 00:07:15.140
+And in working in that small team, we started to see, I wouldn't say the rise of Postgres because it's been going for so long, but the resurgence and the slow and steady improvements from that. So that was my kind of first five years of getting to know databases. And then, yeah.
+
+00:07:15.200 --> 00:07:39.980
+What a cool place to do it. Right. I mean, there are some very hot database companies, the MongoDB folks, obviously Oracle, Microsoft SQL server, like where they make them. But then there's only a few places that where they really say, and what was missing? Let's just fix all of that. Right. Let's make the developer experience really right on databases. And I feel like Redgate was very much like that, like SQL compare and the source control stuff. That was all very neat.
+
+00:07:39.980 --> 00:08:09.960
+Yeah, absolutely.
+
+00:08:09.960 --> 00:08:10.960
+Okay.
+
+00:08:10.960 --> 00:08:10.960
+Yeah.
+
+00:08:10.960 --> 00:08:10.960
+Yeah.
+
+00:08:10.960 --> 00:08:10.960
+Okay.
+
+00:08:10.960 --> 00:08:10.960
+Yeah.
+
+00:08:10.960 --> 00:08:10.960
+Yeah.
+
+00:08:10.960 --> 00:08:11.960
+Yeah.
+
+00:08:11.960 --> 00:08:11.960
+Yeah.
+
+00:08:11.960 --> 00:08:40.960
+And even if you realize they're not magic, they're still complicated or there's certain complexity to dealing with them. And if you can make that easier for folks, or at least help them with better defaults, like people, people designing databases are exceptionally smart and they pick the defaults for a reason. But in the real world, sometimes you can afford to be slightly less conservative or have choose a certain perspective on something and make a tool that's only for a certain subset of the users. So you can be a bit more opinionated as tools vendor.
+
+00:08:40.960 --> 00:08:53.960
+So you can be a bit more on a tool vendor versus a platform provider. And I like that kind of space where you can differentiate a little bit more on usability and performance, maybe a little bit less on the absolute fundamentals.
+
+00:08:53.960 --> 00:09:07.960
+Well, and there's so many different situations in which databases are used, right? Are you Google? Are you Talk Python? Or are you a single little app that one person is using? Like these are all very unrecognizable to each other in significant ways.
+
+00:09:07.960 --> 00:09:14.960
+Yeah, absolutely. And the mad thing is they can all run off the same type of database. So you could run any...
+
+00:09:14.960 --> 00:09:25.960
+Yeah, that is mad. Yeah. Yeah, that's a really good point that you can run off. Basically, everyone installs the same database, does some sort of schema creation thing and goes from there.
+
+00:09:25.960 --> 00:09:40.960
+Yeah, absolutely. Or even Mongo, right? Run well. I think that's the key thing. Run well, probably most... I mean, Facebook still runs off, albeit admittedly, highly modified, very impressive, MySQL setup.
+
+00:09:40.960 --> 00:10:00.960
+And I think just today we saw a couple... Well, maybe in the last two days, we've seen a couple of really impressive companies launching SQLite on the edge, you know. So there's really pretty much any database that's made it to this point can probably support you at any scale if you know enough about it or if you run it well.
+
+00:10:00.960 --> 00:10:15.960
+Yeah. Yeah, for sure. Interesting. All right. Now, before we get into optimizing these... First, let's get the order right. Understanding the performance and then optimizing, right? Not take a shot at optimizing, then we'll figure out if we got the right spot.
+
+00:10:15.960 --> 00:10:45.820
+Just like profiling and performance optimization of code. Let's just talk for a minute about some of the... We were debating what the nomenclature was. I have GUI tools for managing databases. Because I saw that you were using... In some presentations you're doing, you're using dBeaver, which is pretty interesting. And I feel like a lot of people don't end up using these tools. So maybe you could highlight a couple that I think sort of stand out for just interesting database stuff.
+
+00:10:45.940 --> 00:11:15.920
+I do apologize. I got a tiny bit of lag there. So, but yes. So if you can hear me clearly, then I do like dBeaver for doing demos. It's very easy to run multiple queries in a row that you don't have to type out or copy paste around. It's also exceptional for post GIS, which is for geographic data. And there are a few people really keen on its visualizations for that. I tend to not use it day to day anymore, but only because there's so many tools out there that you can use. I think you've
+
+00:11:15.920 --> 00:11:29.820
+Yeah, you've listed a few, but a lot of people are very keen on the default one that ships with Postgres called Psequel, which is command line interface. Very, very powerful. Can do a lot of things that other tools can't, but has quite a steep learning curve, in my opinion.
+
+00:11:29.920 --> 00:11:53.460
+There's some people doing tutorials on that. I think Letitia is doing some really good conference talks at the moment on this and has done them in the past and has a website around Psequel tips. So yeah, there's loads of good GUIs out there. At the moment, I'm using a really modern one called Archetype. They've only recently launched, but I tend to try out tools probably earlier than most would.
+
+00:11:53.460 --> 00:11:55.220
+But wait, this looks nice. Right?
+
+00:11:55.220 --> 00:12:01.120
+This looks real nice. Archetype, A-R-C-T-Y-P-E dot com.
+
+00:12:01.120 --> 00:12:01.640
+You got it.
+
+00:12:01.640 --> 00:12:07.080
+Yeah, right on. This is cool. Okay. And this works on the different databases that you might.
+
+00:12:07.080 --> 00:12:19.940
+So they stripped back down to a couple, maybe a year or two ago. So it was Postgres and MySQL, I believe, but I think they're adding some back in. Not 100% sure though. Sorry. I'm Postgres through and through.
+
+00:12:19.940 --> 00:12:24.460
+Yeah, it solves the problem. What else do we need to worry about, right?
+
+00:12:24.460 --> 00:12:42.280
+Absolutely. And if we're talking specifics, actually, because I'm on Postgres on a Mac, I think probably the best long lived option and one that's been around for years, I would say is Postico, which is a Mac only app. But yes, it's lightning fast, which I, so Postico with an O at the end.
+
+00:12:42.280 --> 00:12:45.060
+Postico. Okay. Interesting.
+
+00:12:45.600 --> 00:12:51.420
+Oh, Mac only. Okay. Yeah. Yeah. That's, that's pretty nice. But this other one, this archetype looks really nice.
+
+00:12:51.420 --> 00:12:52.660
+But looks aren't everything, right?
+
+00:12:52.660 --> 00:13:17.560
+No, no, you're absolutely right. They're not, but they need to work well. So to the two others that I was going to throw out there that are kind of nice. This one clearly is not for Postgres because it's DB browser for SQLite. But at the same time, I feel like a lot of people are interested in databases, generally not just Postgres, right? You can come across SQLite all over the place. So I think this one is nice. This one is free. And then have you done anything with Beekeeper?
+
+00:13:17.660 --> 00:13:19.360
+No, I have seen it around.
+
+00:13:19.360 --> 00:13:33.120
+Yeah. Beekeeper is pretty nice. It gives you like autocomplete for your queries and ways to explore your schemas. But what it seems to not have really is any sort of exploration of the schema visually, right? There's not like a UML looking diagram type thing.
+
+00:13:33.120 --> 00:13:47.880
+Yeah. One last one before we, I think a company that are doing great things in IDE space in general are JetBrains and their DataGrip product is very good as well. And very, very cross platform in terms of different support for different databases.
+
+00:13:48.140 --> 00:14:08.380
+Yeah, absolutely. I think DataGrip is really great, right? Like if you use PyCharm, for example, when you're doing the database features of PyCharm, it really is just DataGrip, right? If you just want the standalone edition. So super cool. Yeah. These are all really nice. And I discovered a few myself as well from this. So awesome.
+
+00:14:08.380 --> 00:14:20.560
+Awesome. I just think it's kind of important for people to have these tools. And maybe you end up just on CLI tools like P-SQL. But when you're starting, I think that that can be the difference of I can do this or I can't do this.
+
+00:14:20.560 --> 00:14:25.300
+You know what I mean? Rather than efficiency. People might just look at it and go, that's too much for me. I'm out.
+
+00:14:25.380 --> 00:14:52.180
+Yeah, well, it's also about discovery. I think sometimes you don't know what's there and what's possible. And in a command line tool, it's really on you to figure that out. Whereas in a GUI, they can leave you hints, they can show you the tree of things, you can start to realize what is and isn't possible. And they've got a lot more freedom to educate you as a new user. Whereas in a command line tool, there's very little they can do on that front.
+
+00:14:52.180 --> 00:14:57.340
+So yeah, not all of them. Not all of the GUIs take advantage of that, but the good ones do.
+
+00:14:57.340 --> 00:15:20.100
+The possibility is there. Yeah, the good ones do. All right. I was talking about schema and I'd like to hear your thoughts on this. I'm sure you're more well versed in it than I am. When I think about schemas, I think about the tables, maybe the columns, the types of columns that are there. So this one is a varchar 16. This one is a float or whatever. Would you consider indexes part of the schema?
+
+00:15:20.100 --> 00:15:26.220
+I would, yes. Yeah. Yeah. I guess it depends on definitions are hard to mathematicians discussing definitions.
+
+00:15:26.260 --> 00:15:49.380
+I guess when I'm thinking about schema changes and deployment scripts and things like that, I think it's just as important for the functioning of your app. An index existing or not can be the difference between you effectively being up or being down. And if it's that important, then I'd probably say it does. It is.
+
+00:15:49.380 --> 00:15:56.380
+Yeah, yeah, for sure. Quick audience question from William. What's the most powerful utility you personally got out of P-SQL?
+
+00:15:56.380 --> 00:15:58.380
+Oh, good question.
+
+00:15:58.380 --> 00:16:03.500
+Or what's the most powerful thing that you find yourself doing with P-SQL maybe is a good way to phrase it.
+
+00:16:03.500 --> 00:16:18.660
+I'm probably not the best person to ask. I tend to use it for really quick things. So it's more of like it's by far the easiest and quickest to throw a quick query into and get a really quick result back out of. There's zero load time or anything like that.
+
+00:16:19.040 --> 00:16:25.560
+Right. And you get text output straight back. It's, you know, it's, it's, you don't have to worry about any formatting or anything.
+
+00:16:25.560 --> 00:16:30.460
+Right. Open your terminal, P-SQL, some query, you see the answers right there.
+
+00:16:30.460 --> 00:16:38.060
+Yeah. But that's not like, there's probably people ripping their hair out and screaming at the screen saying, why didn't you mention this amazing feature of P-SQL?
+
+00:16:38.440 --> 00:16:53.100
+But the truth is I don't, I'm not a heavy database user in the grand scheme of things. You know, people doing DBA work, I make and help design and run a tools company, not a, we don't have a massive database. I don't do tons of analytical queries day to day.
+
+00:16:53.100 --> 00:16:53.420
+Sure.
+
+00:16:53.720 --> 00:17:21.240
+So those, yeah, it's the DBAs of this world and the people that have got a lot of hands on database experience that probably do a lot more of that. But I would, in terms of recommendations, I think Leticia Avro does a, has a website called P-SQL tips. And I think if you go to it, it just loads a random tip of about a hundred and something that she keeps adding to. And I think that's a great, like, that's a fun way to get some discovery or learn some features in a tool.
+
+00:17:21.240 --> 00:17:49.480
+This portion of Talk Python To Me is brought to you by Sentry. How would you like to remove a little stress from your life? Do you worry that users may be encountering errors, slowdowns, or crashes with your app right now? Would you even know it until they sent you that support email? How much better would it be to have the error or performance details immediately sent to you, including the call stack and values of local variables and the active user recorded in the report?
+
+00:17:49.600 --> 00:18:19.520
+With Sentry, this is not only possible, it's simple. In fact, we use Sentry on all the Talk Python web properties. We've actually fixed a bug triggered by a user and had the upgrade ready to roll out as we got the support email. That was a great email to write back. Hey, we already saw your error and have already rolled out the fix. Imagine their surprise. Surprise and delight your users. Create your Sentry account at talkpython.fm/Sentry. And if you sign up with the code Talk Python, all one word.
+
+00:18:19.520 --> 00:18:37.120
+It's good for two free months of Sentry's business plan, which will give you up to 20 times as many monthly events as well as other features. Create better software, delight your users, and support the podcast. Visit talkpython.fm/Sentry and use the coupon code Talk Python.
+
+00:18:39.120 --> 00:18:45.300
+You spoke about being in a tools place. You want to just give a quick shout out to PG Mustard and we'll come back and talk about it more later?
+
+00:18:45.300 --> 00:18:46.120
+Yeah, sure.
+
+00:18:46.120 --> 00:18:58.300
+That's sort of the second question I was going to ask you. We're not making speedy progress, which is great. So you were at Redgate and now you've gone on to start your own company, co-found your own company around database tools.
+
+00:18:58.520 --> 00:19:19.280
+Yeah, absolutely. So I worked at a couple of companies in between, one of which was a big fan of Postgres. So there was a company called GoCardless and the team there were exceptional, loved my time there. And they ran quite a big payments company by the time I left on a single Postgres database. And it was, yeah, the team were big fans and completely converted me.
+
+00:19:19.280 --> 00:19:47.500
+I was already keen on Postgres or the idea of it from Redgate time and hearing what customers were saying about it. So I was pretty sold on the idea. I loved the platform. I loved how extensive it was. I loved that you could see the source code. You could even contribute back to it. So I was a big fan of the platform. But my first ideas for a business were pretty lukewarm, let's say. So there's a Redgate product I love called P-SQL. So you mentioned Autocomplete in, I think it was Beekeeper.
+
+00:19:47.800 --> 00:20:15.040
+They had an Autocomplete tool in SSMS, which is SQL Server Management Studio, which people loved. And it's an everyday use tool and you could easily see yourself making it better and better for years. So that was my kind of ideal tool. But building it would have entailed either integrating into the 25 IDEs that we've looked at so far or picking one and really maybe not being that useful. So ended up trying to build something a little bit more standalone.
+
+00:20:15.320 --> 00:20:35.460
+There's a few really good open source query plan visualization tools. They do a lot of work to help you see where the time's going in a query and give you some basic kind of guidance. Or maybe not basic, maybe super DBA friendly guidance. So it's often built by DBAs for DBAs type tools.
+
+00:20:35.660 --> 00:20:37.860
+Advanced, advanced, but maybe basic in this presentation.
+
+00:20:37.860 --> 00:20:38.400
+Yeah.
+
+00:20:38.400 --> 00:20:42.560
+Something like that, right? It's just like, here's a wall of text. It speaks your language. Go figure it out.
+
+00:20:42.560 --> 00:20:52.840
+Yeah, exactly. And I quite often saw on, in different places, people would post links to them and say, I've put it into this tool, but what can I do to speed it up?
+
+00:20:52.900 --> 00:21:00.560
+So there was clearly still a missing step of what can we do about it? Okay, here's where the time's going, but what can I actually do about that?
+
+00:21:00.560 --> 00:21:05.960
+So tried to build something that would help solve that problem. And this is, this is what we came up with.
+
+00:21:05.960 --> 00:21:22.780
+Yeah, it's really cool. And it, the way it works is you give it, explain, you have Postgres explain your query plan to it, to you. And then you give that query plan to PG Mustard and it puts it into a graphical form and into a more digestible form.
+
+00:21:22.920 --> 00:21:34.320
+And that's interesting. But what's really interesting is it gives you advice. It says, you know what? This sort is happening without a query, without an index. And that's where you're spending most of your time. Here's your big opportunity for a win.
+
+00:21:34.320 --> 00:21:45.840
+We'll come back to this, like I said, after we talk about finding these problems. But I just want to point out, I had, we'd covered this on Talk Python. One of our guests mentioned it. I think it was Hennick.
+
+00:21:45.840 --> 00:21:57.620
+And then we also talked about it on Python Bytes. My other show is just one of the topics. And I don't remember which place we talked about it, but somebody made the joke of, oh, this is my new consulting job.
+
+00:21:57.620 --> 00:22:09.540
+What I'm going to do is I'm going to buy a license to PG Mustard and I'm going to go around and optimize people's databases by dropping the query plans in here and just taking its advice, which I thought was hilarious, but also plausible.
+
+00:22:09.540 --> 00:22:12.080
+We have some consultants that use us.
+
+00:22:12.080 --> 00:22:18.820
+I can imagine. It's really good visualizations and interesting, often useful advice that it gives.
+
+00:22:18.820 --> 00:22:27.060
+So, all right. That is all super cool. But let's, let's go back more broadly to Hostgres, but then maybe even, like I said, more general.
+
+00:22:27.060 --> 00:22:32.060
+Like I feel like a lot of this applies to MySQL, Microsoft SQL Server, and even Mongo.
+
+00:22:32.420 --> 00:22:43.900
+So let's just start out about maybe you're the unfortunate person who is running one of these websites that makes me think about the optimizations that were missed as I wait for the spinning thing to load.
+
+00:22:43.900 --> 00:22:47.120
+And it's your job to figure out, you know, what is wrong?
+
+00:22:47.120 --> 00:22:52.800
+I know. So maybe we could talk about some of the techniques for finding problems with your database.
+
+00:22:52.800 --> 00:22:54.880
+Let's just start there. My database is slow.
+
+00:22:55.380 --> 00:23:12.120
+Perfect. So a lot of databases will have some version of a slow query log or built in monitoring view or, or you'll have a monitoring tool set up yourself to log and aggregate this kind of thing.
+
+00:23:12.120 --> 00:23:24.640
+And normally the starting point. So I guess there's a few starting points, either custom reports, customer or team member or somebody reports something slow or your database is on fire.
+
+00:23:24.640 --> 00:23:27.580
+It's, you know, maxed out on something.
+
+00:23:27.580 --> 00:23:30.120
+CPU, memory, disk, some combination thereof.
+
+00:23:30.120 --> 00:23:33.860
+Yeah, exactly. Or in the cloud, maybe you've run out of your provision.
+
+00:23:33.860 --> 00:23:38.940
+Yeah. Anyway. So, so there's that, but yeah, let's take the, let's take the, I've got one slow query.
+
+00:23:38.940 --> 00:23:45.460
+So in that case, you probably know what can get from the query log, the actual query that was being run.
+
+00:23:45.460 --> 00:23:53.500
+Yeah. Let me just make a little side comment here is like, if you're using an ORM, it can be a little bit harder to see what that is.
+
+00:23:53.500 --> 00:24:01.680
+Right. You might have to attach some kind of real time logging tool to the database or get it to log it to a file and go track it down.
+
+00:24:01.680 --> 00:24:09.080
+But also a lot of the ORMs have features that you can make it spit out the queries like in super verbose mode.
+
+00:24:09.080 --> 00:24:14.220
+So for example, SQLAlchemy, when you create the engine, you can say echo equals true, but it's not just SQLAlchemy.
+
+00:24:14.220 --> 00:24:17.360
+You can do it with many of them and it'll, it'll start printing the queries.
+
+00:24:17.360 --> 00:24:19.200
+Maybe that's a place to start, right?
+
+00:24:19.200 --> 00:24:25.280
+Yeah, absolutely. And some of them have, there's some tools now increasingly that let you even do the explain.
+
+00:24:25.500 --> 00:24:34.180
+So yeah, the first step is get the query, but in some of these frameworks and ORMs, you can even ask for the explain plan directly as well.
+
+00:24:34.180 --> 00:24:39.720
+Increasingly, even with, and this is where we start to get a little bit more technical and a bit more database specific.
+
+00:24:39.720 --> 00:24:49.860
+But I think it's the same, it's the same across many databases, but you want explain will give you the plan of what the, what the database has chosen to be.
+
+00:24:49.860 --> 00:24:55.980
+Probably the optimal route to do that query or to get you that data or to insert that data.
+
+00:24:55.980 --> 00:25:07.020
+But if you want to get the performance information and get really start to dig into exactly why it's slow, you need to run something called explain analyze, which will also run the query.
+
+00:25:07.320 --> 00:25:14.780
+So be careful around that. If you're running kind of big delete or something and probably not run it on production, please, please, please.
+
+00:25:14.780 --> 00:25:20.820
+Wait, why is this delete slow? Oh, wait, why is there no data? It's fast now. That's great. Wait, why is it fast?
+
+00:25:20.820 --> 00:25:21.720
+Yeah.
+
+00:25:21.720 --> 00:25:25.220
+Or you go to run it a second time and don't, and don't understand why it's not.
+
+00:25:25.220 --> 00:25:25.400
+Yeah.
+
+00:25:25.400 --> 00:25:27.040
+That it's got, yeah, it's different somehow.
+
+00:25:27.040 --> 00:25:41.260
+Yeah. So explain analyze will run the query behind the scenes, but instead of getting the data or instead of, let's say, getting the data back or getting a normal return, you get a query plan back with performance data in it with a few, quite a lot of statistics.
+
+00:25:42.300 --> 00:25:50.740
+So yes, there's a, you, you want, you just append your, that to the beginning of your query, run it as normal, and then it gives you the query plan.
+
+00:25:50.740 --> 00:25:55.100
+So that's step. Step one is get that information from your database.
+
+00:25:55.100 --> 00:26:07.680
+Right. And the way that that looks is instead of writing select star from table where you write, explain select star from that or explain analyze, depending on whether you want that timing information, right?
+
+00:26:07.680 --> 00:26:17.600
+Exactly. So if you have, and this is probably, hopefully not many of you in this situation ever, but if you have a query that never returns, let's say it's going to take six hours, maybe.
+
+00:26:17.860 --> 00:26:25.900
+You probably want to get the explain plan just to get a query plan because explain analyze is going to take as long as your query because it is executing behind the scenes.
+
+00:26:25.900 --> 00:26:29.680
+It runs it and figures out how much IO it's doing and stuff like that. Right.
+
+00:26:29.680 --> 00:26:31.780
+Yeah, exactly. Oh, good question.
+
+00:26:31.780 --> 00:26:37.700
+So to add IO information, at least in Postgres, you need to include an additional parameter.
+
+00:26:37.700 --> 00:26:40.380
+So it would be explain analyze buffers.
+
+00:26:40.860 --> 00:26:49.420
+And this is part of my advice to people is especially when, well, probably everybody, but especially when you're new and you might need to help ask for help from somebody else.
+
+00:26:49.420 --> 00:26:52.700
+If you add as many parameters you can to that, explain it.
+
+00:26:52.700 --> 00:26:54.500
+If you're in an IDE, just select them all.
+
+00:26:54.500 --> 00:26:59.700
+There's not once you're getting timing, there's not that much additional overhead to getting the other information as well.
+
+00:26:59.700 --> 00:27:03.440
+But in Postgres, we recommend buffers for Bose settings.
+
+00:27:04.020 --> 00:27:07.480
+And there's even a new that gives you right ahead log information as well.
+
+00:27:07.480 --> 00:27:10.940
+So if you ask for all of it, then you only have to get it once.
+
+00:27:10.940 --> 00:27:15.520
+And even if you have to go to ask, maybe you're placing that into a tool, but maybe you're asking a colleague for help.
+
+00:27:15.520 --> 00:27:19.780
+They might spot something in that extra information that helps them help you.
+
+00:27:19.780 --> 00:27:20.920
+Right, right, right.
+
+00:27:20.920 --> 00:27:25.120
+OK, Michael, in the audience, asked a question, which makes me think of my next one here.
+
+00:27:25.120 --> 00:27:30.500
+It says Google Cloud SQL just added some sweet query monitoring and planning visualization.
+
+00:27:30.500 --> 00:27:32.120
+So that's pretty nice.
+
+00:27:32.360 --> 00:27:34.480
+Yeah, Google Cloud SQL doing some really cool things.
+
+00:27:34.480 --> 00:27:42.940
+They also just recently announced that you can do major version upgrades much more easily now, which they didn't have before.
+
+00:27:42.940 --> 00:27:46.500
+So, yeah, the cloud providers are doing some really interesting things.
+
+00:27:46.500 --> 00:27:53.900
+The query plan visualization stuff is obviously very interesting to us, but there is a natural tradeoff.
+
+00:27:53.900 --> 00:28:03.640
+With performance, as always, there's a tradeoff in general between monitoring constantly for these things versus getting them when you need them.
+
+00:28:03.640 --> 00:28:05.000
+There's a small overhead.
+
+00:28:05.000 --> 00:28:11.600
+Well, I say small, but normally small overhead to constantly profiling, constantly monitoring for these things.
+
+00:28:11.600 --> 00:28:13.560
+And getting timings does have some overhead.
+
+00:28:13.720 --> 00:28:18.140
+So there is some advice out there to not do this in general for most applications.
+
+00:28:18.140 --> 00:28:21.100
+But we have customers that get the query plan for it.
+
+00:28:21.100 --> 00:28:27.340
+They don't log it for every query, but they get it for every query so that if it's slow, put it into the logs and it can be investigated.
+
+00:28:27.620 --> 00:28:27.740
+Okay.
+
+00:28:27.740 --> 00:28:28.540
+Interesting.
+
+00:28:28.540 --> 00:28:29.200
+Yeah.
+
+00:28:29.200 --> 00:28:35.260
+So my question is, let's suppose I'm going to get some cloud database type thing, right?
+
+00:28:35.260 --> 00:28:37.120
+Managed Postgres, let's say.
+
+00:28:37.120 --> 00:28:47.900
+And I also happen to have Postgres running locally, or maybe I'm fully insane and I have SQLite local, but then Postgres, and that's going to make you worry, I'm sure.
+
+00:28:47.960 --> 00:28:51.080
+But I run one of these explain, analyze plans against them.
+
+00:28:51.080 --> 00:28:52.260
+Are they comparable?
+
+00:28:52.260 --> 00:28:57.360
+Do I need to make sure that I point it at my production system when I'm asking these questions?
+
+00:28:57.360 --> 00:28:57.800
+Yeah.
+
+00:28:57.800 --> 00:28:58.340
+Let's take.
+
+00:28:58.340 --> 00:28:58.780
+What do you think?
+
+00:28:58.780 --> 00:29:00.900
+Let's start with a Postgres, Postgres example.
+
+00:29:00.900 --> 00:29:02.380
+That's going to be easier.
+
+00:29:02.380 --> 00:29:08.200
+And yeah, the main thing that's tricky there is, well, there's a few things to get right.
+
+00:29:08.200 --> 00:29:12.360
+Naturally, the schema being as similar as possible is pretty important.
+
+00:29:12.360 --> 00:29:16.500
+The config of the database as well, as similar as possible.
+
+00:29:16.500 --> 00:29:23.760
+So there's a bunch of config changes that you might have made on production that it's pretty important to have locally as well so that the planner is making similar decisions.
+
+00:29:23.760 --> 00:29:32.340
+And then the big one that we see people do, sadly, far too often, is having a really tiny data set locally.
+
+00:29:32.340 --> 00:29:38.920
+So, you know, generating 100 rows or even worse, inserting three rows or not having any data in a table.
+
+00:29:38.920 --> 00:29:43.520
+And databases, as we've discussed, magical or let's say clever.
+
+00:29:43.620 --> 00:29:49.900
+And they know that the amount of data is really important to them in terms of their choices.
+
+00:29:49.900 --> 00:29:53.680
+So you mentioned different, I think, join algorithms.
+
+00:29:53.680 --> 00:29:57.420
+Postgres, for example, has multiple join algorithms it can use.
+
+00:29:57.420 --> 00:30:05.400
+And if there's very little data, it will choose one that has a very low startup cost, even if it would get expensive at lots of data.
+
+00:30:05.600 --> 00:30:07.520
+Because it knows there's or it thinks there's not much.
+
+00:30:07.520 --> 00:30:16.340
+Whereas in a world, if locally you've got not much data, but then on production you've got a lot of data, it might choose a different join algorithm.
+
+00:30:16.340 --> 00:30:20.800
+So the choices it's making are very different depending on the amount of data.
+
+00:30:20.800 --> 00:30:23.640
+So that tends to be the one that trips people up most.
+
+00:30:23.640 --> 00:30:25.480
+But it's not just algorithms.
+
+00:30:25.480 --> 00:30:28.300
+It's also whether it would pick an index or not.
+
+00:30:28.400 --> 00:30:30.200
+That's the one that really confuses people.
+
+00:30:30.200 --> 00:30:33.080
+So you're like, I know there's an index in here.
+
+00:30:33.080 --> 00:30:34.120
+Why isn't it using it?
+
+00:30:34.120 --> 00:30:34.680
+Exactly.
+
+00:30:34.680 --> 00:30:36.280
+It's a super common question.
+
+00:30:36.280 --> 00:30:39.220
+And it turns out you've only got 10 rows there.
+
+00:30:39.220 --> 00:30:40.720
+They all fit on a single block.
+
+00:30:40.720 --> 00:30:47.780
+And it's much faster for Postgres just to return that single block to you than it is to look up each entry in an index.
+
+00:30:47.920 --> 00:30:49.200
+So yeah, exactly.
+
+00:30:49.200 --> 00:30:49.620
+Yeah.
+
+00:30:49.620 --> 00:30:50.360
+Okay.
+
+00:30:50.360 --> 00:30:55.260
+So I did want to give a shout out to a couple of tools for having fake data.
+
+00:30:55.260 --> 00:30:57.640
+Maybe you've got some recommendations as well.
+
+00:30:57.640 --> 00:31:01.720
+But there's really cool tools like this one at makaroo.com.
+
+00:31:01.720 --> 00:31:02.620
+Are you familiar with makaroo?
+
+00:31:02.620 --> 00:31:03.500
+I'm not, no.
+
+00:31:03.500 --> 00:31:06.360
+So what's cool about this, like you can go and generate fake data, right?
+
+00:31:06.360 --> 00:31:08.140
+So of all sorts of things.
+
+00:31:08.140 --> 00:31:10.800
+But one of the problems is like, well, the fake data is too fake.
+
+00:31:10.800 --> 00:31:17.540
+It doesn't look like the right structure or it doesn't validate or, you know, it's also good just for developing things.
+
+00:31:17.640 --> 00:31:20.960
+But like, for example, you can have all sorts of stuff in here.
+
+00:31:20.960 --> 00:31:25.260
+And it gives you, it has, the thing that's cool is there's a library of types of things that I can get.
+
+00:31:25.260 --> 00:31:36.500
+So I could get like all sorts of stuff to do with cars that has real car makes and models and years or VIN numbers or credit cards or genders or those types of things.
+
+00:31:36.500 --> 00:31:47.080
+And then you can go and you can export the schema as CSV or JSON or a create table SQL insert script, which is pretty cool.
+
+00:31:47.360 --> 00:31:58.460
+So if you need more real data, you know, places like this for generating them or faker, which is a package for Python and these other ones that you can just make enough real fake data, right?
+
+00:31:58.460 --> 00:31:59.360
+Yeah, exactly.
+
+00:31:59.600 --> 00:32:09.940
+And this is super powerful in terms of, you know, getting as, getting as similar data as possible to your production system without having to worry about personal sensitive information.
+
+00:32:09.940 --> 00:32:11.760
+Yeah, that's a big concern, right?
+
+00:32:11.800 --> 00:32:18.920
+It's like, if you take production data, let's suppose it's not that massive and you put it on, you give it to all the developers, somebody's going to lose it.
+
+00:32:18.920 --> 00:32:21.560
+Somebody's going to lose their laptop without the drive being encrypted.
+
+00:32:21.560 --> 00:32:23.840
+They're going to put it on a USB stick to transfer it.
+
+00:32:23.840 --> 00:32:27.860
+That's just like fat 32 with no security or something terrible, right?
+
+00:32:27.860 --> 00:32:28.480
+Yeah, absolutely.
+
+00:32:28.480 --> 00:32:34.660
+And then you might not even want people to even have select access to some of that stuff in certain environments.
+
+00:32:34.660 --> 00:32:43.520
+So, yeah, but it's, you know, probably the more important thing in my world is, or the big, the first summing block is the sheer amount of data.
+
+00:32:43.520 --> 00:32:45.560
+So just number of rows, right?
+
+00:32:45.560 --> 00:32:57.800
+Yeah, so even if some of these fields aren't perfect, maybe you've got numbers in as names and things like that, it's probably not going to make a huge difference to performance unless you're really far out in terms of the size of that data.
+
+00:32:57.800 --> 00:33:06.100
+So if you're inserting kind of multi-kilobyte blobs instead of, you know, gender, then you're going to maybe see some differences.
+
+00:33:06.100 --> 00:33:10.520
+Not as much as if there were a million rows versus if there were two.
+
+00:33:10.900 --> 00:33:17.080
+So step one is make sure you've got enough and then step two, maybe if you need to make it a lot more realistic.
+
+00:33:17.080 --> 00:33:21.060
+Size and data type, but not necessarily super precise.
+
+00:33:21.060 --> 00:33:21.320
+Yeah.
+
+00:33:21.320 --> 00:33:23.000
+Great point on data type as well.
+
+00:33:23.000 --> 00:33:23.360
+Yes.
+
+00:33:23.360 --> 00:33:25.260
+Especially when it comes to indexing.
+
+00:33:25.260 --> 00:33:26.000
+Right, exactly.
+
+00:33:26.000 --> 00:33:29.940
+Because indexing a string case insensitive, it's different than a number.
+
+00:33:29.940 --> 00:33:30.380
+Yes.
+
+00:33:30.380 --> 00:33:31.140
+Yes.
+
+00:33:31.140 --> 00:33:32.700
+Great point on case insensitivity.
+
+00:33:32.700 --> 00:33:40.760
+The other thing I wanted to call out on the Postgres side of this is it's got a really powerful generate series function that can be used to mock up.
+
+00:33:40.760 --> 00:33:42.700
+data quite quickly and easily.
+
+00:33:42.700 --> 00:33:47.680
+Not as powerful as some of these, but simpler and built into Postgres already.
+
+00:33:47.680 --> 00:33:48.820
+That's quite cool.
+
+00:33:48.820 --> 00:33:58.960
+And Ryan Booz from Timescale has been doing some quite fancy demos of that, of using that to do quite interesting time series.
+
+00:33:58.960 --> 00:34:02.300
+You know, huge amounts of data being populated via it.
+
+00:34:02.300 --> 00:34:04.740
+So it is surprisingly powerful as well.
+
+00:34:04.740 --> 00:34:04.960
+All right.
+
+00:34:04.960 --> 00:34:10.360
+Speaking of time series, Michael asks, any tips for storing machine learning embeddings in Postgres?
+
+00:34:10.360 --> 00:34:13.620
+Best thing he's seen is storing them as binary blobs.
+
+00:34:13.620 --> 00:34:15.560
+I have no advice here.
+
+00:34:15.560 --> 00:34:16.300
+I'm sorry.
+
+00:34:16.300 --> 00:34:17.840
+I don't have any experience in it.
+
+00:34:17.840 --> 00:34:18.260
+How about you?
+
+00:34:18.260 --> 00:34:21.840
+I think I fully understood what would be different about it.
+
+00:34:21.840 --> 00:34:23.840
+In terms of binary blobs, though.
+
+00:34:23.840 --> 00:34:31.580
+I think generally what happens with the machine learning stuff is people will train up these models and they just save them as just binary blobs.
+
+00:34:31.580 --> 00:34:36.420
+So it's more of a tips for storing binary data, perhaps, in general.
+
+00:34:36.420 --> 00:34:38.180
+So this is...
+
+00:34:38.180 --> 00:34:39.400
+Maybe JSON they could be as well.
+
+00:34:39.720 --> 00:34:40.780
+This is secondhand.
+
+00:34:40.780 --> 00:34:46.000
+This is not something I have direct experience of, but I've read a lot about performance, believe it or not, over the years.
+
+00:34:46.000 --> 00:34:51.220
+It seems to me that the advice is, in the early days, keep it simple.
+
+00:34:51.220 --> 00:34:55.360
+Maybe you want to store blobs in the database, but you could also...
+
+00:34:55.360 --> 00:35:00.520
+There's very cheap blob storage out there and you can store IDs to those in the database.
+
+00:35:00.520 --> 00:35:04.860
+But if you want to, if you want to only have one tool to start with, you can store them.
+
+00:35:04.860 --> 00:35:06.180
+The database allows you to.
+
+00:35:06.180 --> 00:35:08.660
+There's specific types in Postgres for that.
+
+00:35:09.320 --> 00:35:11.640
+Even B support in Postgres is amazing.
+
+00:35:11.640 --> 00:35:14.320
+And I think probably led to...
+
+00:35:14.320 --> 00:35:17.660
+Well, it's partly responsible for why it's popular today, I think.
+
+00:35:17.660 --> 00:35:18.960
+Especially...
+
+00:35:18.960 --> 00:35:19.660
+I think so, too.
+
+00:35:19.660 --> 00:35:22.820
+I think people see it as a significant...
+
+00:35:22.820 --> 00:35:28.600
+A really good choice that's like some middle ground between a purely relational database and document databases like Mongo.
+
+00:35:28.600 --> 00:35:30.340
+They're like, but we can kind of have both, right?
+
+00:35:30.340 --> 00:35:30.880
+Yeah.
+
+00:35:30.880 --> 00:35:33.340
+I don't even know if you need to say the word kind of.
+
+00:35:33.340 --> 00:35:35.760
+Because I think maybe there's...
+
+00:35:35.760 --> 00:35:39.140
+I don't know many, but maybe there's some use cases where Mongo is going to...
+
+00:35:39.140 --> 00:35:42.240
+really outperform Postgres using JSONB.
+
+00:35:42.240 --> 00:35:44.980
+I've not seen them and I don't know what they are.
+
+00:35:44.980 --> 00:35:46.200
+It's super powerful.
+
+00:35:46.200 --> 00:35:51.460
+And I guess the key difference between that and pure blob storage is you can index it.
+
+00:35:51.460 --> 00:35:52.460
+So you can...
+
+00:35:52.460 --> 00:35:52.460
+Yeah.
+
+00:35:52.460 --> 00:35:52.960
+Yeah.
+
+00:35:53.060 --> 00:35:54.420
+You can index it and query it.
+
+00:35:54.420 --> 00:35:59.220
+You can index into go to this object in JSON and then here and then here.
+
+00:35:59.220 --> 00:36:01.900
+And if they have that value, I want it back as an index.
+
+00:36:01.900 --> 00:36:02.740
+That's the magic.
+
+00:36:02.740 --> 00:36:03.200
+Right.
+
+00:36:03.200 --> 00:36:07.720
+It's not as performant as splitting those out into columns in a schema and indexing those.
+
+00:36:07.720 --> 00:36:09.320
+But that...
+
+00:36:09.320 --> 00:36:10.660
+It's a trade-off again.
+
+00:36:10.660 --> 00:36:11.740
+Back to trade-offs.
+
+00:36:11.740 --> 00:36:12.500
+Yeah.
+
+00:36:12.500 --> 00:36:12.960
+Yeah.
+
+00:36:13.320 --> 00:36:15.720
+Do you have a billion of those things or a hundred of them?
+
+00:36:15.720 --> 00:36:17.220
+Because if you got a hundred, you're probably fine.
+
+00:36:17.220 --> 00:36:21.280
+I mean, probably way more than a hundred, but billions of stuff, you might be pushing your luck.
+
+00:36:21.280 --> 00:36:21.820
+Yeah.
+
+00:36:21.820 --> 00:36:22.140
+Okay.
+
+00:36:22.140 --> 00:36:23.340
+Pretty interesting there.
+
+00:36:23.340 --> 00:36:26.720
+Other real quick shout out just to like another thing that these guys...
+
+00:36:26.720 --> 00:36:27.060
+Disclosure.
+
+00:36:27.060 --> 00:36:30.480
+They were sponsors of Talk By Thon, but I found them before they were sponsors.
+
+00:36:30.480 --> 00:36:32.140
+I thought they were cool and started talking to them.
+
+00:36:32.300 --> 00:36:42.640
+Is this place called Tonic that you connect it to your real live data and it will generate like PPI cleaned up or stuff that looks like your real data, but it's not actually your real data.
+
+00:36:42.640 --> 00:36:45.460
+So you sort of base it off of your production data.
+
+00:36:45.460 --> 00:36:48.240
+Anyway, if people are looking for fake data, there's...
+
+00:36:48.240 --> 00:36:54.900
+I guess my whole reason of going down that is there's not a lot of choices or not a lot of reasons to not have enough data.
+
+00:36:54.900 --> 00:36:59.280
+There's a lot of options for getting enough data at various versions of realism.
+
+00:36:59.280 --> 00:36:59.620
+Yeah.
+
+00:36:59.620 --> 00:37:00.040
+Good point.
+
+00:37:00.040 --> 00:37:00.280
+Yeah.
+
+00:37:00.280 --> 00:37:01.000
+All right.
+
+00:37:01.040 --> 00:37:10.300
+So we were talking about, can I run this explain, analyze against my local machine and against, say, and compare the results to how it's going to be in production?
+
+00:37:10.300 --> 00:37:18.520
+So one of your big pieces of advice is make sure you have enough data and data types that are representative and probably relations, right?
+
+00:37:18.520 --> 00:37:23.160
+If you're doing joins, like you want to have like similar amount of related data and whatnot.
+
+00:37:23.160 --> 00:37:24.200
+Yeah, ideally.
+
+00:37:24.620 --> 00:37:31.140
+But again, in step one and that website you talked about that has a spinning loader, they're going to be fine.
+
+00:37:31.140 --> 00:37:36.160
+They're going to spot their problems without very accurate, you know.
+
+00:37:36.160 --> 00:37:36.360
+Yeah.
+
+00:37:36.820 --> 00:37:45.440
+So if a foreign key isn't indexed and they're doing a lookup on that, they'll notice it even if the distribution's slightly off.
+
+00:37:45.440 --> 00:37:46.460
+So, yeah.
+
+00:37:46.460 --> 00:37:49.420
+The nice thing about performance is you don't...
+
+00:37:49.420 --> 00:37:54.140
+Often you're talking about 10x difference, 100x difference, you know, thousands sometimes.
+
+00:37:54.140 --> 00:37:57.880
+All the blog posts talk about, you know, how we may postgres 20,000 times faster.
+
+00:37:58.540 --> 00:38:00.280
+All it took was adding an index, right?
+
+00:38:00.280 --> 00:38:00.900
+Look at it go.
+
+00:38:00.900 --> 00:38:01.500
+Yeah.
+
+00:38:01.500 --> 00:38:03.700
+And there's other things, right?
+
+00:38:03.700 --> 00:38:04.540
+There are...
+
+00:38:04.540 --> 00:38:05.940
+Performance isn't just indexing.
+
+00:38:05.940 --> 00:38:10.740
+But when you're talking about the absolute basics, it's normally...
+
+00:38:10.740 --> 00:38:14.460
+You're probably going to get pretty close as soon as you've got even...
+
+00:38:14.460 --> 00:38:16.880
+Like as soon as you've not just got 10 rows in your database.
+
+00:38:16.880 --> 00:38:17.300
+Sure.
+
+00:38:17.300 --> 00:38:18.100
+Sure, sure.
+
+00:38:18.100 --> 00:38:18.420
+Okay.
+
+00:38:18.420 --> 00:38:21.720
+Because there were interesting things that you'll find...
+
+00:38:21.720 --> 00:38:32.700
+Maybe you'll only find this if you do the buffers also, in addition to just analyze, is if you're doing a sort and you have a ton of data, it might say there's too much data to sort in memory.
+
+00:38:32.700 --> 00:38:33.700
+So it might do a...
+
+00:38:33.700 --> 00:38:34.280
+What was it called?
+
+00:38:34.280 --> 00:38:35.680
+A merged sort on disk.
+
+00:38:35.680 --> 00:38:36.680
+That's crazy.
+
+00:38:36.680 --> 00:38:39.540
+It writes data to the disk and sorts it as the database.
+
+00:38:39.540 --> 00:38:40.220
+You're like, wait a minute.
+
+00:38:40.220 --> 00:38:40.980
+What is it doing?
+
+00:38:40.980 --> 00:38:42.160
+It's taking it out of memory?
+
+00:38:42.160 --> 00:38:42.920
+Are you insane?
+
+00:38:42.920 --> 00:38:43.580
+What is this?
+
+00:38:43.580 --> 00:38:44.000
+Well, yeah.
+
+00:38:44.000 --> 00:38:45.840
+I mean, it's super clever, as you said.
+
+00:38:45.840 --> 00:38:51.360
+But the alternative is risking an out-of-memory exception and the whole thing...
+
+00:38:51.360 --> 00:38:57.120
+Do you want it fast and wrong or right, slow and correct and working, right?
+
+00:38:57.120 --> 00:38:57.840
+Like, which...
+
+00:38:57.840 --> 00:38:58.600
+Take your pick, right?
+
+00:38:58.600 --> 00:39:00.800
+At some point, it can't do it otherwise.
+
+00:39:00.800 --> 00:39:02.900
+But that goes back to the real data.
+
+00:39:02.900 --> 00:39:07.820
+If you don't have enough data, you'll never see the problem as it's going to disk because why would three records go to disk?
+
+00:39:07.820 --> 00:39:08.660
+That would be crazy.
+
+00:39:08.660 --> 00:39:09.840
+Yeah, exactly.
+
+00:39:09.840 --> 00:39:20.020
+So, well, this is a really good example because Postgres determines what it will do in memory versus on disk by a couple of parameters now.
+
+00:39:20.140 --> 00:39:23.280
+But the main one being Workmem or working memory.
+
+00:39:23.280 --> 00:39:27.020
+And that's set very low for most production workloads.
+
+00:39:27.020 --> 00:39:29.140
+So that's four megabytes by default.
+
+00:39:29.140 --> 00:39:31.540
+And I've seen a really good...
+
+00:39:31.540 --> 00:39:36.660
+One of the top Postgres consultants giving a talk at a conference, even a few years ago.
+
+00:39:36.660 --> 00:39:42.220
+So this might even be out of date saying they just automatically change that to 16 megabytes wherever.
+
+00:39:42.220 --> 00:39:44.400
+Just always as a starting point.
+
+00:39:44.400 --> 00:39:48.320
+And sometimes, you know, for analytical workloads, it could be a lot, lot higher than that.
+
+00:39:48.320 --> 00:39:50.860
+But there's loads of formulas you can see out there.
+
+00:39:50.860 --> 00:39:55.540
+But that's an example of a default that probably is a little bit low in Postgres in general.
+
+00:39:55.780 --> 00:40:07.660
+But if it's running on the cheapest server you can get at somewhere like Linode and it's got, you know, 200 megs total, well, then you want it to still be right and slow, not wrong and crashing or fast and crashing.
+
+00:40:07.660 --> 00:40:08.400
+Yeah, exactly.
+
+00:40:09.400 --> 00:40:11.800
+Yeah, you do need to know these defaults.
+
+00:40:11.800 --> 00:40:15.920
+I think part of being successful is like, okay, this is my context.
+
+00:40:15.920 --> 00:40:17.460
+So these are the defaults that make sense.
+
+00:40:17.460 --> 00:40:19.560
+And these are the ones that I should be tweaking.
+
+00:40:19.560 --> 00:40:28.040
+So in another presentation I've seen you give, you talked about the process that you go through for finding these.
+
+00:40:28.040 --> 00:40:32.980
+You sort of determining there's a problem, figuring out what it is, and then, you know, solving it.
+
+00:40:32.980 --> 00:40:34.660
+You want to talk through your process there?
+
+00:40:34.660 --> 00:40:35.580
+Yeah, absolutely.
+
+00:40:35.580 --> 00:40:39.960
+And this is a process I recommend and I'm guilty of not always following.
+
+00:40:39.960 --> 00:40:42.000
+But this helped me as well.
+
+00:40:42.000 --> 00:40:42.660
+So, yeah.
+
+00:40:42.660 --> 00:40:44.880
+Learn the rules first so then you can break them later.
+
+00:40:44.880 --> 00:40:45.300
+There you go.
+
+00:40:45.300 --> 00:40:46.140
+Right, exactly.
+
+00:40:46.140 --> 00:40:48.620
+But I tend to regret breaking these, actually.
+
+00:40:48.620 --> 00:40:54.640
+So, yeah, the first couple I think we've already covered briefly were run on a realistic data set.
+
+00:40:54.640 --> 00:41:01.280
+And then the second one being make use of the parameters that Explain has in your database.
+
+00:41:01.280 --> 00:41:06.600
+So for Postgres, use as many as your version supports is my, it tends to be my recommendation.
+
+00:41:06.600 --> 00:41:10.240
+So get a lot of information is the short version of that.
+
+00:41:10.240 --> 00:41:20.900
+With Postgres query plans, I think, especially if people are used to reading text format ones, they'd be very easily forgiven for starting at the English speaking world.
+
+00:41:20.900 --> 00:41:22.920
+Start at the top, read left to right.
+
+00:41:23.020 --> 00:41:24.060
+Makes loads of sense.
+
+00:41:24.060 --> 00:41:26.440
+But the plans are indented.
+
+00:41:26.440 --> 00:41:29.120
+So they're a list of operations that Postgres is doing.
+
+00:41:29.120 --> 00:41:33.600
+And the first one you see is the last one it does to give you the data back.
+
+00:41:33.600 --> 00:41:33.880
+Right.
+
+00:41:33.880 --> 00:41:35.760
+Think about it like an onion, right?
+
+00:41:35.760 --> 00:41:38.920
+It's the outer shell of the thing that you're being given.
+
+00:41:38.920 --> 00:41:39.860
+Yeah, exactly.
+
+00:41:39.860 --> 00:41:43.380
+It'd be difficult to start in the inside of an onion, wouldn't it?
+
+00:41:43.380 --> 00:41:46.220
+So, yes, my advice tends to be.
+
+00:41:46.220 --> 00:41:54.820
+So firstly, you need to know that the plan is executed from the most indented inwards just to be able to understand what's going on.
+
+00:41:54.820 --> 00:41:59.560
+But secondly, it reports some really important statistics right at the bottom.
+
+00:41:59.560 --> 00:42:10.560
+So the total execution time being an obvious example, but also the amount of time it spends on planning, on triggers and on just in time compilation.
+
+00:42:10.560 --> 00:42:14.500
+So these are don't worry if you don't know what all of those mean.
+
+00:42:14.500 --> 00:42:15.600
+I didn't.
+
+00:42:15.600 --> 00:42:20.100
+But those can all in rare cases be the dominant issue.
+
+00:42:20.100 --> 00:42:34.960
+So if planning time is 300 milliseconds and your execution time is one millisecond, but you've got 20 operations that the query is done in that one millisecond, you could spend easily an hour trying to understand that entire query plan.
+
+00:42:34.960 --> 00:42:35.960
+Maybe more.
+
+00:42:35.960 --> 00:42:42.180
+Maybe you've been interrupted a few times and then you get to the bottom and you see that planning time was the problem the whole time.
+
+00:42:42.180 --> 00:42:46.560
+You're like, I have five seconds, five milliseconds I could possibly save.
+
+00:42:46.560 --> 00:42:47.160
+Yeah.
+
+00:42:47.160 --> 00:42:47.880
+Yeah, exactly.
+
+00:42:48.180 --> 00:42:51.200
+Do things like cache the query plans or stuff like that?
+
+00:42:51.200 --> 00:42:51.740
+Yes.
+
+00:42:51.740 --> 00:42:53.580
+So that's a whole topic in itself.
+
+00:42:53.580 --> 00:42:56.900
+But a lot of IRMs do that kind of thing for you.
+
+00:42:56.900 --> 00:42:57.180
+Yeah.
+
+00:42:57.180 --> 00:43:01.000
+But the big advice there is not so much on the planning time front.
+
+00:43:01.000 --> 00:43:02.860
+It's more check out that bottom.
+
+00:43:02.860 --> 00:43:10.180
+If you're on Postgres especially, check out that bottom section first and look for dominant issues before you spend ages reviewing the rest of the query plan.
+
+00:43:10.180 --> 00:43:10.460
+Okay.
+
+00:43:10.460 --> 00:43:13.260
+So that's the third of the five.
+
+00:43:13.260 --> 00:43:17.860
+And the fourth is then the bit that I sometimes mess up and forget to do.
+
+00:43:17.860 --> 00:43:20.660
+Which is work out which.
+
+00:43:20.660 --> 00:43:32.460
+So if you then have to look through that tree of operations, don't look at any of the statistics until you've worked out where the time is going or where the majority of the work is happening.
+
+00:43:32.680 --> 00:43:37.620
+So Postgres especially is difficult in this area because it will report.
+
+00:43:37.620 --> 00:43:39.280
+I think MySQL does the same.
+
+00:43:39.280 --> 00:43:41.300
+I'm not sure about Mongo and others.
+
+00:43:41.500 --> 00:43:46.360
+It will report all of the operations, including the statistics of their children.
+
+00:43:46.560 --> 00:43:53.520
+So you have to do a bunch of subtraction or and some slightly more complicated stuff than that, sadly, to work out where this time is going.
+
+00:43:53.520 --> 00:43:58.140
+And it's very easy to get distracted by something, a pattern that you've seen before.
+
+00:43:58.140 --> 00:44:06.240
+Like, you know, the obvious, the one that gets me and lots of other people is spot a sequential scan on a relatively big table.
+
+00:44:06.240 --> 00:44:07.280
+And you start to meet.
+
+00:44:07.280 --> 00:44:10.120
+You just jump to that and think that's probably where the problem is.
+
+00:44:10.120 --> 00:44:10.860
+Miss index.
+
+00:44:10.860 --> 00:44:11.720
+We're going to go fix that.
+
+00:44:11.780 --> 00:44:12.340
+Yeah, exactly.
+
+00:44:12.340 --> 00:44:19.020
+But in a big enough query, a scan of even a few hundred thousand rows might be them, especially if it's returning.
+
+00:44:19.020 --> 00:44:20.760
+Most of them might be optimal.
+
+00:44:20.760 --> 00:44:23.040
+It definitely might not be the bottleneck.
+
+00:44:23.040 --> 00:44:24.620
+There might be bigger problems.
+
+00:44:24.620 --> 00:44:25.040
+Sure.
+
+00:44:25.040 --> 00:44:29.960
+So, yeah, my advice is work out where the time's going or the work's being done first.
+
+00:44:29.960 --> 00:44:34.700
+And then the last step is once you've found like, is there a big bottleneck?
+
+00:44:34.700 --> 00:44:35.940
+Where's the time going?
+
+00:44:36.480 --> 00:44:41.940
+Then a narrow down into looking at just that operation or that cluster or that subtree.
+
+00:44:41.940 --> 00:44:44.360
+Like, and it could be a programming pattern.
+
+00:44:44.360 --> 00:44:49.080
+It could be, well, this query is returning 200,000 rows.
+
+00:44:49.080 --> 00:44:55.320
+When it gets back to the app, the app is iterating over the first 10 and deciding it's had enough.
+
+00:44:55.320 --> 00:44:55.980
+Right.
+
+00:44:55.980 --> 00:44:56.740
+But meanwhile.
+
+00:44:56.740 --> 00:44:57.820
+Yeah.
+
+00:44:57.820 --> 00:44:58.900
+And yeah, exactly.
+
+00:44:58.900 --> 00:44:59.920
+So, yeah.
+
+00:44:59.920 --> 00:45:01.500
+I mean, it could be that.
+
+00:45:01.500 --> 00:45:01.700
+Yeah.
+
+00:45:01.700 --> 00:45:05.100
+And the fix would be a simple limit 10 and skip a certain amount.
+
+00:45:05.100 --> 00:45:08.560
+Just put paging in the app as part of the query and you're good to go.
+
+00:45:08.560 --> 00:45:09.140
+Yeah, exactly.
+
+00:45:09.140 --> 00:45:12.480
+Pagination is huge, especially once you've got good indexing.
+
+00:45:12.480 --> 00:45:14.140
+It can be so, so powerful.
+
+00:45:14.140 --> 00:45:14.620
+Yeah.
+
+00:45:14.620 --> 00:45:22.260
+But yeah, I mean, to be fair, we're probably, this process is mostly for a query that you've worked out is slow and you want to make faster.
+
+00:45:22.260 --> 00:45:23.500
+And that would be a great example.
+
+00:45:23.500 --> 00:45:26.420
+But then there are also other application side things.
+
+00:45:26.420 --> 00:45:33.300
+So it might not be that any of these queries are slow necessarily, but you're firing off, you know, the typical N plus one example.
+
+00:45:33.300 --> 00:45:35.580
+You know, you're firing off a lot when you don't need to.
+
+00:45:35.580 --> 00:45:38.380
+You could, instead of going, doing a lot of round trips.
+
+00:45:38.380 --> 00:45:39.300
+Yeah.
+
+00:45:39.300 --> 00:45:48.700
+Instead of doing like an eager join, eager load on an ORM relationship, you're doing, I got a 50 of these back and then I'm doing the relationship 50 times.
+
+00:45:48.700 --> 00:45:48.940
+Yeah.
+
+00:45:48.940 --> 00:45:49.560
+Yeah, exactly.
+
+00:45:49.560 --> 00:45:49.960
+Yeah.
+
+00:45:49.960 --> 00:45:55.160
+And that echoing out the database calls of your ORM, you'll just see stuff ripping by you.
+
+00:45:55.160 --> 00:45:57.060
+Like, why is there so much database stuff here?
+
+00:45:57.060 --> 00:45:57.940
+This seems insane.
+
+00:45:57.940 --> 00:45:59.420
+And they're like, well, N plus one.
+
+00:45:59.420 --> 00:45:59.600
+Yeah.
+
+00:45:59.600 --> 00:46:00.160
+That's the problem.
+
+00:46:00.160 --> 00:46:00.720
+Really quick.
+
+00:46:00.720 --> 00:46:01.960
+I want to just follow up on that.
+
+00:46:01.960 --> 00:46:05.580
+There was a question out in the audience saying, what would you like to use?
+
+00:46:05.580 --> 00:46:09.700
+Would you want to use maybe Postgres and SQLAlchemy or Psycho PG2?
+
+00:46:09.700 --> 00:46:13.380
+Maybe the async version these days would be really nice to use.
+
+00:46:13.380 --> 00:46:16.620
+I said, well, you might also consider a SQL model.
+
+00:46:16.620 --> 00:46:24.560
+But with either of those SQL model built on top of SQLAlchemy or just SQLAlchemy, the question was, can it handle getting millions of rows back in a short amount of time?
+
+00:46:24.560 --> 00:46:25.600
+Yes and no.
+
+00:46:25.600 --> 00:46:29.080
+I like to hear what your experience is with this, Michael, if you have any.
+
+00:46:29.080 --> 00:46:36.000
+What I've seen is a lot of times the database will really quickly give those results back and actually even ship them over the network to the app.
+
+00:46:36.140 --> 00:46:41.480
+But the deserialization of like, here is a record and I'm going to make a class out of it.
+
+00:46:41.480 --> 00:46:42.200
+And here's a record.
+
+00:46:42.200 --> 00:46:46.860
+And you're making a million classes and setting probably 10 properties on each one of them.
+
+00:46:46.860 --> 00:46:48.520
+You know, 10 million assignments.
+
+00:46:48.520 --> 00:46:51.940
+Like that's, it doesn't matter how fast your database is going to be.
+
+00:46:51.940 --> 00:46:55.860
+Just don't return 10 million rows into an RM almost ever.
+
+00:46:55.860 --> 00:46:58.060
+Very, very rarely, let's say.
+
+00:46:58.320 --> 00:46:58.940
+Yeah, exactly.
+
+00:46:58.940 --> 00:47:04.380
+The general advice I think is if you're going to be doing aggregation work, try to do it database side.
+
+00:47:04.380 --> 00:47:06.080
+They're designed to do that stuff.
+
+00:47:06.080 --> 00:47:08.720
+They have incredibly smart algorithms built into them.
+
+00:47:08.720 --> 00:47:13.420
+I'm sure there's exceptions, but it seems to be the wise way of doing things.
+
+00:47:13.420 --> 00:47:15.800
+I mean, of course, analytical stuff.
+
+00:47:15.920 --> 00:47:23.680
+Maybe you are presenting a report that needs to be hundreds of thousands of lines long, but there aren't many apps that there is a good argument for that, I don't think.
+
+00:47:23.680 --> 00:47:23.940
+Yeah.
+
+00:47:23.940 --> 00:47:29.260
+And so many of these, these ORMs have a way to limit the returned fields, right?
+
+00:47:29.260 --> 00:47:37.680
+Say I only need the title and the ID, or I need the title, the price and the ID, because I'm going to do some local data sciencey stuff with price or whatever.
+
+00:47:37.680 --> 00:47:38.180
+Right.
+
+00:47:38.180 --> 00:47:41.100
+But you don't need the full description and all the user reviews or whatever.
+
+00:47:41.100 --> 00:47:41.400
+Right.
+
+00:47:41.400 --> 00:47:43.380
+So that can save a lot.
+
+00:47:43.380 --> 00:47:44.420
+That's such a good point.
+
+00:47:44.420 --> 00:47:47.440
+And yes, I think I might even see that one more often.
+
+00:47:47.440 --> 00:47:51.660
+So requesting, you know, it's effectively the select staff from equivalent.
+
+00:47:51.660 --> 00:47:52.700
+Yeah, it is.
+
+00:47:52.700 --> 00:47:52.900
+Yeah.
+
+00:47:52.900 --> 00:47:55.820
+You'd be surprised how many different things that can affect.
+
+00:47:55.820 --> 00:48:03.860
+The number of operations down that tree that can be affected by the number of columns you've requested is huge.
+
+00:48:03.860 --> 00:48:04.680
+Interesting.
+
+00:48:04.680 --> 00:48:11.660
+It affects things like, oh, by the way, the same goes for how many columns you ask for it to be sorted or ordered by.
+
+00:48:12.060 --> 00:48:19.260
+So it can make the difference between being able to do, for example, an index only scan versus an index scan.
+
+00:48:19.260 --> 00:48:21.560
+That can be a huge performance difference.
+
+00:48:21.560 --> 00:48:23.120
+Just that one alone.
+
+00:48:23.120 --> 00:48:26.240
+In terms of aggregation, it can make a big difference.
+
+00:48:26.240 --> 00:48:27.860
+There's so many things.
+
+00:48:27.860 --> 00:48:31.380
+You'd be kind of the knock on effects of passing that many data.
+
+00:48:31.620 --> 00:48:32.560
+We talked about sorts.
+
+00:48:32.560 --> 00:48:39.920
+If you're having to keep that many rows in memory and each one's bigger, they're going to use that work memory more quickly.
+
+00:48:39.920 --> 00:48:40.300
+Right.
+
+00:48:40.300 --> 00:48:44.260
+It might fall back to one of those write to disk and sort it rather than sort it in memory.
+
+00:48:44.260 --> 00:48:44.800
+Exactly.
+
+00:48:44.800 --> 00:48:45.420
+Interesting.
+
+00:48:45.420 --> 00:48:46.020
+Okay.
+
+00:48:46.240 --> 00:48:48.800
+I hadn't thought about the knock on effects as much.
+
+00:48:48.800 --> 00:48:51.440
+Let's talk a little bit about fixing this.
+
+00:48:51.440 --> 00:48:51.800
+All right.
+
+00:48:51.800 --> 00:48:52.660
+We've set up the problem.
+
+00:48:52.660 --> 00:48:54.060
+Things you shouldn't do.
+
+00:48:54.060 --> 00:48:54.420
+Yeah.
+
+00:48:54.600 --> 00:48:56.660
+But how do you know whether you're doing them?
+
+00:48:56.660 --> 00:48:57.160
+Right.
+
+00:48:57.160 --> 00:49:03.040
+So you've got a couple of free tools that people can use that you might give a shout out to.
+
+00:49:03.040 --> 00:49:07.040
+And then let's talk about PG Mustard and maybe talk through some examples there as well.
+
+00:49:07.040 --> 00:49:07.400
+Sure.
+
+00:49:07.780 --> 00:49:11.560
+So, yeah, there's, I mean, there's so many career plan visualization tools.
+
+00:49:11.560 --> 00:49:15.160
+A lot of the IDEs we discussed also have them inbuilt as well.
+
+00:49:15.160 --> 00:49:18.760
+Amazingly, a lot of them seem to choose to visualize it quite differently.
+
+00:49:18.760 --> 00:49:22.500
+So it's quite, it'd be quite interesting looking through some of them.
+
+00:49:22.500 --> 00:49:32.300
+But the one you've got up on screen at the moment is a free tool written by a French team at Postgres Consultancy called, I don't know how to pronounce it.
+
+00:49:32.300 --> 00:49:33.680
+It's either Dalibo or Dalibo.
+
+00:49:34.240 --> 00:49:43.600
+And they, this tool is inspired, I think it's even a fork of a product that was written many years ago by a great guy called Alex Tatyans.
+
+00:49:43.600 --> 00:49:48.820
+So a lot of guys, a lot of people will recognize the Tatyans name from the URL.
+
+00:49:48.820 --> 00:49:49.980
+That was a tool called PEV.
+
+00:49:49.980 --> 00:49:55.140
+So back in the day when I started, the two tools were Depeze and Tatyans.
+
+00:49:55.140 --> 00:49:57.840
+So Depeze being the one you just flipped to briefly there.
+
+00:49:57.840 --> 00:49:58.620
+Yeah, yeah, yeah.
+
+00:49:58.620 --> 00:50:02.200
+This is like the origin, well, this is the first one I'm aware of.
+
+00:50:02.200 --> 00:50:03.760
+Let's start with the OG first then.
+
+00:50:03.840 --> 00:50:04.280
+Yeah, okay.
+
+00:50:04.280 --> 00:50:07.120
+This guy is a bit of a legend in the Postgres community.
+
+00:50:07.120 --> 00:50:10.260
+He's so helpful on so many of the chat forums.
+
+00:50:10.260 --> 00:50:13.900
+And he's a Postgres DVA and has been for many, many years.
+
+00:50:13.900 --> 00:50:19.920
+And he built this tool because the text format of Explain, I think he described it as unreadable.
+
+00:50:19.920 --> 00:50:26.420
+So he's written a whole great blog series on maybe six parts now on reading Explain plans.
+
+00:50:26.580 --> 00:50:33.240
+And this tool he's using to highlight in red here kind of big problems or where a lot of
+
+00:50:33.240 --> 00:50:33.900
+the time is going.
+
+00:50:33.900 --> 00:50:35.900
+So that's that step four that we talked about.
+
+00:50:35.900 --> 00:50:38.040
+Work out where the time is going first.
+
+00:50:38.300 --> 00:50:44.000
+So if you've seen the Explain text, it's kind of indented and talks about the problem and
+
+00:50:44.000 --> 00:50:45.100
+it has things about timing.
+
+00:50:45.100 --> 00:50:50.360
+But here's an HTML table that has columns that shows you the timing and then the number of
+
+00:50:50.360 --> 00:50:51.460
+rows is very important.
+
+00:50:52.240 --> 00:50:54.700
+And then it has, again, still the actual text.
+
+00:50:54.700 --> 00:50:58.200
+And it sounds to me like you think this is pretty important to still have the text that
+
+00:50:58.200 --> 00:50:58.900
+people expect.
+
+00:50:58.900 --> 00:51:04.140
+I think that text is super important for experts and people that have been doing Postgres performance
+
+00:51:04.140 --> 00:51:05.020
+work for years.
+
+00:51:05.020 --> 00:51:10.140
+So they can fall back to that text if the left hand side is not helping them.
+
+00:51:10.140 --> 00:51:12.800
+Or in the case we're looking at right now, there's a lot of red.
+
+00:51:12.800 --> 00:51:15.500
+It might be tricky to know where to start.
+
+00:51:15.500 --> 00:51:18.560
+You might fall back to looking at the right hand side for something.
+
+00:51:18.560 --> 00:51:23.340
+Interestingly, that rows column is a row count estimate multiplication.
+
+00:51:23.880 --> 00:51:28.940
+So it's how many rows did Postgres expect to get versus how many actually came back.
+
+00:51:28.940 --> 00:51:35.040
+And that's super important for the cases we discussed briefly around which join algorithms
+
+00:51:35.040 --> 00:51:37.000
+they're going to choose or multiple other.
+
+00:51:37.000 --> 00:51:39.160
+Join order is really important as well.
+
+00:51:39.160 --> 00:51:44.140
+It will try and filter out as many as possible in the first few joins so that there's less data
+
+00:51:44.140 --> 00:51:45.940
+to worry about in the future ones.
+
+00:51:45.940 --> 00:51:50.400
+So if it's really far out in an estimate somewhere, that's really important.
+
+00:51:50.900 --> 00:51:54.300
+So yeah, this tool is doing some of those things and doing it really neatly.
+
+00:51:54.300 --> 00:51:57.540
+But that text format, I think, is super expert friendly.
+
+00:51:57.540 --> 00:52:03.780
+People that are very used to the Postgres text format, this is probably the tool they're going to like best.
+
+00:52:03.780 --> 00:52:05.160
+Yeah, it's really nice.
+
+00:52:05.160 --> 00:52:05.440
+Okay.
+
+00:52:05.440 --> 00:52:09.900
+And then there's the Dalibo, other one that's similar, right?
+
+00:52:09.900 --> 00:52:10.320
+Yes.
+
+00:52:10.320 --> 00:52:12.840
+So this one's the one that's based on PEV.
+
+00:52:12.840 --> 00:52:14.760
+So they call it PEV2, I think.
+
+00:52:14.760 --> 00:52:17.520
+And it's open source GitHub repo is PEV2.
+
+00:52:17.920 --> 00:52:20.180
+And this is their hosted tool.
+
+00:52:20.180 --> 00:52:22.060
+Again, free to use, open source.
+
+00:52:22.060 --> 00:52:27.780
+And like the other one, this supports both text format explains and JSON format explains.
+
+00:52:27.780 --> 00:52:30.680
+So I think that, yeah, that's what they're saying up at the top there.
+
+00:52:30.680 --> 00:52:33.140
+This is much more visual as a tool.
+
+00:52:33.140 --> 00:52:35.680
+So this displays the query plan.
+
+00:52:35.680 --> 00:52:38.260
+Sadly, they don't have an example that I can just pull up.
+
+00:52:38.260 --> 00:52:40.680
+I'd have to like put it all together and drop it in there.
+
+00:52:40.680 --> 00:52:41.260
+Or do they?
+
+00:52:41.260 --> 00:52:42.920
+I didn't see one when I clicked around on it.
+
+00:52:42.920 --> 00:52:45.100
+At the bottom, they might have sample plans.
+
+00:52:45.100 --> 00:52:45.900
+There you go.
+
+00:52:45.900 --> 00:52:49.040
+So if you, the gray button on the right.
+
+00:52:49.040 --> 00:52:49.620
+Oh, yeah, yeah.
+
+00:52:49.620 --> 00:52:50.100
+Okay, you're right.
+
+00:52:50.100 --> 00:52:50.320
+Okay.
+
+00:52:50.320 --> 00:52:51.560
+Let's just go with that one.
+
+00:52:51.560 --> 00:52:52.100
+Cool.
+
+00:52:52.100 --> 00:52:53.380
+And then I'll submit it.
+
+00:52:53.380 --> 00:52:53.760
+Yeah.
+
+00:52:53.760 --> 00:52:54.100
+How did it?
+
+00:52:54.100 --> 00:52:54.800
+Oh, well, it's gray.
+
+00:52:54.800 --> 00:52:55.480
+That's why I missed it.
+
+00:52:55.480 --> 00:52:55.700
+Okay.
+
+00:52:55.700 --> 00:52:55.860
+Yeah.
+
+00:52:55.860 --> 00:52:56.700
+This looks fantastic.
+
+00:52:56.700 --> 00:52:57.320
+Yes.
+
+00:52:57.320 --> 00:52:59.080
+So this is a visualization.
+
+00:52:59.080 --> 00:53:01.500
+Very similar color scheme to the last one.
+
+00:53:01.500 --> 00:53:02.780
+So you'll see things in red.
+
+00:53:02.780 --> 00:53:04.060
+They're saying are really bad.
+
+00:53:04.060 --> 00:53:05.860
+Orange, if they're medium, bad.
+
+00:53:05.860 --> 00:53:08.320
+And then yellow, if they're maybe a problem.
+
+00:53:08.320 --> 00:53:08.520
+Slowly?
+
+00:53:08.520 --> 00:53:09.540
+Yeah, exactly.
+
+00:53:09.540 --> 00:53:09.820
+Slightly bad?
+
+00:53:10.760 --> 00:53:12.360
+Don't worry about it for now.
+
+00:53:12.360 --> 00:53:13.080
+Get back to it later.
+
+00:53:13.080 --> 00:53:13.400
+Yeah.
+
+00:53:13.400 --> 00:53:16.320
+So this is good for visual stuff.
+
+00:53:16.320 --> 00:53:17.660
+If you're that way inclined.
+
+00:53:17.660 --> 00:53:23.840
+The other thing, some people that are still extremely competent at this love the left-hand
+
+00:53:23.840 --> 00:53:24.680
+side, especially.
+
+00:53:24.680 --> 00:53:32.940
+So it looks unassuming, but those little bars are kind of like a flame chart on its side.
+
+00:53:33.400 --> 00:53:37.900
+And they'll show you, in this case, we're looking at the amount of time spent by each
+
+00:53:37.900 --> 00:53:38.320
+operation.
+
+00:53:38.320 --> 00:53:43.000
+But you might be able to say buffers there is a really popular way of looking at it.
+
+00:53:43.000 --> 00:53:48.060
+And that's a feature that's not in a lot of the other tools.
+
+00:53:48.060 --> 00:53:51.260
+So that's a common reason that people really like this tool.
+
+00:53:51.260 --> 00:53:51.700
+Fantastic.
+
+00:53:51.700 --> 00:53:52.140
+Okay.
+
+00:53:52.140 --> 00:53:55.080
+So these are both totally free, web-hosted.
+
+00:53:55.080 --> 00:53:56.380
+Sounds like some of them are open source.
+
+00:53:56.380 --> 00:53:58.180
+You can probably download them as well.
+
+00:53:58.180 --> 00:53:59.080
+They look nice.
+
+00:53:59.480 --> 00:54:02.060
+Let's talk PG Mustard a little bit.
+
+00:54:02.060 --> 00:54:07.640
+So like I said, when I came across this, I thought, wow, this is really a lot nicer than
+
+00:54:07.640 --> 00:54:09.780
+the other tools that I've seen for doing this.
+
+00:54:09.780 --> 00:54:13.380
+And maybe the best way to understand it would be to like sort of talk about two things real
+
+00:54:13.380 --> 00:54:13.640
+quick.
+
+00:54:13.640 --> 00:54:15.520
+You can tell me how you want to talk about it.
+
+00:54:15.520 --> 00:54:19.320
+But I think maybe the performance, talk about the performance advice.
+
+00:54:19.320 --> 00:54:20.700
+What do you think about that?
+
+00:54:20.700 --> 00:54:22.540
+Like we could maybe go through that real quick.
+
+00:54:22.540 --> 00:54:24.280
+Some of the things it'll find for you.
+
+00:54:24.280 --> 00:54:24.860
+Well, yes.
+
+00:54:24.860 --> 00:54:25.180
+Yeah.
+
+00:54:25.180 --> 00:54:27.400
+I know there's a lot listed there.
+
+00:54:27.660 --> 00:54:32.560
+But the short version is that we're also trying to, we've got some strong opinions on the
+
+00:54:32.560 --> 00:54:33.360
+visual side of things.
+
+00:54:33.360 --> 00:54:37.480
+You know, the red gate trying to keep things as simple as possible has not left.
+
+00:54:37.480 --> 00:54:40.580
+So my co-founder of this is a guy called Dave.
+
+00:54:40.580 --> 00:54:44.440
+And we worked together for a couple of years, almost full time building this.
+
+00:54:44.440 --> 00:54:48.060
+So we've also spent a lot more time than some of the others on building this.
+
+00:54:48.060 --> 00:54:51.880
+So the big differences are on the visualization front.
+
+00:54:51.880 --> 00:54:53.380
+We try and keep things that bit simpler.
+
+00:54:53.380 --> 00:54:55.180
+We're also a lot more opinionated.
+
+00:54:55.680 --> 00:54:57.960
+We assume you are trying to speed up your query.
+
+00:54:57.960 --> 00:55:02.660
+That might sound stupid, but it's not the only reason you would look at a query plan.
+
+00:55:02.660 --> 00:55:08.140
+So there are reasons why that we might not be a good fit for people.
+
+00:55:08.140 --> 00:55:11.800
+Let's say you're working on the Postgres source code and you're trying to implement a new feature
+
+00:55:11.800 --> 00:55:14.140
+and you just want to look at some explain plans.
+
+00:55:14.140 --> 00:55:17.240
+You probably want the text format and you probably really want the costs.
+
+00:55:17.520 --> 00:55:21.440
+So they're the things that the plan is using to choose between plans.
+
+00:55:21.440 --> 00:55:22.800
+You probably want those highlighted.
+
+00:55:22.800 --> 00:55:24.180
+And we don't highlight those.
+
+00:55:24.180 --> 00:55:28.740
+We hide those really far away from you because most of the time when you're trying to speed up a query,
+
+00:55:28.740 --> 00:55:31.660
+that's not what you're going to be wanting to see.
+
+00:55:31.660 --> 00:55:32.020
+Right.
+
+00:55:32.020 --> 00:55:33.260
+So yeah, so it's super opinionated.
+
+00:55:33.260 --> 00:55:33.460
+Yeah.
+
+00:55:33.560 --> 00:55:38.820
+So which ones of these really do you feel like are both highly valuable, highly recommended,
+
+00:55:38.820 --> 00:55:41.400
+or maybe some that are like, wow, I can't believe it would find that.
+
+00:55:41.400 --> 00:55:42.300
+I would have never found that.
+
+00:55:42.300 --> 00:55:42.960
+Good question.
+
+00:55:42.960 --> 00:55:46.580
+Sadly, the most valuable are the index related ones.
+
+00:55:46.840 --> 00:55:52.020
+So as you mentioned that we call it high index potential when there's a lot of rows being
+
+00:55:52.020 --> 00:55:54.300
+filtered versus the amount being scanned.
+
+00:55:54.300 --> 00:55:58.700
+So that's the big thing to look out for in the text format is when there's higher numbers
+
+00:55:58.700 --> 00:56:04.600
+of rows being filtered, not just on sequential scans, but also if you've got an index scan that's
+
+00:56:04.600 --> 00:56:09.700
+still having to filter out a lot of rows that we call that an inefficient index, but it's only
+
+00:56:09.700 --> 00:56:10.820
+inefficient for that query.
+
+00:56:10.820 --> 00:56:12.920
+It's there's nothing wrong with the index.
+
+00:56:12.920 --> 00:56:15.200
+It's more that your query doesn't suit that.
+
+00:56:15.200 --> 00:56:16.040
+It's just Postgres.
+
+00:56:16.160 --> 00:56:17.840
+That's the best one Postgres could use.
+
+00:56:17.840 --> 00:56:18.500
+Right, right.
+
+00:56:18.500 --> 00:56:20.480
+So yeah, the indexing one's super valuable.
+
+00:56:20.480 --> 00:56:24.340
+Operations on disk, we've already discussed a few times that comes up a lot and poor row
+
+00:56:24.340 --> 00:56:24.700
+estimates.
+
+00:56:24.700 --> 00:56:26.540
+These are the most common.
+
+00:56:26.540 --> 00:56:32.120
+All of the others are either rarer or less valuable when you hit them.
+
+00:56:32.120 --> 00:56:35.700
+But sometimes when they're rare, they can be extremely helpful.
+
+00:56:35.700 --> 00:56:36.460
+So sure.
+
+00:56:36.460 --> 00:56:41.800
+Oh, once you pass the advice of look for table scans and then add an index and, you know,
+
+00:56:41.800 --> 00:56:45.540
+don't select star if you got a big result set so it doesn't go to disk.
+
+00:56:45.540 --> 00:56:49.180
+Like those are pretty not super easy, but those are somewhat easy.
+
+00:56:49.180 --> 00:56:49.880
+Right.
+
+00:56:49.880 --> 00:56:50.560
+Yeah, exactly.
+
+00:56:50.560 --> 00:56:52.340
+And if it's not fast enough, you're like, well, now what?
+
+00:56:52.340 --> 00:56:53.180
+It's not fast.
+
+00:56:53.180 --> 00:56:53.980
+I had an index.
+
+00:56:53.980 --> 00:56:54.720
+It's not fast enough.
+
+00:56:54.720 --> 00:56:55.080
+Now what?
+
+00:56:55.080 --> 00:56:55.360
+Yeah.
+
+00:56:55.360 --> 00:56:59.420
+One more that I'd love to discuss actually is something we talked about really early on
+
+00:56:59.420 --> 00:57:01.720
+is the idea of trying to do less work.
+
+00:57:01.720 --> 00:57:04.000
+So either not doing the work.
+
+00:57:04.000 --> 00:57:09.440
+So what I think something I'm quite proud of is that we'll try and not highlight anything
+
+00:57:09.440 --> 00:57:11.160
+if it's pretty optimal already.
+
+00:57:11.160 --> 00:57:15.900
+Now that's if your query is pretty optimal already and doing a lot of work and still not
+
+00:57:15.900 --> 00:57:17.060
+fast enough for what you want.
+
+00:57:17.440 --> 00:57:18.540
+You kind of need to rethink.
+
+00:57:18.540 --> 00:57:21.900
+You either need to think, should we estimate this number?
+
+00:57:21.900 --> 00:57:27.580
+Do we need to materialize it and run it once every few minutes and have every user look at
+
+00:57:27.580 --> 00:57:29.080
+kind of a cached version of it?
+
+00:57:29.080 --> 00:57:31.660
+So that's quite powerful.
+
+00:57:31.660 --> 00:57:37.060
+And then the other side of it is if it's not efficient, it might be a sign of something else
+
+00:57:37.060 --> 00:57:37.600
+going wrong.
+
+00:57:37.600 --> 00:57:44.340
+So in Postgres, one of the things that it gets beaten with is effectively its equivalent of
+
+00:57:44.340 --> 00:57:45.080
+garbage collection.
+
+00:57:45.080 --> 00:57:51.280
+So the way it does multi-version concurrency control, it ends up bloating the tables and the
+
+00:57:51.280 --> 00:57:54.340
+indexes a little bit, sometimes a lot, which is a problem.
+
+00:57:54.340 --> 00:57:58.520
+It has automatic systems that people sometimes disable around that.
+
+00:57:58.520 --> 00:58:04.740
+But also in older versions, especially indexes on heavily updated tables, for example, can
+
+00:58:04.740 --> 00:58:06.040
+quite quickly and easily bloat.
+
+00:58:06.040 --> 00:58:12.420
+So pointing out, so if you include the buffers flag we talked about, you can spot when Postgres
+
+00:58:12.420 --> 00:58:15.680
+is doing a lot of reads versus the amount of data it's returning.
+
+00:58:15.680 --> 00:58:21.360
+And that's sometimes a sign that, for example, an index has got really badly bloated and rebuilding
+
+00:58:21.360 --> 00:58:25.180
+that index, ideally concurrently if you're on production.
+
+00:58:25.180 --> 00:58:26.880
+But yeah, rebuilding that index.
+
+00:58:26.880 --> 00:58:28.620
+This is how you fix it, Michael.
+
+00:58:28.620 --> 00:58:31.100
+What you do is you put that little banner up there and you say, we're going to be down
+
+00:58:31.100 --> 00:58:32.660
+for four hours on Sunday.
+
+00:58:32.660 --> 00:58:38.200
+So if you just don't mind, don't use our website on Sundays because that's when we rebuild the
+
+00:58:38.200 --> 00:58:38.540
+index.
+
+00:58:38.540 --> 00:58:43.000
+Those are often on the same site that have the really bad queries when they're not offline.
+
+00:58:43.000 --> 00:58:44.660
+Anyway, yeah.
+
+00:58:44.660 --> 00:58:48.720
+So we're trying to help them and trying to educate and trying to teach them how to avoid
+
+00:58:48.720 --> 00:58:49.300
+those things.
+
+00:58:49.300 --> 00:58:50.780
+But yeah, I know exactly what you mean.
+
+00:58:50.780 --> 00:58:52.060
+So yeah, those are the kind of...
+
+00:58:52.060 --> 00:58:52.560
+Yeah, that's good.
+
+00:58:52.560 --> 00:58:52.940
+Yeah.
+
+00:58:52.940 --> 00:58:57.360
+And that I think the more I talk to people that really know this topic and they've spent
+
+00:58:57.360 --> 00:59:04.480
+20, 30 years on it, they focus mostly on work done and really trying to minimize and reduce
+
+00:59:04.480 --> 00:59:05.980
+that as much as possible.
+
+00:59:05.980 --> 00:59:07.680
+Less is more and all of that.
+
+00:59:07.680 --> 00:59:08.160
+So yeah.
+
+00:59:08.160 --> 00:59:08.460
+Yeah.
+
+00:59:08.780 --> 00:59:09.040
+Okay.
+
+00:59:09.040 --> 00:59:12.700
+So let's maybe highlight this through a couple of examples.
+
+00:59:12.700 --> 00:59:14.820
+I also have one final tool to suggest.
+
+00:59:14.820 --> 00:59:23.000
+You have a couple of examples that show how you can check this out and over at app.pgmuster.com,
+
+00:59:23.000 --> 00:59:27.640
+it will give you the visualization that you can dive into and then the recommendations, right?
+
+00:59:27.640 --> 00:59:27.980
+Yeah.
+
+00:59:27.980 --> 00:59:29.740
+So this is just an example we've published.
+
+00:59:29.740 --> 00:59:32.640
+Maybe not the best example ever, but it's one that I like.
+
+00:59:32.640 --> 00:59:33.000
+Sure.
+
+00:59:33.480 --> 00:59:33.700
+All right.
+
+00:59:33.700 --> 00:59:36.200
+Well, maybe let's just talk through the three examples here.
+
+00:59:36.200 --> 00:59:37.780
+Maybe really quickly, the UI.
+
+00:59:37.780 --> 00:59:42.320
+So you've got these nodes that are connected, sort of graph theory-like.
+
+00:59:42.320 --> 00:59:48.580
+You can expand and collapse the sections to get details about very much the indented way
+
+00:59:48.580 --> 00:59:51.140
+of the explain text, right?
+
+00:59:51.320 --> 00:59:51.560
+Yes.
+
+00:59:51.560 --> 00:59:53.620
+So we're trying to mimic the text format with that.
+
+00:59:53.620 --> 00:59:58.180
+So people that are used to text format, this is the exact same structure, but with less
+
+00:59:58.180 --> 00:59:58.780
+data.
+
+00:59:58.780 --> 01:00:00.520
+We're doing some of the calculations there.
+
+01:00:00.520 --> 01:00:04.460
+So it's like those 200,000s that you see there, that's the number of rows being returned
+
+01:00:04.460 --> 01:00:05.440
+at each stage.
+
+01:00:05.440 --> 01:00:10.160
+And one thing you saw was that those two of those operations were hidden by default at the
+
+01:00:10.160 --> 01:00:11.500
+beginning when you first loaded it.
+
+01:00:11.500 --> 01:00:13.460
+That's one of the opinionated things we're doing.
+
+01:00:13.460 --> 01:00:17.200
+By default, we'll hide hot subtrees that are really fast already.
+
+01:00:17.720 --> 01:00:22.120
+So you can, in this example, it's not great, you know, there's only four nodes, but if there,
+
+01:00:22.120 --> 01:00:26.940
+you can get queries that are hundreds of nodes and even ones that return quickly.
+
+01:00:26.940 --> 01:00:33.720
+So hiding fast subtrees is a very opinionated thing to do, but I find very valuable.
+
+01:00:33.720 --> 01:00:34.140
+Sure.
+
+01:00:34.140 --> 01:00:34.760
+I like it.
+
+01:00:34.760 --> 01:00:39.960
+And it's about find, you know, bring your attention to the part where you can make improvements.
+
+01:00:39.960 --> 01:00:40.940
+Yeah, exactly.
+
+01:00:40.940 --> 01:00:41.880
+Where the time is being spent.
+
+01:00:41.880 --> 01:00:42.100
+Yeah.
+
+01:00:42.100 --> 01:00:42.600
+So, yeah.
+
+01:00:42.600 --> 01:00:43.620
+So that's what we're doing.
+
+01:00:43.620 --> 01:00:47.640
+At the top there, we have a timing bar, which is a bit like a flame graph, but
+
+01:00:47.640 --> 01:00:48.580
+viewed from the top.
+
+01:00:48.580 --> 01:00:50.740
+So kind of like a bird's eye view on that.
+
+01:00:50.740 --> 01:00:51.000
+Yeah.
+
+01:00:51.000 --> 01:00:52.740
+Maybe this one's got a little better breakdown.
+
+01:00:52.740 --> 01:00:53.380
+Definitely.
+
+01:00:53.380 --> 01:00:58.860
+So you can see the width of those is the amount of time spent and they're ordered by slowest
+
+01:00:58.860 --> 01:00:59.340
+to fastest.
+
+01:00:59.340 --> 01:01:05.380
+So the idea is to quickly show you if there's one dominant issue versus maybe quite a few
+
+01:01:05.380 --> 01:01:07.020
+that are taking a similar amount of time.
+
+01:01:07.020 --> 01:01:07.300
+Sure.
+
+01:01:07.300 --> 01:01:13.200
+So for people listening, there's this tree of nodes that you can explore to see what's
+
+01:01:13.200 --> 01:01:15.460
+happening, like a gather merge or sort and so on.
+
+01:01:15.580 --> 01:01:19.760
+And there's the timing and the likelihood of good recommendations.
+
+01:01:19.760 --> 01:01:21.080
+They all have numbers.
+
+01:01:21.080 --> 01:01:25.600
+And then across the top, you can see, well, number one was the worst offender of performance
+
+01:01:25.600 --> 01:01:27.240
+and then number zero and then number two.
+
+01:01:27.240 --> 01:01:27.520
+Yeah.
+
+01:01:27.520 --> 01:01:30.180
+I've just realized how un-podcast friendly this might be.
+
+01:01:30.180 --> 01:01:32.100
+So apologies to people listening.
+
+01:01:32.100 --> 01:01:35.700
+Well, you know, I'm going to link to these examples and people can go check them out.
+
+01:01:35.700 --> 01:01:36.020
+Yeah.
+
+01:01:36.020 --> 01:01:36.520
+Well, yeah.
+
+01:01:36.520 --> 01:01:37.000
+Thank you.
+
+01:01:37.000 --> 01:01:40.820
+And then, so the last thing that we're doing, so the other tools do that quite well, in
+
+01:01:40.820 --> 01:01:44.540
+my opinion, in terms of showing you where the time's going, I prefer a very visual way of
+
+01:01:44.540 --> 01:01:44.900
+seeing that.
+
+01:01:44.900 --> 01:01:47.060
+And that's similar to the Dalabo one we looked at.
+
+01:01:47.060 --> 01:01:50.140
+You can see quite quickly where those time bars are going.
+
+01:01:50.140 --> 01:01:53.520
+The thing we do additionally is these scored tips.
+
+01:01:53.740 --> 01:01:59.080
+So we're trying to look for every issue we know about and we're trying to look at them
+
+01:01:59.080 --> 01:02:00.740
+on every single operation we see.
+
+01:02:00.740 --> 01:02:05.120
+And then we're calculating roughly how much time we think you could save if you fix the
+
+01:02:05.120 --> 01:02:06.700
+problem that we think might be there.
+
+01:02:06.780 --> 01:02:11.760
+And then scoring that so that we only show you the top three, maximum three, in this case,
+
+01:02:11.760 --> 01:02:12.360
+just one.
+
+01:02:12.360 --> 01:02:18.680
+So even in this case, you can see that most of the time is being spent doing 200,000 loops
+
+01:02:18.680 --> 01:02:19.900
+of an index only scan.
+
+01:02:19.900 --> 01:02:24.700
+So something that's probably extremely fast on its own, but the fact we're doing 200,000
+
+01:02:24.700 --> 01:02:26.460
+loops of it adds up quite quickly.
+
+01:02:26.460 --> 01:02:26.780
+Maybe a problem.
+
+01:02:26.780 --> 01:02:27.140
+Yeah.
+
+01:02:27.140 --> 01:02:27.900
+Yeah, exactly.
+
+01:02:27.900 --> 01:02:31.820
+And the real problem is a bad row estimate.
+
+01:02:31.820 --> 01:02:34.620
+So in fact, it's the exact example we were discussing earlier.
+
+01:02:34.620 --> 01:02:37.160
+It's picked a nested loop because it's not expecting that many.
+
+01:02:37.160 --> 01:02:40.240
+It's not expecting to have to do that many loops if we.
+
+01:02:40.240 --> 01:02:40.600
+Yeah.
+
+01:02:40.600 --> 01:02:46.960
+And the, but in reality, there were that, sorry, nearly 200 times more rows than it was expecting.
+
+01:02:46.960 --> 01:02:50.200
+And that was probably a bad choice of joint algorithm.
+
+01:02:50.200 --> 01:02:50.640
+Right.
+
+01:02:50.640 --> 01:02:51.020
+Okay.
+
+01:02:51.020 --> 01:02:51.440
+Yeah.
+
+01:02:51.440 --> 01:02:55.000
+And so if I click on, you know, just, if you just open it up right on the left, it says
+
+01:02:55.000 --> 01:03:01.020
+top tips, 4.6 out of five likelihood of improvement, operation zero row estimate out by a factor
+
+01:03:01.020 --> 01:03:02.280
+of 191.8.
+
+01:03:02.280 --> 01:03:05.100
+Then I can click on, on the details here.
+
+01:03:05.100 --> 01:03:08.660
+If I click on the node that it pulls up, it says that same thing.
+
+01:03:08.660 --> 01:03:14.100
+You can expand it out and it, it gives you a nice human English language description of
+
+01:03:14.100 --> 01:03:15.020
+that.
+
+01:03:15.020 --> 01:03:20.020
+And then the operations, the, the nested loop, it describes like what that is, gives
+
+01:03:20.020 --> 01:03:21.400
+you some stats on the buffers.
+
+01:03:21.400 --> 01:03:25.900
+And then the operational details, like it was an inner join and how long it took and
+
+01:03:25.900 --> 01:03:26.200
+so on.
+
+01:03:26.200 --> 01:03:26.700
+Yeah, absolutely.
+
+01:03:26.700 --> 01:03:29.320
+And actually it's a really good point on the operation descriptions.
+
+01:03:29.320 --> 01:03:33.080
+I also spent ages, probably a couple of months solid, right?
+
+01:03:33.080 --> 01:03:37.180
+Like making documentation page or a glossary of terms that you can come across in.
+
+01:03:37.340 --> 01:03:38.340
+Yeah.
+
+01:03:38.340 --> 01:03:42.880
+It's like writing a manual, but in like two paragraphs at a time to be delivered.
+
+01:03:42.880 --> 01:03:43.240
+Yeah.
+
+01:03:43.240 --> 01:03:46.780
+So we put a lot of them in the product, but I've also put them online for people so they
+
+01:03:46.780 --> 01:03:48.340
+can freely access them as well.
+
+01:03:48.340 --> 01:03:52.180
+Um, so if, yeah, those are all available on glossary on our website as well.
+
+01:03:52.180 --> 01:03:52.520
+Yeah.
+
+01:03:52.520 --> 01:03:53.320
+Okay.
+
+01:03:53.320 --> 01:03:55.160
+So in this example, what do I do?
+
+01:03:55.160 --> 01:03:58.500
+Like it tells me these things, what should I go do to make this better?
+
+01:03:58.500 --> 01:03:59.360
+Is there anything?
+
+01:03:59.360 --> 01:03:59.680
+Yeah.
+
+01:03:59.680 --> 01:04:00.780
+Well, exactly.
+
+01:04:00.780 --> 01:04:02.460
+I mean, here's what we're looking at.
+
+01:04:02.460 --> 01:04:04.920
+Vero estimates are tricky.
+
+01:04:04.920 --> 01:04:13.080
+Um, but Postgres has a thing called analyze where it will gather statistics on each table.
+
+01:04:13.080 --> 01:04:14.560
+It will take a sample of them.
+
+01:04:14.560 --> 01:04:16.680
+It will look for most common values.
+
+01:04:16.680 --> 01:04:20.840
+Uh, so it can kind of estimate joins accurately, that kind of thing.
+
+01:04:21.200 --> 01:04:25.540
+And it might be that analyze hasn't run in a long time for, for whatever reason.
+
+01:04:25.540 --> 01:04:28.780
+I see the data has dramatically changed since it last took stats.
+
+01:04:28.780 --> 01:04:32.180
+So it's using out of date stats to make its decisions.
+
+01:04:32.180 --> 01:04:32.800
+Okay.
+
+01:04:32.800 --> 01:04:38.280
+A really common cause of that is if you do a major version upgrade in Postgres, it doesn't
+
+01:04:38.280 --> 01:04:39.460
+bring along your statistics.
+
+01:04:39.460 --> 01:04:42.240
+So you do need to run and analyze as part of your upgrade.
+
+01:04:42.240 --> 01:04:43.220
+So that's really important.
+
+01:04:43.220 --> 01:04:43.620
+Okay.
+
+01:04:43.620 --> 01:04:48.360
+But then if you, there's a learn more link here as well with, it'll go into quite a few
+
+01:04:48.360 --> 01:04:49.300
+more things you can do.
+
+01:04:49.380 --> 01:04:54.660
+So if it's not analyzed, there's a bunch of other ways you can teach Postgres or ask
+
+01:04:54.660 --> 01:04:56.440
+Postgres to gather more statistics.
+
+01:04:56.440 --> 01:04:58.720
+So if it's a heavily skewed column.
+
+01:04:58.720 --> 01:04:59.060
+Yeah.
+
+01:04:59.060 --> 01:04:59.620
+Yeah.
+
+01:04:59.620 --> 01:04:59.960
+Anyway.
+
+01:04:59.960 --> 01:05:04.680
+So we've gone into quite a lot of detail in that blog post, but yeah, there's a bunch
+
+01:05:04.680 --> 01:05:05.060
+of things.
+
+01:05:05.060 --> 01:05:05.680
+I love it though.
+
+01:05:05.680 --> 01:05:08.540
+Because if I, if somebody told me this, I'm like, well, I don't really know what to
+
+01:05:08.540 --> 01:05:08.800
+do.
+
+01:05:08.800 --> 01:05:15.360
+To be clear, I'm basically a beginner on Postgres, but not on relational databases, especially
+
+01:05:15.360 --> 01:05:16.600
+not on databases in general.
+
+01:05:16.600 --> 01:05:16.800
+Right.
+
+01:05:16.800 --> 01:05:20.280
+So I might look at this and go, well, great, but does Postgres even have a way to fix this?
+
+01:05:20.280 --> 01:05:20.500
+Right.
+
+01:05:20.500 --> 01:05:24.020
+And then, you know, right here next to it, you're like, okay, you just run this command
+
+01:05:24.020 --> 01:05:25.360
+and you'll probably be fine.
+
+01:05:25.360 --> 01:05:26.700
+That's super valuable.
+
+01:05:26.700 --> 01:05:30.240
+Cause it's one thing to say, here's your problem, or this is where the problem resides.
+
+01:05:30.240 --> 01:05:31.540
+It's another like, now what?
+
+01:05:31.540 --> 01:05:31.840
+Yeah.
+
+01:05:31.840 --> 01:05:36.780
+And these days, engineers and developers have expected to know, well, there's so many people
+
+01:05:36.780 --> 01:05:40.740
+that started backend and then they kind of went full stack, but then they have to worry
+
+01:05:40.740 --> 01:05:42.060
+about the database as well.
+
+01:05:42.060 --> 01:05:45.780
+And it feels like the surface area is expanding in a lot of cases.
+
+01:05:45.780 --> 01:05:52.820
+So we meet a lot of extremely smart developers that have been doing backend work for decades that
+
+01:05:52.820 --> 01:05:56.680
+only have to deal with Postgres every few months or maybe even every couple of years.
+
+01:05:56.680 --> 01:05:57.200
+years.
+
+01:05:57.200 --> 01:06:01.820
+They have, and those people, we kind of want to help them because they know what they're
+
+01:06:01.820 --> 01:06:02.060
+doing.
+
+01:06:02.060 --> 01:06:05.160
+It's just, this information is not top of mind right now.
+
+01:06:05.160 --> 01:06:09.080
+And yeah, so that, that tends to be who we can be helped most easily.
+
+01:06:09.080 --> 01:06:11.540
+And we're trying to make it a bit more beginner friendly as well.
+
+01:06:11.540 --> 01:06:11.760
+Yeah.
+
+01:06:11.760 --> 01:06:12.320
+That's fantastic.
+
+01:06:12.320 --> 01:06:13.320
+Okay.
+
+01:06:13.320 --> 01:06:15.560
+So that's example one, which I'll link to.
+
+01:06:15.560 --> 01:06:21.340
+Example two, we've got a more significant challenge here, more stuff happening.
+
+01:06:21.340 --> 01:06:23.520
+And this one, we're throwing away too many rows.
+
+01:06:23.520 --> 01:06:24.240
+Yeah.
+
+01:06:24.240 --> 01:06:26.280
+So, well, this is a great example, actually, of a tip.
+
+01:06:26.360 --> 01:06:28.980
+I didn't mention, but it's probably index related.
+
+01:06:28.980 --> 01:06:36.420
+So we're throwing away rows at the end here, going down from 45,000 in the second to last
+
+01:06:36.420 --> 01:06:38.820
+operation down to a hundred in the last one.
+
+01:06:38.820 --> 01:06:45.960
+If we could filter down to ideally is a much smaller number very early on, we could avoid,
+
+01:06:45.960 --> 01:06:51.000
+well, there's a couple of large sequential scans there, a couple of hash joins, all on
+
+01:06:51.000 --> 01:06:52.920
+tens of thousands of rows of data.
+
+01:06:53.560 --> 01:06:57.060
+In this case, there's no big filter until the end.
+
+01:06:57.060 --> 01:07:01.200
+So we're not giving an index potential tip, but we're saying if you can.
+
+01:07:01.200 --> 01:07:01.760
+Yeah.
+
+01:07:01.760 --> 01:07:05.840
+So in fact, we'll actually see on the sequential scans, we're saying index potential is zero.
+
+01:07:05.840 --> 01:07:06.420
+Yeah.
+
+01:07:06.760 --> 01:07:08.760
+Because no rows are being filtered there.
+
+01:07:08.760 --> 01:07:18.160
+But the late filter at the end, the rows discarded is depending on exactly how it's discarding those on what it's doing.
+
+01:07:18.500 --> 01:07:25.160
+I think I remember from this example, we're actually sorting by columns in two different tables.
+
+01:07:25.160 --> 01:07:25.440
+Sorry.
+
+01:07:25.440 --> 01:07:30.700
+So we're ordering by a column from one and then ordering by a column from the other.
+
+01:07:30.700 --> 01:07:33.120
+And neither of those columns is indexed.
+
+01:07:33.120 --> 01:07:39.800
+So if we could get the data from each of those in an ordered manner, this would probably be a lot faster.
+
+01:07:39.800 --> 01:07:47.420
+But it's a tricky investigation because we don't know from what Postgres is telling us here exactly how those are distributed
+
+01:07:47.420 --> 01:07:50.760
+and how many of them are going to be appropriate at each stage.
+
+01:07:50.760 --> 01:07:50.980
+Yeah.
+
+01:07:50.980 --> 01:07:55.740
+Another thing I find value is not necessarily the advice, but the non-advice.
+
+01:07:55.740 --> 01:07:56.380
+Like, you know what?
+
+01:07:56.380 --> 01:07:58.100
+There's zero index potential here.
+
+01:07:58.100 --> 01:07:58.860
+This is fine.
+
+01:07:58.860 --> 01:08:01.520
+So don't look down that path.
+
+01:08:01.520 --> 01:08:02.700
+Go look somewhere else.
+
+01:08:02.700 --> 01:08:03.200
+All right.
+
+01:08:03.200 --> 01:08:03.780
+Row estimates.
+
+01:08:03.780 --> 01:08:04.260
+Perfect.
+
+01:08:04.260 --> 01:08:05.400
+Operation happened memory.
+
+01:08:05.400 --> 01:08:06.600
+Don't worry about those things.
+
+01:08:06.600 --> 01:08:08.800
+Go find the problem somewhere else.
+
+01:08:08.800 --> 01:08:09.480
+Yeah, exactly.
+
+01:08:09.480 --> 01:08:12.540
+That was actually user feedback quite early on.
+
+01:08:12.540 --> 01:08:15.520
+People wanted to see the things that were not an issue.
+
+01:08:15.520 --> 01:08:21.960
+So, yeah, it's been really helpful working with people and trying to understand what they do and don't find.
+
+01:08:21.960 --> 01:08:28.260
+It wasn't something I thought of, but through feedback, it was really helpful to know that it's exactly what people want to see.
+
+01:08:28.260 --> 01:08:29.360
+Yeah.
+
+01:08:29.360 --> 01:08:31.460
+I mean, I think this is super valuable.
+
+01:08:31.740 --> 01:08:33.760
+So people want to check out PG Mustard.
+
+01:08:33.760 --> 01:08:36.020
+It's worth pointing out that it does cost money, right?
+
+01:08:36.020 --> 01:08:37.680
+It is a product.
+
+01:08:37.680 --> 01:08:38.420
+Yeah.
+
+01:08:38.580 --> 01:08:39.460
+It's, yeah, sorry.
+
+01:08:39.460 --> 01:08:41.040
+For our sins, it's commercial.
+
+01:08:41.040 --> 01:08:45.660
+But if anybody's, if there are students listening for non-commercial use, we give it away to people.
+
+01:08:45.660 --> 01:08:47.500
+All you need to do is just contact us.
+
+01:08:47.500 --> 01:08:50.780
+And there's a couple of other reasons we give it away for free.
+
+01:08:50.780 --> 01:08:52.320
+So, yeah, feel free to reach out.
+
+01:08:52.680 --> 01:08:55.800
+But we hope it's not too expensive as well, especially if it's your company.
+
+01:08:55.800 --> 01:09:00.600
+If you're doing this for work, it's, yeah, it starts there at 95 euros per year for a single person.
+
+01:09:00.600 --> 01:09:02.100
+So hopefully affordable.
+
+01:09:02.100 --> 01:09:02.520
+Yeah.
+
+01:09:02.520 --> 01:09:05.280
+And I think it's, I don't mean to make that derogatory.
+
+01:09:05.280 --> 01:09:06.120
+Not at all.
+
+01:09:06.160 --> 01:09:09.640
+I just wanted people to know, like, the other ones we talked about were free and open source.
+
+01:09:09.640 --> 01:09:11.140
+And this one, it is a product.
+
+01:09:11.140 --> 01:09:12.000
+You do pay for it.
+
+01:09:12.000 --> 01:09:24.580
+But boy, if you could save a database upgrade to a new machine, or if you could save, you know, spending $100 a month on a larger server in the cloud every month,
+
+01:09:24.580 --> 01:09:27.680
+because this thing helped you find that, oh, you actually don't need it.
+
+01:09:27.680 --> 01:09:29.080
+You're just doing it wrong, right?
+
+01:09:29.080 --> 01:09:33.260
+Well, $100 once seems like a pretty good bargain, you know?
+
+01:09:33.260 --> 01:09:34.060
+Yeah, absolutely.
+
+01:09:34.060 --> 01:09:40.980
+And I mean, not even talking about PG Mustard, but tools in general, I think developers probably underestimate how valuable their time is,
+
+01:09:40.980 --> 01:09:51.580
+not just from a salary per hour perspective, but also from a, if your management team or your boss or whoever could choose whether you would ship the next year's worth of features today,
+
+01:09:52.000 --> 01:09:57.140
+and they could pay, let's say, 10 times your salary, a lot of them would actually take that trade.
+
+01:09:57.140 --> 01:09:59.900
+I think every company in the world is hiring developers.
+
+01:09:59.900 --> 01:10:02.940
+Most people want, have a huge backlog that they want to be building.
+
+01:10:02.940 --> 01:10:07.920
+So this is an awful example in terms of spending money to solve that.
+
+01:10:07.920 --> 01:10:14.200
+But even if it comes to more expensive tools, I think you'd be surprised how much, if they can make you more efficient,
+
+01:10:14.200 --> 01:10:18.240
+companies will probably think of it as a better trade than you do.
+
+01:10:18.240 --> 01:10:19.400
+Yeah, I agree.
+
+01:10:19.460 --> 01:10:26.100
+I do think that we often muddle along using something that we should be better off paying a decent amount.
+
+01:10:26.100 --> 01:10:31.100
+I'm not talking about like $2,000 a month subscriptions of some insane tool that may or may not be helpful.
+
+01:10:31.100 --> 01:10:36.560
+But also, just from a joy, you're like, do you want to go to work and work on stuff?
+
+01:10:36.560 --> 01:10:38.300
+Or are you like, God, I'm in the log files again.
+
+01:10:38.300 --> 01:10:39.340
+I can't do it.
+
+01:10:39.340 --> 01:10:41.620
+I can't do another day of this, right?
+
+01:10:41.680 --> 01:10:43.420
+Versus, oh, like I really have a good understanding.
+
+01:10:43.420 --> 01:10:45.940
+I'm building something that I'm proud to share with my friends.
+
+01:10:45.940 --> 01:10:47.840
+Look how fast and zippy the site is.
+
+01:10:47.840 --> 01:10:50.060
+Versus, yeah, we're working on it.
+
+01:10:50.060 --> 01:10:53.660
+You know, there is a pride and a joy aspect of being better.
+
+01:10:53.660 --> 01:10:55.140
+And if tools get you there, that's great.
+
+01:10:55.140 --> 01:10:55.780
+All right.
+
+01:10:55.780 --> 01:10:59.520
+Speaking of tools, I think we're about out of time for this.
+
+01:10:59.520 --> 01:11:01.800
+But final two questions before we get out of here.
+
+01:11:01.800 --> 01:11:07.300
+I think I want to focus on database GUI editors rather than text editors for this episode.
+
+01:11:07.300 --> 01:11:08.400
+And we talked about a bunch.
+
+01:11:08.400 --> 01:11:11.120
+So maybe just we could just quick reference back to that.
+
+01:11:11.120 --> 01:11:13.800
+But favorite database GUI tool these days?
+
+01:11:13.800 --> 01:11:15.960
+Oh, I'm going to give a shout out to you.
+
+01:11:15.960 --> 01:11:18.440
+Do you want to go with PSQL?
+
+01:11:18.440 --> 01:11:23.240
+No, I'm going to risk the wrath of the Postgres crowd and say archetype.
+
+01:11:23.240 --> 01:11:23.660
+Archetype.
+
+01:11:23.660 --> 01:11:23.900
+All right.
+
+01:11:23.900 --> 01:11:25.040
+Yeah, archetype looks pretty neat.
+
+01:11:25.040 --> 01:11:28.040
+And then normally I ask about Python extensions.
+
+01:11:28.040 --> 01:11:30.120
+How about Postgres or Python packages?
+
+01:11:30.120 --> 01:11:31.400
+How about Postgres extensions?
+
+01:11:31.400 --> 01:11:32.800
+For a notable one.
+
+01:11:32.800 --> 01:11:33.120
+Yeah.
+
+01:11:33.120 --> 01:11:39.460
+So I think the Postgres extension that everybody should install really is if you're using Postgres,
+
+01:11:39.460 --> 01:11:41.360
+of course, is PG stat statements.
+
+01:11:41.360 --> 01:11:44.360
+If you're using a cloud provider, it's probably on by default already.
+
+01:11:44.360 --> 01:11:48.380
+So in that case, I'd give a shout out to my favorite auto explain.
+
+01:11:48.380 --> 01:11:48.700
+Cool.
+
+01:11:48.700 --> 01:11:49.420
+Awesome.
+
+01:11:49.420 --> 01:11:50.460
+All right, Michael.
+
+01:11:50.460 --> 01:11:54.760
+Well, thanks for giving us insight to all these different things we can do to make our databases
+
+01:11:54.760 --> 01:11:56.280
+work better, especially Postgres.
+
+01:11:56.280 --> 01:11:58.520
+And thanks for making PG mustard.
+
+01:11:58.520 --> 01:11:59.680
+I'm sure it'll help a lot of people.
+
+01:11:59.680 --> 01:12:00.720
+Final call to action.
+
+01:12:00.860 --> 01:12:02.120
+People want to get better with their databases.
+
+01:12:02.120 --> 01:12:04.640
+Maybe pick up some of these tools or these ideas.
+
+01:12:04.640 --> 01:12:05.180
+What do you tell them?
+
+01:12:05.180 --> 01:12:07.500
+Oh, don't be scared to let it.
+
+01:12:07.500 --> 01:12:10.020
+It probably looks more intimidated than it is.
+
+01:12:10.020 --> 01:12:12.400
+The Postgres documentation is awesome.
+
+01:12:12.400 --> 01:12:17.900
+So a lot of the other databases out there, I know it's a bit of a meme and a joke these
+
+01:12:17.900 --> 01:12:19.420
+days, but do read the documentation.
+
+01:12:19.420 --> 01:12:24.820
+It's written and revised over years by some really smart people, but it's very approachable
+
+01:12:24.820 --> 01:12:25.060
+still.
+
+01:12:25.060 --> 01:12:25.560
+Fantastic.
+
+01:12:25.560 --> 01:12:26.020
+All right.
+
+01:12:26.020 --> 01:12:27.400
+Well, thanks a bunch.
+
+01:12:27.400 --> 01:12:28.020
+Cheers, Michael.
+
+01:12:28.020 --> 01:12:28.840
+Thanks so much for having me.
+
+01:12:28.840 --> 01:12:29.180
+You bet.
+
+01:12:29.180 --> 01:12:33.480
+This has been another episode of Talk Python to Me.
+
+01:12:33.480 --> 01:12:35.320
+Thank you to our sponsors.
+
+01:12:35.320 --> 01:12:36.920
+Be sure to check out what they're offering.
+
+01:12:36.920 --> 01:12:38.340
+It really helps support the show.
+
+01:12:38.340 --> 01:12:40.480
+Take some stress out of your life.
+
+01:12:40.480 --> 01:12:45.960
+Get notified immediately about errors and performance issues in your web or mobile applications with
+
+01:12:45.960 --> 01:12:46.280
+Sentry.
+
+01:12:46.560 --> 01:12:51.280
+Just visit talkpython.fm/Sentry and get started for free.
+
+01:12:51.280 --> 01:12:54.860
+And be sure to use the promo code Talk Python, all one word.
+
+01:12:54.860 --> 01:12:56.720
+Want to level up your Python?
+
+01:12:57.140 --> 01:13:00.860
+We have one of the largest catalogs of Python video courses over at Talk Python.
+
+01:13:00.860 --> 01:13:05.960
+Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+01:13:05.960 --> 01:13:08.640
+And best of all, there's not a subscription in sight.
+
+01:13:08.640 --> 01:13:11.540
+Check it out for yourself at training.talkpython.fm.
+
+01:13:11.540 --> 01:13:13.440
+Be sure to subscribe to the show.
+
+01:13:13.440 --> 01:13:16.220
+Open your favorite podcast app and search for Python.
+
+01:13:16.220 --> 01:13:17.520
+We should be right at the top.
+
+01:13:17.960 --> 01:13:22.700
+You can also find the iTunes feed at /itunes, the Google Play feed at /play,
+
+01:13:22.700 --> 01:13:26.900
+and the direct RSS feed at /rss on talkpython.fm.
+
+01:13:26.900 --> 01:13:30.320
+We're live streaming most of our recordings these days.
+
+01:13:30.320 --> 01:13:33.720
+If you want to be part of the show and have your comments featured on the air,
+
+01:13:33.720 --> 01:13:38.100
+be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+01:13:38.100 --> 01:13:40.000
+This is your host, Michael Kennedy.
+
+01:13:40.000 --> 01:13:41.300
+Thanks so much for listening.
+
+01:13:41.300 --> 01:13:42.460
+I really appreciate it.
+
+01:13:42.460 --> 01:13:44.360
+Now get out there and write some Python code.
+
+01:13:44.360 --> 01:13:45.360
+Bye.
+
+01:13:45.360 --> 01:13:46.360
+Bye.
+
+01:13:46.360 --> 01:13:46.360
+Bye.
+
+01:13:46.360 --> 01:13:46.360
+Bye.
+
+01:13:46.360 --> 01:13:47.360
+Bye.
+
+01:13:47.360 --> 01:13:47.360
+Bye.
+
+01:13:47.360 --> 01:13:47.360
+Bye.
+
+01:13:47.360 --> 01:13:48.360
+Bye.
+
+01:13:48.360 --> 01:13:49.360
+Bye.
+
+01:13:49.360 --> 01:13:50.360
+Bye.
+
+01:13:50.360 --> 01:13:51.360
+Bye.
+
+01:13:51.360 --> 01:13:52.360
+Bye.
+
+01:13:52.360 --> 01:13:53.360
+Bye.
+
+01:13:53.360 --> 01:13:54.360
+Bye.
+
+01:13:54.360 --> 01:13:55.360
+Bye.
+
+01:13:55.360 --> 01:13:56.360
+Bye.
+
+01:13:56.360 --> 01:13:57.360
+Bye.
+
+01:13:57.360 --> 01:13:58.360
+Bye.
+
+01:13:58.360 --> 01:13:59.360
+Bye.
+
+01:13:59.360 --> 01:14:00.360
+Bye.
+
+01:14:00.360 --> 01:14:01.360
+Bye.
+
+01:14:01.360 --> 01:14:02.360
+Bye.
+
+01:14:02.360 --> 01:14:02.860
+you
+
+01:14:02.860 --> 01:14:04.860
+Thank you.
+
+01:14:04.860 --> 01:14:34.840
+Thank you.
+
