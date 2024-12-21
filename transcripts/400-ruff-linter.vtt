@@ -1,0 +1,3998 @@
+WEBVTT
+
+00:00:00.160 --> 00:00:08.900
+Our code quality tools, linters, test frameworks, and others, play an important role in keeping our code error-free and conforming to the rules our teams have chosen.
+
+00:00:08.900 --> 00:00:15.060
+But when these tools become sluggish and slow down development, we often avoid running them or even turn them off.
+
+00:00:15.060 --> 00:00:21.140
+On this episode, we have Charlie Marsh here to introduce Ruff, a fast Python linter written in Rust.
+
+00:00:21.140 --> 00:00:29.160
+To give you a sense of what he means by fast, common Python linters can take 30 to 60 seconds to lint the CPython codebase.
+
+00:00:29.460 --> 00:00:31.580
+Ruff takes 300 milliseconds.
+
+00:00:31.580 --> 00:00:39.300
+I ran it on the 20,000 lines of Python code for our courses web app at Talk Python Training, and it was instantaneous.
+
+00:00:39.300 --> 00:00:43.440
+With that kind of speed, it's the kind of tool that can change how you work.
+
+00:00:43.440 --> 00:00:45.980
+I hope you're excited to learn about Ruff.
+
+00:00:45.980 --> 00:00:51.520
+This is Talk Python to Me, episode 400, recorded January 18, 2023.
+
+00:00:58.920 --> 00:01:08.220
+Welcome to Talk Python to Me, a weekly podcast on Python.
+
+00:01:08.220 --> 00:01:09.960
+This is your host, Michael Kennedy.
+
+00:01:09.960 --> 00:01:17.440
+Follow me on Mastodon, where I'm @mkennedy, and follow the podcast using @talkpython, both on fosstodon.org.
+
+00:01:17.440 --> 00:01:20.060
+Be careful with impersonating accounts on other instances.
+
+00:01:20.060 --> 00:01:21.020
+There are many.
+
+00:01:21.020 --> 00:01:26.080
+Keep up with the show and listen to over seven years of past episodes at talkpython.fm.
+
+00:01:26.700 --> 00:01:30.120
+We've started streaming most of our episodes live on YouTube.
+
+00:01:30.120 --> 00:01:37.660
+Subscribe to our YouTube channel over at talkpython.fm/youtube to get notified about upcoming shows and be part of that episode.
+
+00:01:38.080 --> 00:01:40.660
+This episode is brought to you by Cox Automotive.
+
+00:01:40.660 --> 00:01:46.540
+Join their team and use your technical skills to transform the way the world buys, sells, and owns cars.
+
+00:01:46.540 --> 00:01:50.420
+Find an exciting position that's right for you at talkpython.fm/cox.
+
+00:01:50.420 --> 00:01:53.420
+And it's also brought to you by User Interviews.
+
+00:01:53.420 --> 00:01:58.540
+Earn extra income for sharing your software development opinion at User Interviews.
+
+00:01:58.540 --> 00:02:03.200
+Head over to talkpython.fm/userinterviews to participate today.
+
+00:02:03.760 --> 00:02:09.280
+Before we get to the conversation for this episode, I have a very brief sponsored message from the PyCharm team.
+
+00:02:09.280 --> 00:02:14.360
+As you know, I'm a huge fan of PyCharm, the tool and the team, and I'm happy to bring it to you.
+
+00:02:14.360 --> 00:02:15.960
+Do you like storytelling?
+
+00:02:15.960 --> 00:02:21.580
+Want a job where you can work with the Python community and help people with their professional development?
+
+00:02:21.580 --> 00:02:26.580
+PyCharm is doing big things this year, and they have an exciting job opening you should consider.
+
+00:02:27.100 --> 00:02:28.060
+Developer Advocate.
+
+00:02:28.060 --> 00:02:31.100
+It's a good job doing good work with a great company.
+
+00:02:31.100 --> 00:02:36.980
+Learn more and apply at talkpython.fm/PyCharm dash Advocate dash Job.
+
+00:02:36.980 --> 00:02:38.740
+The link is in the episode show notes.
+
+00:02:38.740 --> 00:02:41.500
+Charlie, welcome to Talk Python to me.
+
+00:02:41.500 --> 00:02:42.180
+Thanks so much.
+
+00:02:42.180 --> 00:02:43.520
+It's my pleasure to be here.
+
+00:02:43.520 --> 00:02:45.380
+Yeah, it's a pleasure to have you.
+
+00:02:45.380 --> 00:02:47.780
+I'm going to talk about making Python code fast.
+
+00:02:47.780 --> 00:02:52.400
+Built some pretty interesting tools here with Ruff.
+
+00:02:52.600 --> 00:02:58.820
+We'll see about integrating Rust into Ruff, and there's a lot of cool tools around this
+
+00:02:58.820 --> 00:03:01.360
+sort of code quality side of things, right?
+
+00:03:01.360 --> 00:03:06.960
+Like Black took off in ways, I think, even though Lukash didn't maybe imagine it would take off,
+
+00:03:06.960 --> 00:03:13.180
+and this is kind of in that same realm, and of course, it plays well with Black along the
+
+00:03:13.180 --> 00:03:13.560
+way as well.
+
+00:03:13.560 --> 00:03:16.300
+So we'll get to talk all about those things.
+
+00:03:16.300 --> 00:03:19.760
+It's going to be tons of fun to dig into them, but before we get to it, let's start with
+
+00:03:19.760 --> 00:03:20.120
+your story.
+
+00:03:20.120 --> 00:03:22.760
+How did you get into programming in Python and Rust?
+
+00:03:22.760 --> 00:03:23.420
+Yeah, yeah.
+
+00:03:23.420 --> 00:03:29.060
+So I got into programming, I guess, the summer before I went to college, when I guess I was
+
+00:03:29.060 --> 00:03:30.440
+supposed to be doing something fun.
+
+00:03:30.440 --> 00:03:36.280
+I taught myself Java, and it was the sort of thing that a lot of people had told me I would
+
+00:03:36.280 --> 00:03:38.340
+like, but I never really had a chance to dig into.
+
+00:03:38.340 --> 00:03:43.500
+I ended up, I went to school, majored in computer science, so I did a bunch of internships while
+
+00:03:43.500 --> 00:03:44.440
+I was in college.
+
+00:03:44.440 --> 00:03:50.120
+And then when I, my sort of junior year internship and my first year out of school, I worked at
+
+00:03:50.120 --> 00:03:53.680
+a company called Khan Academy, which is like an education technology company.
+
+00:03:54.220 --> 00:03:59.020
+And at the time, this is less true now, but at the time they were a really big Python
+
+00:03:59.020 --> 00:03:59.360
+child.
+
+00:03:59.360 --> 00:04:03.940
+I mean, they had one of the biggest like App Engine deployments.
+
+00:04:03.940 --> 00:04:09.800
+It was like Khan Academy and like Snapchat and like a couple other, maybe Spotify or someone.
+
+00:04:09.800 --> 00:04:11.240
+Wow, I had no idea.
+
+00:04:11.240 --> 00:04:17.040
+I mean, I'm just, yeah, I'm obviously I'm familiar with Khan Academy, K-H-A-N, I'm sure a lot of
+
+00:04:17.040 --> 00:04:17.420
+people are.
+
+00:04:17.420 --> 00:04:17.620
+Yeah.
+
+00:04:17.620 --> 00:04:22.440
+But I didn't realize that one, they were such a GCP customer and that was Python.
+
+00:04:22.440 --> 00:04:22.740
+Yes.
+
+00:04:22.740 --> 00:04:25.560
+Was that Flask or Django on GCP or what was it?
+
+00:04:25.560 --> 00:04:27.760
+It was like Flask on App Engine.
+
+00:04:27.760 --> 00:04:28.340
+Yeah.
+
+00:04:28.340 --> 00:04:29.140
+We did not use Django.
+
+00:04:29.140 --> 00:04:29.480
+Yeah.
+
+00:04:29.600 --> 00:04:34.640
+But they actually, I mean, it's a whole nother story, but they did a big Go rewrite after
+
+00:04:34.640 --> 00:04:36.360
+I left, which is also super interesting.
+
+00:04:36.360 --> 00:04:38.580
+I mean, it's not Python, but it is still very interesting.
+
+00:04:38.580 --> 00:04:43.240
+Just like migrating a system from any language to any other language is always pretty interesting.
+
+00:04:43.240 --> 00:04:46.840
+But at Khan Academy, yeah, you know, I did some Python.
+
+00:04:46.840 --> 00:04:52.560
+I would say that like I mostly did web and we can talk a little bit more about this because
+
+00:04:52.560 --> 00:04:55.960
+like really through my career, I've kind of jumped between a lot of different ecosystems.
+
+00:04:55.960 --> 00:04:59.540
+And so like at Khan Academy, I did, I think a year of Android.
+
+00:05:00.120 --> 00:05:03.800
+And did a little bit of iOS, did a lot of web, did a little bit of Python.
+
+00:05:03.800 --> 00:05:09.300
+And then most recently, I worked at a company called Spring Discovery, which is like a computational
+
+00:05:09.300 --> 00:05:10.420
+biotech company.
+
+00:05:10.420 --> 00:05:13.660
+And everything we were doing was based on computer vision.
+
+00:05:13.660 --> 00:05:18.220
+So we'd like take really high resolution pictures of cells and then try to model like the way
+
+00:05:18.220 --> 00:05:19.580
+that they change when you add drugs.
+
+00:05:19.580 --> 00:05:19.920
+Wow.
+
+00:05:19.920 --> 00:05:20.340
+Okay.
+
+00:05:20.340 --> 00:05:21.940
+Which is, yeah, it's pretty wild.
+
+00:05:21.940 --> 00:05:23.600
+I mean, I came into that with no bio background.
+
+00:05:23.600 --> 00:05:28.400
+I joined as like second engineer and build out a lot of our like data and machine learning
+
+00:05:28.400 --> 00:05:28.880
+platform.
+
+00:05:29.320 --> 00:05:32.620
+That was kind of a crash course in building like a massive system in Python, right?
+
+00:05:32.620 --> 00:05:34.040
+We were doing scientific computing.
+
+00:05:34.040 --> 00:05:35.740
+So it made a lot of use Python.
+
+00:05:35.740 --> 00:05:38.440
+So we ended up using Python for like almost everything.
+
+00:05:38.440 --> 00:05:38.780
+Yeah.
+
+00:05:38.780 --> 00:05:39.120
+Yeah.
+
+00:05:39.120 --> 00:05:44.280
+Python is a really good choice for the web, but it's like the de facto choice for data
+
+00:05:44.280 --> 00:05:44.960
+science, right?
+
+00:05:44.960 --> 00:05:45.580
+Like it's.
+
+00:05:45.580 --> 00:05:45.940
+Yes.
+
+00:05:45.940 --> 00:05:46.780
+Yeah, exactly.
+
+00:05:46.780 --> 00:05:48.320
+There's not a whole lot of other choices.
+
+00:05:48.320 --> 00:05:52.360
+Whereas on the web, there's, you know, five or six other platforms and languages that are
+
+00:05:52.360 --> 00:05:54.820
+also contenders for that space.
+
+00:05:55.120 --> 00:05:55.660
+Right, right.
+
+00:05:55.660 --> 00:06:00.980
+So, you know, we built out what I consider to be like a fairly large Python code base.
+
+00:06:00.980 --> 00:06:02.180
+It was like a big monorepo.
+
+00:06:02.180 --> 00:06:08.300
+And, you know, I spent four or five years, you know, building that out and like really writing
+
+00:06:08.300 --> 00:06:09.520
+a lot of Python every day.
+
+00:06:09.520 --> 00:06:12.080
+That's where like a lot of my Python experience comes from.
+
+00:06:12.120 --> 00:06:15.700
+And like that experience specifically also informed a lot of, a lot of growth.
+
+00:06:15.700 --> 00:06:19.680
+And, you know, I can talk more about sort of how those experiences intertwined, but that's
+
+00:06:19.680 --> 00:06:20.740
+kind of my Python background.
+
+00:06:20.740 --> 00:06:26.880
+It must have been really fun to explore some of this visualizing cells and interacting with,
+
+00:06:26.880 --> 00:06:28.340
+you know, microscopes and.
+
+00:06:28.340 --> 00:06:29.000
+That was amazing.
+
+00:06:29.000 --> 00:06:29.540
+Yeah.
+
+00:06:29.540 --> 00:06:30.280
+All those kinds of things.
+
+00:06:30.280 --> 00:06:30.480
+Yeah.
+
+00:06:30.480 --> 00:06:35.100
+The coolest part of the job was just that if you bucket it like really crudely, like a
+
+00:06:35.100 --> 00:06:38.960
+third of our team were sort of like software engineers or like data scientists, machine
+
+00:06:38.960 --> 00:06:43.780
+learning researchers, and then, you know, a third were, you know, wet lab biologists,
+
+00:06:43.780 --> 00:06:45.000
+PhDs.
+
+00:06:45.000 --> 00:06:49.440
+And so every day I was like working directly with scientists and like building software for
+
+00:06:49.440 --> 00:06:53.280
+scientists, which was just like a super cool thing to be able to do as part of a small team.
+
+00:06:53.280 --> 00:06:53.620
+Yeah.
+
+00:06:53.620 --> 00:06:55.620
+But yeah, wrote a lot of Python.
+
+00:06:55.620 --> 00:06:56.980
+That's awesome.
+
+00:06:56.980 --> 00:07:03.920
+I worked at a place that was a bunch of PhD researchers doing eye tracking, like not Apple,
+
+00:07:03.920 --> 00:07:05.120
+but your actual eyes.
+
+00:07:05.120 --> 00:07:06.120
+Like, what are you looking at?
+
+00:07:06.400 --> 00:07:10.720
+wrote the software to actually control the device and get all the information off of
+
+00:07:10.720 --> 00:07:15.440
+it and then like analyze that and put, you know, generate like reports for the scientists
+
+00:07:15.440 --> 00:07:15.800
+and stuff.
+
+00:07:15.800 --> 00:07:21.160
+And it's, there's a, there's a special kind of cool for software that touches like reality,
+
+00:07:21.160 --> 00:07:21.840
+right?
+
+00:07:21.840 --> 00:07:22.240
+Yeah.
+
+00:07:22.240 --> 00:07:24.220
+I mean, it adds a lot of complication.
+
+00:07:24.220 --> 00:07:25.880
+Of course it does.
+
+00:07:25.880 --> 00:07:26.420
+It's very cool.
+
+00:07:26.420 --> 00:07:28.800
+You don't get exact numbers.
+
+00:07:28.800 --> 00:07:33.480
+You want to test it like, you got to approximate all the things, but still, yeah, that sounds
+
+00:07:33.480 --> 00:07:34.460
+like a super fun job.
+
+00:07:34.460 --> 00:07:36.100
+How did it inform rough?
+
+00:07:36.100 --> 00:07:37.640
+Like what are some of the experiences that?
+
+00:07:37.640 --> 00:07:38.360
+Yeah, totally.
+
+00:07:38.360 --> 00:07:42.180
+Just so people know rough is like a super fast linter.
+
+00:07:42.180 --> 00:07:43.860
+Just give us the quick elevator pitch.
+
+00:07:43.860 --> 00:07:45.620
+So they, they, they know what the heck rough is.
+
+00:07:45.620 --> 00:07:46.740
+We'll dive more into it later.
+
+00:07:46.740 --> 00:07:47.140
+Sure.
+
+00:07:47.140 --> 00:07:47.740
+Yeah.
+
+00:07:47.740 --> 00:07:48.000
+Yeah.
+
+00:07:48.000 --> 00:07:51.340
+So rough is what I call an extremely fast Python linter.
+
+00:07:51.800 --> 00:07:56.260
+If you've used linters and Python in the past, you've probably used something like play gate
+
+00:07:56.260 --> 00:08:01.740
+or pilot, or maybe like PI code style, you know, maybe use other tools to help manage your code
+
+00:08:01.740 --> 00:08:07.300
+style, like black or like auto peppy, all this stuff that deals with effectively code style.
+
+00:08:07.480 --> 00:08:09.240
+So rough is a linter.
+
+00:08:09.240 --> 00:08:14.000
+It looks at your source code and it tries to report back and tell you a sort of flag and
+
+00:08:14.000 --> 00:08:15.280
+tell you about issues with it.
+
+00:08:15.280 --> 00:08:17.280
+And those could be stylistic issues.
+
+00:08:17.280 --> 00:08:22.320
+Like this variable name is not great, or they could be, you know, like logical issues.
+
+00:08:22.320 --> 00:08:25.180
+Like you reference a variable here and that isn't defined.
+
+00:08:25.180 --> 00:08:25.560
+Right.
+
+00:08:25.640 --> 00:08:28.860
+I think there's a lot that distinguishes rough, but like the thing that I think caught
+
+00:08:28.860 --> 00:08:30.960
+a lot of people's attention was just how fast it is.
+
+00:08:30.960 --> 00:08:35.500
+So I sort of hate benchmarks, like, cause no matter how much time you like put into a benchmark,
+
+00:08:35.500 --> 00:08:39.740
+like it's always wrong from like a certain perspective and like people always complain about
+
+00:08:39.740 --> 00:08:44.900
+them, but I think rough is comfortably like somewhere in 10 to a hundred times faster.
+
+00:08:44.900 --> 00:08:47.480
+Some people even say like a thousand times faster on their setup.
+
+00:08:47.480 --> 00:08:49.680
+So it can be like really, really dramatically faster.
+
+00:08:49.680 --> 00:08:55.580
+And it can also do a lot of auto fixing, which is kind of a distinctive feature that I don't
+
+00:08:55.580 --> 00:08:57.160
+know that many other tools.
+
+00:08:57.160 --> 00:09:02.120
+And there are certainly tools that do code transformation in Python, but like Pylon and
+
+00:09:02.120 --> 00:09:04.080
+Flake 8 and such don't do this.
+
+00:09:04.080 --> 00:09:09.220
+So for lots of the errors that Ruff will flag, it can actually fix the code for you and fix
+
+00:09:09.220 --> 00:09:11.640
+the issue for you, which is a big time saver.
+
+00:09:11.640 --> 00:09:14.760
+I don't know if this is one of them, but just to give people an idea, like one of the errors
+
+00:09:14.760 --> 00:09:20.140
+or warnings rather that it'll give you is you have an F string, but you're not leveraging
+
+00:09:20.140 --> 00:09:22.400
+its F string capabilities, right?
+
+00:09:22.400 --> 00:09:25.380
+I'll just say F quote, and then it has just static text, a little.
+
+00:09:25.520 --> 00:09:26.280
+Literal string.
+
+00:09:26.280 --> 00:09:27.800
+So it doesn't need the F, right?
+
+00:09:27.800 --> 00:09:31.760
+Theoretically, you could say auto fix and just it drops the F for you.
+
+00:09:31.760 --> 00:09:33.320
+It's like, yeah, you don't need that, right?
+
+00:09:33.320 --> 00:09:33.640
+Yeah.
+
+00:09:33.640 --> 00:09:36.440
+And, you know, we can also like go the other direction.
+
+00:09:36.440 --> 00:09:42.740
+So like if you're doing a bunch of like percent string formatting or using like the dot format
+
+00:09:42.740 --> 00:09:47.640
+style helpers, we're actually, we can fix at least one of those right now.
+
+00:09:47.640 --> 00:09:51.660
+And strings are really complicated, but like we can actually rewrite, I think the dot format
+
+00:09:51.660 --> 00:09:53.680
+calls into strings, which is cool.
+
+00:09:54.060 --> 00:09:54.460
+Fantastic.
+
+00:09:54.460 --> 00:09:58.680
+You know, another thing we can do is we can kind of keep your code like modern in a way.
+
+00:09:58.680 --> 00:10:03.720
+We've taken a lot of inspiration from other tools like Pi Upgrade 2 has like so much cool
+
+00:10:03.720 --> 00:10:06.320
+stuff and functionality in it if you haven't seen it.
+
+00:10:06.320 --> 00:10:11.280
+And we take some of the rules from Pi Upgrade and basically re-implement them in Rust and package
+
+00:10:11.280 --> 00:10:14.680
+them into a single interface and a single tool.
+
+00:10:14.680 --> 00:10:20.420
+So you just install one thing and you get, you know, 370 something rules.
+
+00:10:20.660 --> 00:10:23.160
+I can assert that it is indeed fast.
+
+00:10:23.160 --> 00:10:29.920
+We'll dive into it a little bit later, but I ran it on Talk Python training, the courses
+
+00:10:29.920 --> 00:10:30.620
+website that I have.
+
+00:10:30.620 --> 00:10:34.080
+And I think that's got 20,000 lines of Python and it's instant.
+
+00:10:34.080 --> 00:10:38.120
+It's like you press enter and then out, you know, the stuff is just printing out.
+
+00:10:38.120 --> 00:10:40.720
+These are the things that found, which is pretty awesome.
+
+00:10:41.720 --> 00:10:44.260
+So back to your data science work.
+
+00:10:44.260 --> 00:10:44.660
+Yeah, yeah.
+
+00:10:44.660 --> 00:10:47.840
+How are you, what you're doing influence your creation of RUF?
+
+00:10:47.840 --> 00:10:51.680
+Like why not just use Flake 8 or something like that?
+
+00:10:51.680 --> 00:10:55.880
+You know, like I said, I'd like worked in a lot of other ecosystems where, with sort of
+
+00:10:55.880 --> 00:10:57.340
+like stricter languages, right?
+
+00:10:57.340 --> 00:10:59.080
+Like Java and whatever else.
+
+00:10:59.080 --> 00:11:03.660
+And it's not to say those ecosystems are better, but I often come at the stuff from a perspective
+
+00:11:03.660 --> 00:11:06.640
+of wanting a lot of like static analysis tooling.
+
+00:11:06.820 --> 00:11:08.960
+So we had like a really heavily typed code base.
+
+00:11:08.960 --> 00:11:15.620
+We used, like we used mypy, you know, we used Black, we used Flake 8, we used Eyesore, we
+
+00:11:15.620 --> 00:11:18.080
+used, I don't know, like doc formatter.
+
+00:11:18.080 --> 00:11:19.660
+There's like a lot of different stuff that we used.
+
+00:11:19.660 --> 00:11:19.900
+Yeah.
+
+00:11:19.900 --> 00:11:22.620
+You know, really my job was like, I was the maintainer of this big system.
+
+00:11:22.620 --> 00:11:27.160
+And like most of, like a lot of people in the team were effectively like clients of that
+
+00:11:27.160 --> 00:11:27.560
+code base.
+
+00:11:27.560 --> 00:11:31.220
+So they were kind of like using the stuff that, you know, I and some others were building
+
+00:11:31.220 --> 00:11:32.180
+as like a library.
+
+00:11:32.180 --> 00:11:35.440
+And so I had to maintain like this really big system.
+
+00:11:35.440 --> 00:11:40.580
+And like the more static tools you have, you know, in my opinion, it just like greatly
+
+00:11:40.580 --> 00:11:43.200
+increases the leverage that you can have as a maintainer.
+
+00:11:43.200 --> 00:11:44.840
+So we use a lot of tooling.
+
+00:11:44.840 --> 00:11:47.360
+And I think like a couple of things happened.
+
+00:11:47.360 --> 00:11:51.540
+One, you know, I was spending a lot of my time in Python, but I was also doing a lot of
+
+00:11:51.540 --> 00:11:51.840
+web.
+
+00:11:51.840 --> 00:11:56.160
+And so, you know, like one week I'd be doing Python, the next I'd be going and doing like
+
+00:11:56.160 --> 00:11:58.320
+React and TypeScript and whatever else.
+
+00:11:58.740 --> 00:12:04.000
+And so people complain a lot about web tooling and like, you know, there are certainly lots
+
+00:12:04.000 --> 00:12:05.140
+of valid complaints about it.
+
+00:12:05.140 --> 00:12:08.940
+But there's been a lot of interesting innovation, I think, in that space.
+
+00:12:08.940 --> 00:12:13.300
+And I was certainly influenced by some of it, just seeing some of the tools that came out
+
+00:12:13.300 --> 00:12:14.480
+and how fast they were.
+
+00:12:14.480 --> 00:12:14.740
+Sure.
+
+00:12:14.880 --> 00:12:18.740
+And the fact that a lot of those tools were not being written in JavaScript sort of intentionally
+
+00:12:18.740 --> 00:12:21.640
+to make them super performant was pretty interesting to me.
+
+00:12:21.640 --> 00:12:24.940
+So like, I don't know, I don't want to like name drop a bunch of tools, but you know, in
+
+00:12:24.940 --> 00:12:30.260
+the web ecosystem, more tooling is being written in like Go, Rust, even some other sort of more
+
+00:12:30.260 --> 00:12:31.520
+out there languages like Zig.
+
+00:12:31.920 --> 00:12:33.540
+And to me, that was kind of an interesting thing.
+
+00:12:33.540 --> 00:12:36.760
+It was like, well, does the Python tooling have to be written in Python?
+
+00:12:36.760 --> 00:12:39.860
+Like what does, like, why does that have to be the case?
+
+00:12:39.860 --> 00:12:41.840
+And like, what does it buy you and what do you lose?
+
+00:12:41.840 --> 00:12:42.960
+So that was one thing.
+
+00:12:42.960 --> 00:12:48.920
+The other was we actually started to do a lot of Rust Python hybrid stuff in our own code base.
+
+00:12:48.920 --> 00:12:50.660
+You know, our code base was fully Python.
+
+00:12:50.660 --> 00:12:56.060
+And over time, we took some of the like really performance critical pieces and started to
+
+00:12:56.060 --> 00:13:03.140
+rewrite them in Rust and expose them to the Python side using some of these like really great
+
+00:13:03.140 --> 00:13:06.040
+Rust Python hybrid tools that, you know, maybe we'll get into later.
+
+00:13:06.040 --> 00:13:09.180
+So like one example is we were dealing with image data.
+
+00:13:09.180 --> 00:13:14.340
+So like a common thing we had to do is just like download a lot of image files, like really,
+
+00:13:14.340 --> 00:13:14.980
+really fast.
+
+00:13:14.980 --> 00:13:15.280
+Right.
+
+00:13:15.280 --> 00:13:17.160
+And so, you know, we wrote that in Python.
+
+00:13:17.320 --> 00:13:21.160
+We wrote like a bunch of versions that use all sorts of like multiprocessing, threading,
+
+00:13:21.160 --> 00:13:22.060
+and like we tried everything.
+
+00:13:22.060 --> 00:13:24.340
+And then eventually we like rewrote it in Rust.
+
+00:13:24.340 --> 00:13:29.280
+And so we had a really simple, you know, Rust module that would just download files really
+
+00:13:29.280 --> 00:13:29.640
+fast.
+
+00:13:29.640 --> 00:13:31.800
+And then we exposed that as a Python API.
+
+00:13:31.800 --> 00:13:36.980
+So like from the Python code, it just looked like Python, but the actual code that was running
+
+00:13:36.980 --> 00:13:40.760
+and the way it was, you know, built and executed all went through Rust.
+
+00:13:40.760 --> 00:13:41.160
+Right.
+
+00:13:41.160 --> 00:13:46.220
+So you have these big data, big, let's say big computation problems where you're like, you
+
+00:13:46.220 --> 00:13:47.280
+know, this could be better.
+
+00:13:47.280 --> 00:13:51.780
+The same time you're looking at this happening on the web side, you know, web pack or whatever
+
+00:13:51.780 --> 00:13:52.140
+it is.
+
+00:13:52.140 --> 00:13:54.000
+And it's like, this is way better.
+
+00:13:54.000 --> 00:13:55.860
+We can do this in Python, but we aren't.
+
+00:13:55.860 --> 00:13:56.860
+So let's start, right?
+
+00:13:56.860 --> 00:13:59.960
+Probably you got a little experience there and you're like, what else can I build with Rust
+
+00:13:59.960 --> 00:14:00.840
+now that I know how?
+
+00:14:00.940 --> 00:14:01.040
+Yeah.
+
+00:14:01.040 --> 00:14:04.440
+I was seeing, you know, the way that this innovation was happening in the web.
+
+00:14:04.440 --> 00:14:09.140
+I was seeing specifically the Rust Python like opportunity from what we were doing.
+
+00:14:09.140 --> 00:14:14.180
+And then I was, you know, frankly, like feeling a fair amount of frustration just with the
+
+00:14:14.180 --> 00:14:16.040
+performance of a lot of the existing tools.
+
+00:14:16.040 --> 00:14:17.000
+Like, I don't know.
+
+00:14:17.060 --> 00:14:20.360
+I'm always really careful with how I talk about this stuff because I hate being, I'm
+
+00:14:20.360 --> 00:14:21.480
+really like not a hater.
+
+00:14:21.480 --> 00:14:25.920
+And like, I've actually gotten like so much value out of like all of those tools.
+
+00:14:25.920 --> 00:14:31.240
+But I was being like, well, should it really take like one to two minutes to let my code,
+
+00:14:31.240 --> 00:14:33.420
+like couldn't it be much faster?
+
+00:14:33.420 --> 00:14:33.820
+Right.
+
+00:14:33.820 --> 00:14:34.920
+Like it's like a big code base.
+
+00:14:34.920 --> 00:14:39.720
+And like, as you add more plugins and everything else, it really like changes, like how you
+
+00:14:39.720 --> 00:14:40.660
+feel about the tool.
+
+00:14:40.660 --> 00:14:41.000
+Right.
+
+00:14:41.000 --> 00:14:43.960
+Like it's no longer like something I just run and get feedback.
+
+00:14:43.960 --> 00:14:46.540
+It's like, oh, I have to run the linter now.
+
+00:14:46.540 --> 00:14:47.580
+Oh, I have to run the blah blah blah.
+
+00:14:47.580 --> 00:14:49.400
+And I was sort of craving that.
+
+00:14:49.400 --> 00:14:49.640
+Yeah.
+
+00:14:49.640 --> 00:14:55.280
+And if you're doing it on a team, my experience at least has been some people in the team continue
+
+00:14:55.280 --> 00:14:58.280
+to run it because they find more value than stress.
+
+00:14:58.280 --> 00:15:00.700
+And others are like, eh, I'm not running that stupid thing.
+
+00:15:00.920 --> 00:15:04.260
+But then their problems get pushed onto the people who still care.
+
+00:15:04.260 --> 00:15:08.820
+And so then it creates this kind of like a tension, like Joe's code is always kind of crappy
+
+00:15:08.820 --> 00:15:09.740
+because he won't lent it.
+
+00:15:09.740 --> 00:15:13.040
+But then like when I check out his code, my stuff starts reporting.
+
+00:15:13.040 --> 00:15:18.100
+You know, like those are the weird dynamics that happen from tools that are like super slow
+
+00:15:18.100 --> 00:15:23.500
+unit tests or super slow linting or those types of things where certain people stop working
+
+00:15:23.500 --> 00:15:24.780
+with them and others don't.
+
+00:15:24.780 --> 00:15:26.820
+And then you get these weird tensions.
+
+00:15:26.820 --> 00:15:30.260
+So having it fast, there's like real value to that.
+
+00:15:30.260 --> 00:15:35.840
+This portion of Talk Python Nemy is brought to you by Cox Automotive.
+
+00:15:35.840 --> 00:15:42.380
+With brands like Kelly Blue Book, Autotrader, Dealer.com and more, Cox Automotive flips the
+
+00:15:42.380 --> 00:15:46.320
+script on how we buy, sell, own and use our cars.
+
+00:15:46.320 --> 00:15:52.620
+And now the team at Cox Automotive is looking for software engineers, data scientists, scrum
+
+00:15:52.620 --> 00:15:57.140
+masters and other tech experts to help create meaningful change in the industry.
+
+00:15:57.840 --> 00:16:02.540
+Do you want to be part of a collaborative workplace that values your time and work life balance?
+
+00:16:02.540 --> 00:16:04.860
+Consider joining Cox Automotive.
+
+00:16:04.860 --> 00:16:08.720
+Visit talkpython.fm/cox today.
+
+00:16:08.720 --> 00:16:11.840
+Thank you to Cox Automotive for sponsoring the show.
+
+00:16:13.420 --> 00:16:17.080
+I left spring and like mid to late August.
+
+00:16:17.080 --> 00:16:22.240
+I started working on Ruff along with like a couple other projects and I never built a linter
+
+00:16:22.240 --> 00:16:22.700
+before.
+
+00:16:22.700 --> 00:16:23.220
+It was sick.
+
+00:16:23.220 --> 00:16:28.400
+So like I didn't, yeah, I didn't really know what I was doing, but it felt maybe this is
+
+00:16:28.400 --> 00:16:32.860
+like a little bit of hubris or not, I guess, because like it seems to be working.
+
+00:16:33.000 --> 00:16:36.760
+But like I was kind of like, I'll start with a linter because it feels like a tractable
+
+00:16:36.760 --> 00:16:38.460
+like scope of problem.
+
+00:16:38.460 --> 00:16:39.880
+I was like, type checker.
+
+00:16:39.880 --> 00:16:42.340
+I know that's hard and like I don't really know much about it.
+
+00:16:42.340 --> 00:16:42.820
+A linter.
+
+00:16:42.820 --> 00:16:45.040
+I feel like I can learn like some of the concepts.
+
+00:16:45.040 --> 00:16:48.120
+I have a good understanding of like of like how it might work.
+
+00:16:48.120 --> 00:16:52.120
+To me, when I look at it, I think linting people's code, like abstract syntax trees and
+
+00:16:52.120 --> 00:16:52.320
+stuff.
+
+00:16:52.320 --> 00:16:54.260
+I'm like, that doesn't sound like a problem to me.
+
+00:16:54.260 --> 00:16:57.760
+But it's good that you saw it that way because you did get through it.
+
+00:16:57.760 --> 00:16:58.000
+Yeah.
+
+00:16:58.000 --> 00:17:01.660
+Well, the first version I released was like very limited.
+
+00:17:01.660 --> 00:17:05.640
+It was sort of, I sort of needed to get it out because I wasn't sure that people would
+
+00:17:05.640 --> 00:17:07.940
+actually really care that much about like what I was doing.
+
+00:17:07.940 --> 00:17:08.240
+Yeah.
+
+00:17:08.240 --> 00:17:11.000
+Because like I've described to you a lot of like pain points.
+
+00:17:11.000 --> 00:17:12.800
+They're also sort of like opinion, right?
+
+00:17:12.800 --> 00:17:15.420
+But like, you know, I wasn't like a fast forward linter.
+
+00:17:15.420 --> 00:17:16.420
+Like who cares?
+
+00:17:16.420 --> 00:17:17.940
+Was sort of, I wasn't sure.
+
+00:17:17.940 --> 00:17:18.240
+Yeah.
+
+00:17:18.240 --> 00:17:21.780
+So, you know, when I released it, I was like, I want to prove it's possible.
+
+00:17:22.000 --> 00:17:26.880
+I want to like have reasonable confidence that the performance won't get worse or much
+
+00:17:26.880 --> 00:17:28.120
+worse as I expand it.
+
+00:17:28.120 --> 00:17:32.700
+But I only supported like, I don't know, maybe like 20 rules, which was fine with me because
+
+00:17:32.700 --> 00:17:37.220
+I was really trying to prove a point more than, you know, get people to adopt it even.
+
+00:17:37.220 --> 00:17:37.620
+Right.
+
+00:17:37.620 --> 00:17:43.700
+Well, and a lot of times go into that experience, even if very few people used it, you learn fantastic
+
+00:17:43.700 --> 00:17:44.860
+things, right?
+
+00:17:44.860 --> 00:17:45.200
+Yeah.
+
+00:17:45.200 --> 00:17:46.300
+I learned so much.
+
+00:17:46.300 --> 00:17:48.320
+And I read a ton of code.
+
+00:17:48.640 --> 00:17:54.280
+Like I read all, I've read like a lot of, I've read like a lot of source code now.
+
+00:17:54.280 --> 00:18:01.040
+So I've read like all of like, you know, PyFlakes, like high doc style, high code style, like, you
+
+00:18:01.040 --> 00:18:04.280
+know, because I've spent time like trying to re-implement a lot of those, a lot of those rules
+
+00:18:04.280 --> 00:18:06.080
+and like understand how they do things.
+
+00:18:06.080 --> 00:18:09.320
+And you just learn a lot from like reading and trying stuff.
+
+00:18:09.320 --> 00:18:09.520
+Yeah.
+
+00:18:09.680 --> 00:18:13.820
+Rust is sort of like a whole nother thing where, you know, I did some Rust at Spring,
+
+00:18:13.820 --> 00:18:17.960
+but I would say that building Rust was really like my Rust learning experience.
+
+00:18:17.960 --> 00:18:23.480
+I think I had to kind of try to build something from scratch to like really understand the language.
+
+00:18:23.480 --> 00:18:23.860
+Sure.
+
+00:18:23.860 --> 00:18:24.940
+Everything I did in Spring.
+
+00:18:24.940 --> 00:18:26.260
+You can do all the tutorials.
+
+00:18:26.260 --> 00:18:26.820
+Yeah.
+
+00:18:26.820 --> 00:18:29.360
+And I was like, I was trying to get in and out as quickly as possible.
+
+00:18:29.360 --> 00:18:30.020
+No, no.
+
+00:18:30.020 --> 00:18:33.860
+I just like, you know, I didn't do the initial Rust migration at Spring.
+
+00:18:33.860 --> 00:18:37.020
+I worked with another like super talented engineer who did that.
+
+00:18:37.560 --> 00:18:41.300
+And so every time I went into, you know, and I made a bunch of changes to it, but every
+
+00:18:41.300 --> 00:18:45.580
+time I was going in and out, I was like, I just need to like ship this and like move on.
+
+00:18:45.580 --> 00:18:49.260
+Like, I'm not going to spend a bunch of time like really understanding everything that's
+
+00:18:49.260 --> 00:18:49.820
+going on here.
+
+00:18:49.820 --> 00:18:50.880
+I just want to get it to work.
+
+00:18:50.880 --> 00:18:56.380
+And so I needed to like sit down and like really like focus and be presented with like
+
+00:18:56.380 --> 00:19:00.720
+a blank plate, I think to learn and just like fail a lot and like build stuff that didn't
+
+00:19:00.720 --> 00:19:01.120
+compile.
+
+00:19:01.120 --> 00:19:01.520
+Right.
+
+00:19:01.520 --> 00:19:03.340
+And figure out how to resolve those problems.
+
+00:19:03.340 --> 00:19:05.960
+It's honestly, it's a tough, it is a tough learning curve.
+
+00:19:05.960 --> 00:19:06.880
+I'm sure that it is.
+
+00:19:07.160 --> 00:19:12.400
+I started out in C++ and so I, I know there are harder languages and they're easier languages.
+
+00:19:12.400 --> 00:19:15.040
+So I've never written C++.
+
+00:19:15.040 --> 00:19:17.140
+I'm never.
+
+00:19:17.140 --> 00:19:18.240
+You're not missing that much.
+
+00:19:18.240 --> 00:19:18.700
+I would say.
+
+00:19:18.700 --> 00:19:20.900
+Eddie out there says rough is so awesome.
+
+00:19:20.900 --> 00:19:25.300
+I actually changed all the switch statements in my Python 310 code back to if else blocks
+
+00:19:25.300 --> 00:19:28.440
+so I could switch to rough, which is pretty awesome.
+
+00:19:28.440 --> 00:19:32.060
+That's super nice and slightly embarrassing because we don't support Matt.
+
+00:19:32.060 --> 00:19:32.980
+We don't support Matt.
+
+00:19:32.980 --> 00:19:34.160
+We don't support the match.
+
+00:19:34.340 --> 00:19:38.140
+That's the one big language feature that we don't support yet.
+
+00:19:38.140 --> 00:19:39.420
+You could just kind of comment it out.
+
+00:19:39.420 --> 00:19:41.880
+Like it just, we're going to just ignore whatever's in the switch.
+
+00:19:41.880 --> 00:19:42.660
+It must be fine.
+
+00:19:42.660 --> 00:19:43.620
+On to the next part.
+
+00:19:43.820 --> 00:19:44.320
+Yeah, exactly.
+
+00:19:44.320 --> 00:19:44.840
+Right.
+
+00:19:44.840 --> 00:19:45.900
+Yeah.
+
+00:19:45.900 --> 00:19:46.200
+Yeah.
+
+00:19:46.200 --> 00:19:46.520
+Yeah.
+
+00:19:46.520 --> 00:19:48.080
+I mean, not for your code, but for linting.
+
+00:19:48.080 --> 00:19:51.580
+Let's start our dive in with this comment from Tyler.
+
+00:19:51.580 --> 00:19:55.220
+He says, what are the differences between linters like rough and flake gate?
+
+00:19:55.700 --> 00:19:58.600
+Those versus code stylers or formatters like black.
+
+00:19:58.600 --> 00:20:00.880
+And maybe rough lives in the middle of that spectrum.
+
+00:20:00.880 --> 00:20:01.460
+I'm not sure.
+
+00:20:01.460 --> 00:20:02.220
+Yeah.
+
+00:20:02.220 --> 00:20:07.300
+There's certainly like, like, like you said, it's like a spectrum, right?
+
+00:20:07.300 --> 00:20:09.740
+So I guess there's a couple of different ways to think about it.
+
+00:20:09.740 --> 00:20:14.160
+And it, with those tools specifically, like some of the responsibilities have like in my
+
+00:20:14.160 --> 00:20:15.880
+mind, at least shifted a bit over time.
+
+00:20:15.960 --> 00:20:20.380
+So for example, like flake gate, it does a lot of, it doesn't change your code at all.
+
+00:20:20.380 --> 00:20:22.260
+And it'll just tell you about issues.
+
+00:20:22.260 --> 00:20:24.460
+And those issues could be style issues.
+
+00:20:24.460 --> 00:20:27.180
+Like you have extra white space here or.
+
+00:20:27.180 --> 00:20:27.620
+Yeah.
+
+00:20:27.620 --> 00:20:28.160
+I don't know.
+
+00:20:28.160 --> 00:20:29.220
+What's another big example.
+
+00:20:29.220 --> 00:20:30.500
+This line is too long.
+
+00:20:30.500 --> 00:20:30.780
+Yeah.
+
+00:20:30.780 --> 00:20:31.120
+Yeah.
+
+00:20:31.120 --> 00:20:35.620
+But it could also be like a logical issue, which is something that black wouldn't touch.
+
+00:20:35.620 --> 00:20:38.140
+So it might be like this import is unused.
+
+00:20:38.140 --> 00:20:43.220
+So on the one end you have like, you know, different collections of rules and maybe not really
+
+00:20:43.220 --> 00:20:45.200
+changing the code, just kind of telling you about it.
+
+00:20:45.200 --> 00:20:48.980
+Black is different in that black just reformats your code.
+
+00:20:48.980 --> 00:20:52.020
+So it does, it's not actually aware of like the logic in the code.
+
+00:20:52.020 --> 00:20:54.240
+Like it doesn't know that an imports unused.
+
+00:20:54.240 --> 00:20:57.380
+It doesn't know that function is never called.
+
+00:20:57.380 --> 00:20:57.780
+Yeah.
+
+00:20:57.780 --> 00:20:59.760
+It just takes, you know, that abstract.
+
+00:20:59.760 --> 00:21:03.500
+Well, not, not exactly the abstract syntax tree, but it basically preserves your code as
+
+00:21:03.500 --> 00:21:05.200
+is and just tries to restyle it.
+
+00:21:05.200 --> 00:21:09.640
+And so, you know, it's interesting because like if you use black, you probably don't need
+
+00:21:09.640 --> 00:21:11.460
+a lot of style linting.
+
+00:21:11.460 --> 00:21:14.820
+Like if you're using black to format your code, a lot of the rules.
+
+00:21:14.820 --> 00:21:16.920
+Like a part that relevant anymore.
+
+00:21:16.920 --> 00:21:21.140
+They'll say something like you should have followed the rules of this, but black automatically
+
+00:21:21.140 --> 00:21:22.360
+follows those rules for you.
+
+00:21:22.360 --> 00:21:22.560
+Right.
+
+00:21:22.560 --> 00:21:25.980
+So they're kind of, you don't need to correct the line length because black will wrap it
+
+00:21:25.980 --> 00:21:27.180
+because that's what black does.
+
+00:21:27.180 --> 00:21:28.280
+Right.
+
+00:21:28.280 --> 00:21:28.560
+Yeah.
+
+00:21:28.560 --> 00:21:33.060
+Or even like, you know, if you have like X equals one with like no spaces between the
+
+00:21:33.060 --> 00:21:37.460
+X and the equals and the equals and the one, like the linter will yell at you for that.
+
+00:21:37.520 --> 00:21:39.020
+But black fixes that for you.
+
+00:21:39.020 --> 00:21:41.740
+So a lot of people will turn off those rules.
+
+00:21:41.740 --> 00:21:45.180
+You know, this is why I say the responsibilities have shifted a bit over time.
+
+00:21:45.180 --> 00:21:45.520
+Yeah.
+
+00:21:45.520 --> 00:21:46.300
+I think you're right.
+
+00:21:46.300 --> 00:21:48.460
+That rough, like it kind of sits in the middle.
+
+00:21:48.460 --> 00:21:51.620
+We do less stylistic linting for this exact reason.
+
+00:21:51.620 --> 00:21:53.520
+Like I use black a lot.
+
+00:21:53.520 --> 00:21:55.440
+Black is like immensely popular.
+
+00:21:55.440 --> 00:22:01.920
+So I actually like strong, like heavily deprioritized, like all of the stylistic rules that are made
+
+00:22:01.920 --> 00:22:02.920
+redundant by black.
+
+00:22:02.920 --> 00:22:03.160
+Okay.
+
+00:22:03.160 --> 00:22:05.680
+The difference is we do do a lot of that automatic fixing.
+
+00:22:05.680 --> 00:22:08.840
+So like we'll, we can remove unused imports for you.
+
+00:22:08.840 --> 00:22:11.660
+We can even do like a lot of more complicated rewrites.
+
+00:22:11.660 --> 00:22:16.800
+Like if you're using, if you're using like a dictionary constructor, like the actual, you
+
+00:22:16.800 --> 00:22:21.520
+know, D I C T parentheses arguments, we can actually rewrite as a literal.
+
+00:22:21.520 --> 00:22:25.180
+If you have the rules enabled and you want to do that, you know, there's like a bunch of
+
+00:22:25.180 --> 00:22:28.620
+rules around like comprehensions and literals, and we can do those rewrites too.
+
+00:22:28.620 --> 00:22:33.520
+So, you know, it does, it can do like style and reformatting, but it's somewhere in the
+
+00:22:33.520 --> 00:22:33.680
+middle.
+
+00:22:33.680 --> 00:22:33.960
+Yeah.
+
+00:22:33.960 --> 00:22:38.540
+The fact that it makes some changes, but it doesn't go completely all in like black is
+
+00:22:38.540 --> 00:22:40.660
+kind of why I think it lives a little bit in the middle there.
+
+00:22:40.660 --> 00:22:40.960
+Yeah.
+
+00:22:40.960 --> 00:22:46.520
+One of the things that I think might give people a lot of, brought a lot of faith or a willingness
+
+00:22:46.520 --> 00:22:52.840
+to give it a try is there's a lot of projects out here that are large projects that people
+
+00:22:52.840 --> 00:22:58.320
+would know that have adopted, actively adopted and started using rough.
+
+00:22:58.320 --> 00:23:03.960
+I saw a quote from Sebastian Ramirez from FastAPI right now in the audience.
+
+00:23:03.960 --> 00:23:10.020
+We have Olfek says the next release of hatch, which I hope to do this weekend will have
+
+00:23:10.020 --> 00:23:14.420
+all the new projects generated with config for a Linting environment that uses rough, which
+
+00:23:14.420 --> 00:23:15.580
+I think is pretty excellent.
+
+00:23:15.580 --> 00:23:20.160
+Can we speak to speak to some of that, like about these, these projects adopting it and
+
+00:23:20.160 --> 00:23:21.460
+how that's helped you?
+
+00:23:21.460 --> 00:23:22.280
+Yeah, totally.
+
+00:23:22.280 --> 00:23:22.820
+Yeah.
+
+00:23:22.820 --> 00:23:27.300
+I never expected that like this, maybe that like goes without saying, I think you'd have
+
+00:23:27.300 --> 00:23:31.240
+to be like super arrogant to release something and expect a bunch of these people to use it.
+
+00:23:31.240 --> 00:23:31.660
+Yeah.
+
+00:23:31.660 --> 00:23:32.500
+It's been kind of wild.
+
+00:23:32.500 --> 00:23:37.560
+You know, initially there were a couple big projects that I would call like really early
+
+00:23:37.560 --> 00:23:41.660
+adopters and they helped shape the project a lot.
+
+00:23:42.040 --> 00:23:44.600
+like Pydantic was a very early adopter.
+
+00:23:44.600 --> 00:23:46.740
+Zulip was a very early adopter.
+
+00:23:46.740 --> 00:23:49.820
+FastAPI was actually like a pretty early adopter too.
+
+00:23:49.820 --> 00:23:50.160
+Okay.
+
+00:23:50.160 --> 00:23:55.440
+And then like Pandas and Airflow and stuff, those kind of are more recent.
+
+00:23:55.440 --> 00:23:55.760
+Okay.
+
+00:23:55.760 --> 00:24:01.240
+It's been a very interesting, like to reflect on how that's happened because on the one hand,
+
+00:24:01.240 --> 00:24:06.360
+it's like sort of ridiculous that all these products would migrate over because I'm on,
+
+00:24:06.360 --> 00:24:09.760
+I don't even really have like a proper versioning system right now.
+
+00:24:09.840 --> 00:24:12.940
+Like I'm on V00225 or something.
+
+00:24:12.940 --> 00:24:18.900
+I basically release like every day and I consider like, I don't really make, we've made like
+
+00:24:18.900 --> 00:24:22.560
+very few breaking changes, but like in theory we could make breaking change.
+
+00:24:22.560 --> 00:24:27.200
+I don't want to, but like if you have Scribe December, like we could make changes like that.
+
+00:24:27.200 --> 00:24:30.740
+You know, there's not really like docs, like the docs are just like this huge read me.
+
+00:24:30.740 --> 00:24:32.320
+It's kind of wild, right?
+
+00:24:32.320 --> 00:24:35.160
+We don't support like all the Python 3.10 features, right?
+
+00:24:35.160 --> 00:24:36.100
+We don't support match statements.
+
+00:24:36.100 --> 00:24:39.120
+So on the one hand, it's kind of wild that all these projects would move over.
+
+00:24:39.560 --> 00:24:42.140
+I think there are a couple of things that help a lot.
+
+00:24:42.140 --> 00:24:48.020
+So one is that the entire time I've been like very, very focused on compatibility with existing
+
+00:24:48.020 --> 00:24:48.440
+tools.
+
+00:24:48.440 --> 00:24:51.140
+And that comes at a lot of cost.
+
+00:24:51.140 --> 00:24:54.020
+Like if there are things that I like don't agree with, right?
+
+00:24:54.020 --> 00:24:57.360
+Or whatever else, like I sometimes still support them or implement them.
+
+00:24:57.360 --> 00:25:01.960
+And, you know, but the upside is like, it's very easy for people to migrate.
+
+00:25:01.960 --> 00:25:02.320
+Right.
+
+00:25:02.320 --> 00:25:04.440
+It might change nothing potentially.
+
+00:25:04.440 --> 00:25:05.040
+Right.
+
+00:25:05.120 --> 00:25:06.200
+It just, it just goes faster.
+
+00:25:06.200 --> 00:25:06.820
+Hopefully.
+
+00:25:06.820 --> 00:25:10.860
+And over time, like, you know, we don't have like a third party plugin system.
+
+00:25:10.860 --> 00:25:15.060
+We've just like implemented everything like in Rust, like as part of Rust.
+
+00:25:15.060 --> 00:25:20.320
+I viewed that as like, I'm just going to look at the most popular plugins and the most important
+
+00:25:20.320 --> 00:25:20.780
+rules.
+
+00:25:20.780 --> 00:25:24.300
+And I'm just going to figure out like, what's a blocker for whom?
+
+00:25:24.640 --> 00:25:28.280
+And like, what do I need to implement in order to like unblock people and like make sure
+
+00:25:28.280 --> 00:25:28.900
+they can use it?
+
+00:25:28.900 --> 00:25:32.900
+Is there a way for people to let you know which of those are really important to them?
+
+00:25:32.900 --> 00:25:36.920
+Like, for example, if there's some big project out there, it's like, we would love to move
+
+00:25:36.920 --> 00:25:41.180
+to rough, but there's this one, one plugin we're waiting on.
+
+00:25:41.180 --> 00:25:41.740
+Yeah.
+
+00:25:41.740 --> 00:25:43.760
+I mostly hear about it in issues.
+
+00:25:43.760 --> 00:25:49.340
+And there are a couple issues where it's like kind of a big GitHub issue.
+
+00:25:49.340 --> 00:25:50.940
+It'll be like implement this plugin.
+
+00:25:51.460 --> 00:25:54.080
+And a lot of people will come and like give it a thumbs up or whatever.
+
+00:25:54.080 --> 00:25:57.340
+We have pretty good coverage now, actually.
+
+00:25:57.340 --> 00:25:59.040
+Like, I mean, there is a long tail.
+
+00:25:59.040 --> 00:26:01.580
+Like there's a big ecosystem of like flaky plugins.
+
+00:26:01.580 --> 00:26:06.040
+You know, sometimes someone will come along and ask for a plugin that I haven't really like
+
+00:26:06.040 --> 00:26:06.620
+seen before.
+
+00:26:06.620 --> 00:26:09.660
+And then it's just a calculus of like, what do I want to prioritize?
+
+00:26:09.660 --> 00:26:11.520
+How much work is it?
+
+00:26:11.520 --> 00:26:12.400
+Yeah, exactly.
+
+00:26:12.400 --> 00:26:15.560
+Is this a super easy thing to do?
+
+00:26:15.560 --> 00:26:17.020
+Like, oh, the line is too long.
+
+00:26:17.020 --> 00:26:17.540
+That's easy.
+
+00:26:17.540 --> 00:26:19.920
+Or is it, you know, rewrite this?
+
+00:26:19.920 --> 00:26:20.380
+Yeah.
+
+00:26:20.880 --> 00:26:23.180
+This generator in this other interesting way.
+
+00:26:23.180 --> 00:26:23.440
+Yeah.
+
+00:26:23.440 --> 00:26:27.220
+That happened with, well, a lot of people want like, I don't know how to pronounce this library,
+
+00:26:27.220 --> 00:26:30.780
+but like Dargland, like D-Argland, Dargland.
+
+00:26:30.780 --> 00:26:31.420
+I don't know.
+
+00:26:31.420 --> 00:26:31.780
+Anyway.
+
+00:26:31.780 --> 00:26:32.780
+I would go with that as well.
+
+00:26:32.780 --> 00:26:32.980
+Yeah.
+
+00:26:32.980 --> 00:26:33.280
+Yeah.
+
+00:26:33.280 --> 00:26:33.600
+Dargland.
+
+00:26:33.600 --> 00:26:34.160
+Let's go with that.
+
+00:26:34.160 --> 00:26:35.960
+It's very popular, but I've looked at the source.
+
+00:26:35.960 --> 00:26:36.760
+It's pretty complicated.
+
+00:26:36.760 --> 00:26:40.320
+So like, I need to, you know, that's not something I can just like turn around in a day.
+
+00:26:40.320 --> 00:26:43.060
+But like, you know, I hear like what people want.
+
+00:26:43.060 --> 00:26:47.580
+And I mean, some of those migrations though, I didn't even know about them until they'd happened.
+
+00:26:47.580 --> 00:26:48.000
+Yeah.
+
+00:26:48.000 --> 00:26:48.180
+Yeah.
+
+00:26:48.180 --> 00:26:48.540
+Of course.
+
+00:26:48.540 --> 00:26:50.020
+People come, they submit issues.
+
+00:26:50.020 --> 00:26:51.060
+I look at their profiles.
+
+00:26:51.060 --> 00:26:52.200
+I see what they're working on.
+
+00:26:52.200 --> 00:26:53.940
+I get a sense for what the projects are.
+
+00:26:53.940 --> 00:26:54.220
+Right.
+
+00:26:54.280 --> 00:26:59.200
+So sometimes I know, and then I'm kind of fixing things knowing that hopefully it's unblocking
+
+00:26:59.200 --> 00:27:00.160
+them in different ways.
+
+00:27:00.160 --> 00:27:03.860
+But I think, like I said, I think the compatibility piece is like really huge.
+
+00:27:03.860 --> 00:27:08.900
+And I actually think that like black and eyesword and like the popularity of those things has
+
+00:27:08.900 --> 00:27:12.920
+made compatibility for me like a little bit easier because I can just like adhere to what
+
+00:27:12.920 --> 00:27:13.340
+they do.
+
+00:27:13.340 --> 00:27:16.220
+And then hopefully there's like no code changes.
+
+00:27:16.220 --> 00:27:16.600
+Yeah.
+
+00:27:16.600 --> 00:27:19.120
+They centralize around what like black is the truth.
+
+00:27:19.120 --> 00:27:20.840
+And then we'll, then we'll stop.
+
+00:27:20.840 --> 00:27:21.860
+We'll debate beyond that.
+
+00:27:21.880 --> 00:27:27.260
+But like, we're just going to accept black because it's no fun to go commas on the end
+
+00:27:27.260 --> 00:27:27.660
+of the line.
+
+00:27:27.660 --> 00:27:29.660
+No commas on the trailing thing in the list.
+
+00:27:29.660 --> 00:27:32.860
+You know, like that, those kinds of debates just go on and on.
+
+00:27:32.860 --> 00:27:33.260
+Yeah.
+
+00:27:33.260 --> 00:27:33.640
+I know.
+
+00:27:33.640 --> 00:27:38.320
+I think black kind of solves that by just making a decision for you and not everyone's
+
+00:27:38.320 --> 00:27:41.500
+totally happy with every choice, but it stops the debate.
+
+00:27:41.500 --> 00:27:43.620
+And that actually probably wins the day for most of them.
+
+00:27:43.620 --> 00:27:48.900
+One thing that's interesting here that I'm noticing about these projects in the large open
+
+00:27:48.900 --> 00:27:54.400
+source projects that have adopted rough, not all of them, surely, but many of them like
+
+00:27:54.400 --> 00:28:00.100
+Pydantic and Polars and so on themselves are adopting Rust.
+
+00:28:00.100 --> 00:28:02.300
+Do you see a synergy of those?
+
+00:28:02.300 --> 00:28:07.340
+Like, well, we're rewriting Pydantic core and Rust like Samuel Colvin is, or the folks behind
+
+00:28:07.340 --> 00:28:10.940
+Polars are like, that's the core of it is about Rust.
+
+00:28:10.940 --> 00:28:12.640
+And that's the RS on the end, I think.
+
+00:28:13.000 --> 00:28:15.720
+So there might be a little extra draw there, right?
+
+00:28:15.720 --> 00:28:19.220
+I think it's just more like, like spiritual alignment.
+
+00:28:19.220 --> 00:28:20.180
+Yes, exactly.
+
+00:28:20.180 --> 00:28:21.280
+Because it doesn't matter.
+
+00:28:21.280 --> 00:28:23.060
+No, it doesn't.
+
+00:28:23.060 --> 00:28:24.900
+But spiritually.
+
+00:28:24.900 --> 00:28:27.660
+But there's, yeah, there's a little bit of a bug.
+
+00:28:27.660 --> 00:28:32.900
+Sorry, bug in the sense of like, like once people start writing some stuff in Rust and
+
+00:28:32.900 --> 00:28:37.060
+improving their Python, they're kind of like more open to like, you know, trying out other
+
+00:28:37.060 --> 00:28:39.220
+things that are written in Rust and so on.
+
+00:28:39.220 --> 00:28:44.680
+So it's, I mean, that community has like been very interesting to sort of watch and be a
+
+00:28:44.680 --> 00:28:46.600
+part of the like Rust Python community.
+
+00:28:46.600 --> 00:28:52.660
+It still feels like pretty nascent, but there are, the tooling is actually like really great.
+
+00:28:52.660 --> 00:28:57.200
+And, you know, we could talk about that more, but like, you know, there was definitely like
+
+00:28:57.200 --> 00:29:03.080
+a bunch of initial setup for actually like distributing Rust, PyPI and making pip installable.
+
+00:29:03.560 --> 00:29:05.620
+But now that that's over, it all like just works.
+
+00:29:05.620 --> 00:29:10.480
+And I mean, I wouldn't say it's like requires no effort, but it's actually pretty amazing.
+
+00:29:10.480 --> 00:29:15.600
+Like how, like the degree of integration and how much you can do now with these tools like
+
+00:29:15.600 --> 00:29:18.540
+Py03 and, and MatcherIn and some others.
+
+00:29:18.540 --> 00:29:22.340
+That was one of the things that was really nice surprise for me as well as how easy it is to
+
+00:29:22.340 --> 00:29:23.280
+install, right?
+
+00:29:23.280 --> 00:29:29.080
+Like, unless you told me, unless it wasn't part of, you know, the elevator pitch, you know,
+
+00:29:29.080 --> 00:29:34.920
+the little one sentence subtitle on the project, like you would know from a interacting perspective,
+
+00:29:34.920 --> 00:29:36.960
+which is kind of exactly what you want.
+
+00:29:36.960 --> 00:29:40.960
+I also think that it's really, there's some value to having these popular projects adopt
+
+00:29:40.960 --> 00:29:45.700
+RUF because Martin and the audience, for example, says, I found out about Ruff by looking to see
+
+00:29:45.700 --> 00:29:51.680
+what FastAPI does, because presumably it's a ton of respect for FastAPI and Sebastian, his choices.
+
+00:29:52.520 --> 00:29:56.080
+So yeah, it's got to sort of create the snowball effect as well.
+
+00:29:56.080 --> 00:30:02.340
+So this portion of Talk Python to me is brought to you by user interviews.
+
+00:30:02.340 --> 00:30:08.120
+As a developer, how often do you find yourself talking back to products and services that you use?
+
+00:30:08.120 --> 00:30:11.920
+Sometimes it may be frustration over how it's working poorly.
+
+00:30:11.920 --> 00:30:15.800
+And if they just did such and such, it would work better.
+
+00:30:15.800 --> 00:30:17.140
+And it's easy to do.
+
+00:30:17.140 --> 00:30:19.040
+Other times it might be delight.
+
+00:30:19.040 --> 00:30:21.240
+Wow, they auto-filled that section for me.
+
+00:30:21.500 --> 00:30:22.620
+How did they even do that?
+
+00:30:22.620 --> 00:30:23.040
+Wonderful.
+
+00:30:23.040 --> 00:30:23.680
+Thanks.
+
+00:30:23.680 --> 00:30:27.780
+While this verbalization might be great to get the thoughts out of your head,
+
+00:30:27.780 --> 00:30:31.400
+did you know that you can earn money for your feedback on real products?
+
+00:30:31.400 --> 00:30:36.820
+User interviews connects researchers with professionals that want to participate in research studies.
+
+00:30:36.820 --> 00:30:42.640
+There is a high demand for developers to share their opinions on products being created for developers.
+
+00:30:42.640 --> 00:30:47.260
+Aside from the extra cash, you'll talk to people building products in your space.
+
+00:30:47.260 --> 00:30:50.140
+You will not only learn about new tools being created,
+
+00:30:50.320 --> 00:30:53.380
+but you'll also shape the future of the products that we all use.
+
+00:30:53.380 --> 00:30:58.320
+It's completely free to sign up and you can apply to your first study in under five minutes.
+
+00:30:58.320 --> 00:31:00.620
+The average study pays over $60.
+
+00:31:00.620 --> 00:31:07.620
+However, many studies specifically interested in developers pay several hundreds of dollars for a one-on-one interview.
+
+00:31:07.880 --> 00:31:11.840
+Are you ready to earn extra income from sharing your expert opinion?
+
+00:31:11.840 --> 00:31:16.760
+Head over to talkpython.fm/user interviews to participate today.
+
+00:31:16.760 --> 00:31:19.060
+The link is in your podcast player show notes.
+
+00:31:19.060 --> 00:31:21.600
+Thank you to user interviews for supporting the show.
+
+00:31:24.260 --> 00:31:34.400
+One thing that's a little bit overlooked about why that adoption is useful is that it actually feeds back into the project in so many great ways.
+
+00:31:34.400 --> 00:31:48.240
+So, you know, for example, DAG sir adopted ROUGH and they have a really big Python monorepo with 50 or 100 separate Python modules or packages in there.
+
+00:31:48.460 --> 00:31:54.360
+And they filed like a bunch of issues about around how can we make ROUGH better for monorepos.
+
+00:31:54.860 --> 00:32:00.420
+And so now they can run ROUGH once and it runs over all their separate projects that can all have their own configuration.
+
+00:32:00.420 --> 00:32:03.460
+And that's like a really, really powerful thing.
+
+00:32:03.460 --> 00:32:11.300
+And something that like if I was just sort of sitting around like building ROUGH, like I don't know that I would have known to prioritize that or what it should look like.
+
+00:32:11.300 --> 00:32:20.300
+And so like actually like working with people who want to adopt ROUGHs and like figuring out what stops using it provides a ton of value to the project and just prioritization.
+
+00:32:21.180 --> 00:32:25.560
+Like a lot of the iSort stuff, I pushed on it a lot when I started because ROUGH does import sorting.
+
+00:32:25.560 --> 00:32:28.320
+So you can use it if you want in lieu of iSort.
+
+00:32:28.320 --> 00:32:33.020
+And we implement a lot of the same configuration options, not all the same.
+
+00:32:33.020 --> 00:32:35.040
+iSort just is like really configurable.
+
+00:32:35.040 --> 00:32:37.980
+So we went, we sort of implement them as they get requested.
+
+00:32:37.980 --> 00:32:46.320
+But anyway, I prioritize that stuff because a lot of people wanted it and they were coming to the issues and being like, hey, this would really help me adopt it, blah, blah, blah.
+
+00:32:46.760 --> 00:32:52.300
+So just like getting the feedback and like hearing what's blocking people, like that itself is like so valuable for the project.
+
+00:32:52.300 --> 00:32:52.620
+Right.
+
+00:32:52.620 --> 00:32:54.860
+And you have a lot of people involved in these larger projects.
+
+00:32:54.860 --> 00:32:59.380
+So they, and they have specific polished needs, right?
+
+00:32:59.380 --> 00:33:05.460
+Like there's a lot of people who work on pandas or FastAPI and those are mature code bases.
+
+00:33:05.460 --> 00:33:07.020
+It's not just a pet project, right?
+
+00:33:07.020 --> 00:33:07.540
+Yeah.
+
+00:33:07.540 --> 00:33:08.100
+Yeah.
+
+00:33:08.100 --> 00:33:08.860
+Those are very mature.
+
+00:33:08.860 --> 00:33:09.240
+Yeah.
+
+00:33:09.240 --> 00:33:10.660
+Yeah, exactly.
+
+00:33:10.660 --> 00:33:11.100
+That's good.
+
+00:33:11.100 --> 00:33:12.180
+But also it's a challenge.
+
+00:33:12.780 --> 00:33:18.800
+One other thing I would like to point out, you know, you started off by introducing rough saying, maybe people will be interested.
+
+00:33:18.800 --> 00:33:20.080
+I don't really know if they will.
+
+00:33:20.080 --> 00:33:20.640
+Maybe they will.
+
+00:33:20.640 --> 00:33:21.300
+That'd be cool.
+
+00:33:21.300 --> 00:33:24.600
+You know, 6.5, 6.4 thousand stars.
+
+00:33:24.600 --> 00:33:27.560
+That's a, it's a non-trivial amount of interest.
+
+00:33:27.560 --> 00:33:28.840
+That's a lot of love.
+
+00:33:28.840 --> 00:33:29.440
+Yeah.
+
+00:33:29.440 --> 00:33:30.240
+Yeah.
+
+00:33:30.240 --> 00:33:30.620
+Yeah.
+
+00:33:30.620 --> 00:33:32.060
+And like, I don't know.
+
+00:33:32.060 --> 00:33:36.220
+One thing that I, I guess I might feel weird, like highlighting all the big projects.
+
+00:33:36.220 --> 00:33:41.240
+Cause one thing that I really appreciate is just like anyone who's willing to try a tool
+
+00:33:41.240 --> 00:33:41.860
+like this.
+
+00:33:41.860 --> 00:33:42.180
+Sure.
+
+00:33:42.180 --> 00:33:45.240
+Like moving tools and trying new tools is like a big decision.
+
+00:33:45.240 --> 00:33:49.640
+I just like really appreciate everyone who says nice things about it or everyone who's
+
+00:33:49.640 --> 00:33:53.660
+like willing to give a try, give it a try, like no matter what they're working on.
+
+00:33:53.660 --> 00:33:53.880
+Yeah.
+
+00:33:53.880 --> 00:33:55.880
+It's not a platform to say that out loud.
+
+00:33:55.880 --> 00:33:57.020
+So hopefully people hear it.
+
+00:33:57.020 --> 00:33:58.040
+Yeah, absolutely.
+
+00:33:58.040 --> 00:34:03.760
+So the other thing I want to highlight about the repo here, not just the stars, but when
+
+00:34:03.760 --> 00:34:08.360
+I look at a project and I want to sort of assess, I really want to adopt this thing.
+
+00:34:08.360 --> 00:34:13.440
+Do I want to make this part of my dependencies or things or layers that I got to live with
+
+00:34:13.440 --> 00:34:13.680
+here?
+
+00:34:13.680 --> 00:34:19.300
+And if it goes sideways, I got to change something is, you know, how old is the project?
+
+00:34:19.300 --> 00:34:20.900
+How active is the project?
+
+00:34:20.900 --> 00:34:21.720
+And so on.
+
+00:34:21.720 --> 00:34:26.060
+So look, we started this podcast 40 minutes ago.
+
+00:34:26.220 --> 00:34:28.880
+The last commit was 52 minutes ago.
+
+00:34:28.880 --> 00:34:30.300
+Oh yeah.
+
+00:34:30.300 --> 00:34:30.920
+Sorry.
+
+00:34:30.920 --> 00:34:31.480
+Yeah.
+
+00:34:31.480 --> 00:34:32.200
+It's kind of.
+
+00:34:32.200 --> 00:34:32.740
+That's awesome.
+
+00:34:32.740 --> 00:34:36.160
+I mean, you're like, but you're looking here and it's then it's, it's yesterday.
+
+00:34:36.160 --> 00:34:37.620
+It's, it's last week.
+
+00:34:37.620 --> 00:34:41.080
+I want to point out there's just a lot of activity, 78 contributors.
+
+00:34:41.080 --> 00:34:45.920
+It's a very lively project and not just something that's cool, but you know, there's a lot of interest
+
+00:34:45.920 --> 00:34:51.080
+and energy in it, which I think is a very strong signal that it's something people should
+
+00:34:51.080 --> 00:34:52.160
+be comfortable adopting.
+
+00:34:52.160 --> 00:34:52.460
+Thanks.
+
+00:34:52.460 --> 00:34:54.400
+I appreciate you calling that out.
+
+00:34:54.400 --> 00:34:58.720
+I think I guess companies one, that's actually something that when I talked before about
+
+00:34:58.720 --> 00:35:03.240
+why would these big projects adopt this thing that like seems really experimental, that's
+
+00:35:03.240 --> 00:35:07.020
+actually something that comes up a lot is, and I'm not in the conversation, but obviously
+
+00:35:07.020 --> 00:35:09.680
+I'm sleuthing a little bit on the PRs.
+
+00:35:09.680 --> 00:35:09.940
+Right.
+
+00:35:09.940 --> 00:35:14.360
+And they're saying, well, it doesn't support X, but it's like really actively developed.
+
+00:35:14.360 --> 00:35:18.260
+And I'm like very confident that they will support that, you know, at some point.
+
+00:35:18.980 --> 00:35:19.140
+Yeah.
+
+00:35:19.140 --> 00:35:24.500
+And so like, just like having something that is clearly very actively worked on, I think
+
+00:35:24.500 --> 00:35:26.720
+is quite like appealing and comforting to people.
+
+00:35:26.720 --> 00:35:26.980
+Yeah.
+
+00:35:26.980 --> 00:35:31.660
+I actually like do feel bad saying this, but like one of my favorite, not favorite, but
+
+00:35:31.660 --> 00:35:38.400
+it kind of an interaction that happens on the repo is someone will file an issue and they'll
+
+00:35:38.400 --> 00:35:44.180
+say, this is actually also a bug that exists in the, let's call it the upstream implementation.
+
+00:35:44.600 --> 00:35:48.240
+So the existing Python version of that tool also has that bug.
+
+00:35:48.240 --> 00:35:48.300
+Right.
+
+00:35:48.300 --> 00:35:50.520
+Like Pyland or FlickAids or something like that.
+
+00:35:50.520 --> 00:35:50.780
+Yeah.
+
+00:35:50.780 --> 00:35:52.820
+It does this, but we think it's wrong.
+
+00:35:52.820 --> 00:35:54.700
+We disagree with it or something, right?
+
+00:35:54.700 --> 00:35:58.360
+Or there's an issue where, you know, the maintainer is like, oh yeah, this is broken.
+
+00:35:58.360 --> 00:35:58.780
+Yeah.
+
+00:35:58.780 --> 00:35:58.940
+Yeah.
+
+00:35:58.940 --> 00:35:59.140
+Okay.
+
+00:35:59.140 --> 00:36:02.960
+It's really not like the reason I tell that thing is like, I, you know, every project is
+
+00:36:02.960 --> 00:36:06.940
+different and like every maintainer, like most people, like everyone's doing this like
+
+00:36:06.940 --> 00:36:07.720
+for free, right?
+
+00:36:07.720 --> 00:36:11.780
+Like I'm not, I'm not here to like call out other maintainers, but I think it's a very satisfying
+
+00:36:11.780 --> 00:36:15.940
+interaction for people when, you know, they link to an issue it's been open for, for maybe
+
+00:36:15.940 --> 00:36:16.700
+for like years.
+
+00:36:16.700 --> 00:36:21.880
+And then I can actually just like fix it in like, like pretty quickly and ship a release
+
+00:36:21.880 --> 00:36:22.540
+in the same day.
+
+00:36:22.540 --> 00:36:27.420
+And like that, I think that's like a really like powerful thing that resonates with people
+
+00:36:27.420 --> 00:36:27.800
+a lot.
+
+00:36:27.800 --> 00:36:32.460
+It's just the feeling of like stuff getting shipped and like things getting fixed.
+
+00:36:32.880 --> 00:36:35.540
+And yeah, I'm like, you know, I'm working on this full time.
+
+00:36:35.540 --> 00:36:37.300
+So like, I'm fortunate to be able to do that.
+
+00:36:37.300 --> 00:36:41.720
+And like, I totally get it that like other projects are in different states and stuff.
+
+00:36:41.720 --> 00:36:45.940
+But I get a lot of, you know, and people are always super appreciative.
+
+00:36:45.940 --> 00:36:49.440
+And so it all just like funnels into, you know, giving me energy.
+
+00:36:49.440 --> 00:36:51.920
+Eddie has called you a commit machine.
+
+00:36:51.920 --> 00:36:56.800
+Literally every time I update my project dependencies, I'm guaranteed to see new stuff on Ruff, a new
+
+00:36:56.800 --> 00:36:57.280
+version of Ruff.
+
+00:36:57.400 --> 00:36:58.140
+I appreciate that.
+
+00:36:58.140 --> 00:37:00.160
+You know, it's, I do appreciate that.
+
+00:37:00.160 --> 00:37:04.140
+Like, yeah, I do try to write a lot of code, but you know, it's obviously not just, not just
+
+00:37:04.140 --> 00:37:07.920
+me and like the contributors, the contributors have been awesome.
+
+00:37:07.920 --> 00:37:12.860
+And I think, I mean, one thing I'm particularly impressed by is just the number of, number of
+
+00:37:12.860 --> 00:37:16.580
+people who, like, I don't even know if I always believe them when they say this, but like
+
+00:37:16.580 --> 00:37:21.340
+just the number of people who are like, this is my first time writing Rust or like, I'm
+
+00:37:21.340 --> 00:37:23.880
+really not good at Rust or like, blah, blah, blah.
+
+00:37:23.880 --> 00:37:24.920
+And hear something amazing.
+
+00:37:25.540 --> 00:37:25.940
+Yeah.
+
+00:37:25.940 --> 00:37:27.780
+And they just like make like great contribution.
+
+00:37:27.780 --> 00:37:29.740
+They're like, Hey, I'm trying to learn Rust.
+
+00:37:29.740 --> 00:37:31.640
+And I obviously love that stuff.
+
+00:37:31.640 --> 00:37:35.560
+Like for interested in learning Rust, I actually think Ruff is like a great, a great project
+
+00:37:35.560 --> 00:37:37.760
+and like a great place for that.
+
+00:37:37.760 --> 00:37:41.340
+But I mean, there are people who are working on stuff, especially the stuff that I just
+
+00:37:41.340 --> 00:37:45.660
+like, it's like big things I can't like focus all my time on and just like having great
+
+00:37:45.660 --> 00:37:50.280
+contributors who are like really, you know, like thoughtful and like prolific.
+
+00:37:50.280 --> 00:37:52.780
+Every project is lucky to have people like that.
+
+00:37:52.780 --> 00:37:53.780
+How old is the project?
+
+00:37:54.300 --> 00:37:55.020
+When did you start it?
+
+00:37:55.020 --> 00:37:55.820
+In August.
+
+00:37:55.820 --> 00:37:56.100
+Yeah.
+
+00:37:56.100 --> 00:37:57.260
+So it's not that old.
+
+00:37:57.260 --> 00:37:59.120
+My brain is like melting, but it's somewhere.
+
+00:37:59.120 --> 00:37:59.580
+Yeah.
+
+00:37:59.580 --> 00:38:02.380
+I think it's like, like somewhere between four and six months.
+
+00:38:02.380 --> 00:38:02.840
+Okay.
+
+00:38:02.840 --> 00:38:06.120
+Did you say you're working on this full time as like your full time job?
+
+00:38:06.120 --> 00:38:06.420
+Yeah.
+
+00:38:06.420 --> 00:38:06.760
+Okay.
+
+00:38:06.760 --> 00:38:08.000
+And so how's that work?
+
+00:38:08.000 --> 00:38:12.600
+Is that GitHub sponsors or are you employed by someone to completely work out?
+
+00:38:12.600 --> 00:38:13.160
+What's the story?
+
+00:38:13.160 --> 00:38:13.780
+That sounds awesome.
+
+00:38:13.780 --> 00:38:17.180
+Still figuring out, you know, I'll probably share more on that soon.
+
+00:38:17.180 --> 00:38:17.540
+Okay.
+
+00:38:17.580 --> 00:38:19.200
+I don't know if sponsors enabled right now.
+
+00:38:19.200 --> 00:38:22.580
+Still figuring out exactly what, like how I want that all to evolve.
+
+00:38:22.580 --> 00:38:22.880
+Right.
+
+00:38:22.880 --> 00:38:24.000
+I am working on it full time.
+
+00:38:24.000 --> 00:38:25.740
+I don't anticipate that changing in any way.
+
+00:38:25.740 --> 00:38:31.200
+Like I, I'm really happy in getting so much out of this and yeah, I think there are a lot
+
+00:38:31.200 --> 00:38:32.100
+of ways to make it work.
+
+00:38:32.560 --> 00:38:35.480
+And if not rough, I want to be working on like other Python tooling.
+
+00:38:35.480 --> 00:38:37.740
+So, you know, I think there's like more stuff to come.
+
+00:38:37.740 --> 00:38:39.280
+Well, it certainly is neat tooling.
+
+00:38:39.280 --> 00:38:42.920
+Let's go, let's go through the GitHub page here a little bit.
+
+00:38:42.920 --> 00:38:45.660
+So we've talked about the speed a couple of times.
+
+00:38:45.660 --> 00:38:47.900
+We talked about ways in which that happens.
+
+00:38:47.900 --> 00:38:52.020
+You know, Rust is an important part, but it sounds like it's not the only reason that it's
+
+00:38:52.020 --> 00:38:52.440
+fast.
+
+00:38:52.440 --> 00:38:58.420
+You have a chart with the obvious like a little asterisk caveat benchmarks.
+
+00:38:58.420 --> 00:39:02.240
+It's reproducible, you know, like all the stuff's in the readme, but yeah.
+
+00:39:02.240 --> 00:39:07.080
+That's fast in this situation, but my situation is different in which case, you know, such
+
+00:39:07.080 --> 00:39:07.480
+and such.
+
+00:39:07.480 --> 00:39:07.740
+Right.
+
+00:39:07.740 --> 00:39:16.980
+But for some large code base, we've got rough in 0.3 seconds, autoflake at six, pylint at
+
+00:39:16.980 --> 00:39:18.780
+over 60 seconds, just barely.
+
+00:39:18.780 --> 00:39:23.320
+This is on the CPython code base from scratch, which is pretty ridiculous.
+
+00:39:23.320 --> 00:39:24.560
+And I already told you the numbers.
+
+00:39:24.560 --> 00:39:31.840
+I don't have a millisecond number, but it appears to be instant on 20,000 lines of Python code
+
+00:39:31.840 --> 00:39:32.340
+that I wrote.
+
+00:39:32.340 --> 00:39:35.520
+And it found some issues, which I thought would already be discovered.
+
+00:39:35.520 --> 00:39:36.840
+So that's pretty excellent.
+
+00:39:36.840 --> 00:39:37.340
+Nice.
+
+00:39:37.440 --> 00:39:41.420
+It's nearly Python 3.11 100% compatible, right?
+
+00:39:41.420 --> 00:39:46.200
+You said the one major language feature is the match statement, but other than that, it's
+
+00:39:46.200 --> 00:39:46.940
+compatible, right?
+
+00:39:46.940 --> 00:39:47.260
+Correct.
+
+00:39:47.260 --> 00:39:47.880
+Yeah.
+
+00:39:47.880 --> 00:39:48.180
+Okay.
+
+00:39:48.180 --> 00:39:52.960
+It supports some of the other language features like that are maybe less high profile, like
+
+00:39:52.960 --> 00:39:55.980
+the parenthesized width statements and stuff like that.
+
+00:39:55.980 --> 00:39:59.100
+But it doesn't support the pattern of structural pattern matching yet.
+
+00:39:59.100 --> 00:39:59.620
+Got it.
+
+00:39:59.620 --> 00:40:04.740
+So it's got the autofix support near parity with the Flake 8 rule set, which is cool.
+
+00:40:04.740 --> 00:40:11.380
+You talked about the way that you keep the performance fast, but still have parity with Flake 8 is
+
+00:40:11.380 --> 00:40:14.640
+you have native re-implementations of the Flake 8 plugins.
+
+00:40:14.820 --> 00:40:15.100
+That's right.
+
+00:40:15.100 --> 00:40:15.320
+Yeah.
+
+00:40:15.320 --> 00:40:18.000
+So we re-implement everything in Rust.
+
+00:40:18.000 --> 00:40:24.540
+And a lot of the time, that's like me or whoever's working on it, like looking actually at the plugin and
+
+00:40:24.540 --> 00:40:29.080
+like the logic it uses and trying to mimic that in a high fidelity way.
+
+00:40:29.080 --> 00:40:39.540
+And often we'll like try to use the same test suite and really try to make sure that we're compatible, except in cases where we think there is like an actual sort of factual error.
+
+00:40:39.540 --> 00:40:39.820
+Yeah.
+
+00:40:39.820 --> 00:40:41.540
+Why rough is fast?
+
+00:40:41.540 --> 00:40:50.880
+The plugin stuff, there's a lot of interesting stuff to say about like plugins, because I think Rust is a big part of why rough is fast.
+
+00:40:50.880 --> 00:40:52.640
+But there are a couple of other big pieces.
+
+00:40:53.180 --> 00:40:59.580
+So we take a lot of care in the code base to like only do necessary work, if that makes sense.
+
+00:40:59.580 --> 00:41:07.880
+So, you know, we support 300 something rules, but depending on which exact rules you have enabled, we'll skip a lot of unnecessary work.
+
+00:41:07.880 --> 00:41:08.160
+Okay.
+
+00:41:08.160 --> 00:41:09.400
+That can help a lot.
+
+00:41:09.400 --> 00:41:12.720
+So, you know, it's basically tailored to how much you're using it.
+
+00:41:12.720 --> 00:41:16.600
+So like if you're not using it as an import sorter, you know, there's a bunch of stuff that we get.
+
+00:41:16.600 --> 00:41:17.920
+It's just how I would think about it.
+
+00:41:17.920 --> 00:41:24.060
+But the other like really big one is because everything is sort of implemented in like one system.
+
+00:41:24.320 --> 00:41:30.720
+There's a lot of work that would normally be duplicated between a lot of different tools that can actually just be done once.
+
+00:41:30.720 --> 00:41:40.320
+So the way to think of that is like if you look at like flake 8 with flake 8 doc strings, there's maybe one example which uses PyDoc style.
+
+00:41:40.320 --> 00:41:42.480
+Sorry, I know it's like a huge like a tree of tools.
+
+00:41:42.480 --> 00:41:44.320
+You know, if you add that plug in.
+
+00:41:44.320 --> 00:41:48.160
+So PyFlakes is going to parse your source code and turn that into an AST.
+
+00:41:48.160 --> 00:41:56.040
+And then PyDoc style actually has basically its own parser that will go back over the source code and look at all the tokens and extract the doc string.
+
+00:41:56.040 --> 00:42:01.680
+And if you have a bunch of different tools, like some of them will share that abstract syntax tree.
+
+00:42:01.680 --> 00:42:04.960
+But a lot of them end up doing work that other tools are also doing.
+
+00:42:04.960 --> 00:42:12.640
+Right, because they can't count on necessarily that being done or the plug in system doesn't provide work that's already been done to them.
+
+00:42:12.640 --> 00:42:14.160
+So they got to start over anyway. Right.
+
+00:42:14.160 --> 00:42:18.320
+Yeah. Or they might want to do things in like a slightly different maybe you have like three different plugins.
+
+00:42:18.320 --> 00:42:24.240
+Like I guess one example is a lot of plugins like need some way to tell if a function is like public or private.
+
+00:42:24.240 --> 00:42:28.720
+And it's not like super complicated, but you know, it's not like totally trivial.
+
+00:42:28.720 --> 00:42:32.240
+Like you need to account for functions that are in inside of classes.
+
+00:42:32.240 --> 00:42:36.640
+Like is it a public method or private method to account for functions that are inside of other functions.
+
+00:42:36.640 --> 00:42:41.360
+Right. So there's like a lot of rules actually for like determining what's like public and private.
+
+00:42:41.360 --> 00:42:46.080
+And, you know, you might have one lint rule that's like all public methods need to have doc string.
+
+00:42:46.080 --> 00:42:50.800
+And you might have another rule that's like all public methods need to have type in two things.
+
+00:42:50.800 --> 00:42:57.840
+And if you have two separate plugins that are doing that, they both need a way to actually like extract that information.
+
+00:42:57.840 --> 00:43:03.840
+And, you know, it's not necessarily the case that like it'll be way faster to do it with one pass and one.
+
+00:43:03.840 --> 00:43:06.880
+I think it will. It may not be like or as magnitude.
+
+00:43:06.880 --> 00:43:11.760
+But the other thing is you have a lot of like consistency. So like, you know, it's defined in one way.
+
+00:43:11.760 --> 00:43:16.160
+You're not going to be at the whims of like small decisions that the tools have to make.
+
+00:43:16.160 --> 00:43:21.840
+For us as like maintainers and like building rough, you know, there's a lot of stuff you like don't have to implement multiple times.
+
+00:43:21.840 --> 00:43:22.240
+Right.
+
+00:43:22.240 --> 00:43:24.880
+I can leverage that and like go and implement other lint rules.
+
+00:43:24.880 --> 00:43:28.800
+And I don't have to like figure out from scratch, how do I determine like what public and private in it?
+
+00:43:28.800 --> 00:43:33.120
+How do I like extract all the doc strings from a file? Like we already have all that infrastructure.
+
+00:43:33.120 --> 00:43:38.000
+So there's kind of like economies of scale, I guess, to like implementing new stuff.
+
+00:43:38.000 --> 00:43:43.760
+Like it sort of snowballs a little bit, like the tool gets more powerful, it gets kind of easier to do things.
+
+00:43:43.760 --> 00:43:47.360
+I mean, I think you'd be surprised like how much of building a tool.
+
+00:43:47.360 --> 00:43:52.640
+I don't know about you personally, but like I was surprised by like how much of building a tool like this is just done.
+
+00:43:52.640 --> 00:43:58.640
+It's like settings and like configuration and like how do people express their settings?
+
+00:43:58.640 --> 00:44:00.480
+What is the command line interface look like?
+
+00:44:00.480 --> 00:44:03.120
+How do you find all the Python files in a directory?
+
+00:44:03.120 --> 00:44:09.040
+Like it sounds trivial, but like, you also want to respect like getting more is do you want users to be able to ignore files?
+
+00:44:09.040 --> 00:44:10.320
+Like there's a lot of rules.
+
+00:44:10.320 --> 00:44:15.840
+And so again, it's like if I look at a new Python tool, you know, that wants to go off and implement something,
+
+00:44:15.840 --> 00:44:17.760
+they might have to implement all that stuff themselves.
+
+00:44:17.760 --> 00:44:21.680
+But for us, it's like we have all that infrastructure in place.
+
+00:44:21.680 --> 00:44:27.360
+And so if we want to build a new fun piece of functionality, it's just sort of defining the rule and we get all this other stuff for free.
+
+00:44:27.360 --> 00:44:31.600
+Yeah, you can definitely build on the layers that are in place because it's all together.
+
+00:44:31.600 --> 00:44:31.840
+That's cool.
+
+00:44:31.840 --> 00:44:32.080
+Yeah.
+
+00:44:32.080 --> 00:44:34.000
+All right, let's look through here a little bit.
+
+00:44:34.000 --> 00:44:43.040
+Like I said, there's the testimonials from the different projects like Brian from Bokeh or Sebastian from FastAPI and whatnot there.
+
+00:44:43.040 --> 00:44:45.760
+But let's start with installing it.
+
+00:44:45.760 --> 00:44:49.920
+Like I said, you would know that this wasn't just a Python tool you could use.
+
+00:44:49.920 --> 00:44:51.840
+Pip install rough. That's the way to go.
+
+00:44:51.840 --> 00:44:54.000
+But when I installed it, I didn't pip install.
+
+00:44:54.000 --> 00:44:56.560
+I pip x installed it.
+
+00:44:56.560 --> 00:44:57.600
+Are you a fan of pip x?
+
+00:44:57.600 --> 00:44:58.960
+Yeah, I use pip x.
+
+00:44:58.960 --> 00:45:02.240
+Yeah, to me, it seems like rough is something I want to run on different projects.
+
+00:45:02.240 --> 00:45:05.200
+And I just kind of want rough in my tool set.
+
+00:45:05.200 --> 00:45:08.080
+And so I pip x installed rough.
+
+00:45:08.080 --> 00:45:08.640
+What do you think?
+
+00:45:08.640 --> 00:45:09.280
+Good idea.
+
+00:45:09.280 --> 00:45:12.720
+Is it better to put it, say, like in a per version of per project?
+
+00:45:12.720 --> 00:45:13.600
+Like everything.
+
+00:45:13.600 --> 00:45:15.040
+I think it probably depends.
+
+00:45:15.040 --> 00:45:15.840
+Yeah.
+
+00:45:15.840 --> 00:45:17.520
+I mean, I definitely saw a lot of stuff at pip x.
+
+00:45:17.520 --> 00:45:25.440
+I think the one thing that I, the one issue with rough, and I guess I recognize wines can be annoying for some people, for sure.
+
+00:45:25.440 --> 00:45:26.800
+Like we released a lot.
+
+00:45:26.800 --> 00:45:36.880
+And so if projects don't pin their dependencies, then they can start to see like new errors as we add new rules, which I guess in some sense is like a breaking change.
+
+00:45:36.880 --> 00:45:38.720
+But I don't really consider it as such.
+
+00:45:38.720 --> 00:45:47.120
+It's like, you know, they have the like, let's say they have the like, like a simplify rule set enabled and we add a new rule and that gets turned on for them.
+
+00:45:47.120 --> 00:45:55.200
+So anyway, the point is like people, I guess I recommend pinning rough if you're using it for a project, which I mean, with pip x, you're just going to stay on one burger.
+
+00:45:55.200 --> 00:45:55.520
+Right.
+
+00:45:55.520 --> 00:45:59.680
+So you run pip x, you upgrade dash all or whatever, or upgrade that thing.
+
+00:45:59.680 --> 00:46:00.720
+Yeah, exactly.
+
+00:46:00.720 --> 00:46:01.760
+It's doing it to a sense.
+
+00:46:01.760 --> 00:46:06.480
+It's kind of a pin, but it's pinned globally and it gets upgraded globally and that not, not per project.
+
+00:46:06.480 --> 00:46:06.800
+Yeah.
+
+00:46:06.800 --> 00:46:07.120
+Yeah.
+
+00:46:07.120 --> 00:46:07.360
+Yeah.
+
+00:46:07.360 --> 00:46:08.400
+For me, that's kind of okay.
+
+00:46:08.400 --> 00:46:13.520
+But if I was on a large team, you know, lots of people who were working on it, you might want to control that more.
+
+00:46:13.520 --> 00:46:14.080
+I can see that.
+
+00:46:14.080 --> 00:46:20.160
+We have a homebrew distribution and a condo distribution on condo forage.
+
+00:46:20.160 --> 00:46:25.040
+And then I did those and then there's everything else was done by other people.
+
+00:46:25.040 --> 00:46:28.800
+So I'm like, which is cool, but most of me, I'm like less familiar with them.
+
+00:46:28.800 --> 00:46:29.200
+Yeah, sure.
+
+00:46:29.200 --> 00:46:30.160
+I mean, I don't know.
+
+00:46:30.160 --> 00:46:33.760
+Publishing on homebrew and condo forage was like pretty interesting experience for me.
+
+00:46:33.760 --> 00:46:36.720
+I've never done that and I didn't actually really know that.
+
+00:46:36.720 --> 00:46:37.680
+much about how those worked.
+
+00:46:37.680 --> 00:46:38.560
+I think so.
+
+00:46:38.560 --> 00:46:38.880
+Yeah.
+
+00:46:38.880 --> 00:46:39.880
+Yeah.
+
+00:46:39.880 --> 00:46:40.280
+That was cool.
+
+00:46:40.280 --> 00:46:41.600
+Hopefully it's useful for people.
+
+00:46:41.600 --> 00:46:46.640
+There's definitely some complexity with like the packaging and release stuff, which I don't
+
+00:46:46.640 --> 00:46:49.760
+know if you want to talk about that or not, but you know, because we're building Rust, there's
+
+00:46:49.760 --> 00:46:53.920
+like a couple of things that we need to do that are a little different from a standard Python package.
+
+00:46:53.920 --> 00:46:58.000
+Maybe just touch on it a bit because what you deliver is a wheel, right?
+
+00:46:58.000 --> 00:47:04.720
+But it's got the compiled Rust bit for me on my ARM 64 macOS build, right?
+
+00:47:04.720 --> 00:47:05.680
+Yeah, that's right.
+
+00:47:05.680 --> 00:47:06.560
+Yeah, that's right.
+
+00:47:06.560 --> 00:47:11.760
+So basically it just means we have to do the wheel in some sort of pre-compiled version of
+
+00:47:11.760 --> 00:47:14.560
+the package as opposed to just giving you the source code.
+
+00:47:14.560 --> 00:47:18.960
+And like if I just gave you the source code and not the wheel, you'd actually need to have
+
+00:47:18.960 --> 00:47:23.680
+Rust installed because you'd have to actually build the thing and install it, which is of course
+
+00:47:23.680 --> 00:47:29.280
+an extremely unreasonable expectation for the kind of people who are using this for the most part.
+
+00:47:29.280 --> 00:47:33.520
+Yeah, but before the wheels really became popular, that was part of the step, right?
+
+00:47:33.520 --> 00:47:35.040
+It would build for you.
+
+00:47:35.040 --> 00:47:35.520
+Yeah.
+
+00:47:35.520 --> 00:47:35.920
+Yeah.
+
+00:47:35.920 --> 00:47:39.120
+Or it wouldn't build for you, which was frustrating, but that was part of the step, right?
+
+00:47:39.120 --> 00:47:39.520
+Yeah.
+
+00:47:39.520 --> 00:47:39.920
+Yeah.
+
+00:47:39.920 --> 00:47:43.920
+We just build wheels for all the platforms that I know of.
+
+00:47:43.920 --> 00:47:44.640
+It's not something.
+
+00:47:44.640 --> 00:47:45.680
+Is it all CI/CD?
+
+00:47:45.680 --> 00:47:50.320
+You just push it to some branch and magic happens and then wheels start appearing in places.
+
+00:47:50.320 --> 00:47:54.320
+Whenever I cut a release on GitHub, like I just use like GitHub releases, basically.
+
+00:47:54.320 --> 00:47:56.240
+I just use GitHub releases.
+
+00:47:56.240 --> 00:47:59.120
+It kicks off our release job and then that's all through GitHub
+
+00:47:59.120 --> 00:47:59.600
+action.
+
+00:47:59.600 --> 00:48:01.760
+So it just has a big matrix, right?
+
+00:48:01.760 --> 00:48:03.680
+Of all the different operating systems.
+
+00:48:03.680 --> 00:48:09.280
+We only have to build, thankfully, we only have to build one wheel per operating system.
+
+00:48:09.280 --> 00:48:13.280
+We don't have to build one wheel per Python version, which is something that can happen sometimes.
+
+00:48:13.280 --> 00:48:16.320
+And then you have like a mass explosion of number of wheels.
+
+00:48:16.320 --> 00:48:21.680
+That's all facilitated with a tool called Maturin, which I'm a big fan of, which is,
+
+00:48:21.680 --> 00:48:26.000
+it's sort of like, I don't know, like set up tools and a bunch of other stuff bundled together,
+
+00:48:26.000 --> 00:48:29.040
+but specifically for shipping mixed Rust Python.
+
+00:48:29.040 --> 00:48:33.520
+So I don't actually have to like do anything for the host part to make that work.
+
+00:48:33.520 --> 00:48:33.840
+Yeah.
+
+00:48:33.840 --> 00:48:40.480
+My pyproject.tomol has, you know, Maturin at the top and I have a Rust project and I call
+
+00:48:40.480 --> 00:48:42.640
+Maturin build and it creates a wheel.
+
+00:48:42.640 --> 00:48:44.240
+It's all like, I don't know.
+
+00:48:44.240 --> 00:48:45.360
+I think it's like super cool.
+
+00:48:45.360 --> 00:48:45.760
+That works.
+
+00:48:45.760 --> 00:48:49.120
+Yeah, that sounds super smooth and super neat.
+
+00:48:49.120 --> 00:48:49.680
+Yeah.
+
+00:48:49.680 --> 00:48:53.280
+And like I said, as a consumer of it, also very smooth, right?
+
+00:48:53.280 --> 00:48:54.640
+It was still quickly.
+
+00:48:54.640 --> 00:48:56.160
+I didn't have to wait on some build.
+
+00:48:56.160 --> 00:48:59.840
+I didn't need build tools or config that I don't care about or don't use.
+
+00:48:59.840 --> 00:49:05.760
+I'm pretty sure I do have Rust, Rust C as a CLI option I can use here, but you know,
+
+00:49:05.760 --> 00:49:06.880
+you don't want to depend on that, right?
+
+00:49:06.880 --> 00:49:07.280
+No.
+
+00:49:07.280 --> 00:49:13.120
+So you run it on the command line, you say rough and you point at either a file or a directory
+
+00:49:13.120 --> 00:49:15.760
+or some pattern of files, right?
+
+00:49:15.760 --> 00:49:15.760
+Yep.
+
+00:49:15.760 --> 00:49:18.480
+Star type of thing, which is cool.
+
+00:49:18.480 --> 00:49:20.080
+And that gives you the output.
+
+00:49:20.080 --> 00:49:25.680
+You can also do it with a --watch and just run it constantly, which is pretty cool,
+
+00:49:25.680 --> 00:49:25.680
+right?
+
+00:49:25.680 --> 00:49:30.400
+It's fast enough that basically as you save it, if there's problems that'll just appear
+
+00:49:30.400 --> 00:49:31.920
+in the terminal, right?
+
+00:49:31.920 --> 00:49:32.800
+Or wherever you run it.
+
+00:49:32.800 --> 00:49:36.880
+That's kind of a funny example because I based, or it's a good example because I,
+
+00:49:36.880 --> 00:49:43.040
+I'm pretty sure I took that exactly from probably from TSC, which is the TypeScript compiler.
+
+00:49:43.040 --> 00:49:43.760
+Yeah.
+
+00:49:43.760 --> 00:49:46.400
+They have a watch setting and I like how it works.
+
+00:49:46.400 --> 00:49:51.280
+And so I wanted that for, so it's just a, that's a very literal example of me looking at
+
+00:49:51.280 --> 00:49:55.120
+another tool from like another space and being like, oh, that's really nice.
+
+00:49:55.120 --> 00:49:57.280
+And I wish you had that other tools like it too.
+
+00:49:57.280 --> 00:49:57.600
+Yeah.
+
+00:49:57.600 --> 00:50:00.480
+I suppose it's terrible and not terribly difficult to implement, right?
+
+00:50:00.480 --> 00:50:06.160
+You take the pattern and you put a watch in the OS watch implementation and you say,
+
+00:50:06.160 --> 00:50:09.200
+call me back when something changes and because it's fast, it just reruns, right?
+
+00:50:09.200 --> 00:50:09.840
+But it's still,
+
+00:50:09.840 --> 00:50:11.120
+Yeah, it's exactly right.
+
+00:50:11.120 --> 00:50:13.360
+It's very handy though, that, that it's there.
+
+00:50:13.360 --> 00:50:18.640
+The other thing that's interesting is you can do it as a pre commit hook, which is nice.
+
+00:50:18.640 --> 00:50:19.120
+Yeah.
+
+00:50:19.120 --> 00:50:20.800
+That works pretty well for people.
+
+00:50:20.800 --> 00:50:22.800
+I think a lot of people seem to use it.
+
+00:50:22.800 --> 00:50:23.840
+I'm glad that it exists.
+
+00:50:23.840 --> 00:50:24.240
+Yeah.
+
+00:50:24.240 --> 00:50:27.120
+A little bit of a weird setup because maybe it's actually not that interesting to talk
+
+00:50:27.120 --> 00:50:31.760
+about, but it's in like a separate repo for sort of like, I can't even really remember.
+
+00:50:31.760 --> 00:50:32.160
+Okay.
+
+00:50:32.160 --> 00:50:34.000
+Interesting.
+
+00:50:34.000 --> 00:50:39.680
+Now to configure it, it has a, let's say comprehensive CLI set of options.
+
+00:50:39.680 --> 00:50:42.320
+I can't remember maybe 15 or so command line options.
+
+00:50:42.320 --> 00:50:48.560
+You can pass it, but you can also put, put it into the pyproject.toml with things just
+
+00:50:48.560 --> 00:50:51.360
+like tool.rough and then you can put your various settings in there.
+
+00:50:51.360 --> 00:50:51.760
+Right.
+
+00:50:51.760 --> 00:50:57.360
+So it just sort of integrates along that, or you can have a rough.toml and then put it in there.
+
+00:50:57.360 --> 00:50:57.840
+Yeah.
+
+00:50:57.840 --> 00:51:00.880
+So that's something that I took basically from hatch.
+
+00:51:00.880 --> 00:51:06.480
+So within hatch, you can have a pyproject.toml or a hatch.toml and the hatch.toml kind of like
+
+00:51:07.040 --> 00:51:08.720
+tests the configuration.
+
+00:51:08.720 --> 00:51:13.360
+Like if you use a rough.toml, you don't need to have like tool.rough at the top and stuff like that.
+
+00:51:13.360 --> 00:51:13.680
+Yeah.
+
+00:51:13.680 --> 00:51:21.360
+I think one thing that I'm quite happy that we have is like the configuration is very like type safe.
+
+00:51:21.360 --> 00:51:26.960
+So if you try to like, you know, so that, that line select equals EF, those are like error,
+
+00:51:26.960 --> 00:51:29.200
+like rule codes that are defined in rough.
+
+00:51:29.200 --> 00:51:34.640
+And so if you put, if you replaced F with some string that wasn't, you know, a real rule,
+
+00:51:34.640 --> 00:51:38.560
+you'll get an error immediately saying that, you know, your pyproject.toml had invalid,
+
+00:51:38.560 --> 00:51:40.640
+was invalid in like these ways, blah, blah, blah.
+
+00:51:40.640 --> 00:51:41.200
+Interesting.
+
+00:51:41.200 --> 00:51:41.600
+Okay.
+
+00:51:41.600 --> 00:51:47.120
+And similarly, we create what are called like JSON schemas or the configuration.
+
+00:51:47.120 --> 00:51:51.040
+If you're in PyCharm and you open up like a pyproject.toml and you type
+
+00:51:51.040 --> 00:51:54.160
+tool.rough, it'll actually like show you all the options.
+
+00:51:54.160 --> 00:51:57.920
+It'll actually surface the documentation we have for the options too.
+
+00:51:57.920 --> 00:51:58.480
+Oh, nice.
+
+00:51:58.480 --> 00:51:59.520
+Which is pretty cool.
+
+00:51:59.520 --> 00:52:00.160
+Yeah.
+
+00:52:00.160 --> 00:52:01.440
+I'd like more tools to do that.
+
+00:52:01.440 --> 00:52:03.040
+Cause I think it's like super useful.
+
+00:52:03.040 --> 00:52:06.880
+I think poetry has it, but not too many others do.
+
+00:52:06.880 --> 00:52:11.600
+You can get it in VS Code as well, but you need to install an extension.
+
+00:52:11.600 --> 00:52:13.600
+It's called like even better.toml, I think.
+
+00:52:13.600 --> 00:52:13.920
+Right.
+
+00:52:13.920 --> 00:52:14.320
+Okay.
+
+00:52:14.320 --> 00:52:15.920
+But I'm happy with those things.
+
+00:52:15.920 --> 00:52:20.720
+I think it makes it like, I think small things like that add up and glad we're able to do them.
+
+00:52:20.720 --> 00:52:21.200
+Yeah.
+
+00:52:21.200 --> 00:52:25.280
+When I looked at the configuration settings, like the exclude directories and various other
+
+00:52:25.280 --> 00:52:27.600
+things, like that's kind of a lot to put on a command line.
+
+00:52:27.600 --> 00:52:31.680
+It would be nice if you could just put it and say rough.toml or pyproject.toml.
+
+00:52:31.680 --> 00:52:35.680
+And then when you just type rough the thing, it, it sees that and it uses it.
+
+00:52:35.680 --> 00:52:35.920
+Right.
+
+00:52:35.920 --> 00:52:36.240
+Yeah.
+
+00:52:36.240 --> 00:52:40.320
+I've kind of like intentionally like not put a lot of these arguments on the command line.
+
+00:52:40.320 --> 00:52:44.560
+Like for that reason, like you can imagine taking everything here and exposing it on the command
+
+00:52:44.560 --> 00:52:49.680
+line, but the command line really just deals with like how should the thing execute and not like,
+
+00:52:49.680 --> 00:52:51.760
+I don't know, what should the max complexity be?
+
+00:52:51.760 --> 00:52:51.760
+Yeah.
+
+00:52:51.760 --> 00:52:52.320
+Yeah.
+
+00:52:52.320 --> 00:52:52.320
+Yeah.
+
+00:52:52.320 --> 00:52:52.320
+Yeah.
+
+00:52:52.320 --> 00:52:52.720
+Yeah.
+
+00:52:52.720 --> 00:52:54.960
+I think that's fair.
+
+00:52:54.960 --> 00:52:59.040
+Like put the common stuff on the command line and then say, and if you need to go crazy,
+
+00:52:59.040 --> 00:53:03.280
+here's your --config, pass that in and put it in there.
+
+00:53:03.280 --> 00:53:03.600
+Right.
+
+00:53:03.600 --> 00:53:03.840
+Yeah.
+
+00:53:03.840 --> 00:53:04.000
+Yeah.
+
+00:53:04.000 --> 00:53:04.400
+Yeah.
+
+00:53:04.400 --> 00:53:04.400
+Yeah.
+
+00:53:04.400 --> 00:53:08.240
+One thing that I did want to talk about and you kind of touched on, there's a bunch of the
+
+00:53:08.240 --> 00:53:09.120
+command line arguments.
+
+00:53:09.120 --> 00:53:12.400
+One of the things I did want to talk about is the editor integration.
+
+00:53:12.400 --> 00:53:14.080
+There's a huge bunch of rules here.
+
+00:53:14.080 --> 00:53:18.000
+We got to scroll through on the homepage to get, get down to it, which is awesome.
+
+00:53:18.000 --> 00:53:19.120
+That are no, no, it's good.
+
+00:53:19.120 --> 00:53:22.720
+I mean, these are like all the things that checks that I don't have to think about anymore,
+
+00:53:22.720 --> 00:53:23.840
+which is great.
+
+00:53:23.840 --> 00:53:28.640
+Eventually though, geez, I forgot it was this long.
+
+00:53:28.640 --> 00:53:33.840
+Eventually though it has plugins or maybe that's not quite what I said.
+
+00:53:33.840 --> 00:53:40.560
+It has a, an extension of a VS Code and it has ways to basically add it as a command
+
+00:53:40.560 --> 00:53:41.840
+to PyCharm, right?
+
+00:53:41.840 --> 00:53:46.800
+Which is, those are both awesome editors that are kind of very friendly to thinking about code
+
+00:53:46.800 --> 00:53:50.080
+formatting and exposing the errors that this would as well.
+
+00:53:50.080 --> 00:53:50.560
+So that's great.
+
+00:53:50.560 --> 00:53:52.480
+You might want to just talk about that just real quick.
+
+00:53:52.480 --> 00:53:53.200
+Yeah, totally.
+
+00:53:53.200 --> 00:53:55.040
+So yeah, we have a VS Code extension.
+
+00:53:55.040 --> 00:53:57.440
+That was my first time writing a VS Code extension.
+
+00:53:57.440 --> 00:54:03.280
+And actually the, these extensions use, or they conform to something called the language server protocol.
+
+00:54:03.280 --> 00:54:08.240
+And effectively that's sort of like a standard, I believe I'll probably get like a bunch of
+
+00:54:08.240 --> 00:54:12.560
+the history wrong, but I believe it's Microsoft that like publishes and maintains that.
+
+00:54:12.560 --> 00:54:13.280
+It's that.
+
+00:54:13.280 --> 00:54:19.280
+The nice thing about that protocol is you can actually use like the lot, like most, almost all
+
+00:54:19.280 --> 00:54:23.600
+of the code behind the VS Code extension is actually published as a language server.
+
+00:54:23.600 --> 00:54:24.160
+Yeah.
+
+00:54:24.160 --> 00:54:25.040
+Rough LSP.
+
+00:54:25.040 --> 00:54:29.680
+And what that means is you can actually get like the exact same behaviors in all sorts of different
+
+00:54:29.680 --> 00:54:30.240
+editors.
+
+00:54:30.240 --> 00:54:32.000
+It's not confined to VS Code.
+
+00:54:32.000 --> 00:54:38.960
+So if you use like NeoVim or like sublime text or whatever else, those all support this standard
+
+00:54:38.960 --> 00:54:44.080
+protocol and they all have ways to tap into that rough language server protocol.
+
+00:54:44.080 --> 00:54:51.120
+So we have sort of like the standalone LSP, which we have instructions for like sublime and,
+
+00:54:51.120 --> 00:54:52.800
+and you know, other tools.
+
+00:54:52.800 --> 00:54:56.720
+And then we have the actual extension, which is published on the marketplace.
+
+00:54:56.720 --> 00:54:59.360
+And those are things I definitely want to like keep supporting.
+
+00:54:59.360 --> 00:55:02.640
+And I view them as like official arms, right?
+
+00:55:02.640 --> 00:55:04.720
+Of the project, which I think is nice.
+
+00:55:04.720 --> 00:55:08.560
+So people should know that like, you know, those are official and like, I pick bugs and
+
+00:55:08.560 --> 00:55:09.600
+man, and all that kind of stuff.
+
+00:55:09.600 --> 00:55:09.840
+Nice.
+
+00:55:09.840 --> 00:55:15.200
+And then for PyCharm, you just add it as an external tool and then you have the rough command
+
+00:55:15.200 --> 00:55:19.200
+around or for both of these, if you prefer, you just add it as a pre-commit hook.
+
+00:55:19.200 --> 00:55:19.440
+Yeah.
+
+00:55:19.440 --> 00:55:19.840
+That's also.
+
+00:55:19.840 --> 00:55:20.080
+Yeah.
+
+00:55:20.080 --> 00:55:20.480
+That's right.
+
+00:55:20.480 --> 00:55:20.960
+Yeah.
+
+00:55:20.960 --> 00:55:24.880
+That then like, as you interact with it, it'll run the pre-commit hook as well.
+
+00:55:24.880 --> 00:55:26.240
+If you try to check things in.
+
+00:55:26.240 --> 00:55:27.600
+Super cool here.
+
+00:55:27.600 --> 00:55:29.920
+I think this is a neat project.
+
+00:55:29.920 --> 00:55:36.080
+I ran it into my project and I thought, you know, everything is pretty much good to go.
+
+00:55:36.640 --> 00:55:42.480
+Where, you know, when I'm using PyCharm, for example, it'll often tell me many of these things.
+
+00:55:42.480 --> 00:55:47.520
+Like it'll say there's a local variable that's unused or it'll automatically remove unused imports.
+
+00:55:47.520 --> 00:55:51.040
+And yet I'm looking at 331 issues.
+
+00:55:51.040 --> 00:55:55.840
+108 are potentially fixable with the --fix option.
+
+00:55:55.840 --> 00:56:00.160
+So it sounds like there's still a lot of value to like make that part of my tool chain.
+
+00:56:00.160 --> 00:56:00.320
+Yeah.
+
+00:56:00.320 --> 00:56:05.680
+I mean, you know, and feel free to have some of your own opinions about which of those rules actually matter.
+
+00:56:05.680 --> 00:56:06.000
+Sure.
+
+00:56:06.000 --> 00:56:08.720
+And I suspect you can disable them in your config file, right?
+
+00:56:08.720 --> 00:56:10.240
+You can say this rule I don't care about.
+
+00:56:10.240 --> 00:56:10.640
+Yeah.
+
+00:56:10.640 --> 00:56:12.640
+And this is another sort of compatibility thing.
+
+00:56:12.640 --> 00:56:19.120
+Like we, API for actually like turning rules on and off is like essentially identical to the flight gate API.
+
+00:56:19.120 --> 00:56:21.600
+So that's also useful for people migrating over.
+
+00:56:21.600 --> 00:56:24.320
+So the no QA, is it the like comment?
+
+00:56:24.320 --> 00:56:24.560
+Yeah.
+
+00:56:24.560 --> 00:56:26.080
+Like comment no QA is one option.
+
+00:56:26.080 --> 00:56:26.560
+Yeah.
+
+00:56:26.560 --> 00:56:27.200
+We respect.
+
+00:56:27.200 --> 00:56:27.520
+Yep.
+
+00:56:27.520 --> 00:56:28.400
+We respect those too.
+
+00:56:28.400 --> 00:56:31.760
+We also respect like, I sorts action comments.
+
+00:56:31.760 --> 00:56:35.360
+So yeah, we, we like do a lot of stuff to try and
+
+00:56:35.360 --> 00:56:36.320
+maintain compatibility.
+
+00:56:36.320 --> 00:56:36.720
+Nice.
+
+00:56:36.720 --> 00:56:40.720
+Maybe another like interesting thing in that vein is that we ship a tool called
+
+00:56:40.720 --> 00:56:45.040
+flight gate to roughs, which does sort of what it sounds like.
+
+00:56:45.040 --> 00:56:50.080
+So you point it to a flight gate configuration file and it spits out a Tommel for rough,
+
+00:56:50.080 --> 00:56:51.200
+you know, that's compatible.
+
+00:56:51.200 --> 00:56:55.440
+And it also tells you if there were things in the file that we don't support, which is useful too.
+
+00:56:55.440 --> 00:56:57.360
+Like, oh, hey, you're using these rules.
+
+00:56:57.360 --> 00:56:58.640
+Those actually aren't implemented yet.
+
+00:56:58.640 --> 00:56:58.880
+Yeah.
+
+00:56:58.880 --> 00:57:00.880
+That's also maintained as like part of the project.
+
+00:57:00.880 --> 00:57:02.880
+So, you know, I recommend checking it out.
+
+00:57:02.880 --> 00:57:03.280
+Excellent.
+
+00:57:03.280 --> 00:57:06.880
+Well, Charlie, I think we're getting short on time, but not short on topic.
+
+00:57:06.880 --> 00:57:08.880
+There's a whole lot more to dive into.
+
+00:57:08.880 --> 00:57:10.880
+I think it's, it's really cool project.
+
+00:57:10.880 --> 00:57:12.160
+I think it's new.
+
+00:57:12.160 --> 00:57:12.880
+Are we gonna do a big WASM section?
+
+00:57:12.880 --> 00:57:15.120
+No, I'm kidding.
+
+00:57:15.120 --> 00:57:15.520
+I'm kidding.
+
+00:57:15.520 --> 00:57:16.640
+We don't have time for that.
+
+00:57:16.640 --> 00:57:18.160
+We could do a WASM section.
+
+00:57:18.160 --> 00:57:22.000
+We even have some great chat GDP questions in the audience.
+
+00:57:22.000 --> 00:57:25.120
+I don't necessarily think that there's time for those, unfortunately,
+
+00:57:25.120 --> 00:57:27.680
+but there is one final question that I want to ask.
+
+00:57:27.680 --> 00:57:30.240
+It's kind of inspired by the audience, but I think it's good for everyone.
+
+00:57:30.240 --> 00:57:36.800
+Jean Gabriel asks, is there a roadmap or timeline for rough development out there?
+
+00:57:36.800 --> 00:57:38.160
+Like what's next basically?
+
+00:57:38.160 --> 00:57:41.360
+Like, I guess the short answer is no, like there's not like a published
+
+00:57:42.240 --> 00:57:47.520
+timeline, unfortunately, like most of this stuff exists in my head and in issues.
+
+00:57:47.520 --> 00:57:49.040
+Like everything happens on issues.
+
+00:57:49.040 --> 00:57:51.040
+Like we're just talking a lot on issues.
+
+00:57:51.040 --> 00:57:51.280
+Yeah.
+
+00:57:51.280 --> 00:57:54.000
+I'll maybe talk a bit about like the things that I'm thinking about.
+
+00:57:54.000 --> 00:58:00.080
+So one is fixing like the structural pattern matching issue.
+
+00:58:00.080 --> 00:58:06.240
+And so like getting full like Python compatibility, which it's sort of like one bug, but then unlocks
+
+00:58:06.240 --> 00:58:10.560
+us doing what I hope will be like a stable release, even if that's not that much changes.
+
+00:58:10.560 --> 00:58:14.160
+And it's just kind of, you know, the marketing of it, but hopefully we'll fix that.
+
+00:58:14.160 --> 00:58:15.680
+And then we can do like a stable release.
+
+00:58:15.680 --> 00:58:18.880
+The, there are two other kind of big things on my mind.
+
+00:58:18.880 --> 00:58:23.040
+So one is this is like a really big project, but not, not rough.
+
+00:58:23.040 --> 00:58:27.840
+The thing I'm about to talk about, but, I want to extend rough to do like full code auto
+
+00:58:27.840 --> 00:58:31.120
+formatting so that people could use it in lieu of black.
+
+00:58:31.120 --> 00:58:36.000
+If they wanted to think it's like a really natural fit for what rough is doing.
+
+00:58:36.000 --> 00:58:37.840
+And a lot of people asked about it.
+
+00:58:37.840 --> 00:58:42.000
+The way that that will, there's an issue where we talk about this, like on the repo, it's not
+
+00:58:42.000 --> 00:58:47.200
+like some big secret reveal, but, the way that I think about that, like, like with all things is
+
+00:58:47.200 --> 00:58:50.400
+I want it to be like, sort of incrementally adoptable.
+
+00:58:50.400 --> 00:58:52.400
+Like right now you can use rough with ice or.
+
+00:58:52.400 --> 00:58:57.120
+Or you can use just rough, or you can use rough to your input sorting, but like not as a linter.
+
+00:58:57.120 --> 00:58:59.920
+Like you can kind of pick and choose like what you want to use.
+
+00:58:59.920 --> 00:59:02.560
+And I view like the auto formatter is the same way.
+
+00:59:02.560 --> 00:59:07.200
+Like I fully expect that people will keep using rough and black, but it's just like the kind of
+
+00:59:07.200 --> 00:59:11.360
+functionality that makes a lot of sense, given what we're already doing and like the way that the
+
+00:59:11.360 --> 00:59:12.480
+project's evolving.
+
+00:59:12.480 --> 00:59:16.880
+So I need to like, and you be careful because like, it's like that blog work.
+
+00:59:16.880 --> 00:59:21.040
+And so I'm not like saying exactly when that will be done, but I do want to start working on it.
+
+00:59:21.040 --> 00:59:24.720
+And then the other thing, which is maybe like a little bit less exciting to other people.
+
+00:59:24.720 --> 00:59:28.240
+And it's like, you know, I think at some point I'd like rough to get to a world where
+
+00:59:28.240 --> 00:59:30.080
+it kind of stands alone a little bit more.
+
+00:59:30.080 --> 00:59:34.720
+It isn't viewed quite as much as a compatibility as this compatibility layer.
+
+00:59:34.720 --> 00:59:39.360
+Like right now, all the rules kind of map back to like, Hey, or other tools.
+
+00:59:39.360 --> 00:59:43.040
+And when you're using rough, you're kind of thinking in the mindset of those other tools,
+
+00:59:43.040 --> 00:59:47.040
+like what are the rules and how do I configure them at some point in the future?
+
+00:59:47.040 --> 00:59:51.840
+I'd actually like, you know, rough to sort of have its own API, like own indexing of the rules.
+
+00:59:51.840 --> 00:59:55.520
+And to view that as kind of a compatibility layer that will not go away.
+
+00:59:55.520 --> 00:59:58.080
+Like this won't put a burden on users, but I'd like to get
+
+00:59:58.080 --> 01:00:02.480
+to get to a point where like conceptually, a lot of this stuff is like first class and rough.
+
+01:00:02.480 --> 01:00:08.000
+And it's not viewed as re-implementations of other extensions, which I think will enable us to do a lot of cool things.
+
+01:00:08.000 --> 01:00:12.320
+But I'm hopeful that I'm doing that in a way that has no disruption to users.
+
+01:00:12.320 --> 01:00:14.960
+So we'll continue to support the existing API and such.
+
+01:00:14.960 --> 01:00:15.520
+Yeah.
+
+01:00:15.520 --> 01:00:16.160
+Yeah, exactly.
+
+01:00:16.160 --> 01:00:17.280
+Very exciting.
+
+01:00:17.280 --> 01:00:18.080
+Very exciting.
+
+01:00:18.080 --> 01:00:21.200
+Well, congratulations on a project that people seem to love.
+
+01:00:21.200 --> 01:00:24.720
+It's got a lot of traction and definitely doing some cool stuff.
+
+01:00:24.720 --> 01:00:27.040
+So before we get out of here, though, final two questions.
+
+01:00:27.040 --> 01:00:30.720
+If you're going to write some Python code, what editor are you using these days?
+
+01:00:30.720 --> 01:00:32.240
+I use PyCharm for everything.
+
+01:00:32.240 --> 01:00:33.600
+And that includes Rust.
+
+01:00:33.600 --> 01:00:35.120
+But I do all my Rust and my Python and PyCharm.
+
+01:00:35.120 --> 01:00:36.000
+Nice.
+
+01:00:36.000 --> 01:00:39.200
+Is there a cool plugin that basically adds Rust support to?
+
+01:00:39.200 --> 01:00:42.800
+Yeah, there's just an official IntelliJ Rust plugin.
+
+01:00:42.800 --> 01:00:43.200
+Got it.
+
+01:00:43.200 --> 01:00:43.360
+Nice.
+
+01:00:43.360 --> 01:00:43.920
+Works really well.
+
+01:00:43.920 --> 01:00:50.320
+I've used IntelliJ for that platform for Dart and Flutter, but I haven't tried to plug Rust into it.
+
+01:00:50.320 --> 01:00:52.240
+But yeah, it does a lot of things.
+
+01:00:52.240 --> 01:00:52.880
+Cool.
+
+01:00:52.880 --> 01:00:55.280
+And then notable PyPI package, something out there.
+
+01:00:55.280 --> 01:00:58.960
+You've named a couple that do the Rust integration nicely.
+
+01:00:58.960 --> 01:01:00.240
+But anything you want to give a shout out to?
+
+01:01:00.240 --> 01:01:01.600
+Yeah, I really want to give a shout out.
+
+01:01:01.600 --> 01:01:02.880
+I've already mentioned it a few times.
+
+01:01:02.880 --> 01:01:06.800
+I think if you're interested in doing Rust Python stuff, you should really look at Matrin.
+
+01:01:06.800 --> 01:01:07.280
+Matrin.
+
+01:01:07.280 --> 01:01:07.520
+All right.
+
+01:01:07.520 --> 01:01:09.680
+M-A-T-U-R-I-N.
+
+01:01:09.680 --> 01:01:13.120
+It just makes the publishing really easy.
+
+01:01:13.120 --> 01:01:15.520
+And you still have to learn Rust, which is not easy.
+
+01:01:15.520 --> 01:01:16.720
+I mean, I do.
+
+01:01:16.720 --> 01:01:18.720
+It's worthwhile, I think, but it's not easy.
+
+01:01:18.720 --> 01:01:23.440
+But it makes the publishing Rust code to PyPI, or PyPI, sorry, really easy.
+
+01:01:23.440 --> 01:01:23.840
+Awesome.
+
+01:01:23.840 --> 01:01:25.440
+Well, great recommendation.
+
+01:01:25.440 --> 01:01:26.480
+Thanks for being here.
+
+01:01:26.480 --> 01:01:27.200
+Final call to action.
+
+01:01:27.200 --> 01:01:28.320
+People want to get started with Rust.
+
+01:01:28.320 --> 01:01:28.960
+What do you tell them?
+
+01:01:28.960 --> 01:01:32.960
+The main thing that I would like to say is if you're interested in contributing,
+
+01:01:32.960 --> 01:01:36.080
+even if you don't know that much Rust and are interested in learning,
+
+01:01:36.880 --> 01:01:42.000
+I'd love to see you on the repo, and I hope it's a place that people feel really welcome
+
+01:01:42.000 --> 01:01:47.360
+to come and contribute, even if they are 100% certain if their code is right or anything like that.
+
+01:01:47.360 --> 01:01:52.000
+So definitely really excited to have more contributors and have more people coming into the project.
+
+01:01:52.000 --> 01:01:55.040
+And of course, you should also try using it yourself.
+
+01:01:55.040 --> 01:01:55.520
+All right.
+
+01:01:55.520 --> 01:01:56.000
+Excellent.
+
+01:01:56.000 --> 01:01:57.680
+Well, thanks for being here.
+
+01:01:57.680 --> 01:01:59.360
+It was a great conversation with you.
+
+01:01:59.360 --> 01:02:00.640
+Yeah, thanks so much for having me.
+
+01:02:00.640 --> 01:02:02.240
+It was a really cool opportunity.
+
+01:02:02.240 --> 01:02:02.720
+I appreciate it.
+
+01:02:04.160 --> 01:02:06.720
+This has been another episode of Talk Python to Me.
+
+01:02:06.720 --> 01:02:08.560
+Thank you to our sponsors.
+
+01:02:08.560 --> 01:02:10.160
+Be sure to check out what they're offering.
+
+01:02:10.160 --> 01:02:11.600
+It really helps support the show.
+
+01:02:11.600 --> 01:02:17.520
+Join Cox Automotive and use your technical skills to transform the way the world buys,
+
+01:02:17.520 --> 01:02:18.960
+sells, and owns cars.
+
+01:02:18.960 --> 01:02:24.080
+Find an exciting position that's right for you at talkpython.fm/cox.
+
+01:02:24.080 --> 01:02:29.840
+Earn extra income from sharing your software development opinion at user interviews.
+
+01:02:29.840 --> 01:02:34.240
+Head over to talkpython.fm/userinterviews to participate today.
+
+01:02:34.240 --> 01:02:36.480
+Want to level up your Python?
+
+01:02:36.480 --> 01:02:40.640
+We have one of the largest catalogs of Python video courses over at Talk Python.
+
+01:02:40.640 --> 01:02:45.680
+Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+01:02:45.680 --> 01:02:48.320
+And best of all, there's not a subscription in sight.
+
+01:02:48.320 --> 01:02:51.360
+Check it out for yourself at training.talkpython.fm.
+
+01:02:51.360 --> 01:02:56.000
+Be sure to subscribe to the show, open your favorite podcast app, and search for Python.
+
+01:02:56.000 --> 01:02:57.040
+We should be right at the top.
+
+01:02:57.040 --> 01:03:03.040
+You can also find the iTunes feed at /itunes, the Google Play feed at /play, and the direct
+
+01:03:03.040 --> 01:03:06.400
+RSS feed at /rss on talkpython.fm.
+
+01:03:06.400 --> 01:03:09.920
+We're live streaming most of our recordings these days.
+
+01:03:09.920 --> 01:03:13.360
+If you want to be part of the show and have your comments featured on the air,
+
+01:03:13.360 --> 01:03:18.240
+be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+01:03:18.240 --> 01:03:19.680
+This is your host, Michael Kennedy.
+
+01:03:19.680 --> 01:03:20.880
+Thanks so much for listening.
+
+01:03:20.880 --> 01:03:22.080
+I really appreciate it.
+
+01:03:22.080 --> 01:03:23.840
+Now get out there and write some Python code.
+
+01:03:23.840 --> 01:03:44.160
+I'll see you next time.
+
+01:03:44.160 --> 01:04:14.140
+Thank you.
+

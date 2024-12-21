@@ -1,0 +1,3521 @@
+WEBVTT
+
+00:00:00.001 --> 00:00:04.120
+When we talk about scaling software, threading and async get all the buzz.
+
+00:00:04.120 --> 00:00:08.840
+And while they are powerful, using asynchronous queues can often be much more effective.
+
+00:00:08.840 --> 00:00:14.140
+You might think this means creating a Celery server and maybe running RabbitMQ or Redis as well.
+
+00:00:14.140 --> 00:00:19.360
+What if you wanted this async ability and many more message exchange patterns like PubSub,
+
+00:00:19.360 --> 00:00:22.900
+but you wanted to do zero of that server work, none of it?
+
+00:00:22.900 --> 00:00:25.040
+Then you should check out ZeroMQ.
+
+00:00:25.040 --> 00:00:28.480
+ZeroMQ is to queuing what Flask is to web apps,
+
+00:00:28.480 --> 00:00:31.580
+a powerful and simple framework for you to build just what you need.
+
+00:00:31.580 --> 00:00:37.220
+You're almost certain to learn some new networking patterns and capabilities in this episode with our guest,
+
+00:00:37.220 --> 00:00:38.280
+Min Reagan-Kelly.
+
+00:00:38.280 --> 00:00:41.180
+He's here to discuss ZeroMQ for Python,
+
+00:00:41.180 --> 00:00:45.100
+as well as how ZeroMQ is central to the internals of Jupyter Notebooks.
+
+00:00:45.100 --> 00:00:50.420
+This is Talk Python to Me, episode 306, recorded February 11th, 2021.
+
+00:00:50.420 --> 00:01:08.840
+Welcome to Talk Python to Me, a weekly podcast on Python, the language, the libraries, the ecosystem,
+
+00:01:08.840 --> 00:01:09.800
+and the personalities.
+
+00:01:09.800 --> 00:01:11.600
+This is your host, Michael Kennedy.
+
+00:01:11.600 --> 00:01:13.800
+Follow me on Twitter where I'm @mkennedy,
+
+00:01:14.200 --> 00:01:17.540
+and keep up with the show and listen to past episodes at talkpython.fm,
+
+00:01:17.540 --> 00:01:20.680
+and follow the show on Twitter via at Talk Python.
+
+00:01:21.640 --> 00:01:24.180
+This episode is brought to you by Linode and Mido.
+
+00:01:24.180 --> 00:01:26.340
+If you want to host some Python in the cloud,
+
+00:01:26.340 --> 00:01:29.300
+check out Linode and use our code to get $100 credit.
+
+00:01:29.300 --> 00:01:34.760
+If you've ever wanted to work with Python's data science tools like Jupyter Notebooks and Pandas,
+
+00:01:34.760 --> 00:01:36.960
+but you wanted to do it like you worked with Excel,
+
+00:01:36.960 --> 00:01:39.120
+with a spreadsheet and a visual designer,
+
+00:01:39.120 --> 00:01:39.980
+check out Mido.
+
+00:01:39.980 --> 00:01:42.880
+One quick announcement before we get to the interview.
+
+00:01:43.380 --> 00:01:47.260
+We'll be giving away five tickets to attend PyCon US 2021.
+
+00:01:47.260 --> 00:01:51.260
+This conference is one of the primary sources of funding for the PSF,
+
+00:01:51.260 --> 00:01:54.600
+and it's going to be held May 14th to 15th online.
+
+00:01:54.600 --> 00:01:58.340
+And because it's online this year, it's open to anyone around the world.
+
+00:01:58.340 --> 00:02:00.700
+So we decided to run a contest to help people,
+
+00:02:00.700 --> 00:02:03.220
+especially those who have never been part of PyCon before,
+
+00:02:03.220 --> 00:02:04.540
+attend it this year.
+
+00:02:04.540 --> 00:02:08.220
+Just visit talkpython.fm/PyCon 2021
+
+00:02:08.220 --> 00:02:09.900
+and enter your email address,
+
+00:02:09.900 --> 00:02:12.580
+and you'll be in the running for an individual PyCon ticket.
+
+00:02:13.100 --> 00:02:14.380
+compliments of Talk Python.
+
+00:02:14.380 --> 00:02:17.260
+These normally sell for about $100 each.
+
+00:02:17.260 --> 00:02:18.760
+And if you're certain you want to go,
+
+00:02:18.760 --> 00:02:20.520
+I encourage you to visit the PyCon website,
+
+00:02:20.520 --> 00:02:21.320
+get a ticket,
+
+00:02:21.320 --> 00:02:24.780
+and that money will go to support the PSF and the Python community.
+
+00:02:24.780 --> 00:02:26.520
+If you want to be in this drawing,
+
+00:02:26.520 --> 00:02:29.780
+just visit talkpython.fm/PyCon 2021.
+
+00:02:29.780 --> 00:02:31.640
+Enter your email address.
+
+00:02:31.640 --> 00:02:33.760
+You'll be in the running to win a ticket.
+
+00:02:33.760 --> 00:02:35.880
+Now let's get on to that interview.
+
+00:02:35.880 --> 00:02:38.680
+Min, welcome to Talk Python to me.
+
+00:02:38.680 --> 00:02:39.740
+Thanks. Thanks for having me.
+
+00:02:39.740 --> 00:02:40.820
+Yeah, it's really good to have you here.
+
+00:02:41.080 --> 00:02:45.700
+I'm excited to talk about building applications with zero MQ.
+
+00:02:45.700 --> 00:02:51.600
+It's definitely one of those topics that I think lives in this realm of asynchronous programming
+
+00:02:51.600 --> 00:02:54.860
+in ways that I think a lot of people don't initially think of.
+
+00:02:54.860 --> 00:02:56.160
+Like you think of async programming,
+
+00:02:56.160 --> 00:02:57.460
+like, okay, well, I'm going to do threads.
+
+00:02:57.460 --> 00:02:58.240
+And if threads don't work,
+
+00:02:58.240 --> 00:02:59.500
+maybe I'll do multi-processing.
+
+00:02:59.540 --> 00:03:01.140
+And then those are my options, right?
+
+00:03:01.140 --> 00:03:07.840
+But Qs and other types of intermediaries are really interesting for creating powerful design patterns
+
+00:03:07.840 --> 00:03:10.660
+that let you scale your apps and do all sorts of interesting things, right?
+
+00:03:10.660 --> 00:03:10.940
+Yeah.
+
+00:03:10.940 --> 00:03:11.200
+Yeah.
+
+00:03:11.200 --> 00:03:15.140
+Zero MQ has definitely given me a new way of thinking about how different components
+
+00:03:15.140 --> 00:03:17.480
+of a distributed application can talk to each other.
+
+00:03:17.480 --> 00:03:17.960
+Absolutely.
+
+00:03:18.400 --> 00:03:21.580
+So we're going to dive all into that, which is going to be super fun.
+
+00:03:21.580 --> 00:03:24.060
+But before we do, maybe just tell us a bit about yourself.
+
+00:03:24.060 --> 00:03:26.240
+How do you get started in programming in Python?
+
+00:03:26.380 --> 00:03:30.160
+I got started mostly during college where I was studying physics
+
+00:03:30.160 --> 00:03:33.900
+and what essentially amounted to a computational physics degree.
+
+00:03:33.900 --> 00:03:37.300
+And that's where I met, I had a professor, Brian Granger,
+
+00:03:37.300 --> 00:03:40.000
+who's one of the heads of the now Jupyter project.
+
+00:03:40.000 --> 00:03:43.060
+I started working with him as an undergrad back in 2006,
+
+00:03:43.060 --> 00:03:47.140
+working on what would ultimately become the first IPython parallel,
+
+00:03:47.140 --> 00:03:50.080
+the interactive parallel computing toolkit in IPython.
+
+00:03:50.080 --> 00:03:50.920
+Oh, that's really cool.
+
+00:03:50.920 --> 00:03:52.020
+What university was that at?
+
+00:03:52.020 --> 00:03:53.240
+That was at Santa Clara University.
+
+00:03:53.240 --> 00:03:53.640
+Uh-huh.
+
+00:03:53.640 --> 00:03:54.100
+Okay.
+
+00:03:54.100 --> 00:03:54.560
+Nice.
+
+00:03:54.560 --> 00:03:55.420
+Yeah, it's really cool.
+
+00:03:55.420 --> 00:03:56.400
+I mean, you were working on physics,
+
+00:03:56.400 --> 00:03:59.220
+but you were also like at the heart of Jupyter.
+
+00:03:59.220 --> 00:04:01.360
+And I guess IPython at the time, right?
+
+00:04:01.360 --> 00:04:03.400
+IPython notebooks is what they were called, yeah?
+
+00:04:03.400 --> 00:04:07.620
+Yeah, coming up on 15 years that I've been working on IPython and Jupyter.
+
+00:04:07.620 --> 00:04:08.000
+Nice.
+
+00:04:08.000 --> 00:04:11.980
+And so you basically, did you do programming before you got into your physics
+
+00:04:11.980 --> 00:04:14.620
+or did you just learn that to get going with your degree?
+
+00:04:14.620 --> 00:04:17.340
+So I did it for fun in college,
+
+00:04:17.340 --> 00:04:20.180
+but I played around with calculators and stuff in high school,
+
+00:04:20.180 --> 00:04:23.560
+but nothing more complicated than printing out a Fibonacci sequence.
+
+00:04:23.560 --> 00:04:24.440
+Nice.
+
+00:04:24.460 --> 00:04:26.780
+So were you a TI person?
+
+00:04:26.780 --> 00:04:28.140
+Were you an HP person?
+
+00:04:28.140 --> 00:04:29.800
+What kind of world were you?
+
+00:04:29.800 --> 00:04:31.260
+Yeah, TI all the way.
+
+00:04:31.260 --> 00:04:32.800
+Yeah, me too, obviously.
+
+00:04:32.800 --> 00:04:35.280
+That reverse Polish notation, that was just wrong.
+
+00:04:35.280 --> 00:04:35.660
+Yeah.
+
+00:04:35.660 --> 00:04:38.820
+Although I did, in college, we did implement reverse Polish calculators
+
+00:04:38.820 --> 00:04:39.420
+because it's easier.
+
+00:04:39.420 --> 00:04:39.740
+Yeah.
+
+00:04:39.740 --> 00:04:40.240
+Yeah, cool.
+
+00:04:40.240 --> 00:04:41.940
+It's easy to write a parser for that.
+
+00:04:42.020 --> 00:04:48.220
+Yeah, it's easier on the creator and not on the user, which I feel like computers used to be way more that way, right?
+
+00:04:48.220 --> 00:04:49.760
+Like, oh, it's easier for us to make it this way.
+
+00:04:49.760 --> 00:04:53.540
+Well, if you put a little more work, it'll be easier for the millions of people that use it.
+
+00:04:53.540 --> 00:04:55.980
+Well, maybe not millions in the early, early days, but yeah.
+
+00:04:55.980 --> 00:04:56.880
+Very interesting.
+
+00:04:57.300 --> 00:05:00.700
+So what kind of stuff were you doing with IPython in the early days?
+
+00:05:00.700 --> 00:05:02.440
+What kind of stuff were you studying with your physics?
+
+00:05:02.580 --> 00:05:06.040
+In grad school, I was studying computational plasma physics simulation.
+
+00:05:06.040 --> 00:05:10.920
+So it was particle simulations of plasmas, which are, you know, what's going on in stars.
+
+00:05:10.920 --> 00:05:15.100
+I wasn't studying stars, but that's one of the main plasmas that people know about.
+
+00:05:15.100 --> 00:05:19.280
+And so I was doing particle simulations of just studying a system, seeing what happens.
+
+00:05:19.280 --> 00:05:24.340
+And we were working on an interactive scale simulation code that was written in C++.
+
+00:05:24.340 --> 00:05:32.160
+It was a fairly nice and welcoming C++ physics simulation as far as academic C++ physics simulations go.
+
+00:05:32.400 --> 00:05:32.500
+Yeah.
+
+00:05:32.500 --> 00:05:39.400
+But essentially, my first year of grad school, I wrote a paper where I had to do a simulation run for five days,
+
+00:05:39.400 --> 00:05:43.860
+look at the results, and then change some input parameters and run it again for five days,
+
+00:05:43.860 --> 00:05:47.300
+and do that for a few dozen iterations, and then wrote a paper about that.
+
+00:05:47.300 --> 00:05:51.840
+And then ultimately, my PhD thesis was about wrapping the same code in Python
+
+00:05:51.840 --> 00:05:56.580
+so that I could have programmatic, like, self-steering, actually by this time driven in a notebook.
+
+00:05:56.580 --> 00:06:01.820
+Doing what had been manual, like change it, run it again, doing that automatically,
+
+00:06:02.220 --> 00:06:11.540
+just by wrapping the C++ code in a Python API, I could do it much more efficiently and actually take something that took multiple iterations of five days,
+
+00:06:11.540 --> 00:06:15.480
+I could actually get the same result in a little over half a day, I think.
+
+00:06:15.480 --> 00:06:15.880
+Wow.
+
+00:06:15.880 --> 00:06:16.740
+That's really cool.
+
+00:06:16.740 --> 00:06:23.180
+So you would run basically a little small simulation with C, and then you would get the inputs into Python and go,
+
+00:06:23.180 --> 00:06:26.480
+okay, well, now how do we adjust it? How do we change that and go from there?
+
+00:06:26.640 --> 00:06:32.220
+It was the same simulation, but I had to tune the inputs a little bit differently in order to,
+
+00:06:32.220 --> 00:06:38.540
+there were some details of the physics that basically I had to turn some knobs way up because I wasn't constantly watching it.
+
+00:06:38.540 --> 00:06:39.200
+Yeah, I see.
+
+00:06:39.360 --> 00:06:44.960
+And then it would say like, oh, that number was too big, turn it down, do it again, and then look and see if it was too big again.
+
+00:06:44.960 --> 00:06:51.680
+Whereas once I had a knob that could be turned while the simulation was running, which is the feature that was missing,
+
+00:06:51.680 --> 00:06:55.440
+I could say ramp up the current in this case.
+
+00:06:55.640 --> 00:06:59.500
+So I was studying the limit of current that you can get through a diode.
+
+00:06:59.500 --> 00:06:59.820
+Right.
+
+00:06:59.820 --> 00:07:05.680
+And so ramp up the current, and then once I see evidence that it's too high, ramp it back down,
+
+00:07:05.680 --> 00:07:11.920
+and then I could change, you know, lower the slope so that I would slowly approach an equilibrium and find the limit.
+
+00:07:11.920 --> 00:07:17.140
+Whereas when I had to do it with this long, I had to basically wait until it's done to change the input,
+
+00:07:17.140 --> 00:07:22.680
+I had to dramatically over-inject the current, which made the simulations extra slow because there were way too many particles.
+
+00:07:22.680 --> 00:07:23.460
+Yeah, yeah.
+
+00:07:23.640 --> 00:07:28.920
+And the spatial resolution had to be really fine in order to resolve something called a virtual cathode,
+
+00:07:28.920 --> 00:07:30.620
+and I didn't have to do nearly as much.
+
+00:07:30.620 --> 00:07:36.780
+Basically, because I could do this live feedback, the simulations themselves could be quicker
+
+00:07:36.780 --> 00:07:42.180
+because I didn't have to provide enough information that I could get the right answer out a long time later.
+
+00:07:42.180 --> 00:07:44.580
+That's super cool, and obviously it makes a huge difference.
+
+00:07:44.580 --> 00:07:48.120
+You know, I feel like we have a similar background in how we got into programming.
+
+00:07:48.420 --> 00:07:56.960
+Like, I was doing a math degree, and my math research led me into doing C++ on Silicon Graphics, mainframes, computers, and stuff like that.
+
+00:07:56.960 --> 00:07:58.940
+You talk about letting these things run overnight.
+
+00:07:58.940 --> 00:08:03.960
+Like, everyone would just kick off these things, and then they would come back in the morning to see what happened.
+
+00:08:04.300 --> 00:08:07.500
+And, you know, interesting sort of random sidebars.
+
+00:08:07.500 --> 00:08:13.240
+Like, we came in one morning, and we all tried to log into our little workstations or whatever,
+
+00:08:13.240 --> 00:08:15.580
+and, like, the system just wouldn't respond.
+
+00:08:15.580 --> 00:08:16.940
+There was just something wrong with it.
+
+00:08:16.940 --> 00:08:18.580
+And we were like, well, what the heck is going on?
+
+00:08:18.580 --> 00:08:20.780
+You know, like, this is like a quarter-million-dollar computer.
+
+00:08:20.780 --> 00:08:22.000
+It should let us log in.
+
+00:08:22.000 --> 00:08:22.840
+What is wrong with it, right?
+
+00:08:23.020 --> 00:08:25.240
+And it was in there running really loud, right?
+
+00:08:25.240 --> 00:08:26.720
+It's like this huge, loud machine.
+
+00:08:26.720 --> 00:08:33.880
+And it turned out that one of the grad students, not me, had started a job that was—they were trying to figure out what was going on,
+
+00:08:33.880 --> 00:08:37.380
+and they were logging a lot because they were having problems with their code.
+
+00:08:37.380 --> 00:08:39.640
+And it was in this tight loop that ran all night.
+
+00:08:40.100 --> 00:08:47.200
+And because it was, like, a somewhat small group, they had no disk limits or permission restrictions for the large part.
+
+00:08:47.200 --> 00:08:52.380
+So it literally used up every byte on the server, and then it just wouldn't do anything at all.
+
+00:08:52.380 --> 00:08:57.240
+And, I mean, that's the—the reason I bring this up is, like, that's the challenge of these things where you, like,
+
+00:08:57.240 --> 00:09:00.140
+start it and let it run for days and then figure out what's happening.
+
+00:09:00.140 --> 00:09:03.000
+You're like, oh, it just used up the entire hard drive of this giant machine.
+
+00:09:03.000 --> 00:09:03.480
+Whoops.
+
+00:09:03.480 --> 00:09:05.200
+It broke it for everyone, right?
+
+00:09:05.200 --> 00:09:05.480
+Yeah.
+
+00:09:05.480 --> 00:09:10.420
+And so this live aspect or more self-guided is a really great idea.
+
+00:09:10.420 --> 00:09:12.340
+It's really—it's a big step ahead.
+
+00:09:12.340 --> 00:09:15.960
+Maybe more so than people initially, like, hear it as, right?
+
+00:09:15.960 --> 00:09:16.540
+It's a big deal.
+
+00:09:16.540 --> 00:09:21.660
+Yeah, and I think it was—that's part of what got me really excited about the programmatic—
+
+00:09:21.660 --> 00:09:26.800
+giving—when you have access to something in Python and you have an environment like iPython or Jupyter or whatever,
+
+00:09:26.800 --> 00:09:30.920
+being able to interact with something, what is usually—
+
+00:09:30.920 --> 00:09:35.220
+what you might think of as an offline physics simulation that runs for hours or days,
+
+00:09:35.220 --> 00:09:40.720
+if you have a Python API to it, you can steer it while it's going.
+
+00:09:40.720 --> 00:09:44.200
+Like, you can turn the knobs on your experiment while it's running.
+
+00:09:44.200 --> 00:09:49.720
+You know, sometimes there are reasons why that's not actually a good idea, but it's really powerful to not—
+
+00:09:49.720 --> 00:09:54.420
+one of the costs, you know, that I had in my experiment was that in order to change the inputs, I had to start over.
+
+00:09:54.420 --> 00:09:56.100
+Like, physically, I didn't have to.
+
+00:09:56.100 --> 00:10:02.380
+Like, if it were a physical machine where I were measuring inputs and outputs, I could just, you know, turn the current down and see the results.
+
+00:10:02.580 --> 00:10:05.020
+But the code didn't support that.
+
+00:10:05.020 --> 00:10:08.780
+The frustrating thing about it was the way the physics was written did support that.
+
+00:10:08.780 --> 00:10:10.640
+The C++ code did support that.
+
+00:10:10.640 --> 00:10:14.440
+We just hadn't written an interface that allowed me as the user to do it.
+
+00:10:14.440 --> 00:10:17.360
+And so the Python wrapping work was surprisingly little.
+
+00:10:17.360 --> 00:10:22.220
+It was, you know, expose Python APIs to—or C++ APIs to Python with Cython.
+
+00:10:22.220 --> 00:10:22.880
+Yeah, that's cool.
+
+00:10:23.020 --> 00:10:25.820
+And then I could turn all the knobs that were already there in the code.
+
+00:10:25.820 --> 00:10:27.700
+I just was now allowed to turn them.
+
+00:10:27.700 --> 00:10:36.300
+It sounds to me, thinking back on the timeline there, that must have been pretty early days in the data science, computational science world of Python, right?
+
+00:10:36.300 --> 00:10:39.620
+Like, NumPy was probably just about out around then.
+
+00:10:39.620 --> 00:10:42.220
+By the time I was doing that work, that would have been around 2012.
+
+00:10:42.220 --> 00:10:42.920
+Oh, okay.
+
+00:10:43.000 --> 00:10:45.060
+So, yeah, it was more established at that point.
+
+00:10:45.060 --> 00:10:47.840
+I was thinking back to, like, early, like, 2005 or something.
+
+00:10:47.840 --> 00:10:49.180
+That, yeah, not quite, right?
+
+00:10:49.180 --> 00:10:49.800
+Yeah, not quite.
+
+00:10:49.800 --> 00:10:59.960
+That was when I was still, as a little undergrad, was still able to help make building NumPy—I was able to submit patches to make building NumPy on Mac a little easier.
+
+00:11:00.120 --> 00:11:00.500
+That's cool.
+
+00:11:00.500 --> 00:11:04.760
+Before it became, like, completely polished and, like, so widely used.
+
+00:11:04.760 --> 00:11:08.220
+I suspect it's really nerve-wracking to contribute to those kinds of things now.
+
+00:11:08.220 --> 00:11:12.160
+It was a nice community, and it was exciting to be able to say, like, I have a problem.
+
+00:11:12.160 --> 00:11:14.180
+There's probably other people who have a similar problem.
+
+00:11:14.180 --> 00:11:16.200
+Let me see if I can fix it and then submit a patch.
+
+00:11:16.200 --> 00:11:17.200
+Yeah, that's fantastic.
+
+00:11:17.200 --> 00:11:17.680
+Cool.
+
+00:11:17.680 --> 00:11:22.240
+So you're carrying on with your scientific computation work these days, right?
+
+00:11:22.240 --> 00:11:23.460
+What do you go to now?
+
+00:11:23.460 --> 00:11:27.620
+Now my job is actually working on Jupyter and Python-related stuff.
+
+00:11:27.980 --> 00:11:34.100
+So I am a senior research engineer at Simula Research Lab in Oslo, Norway, where I've been since 2015.
+
+00:11:34.100 --> 00:11:38.140
+And I'm the head of the Department of Scientific Computing and Numerical Analysis.
+
+00:11:38.140 --> 00:11:45.700
+So I'm in a department where people are doing physical simulations of the brain and studying PEs and things like that.
+
+00:11:45.700 --> 00:11:48.180
+But what I do is I work on JupyterHub.
+
+00:11:48.180 --> 00:11:48.460
+Yeah.
+
+00:11:48.460 --> 00:11:53.260
+So we made JupyterHub as a tool for deploying while I was still at Berkeley.
+
+00:11:53.260 --> 00:11:57.380
+We made it as a tool for deploying—for people who want to deploy Jupyter Notebooks.
+
+00:11:57.620 --> 00:12:04.160
+We say it's for if you're a person who has computers and you have some humans and you want to help those humans use those computers with Jupyter.
+
+00:12:04.160 --> 00:12:05.120
+That's what JupyterHub is for.
+
+00:12:05.120 --> 00:12:11.460
+Initially, it was scoped to be an extremely small project because we didn't have any maintenance burden to spare.
+
+00:12:11.460 --> 00:12:18.320
+The target of that was research groups like mine in grad school of a few people, maybe small classes,
+
+00:12:18.320 --> 00:12:23.420
+who have one server in their office and they just want to make it easier for people to log in and use Jupyter on there.
+
+00:12:23.420 --> 00:12:23.860
+Right.
+
+00:12:23.860 --> 00:12:24.960
+This is when people—
+
+00:12:24.960 --> 00:12:25.300
+Right, right.
+
+00:12:25.300 --> 00:12:32.720
+People had all their SSH tunnel reverse—SSH to my server with the opener reverse tunnel so I can point localhost and it's actually over there.
+
+00:12:32.720 --> 00:12:35.320
+So we were trying to make life easier for those folks.
+
+00:12:35.320 --> 00:12:41.880
+They were running the servers locally and they're like, how do I get access to my computation over there but on my machine?
+
+00:12:41.880 --> 00:12:42.620
+That kind of stuff, right?
+
+00:12:42.620 --> 00:12:50.600
+Yeah, it's like if I'm a person who's already comfortable with Jupyter but now I have access to a computer that's over there, how do I run my notebook stuff over there?
+
+00:12:50.600 --> 00:12:54.000
+And there were a few solutions to that involving SSH tunnels or whatever.
+
+00:12:54.000 --> 00:12:56.060
+And JupyterHub was aimed at those folks.
+
+00:12:56.060 --> 00:13:02.060
+But it turned out that's not the user community that's really been the most excited about it.
+
+00:13:02.220 --> 00:13:13.240
+With things like Zero to JupyterHub, the JupyterHub on Kubernetes started by UVPanda and now led by a whole bunch of wonderful folks, we're shifted into a larger scale than initially designed for.
+
+00:13:13.240 --> 00:13:21.960
+It definitely seems like JupyterLab and the predecessors to it have really probably exploded beyond the scale that people initially expected.
+
+00:13:22.180 --> 00:13:26.840
+I mean, it's just the de facto way of doing things if you're doing computation these days, it seems.
+
+00:13:26.840 --> 00:13:29.580
+I for certain folks definitely seem to like it.
+
+00:13:29.580 --> 00:13:33.620
+We try to respond to feedback and just build things that people are going to use.
+
+00:13:33.620 --> 00:13:33.880
+Nice.
+
+00:13:33.880 --> 00:13:42.240
+So if you're running JupyterLab for such a big group, I mean, there's got to be crazy amounts of computation and, you know, super computer type stuff there.
+
+00:13:42.240 --> 00:13:43.660
+What does your whole setup look like there?
+
+00:13:43.660 --> 00:13:46.460
+What are you running for your folks at the research lab?
+
+00:13:46.460 --> 00:13:55.980
+I run JupyterHub instances for like a summer school and they'll run a workshop and I'll spin up a cluster for running JupyterHub for doing some physics simulations.
+
+00:13:55.980 --> 00:13:56.920
+Usually it's for teaching.
+
+00:13:56.920 --> 00:13:57.340
+Okay.
+
+00:13:57.340 --> 00:13:59.740
+So I don't operate, I don't operate hubs for research.
+
+00:13:59.740 --> 00:14:01.400
+Usually I usually operate them for teaching.
+
+00:14:01.400 --> 00:14:02.200
+I see.
+
+00:14:02.200 --> 00:14:02.660
+Yeah.
+
+00:14:02.660 --> 00:14:08.820
+So maybe the computation there, it's like, yeah, not nearly as high as we're trying to model the universe and let that go.
+
+00:14:08.820 --> 00:14:09.300
+Yeah.
+
+00:14:09.300 --> 00:14:12.540
+Often those folks, the computations are handed off somewhere.
+
+00:14:12.540 --> 00:14:12.960
+Right.
+
+00:14:13.080 --> 00:14:18.860
+But yeah, like the folks at NERSC in Berkeley are doing some really exciting stuff with running JupyterHub on a supercomputer.
+
+00:14:18.860 --> 00:14:19.440
+Yeah.
+
+00:14:19.440 --> 00:14:19.720
+Cool.
+
+00:14:19.720 --> 00:14:25.780
+Are you doing like Kubernetes or Docker or are you just setting up VMs or how do you handle that side?
+
+00:14:25.780 --> 00:14:37.320
+Thanks to the work of all the folks contributing to Zero to JupyterHub, deploying JupyterHub with Kubernetes, I think, is the easiest to deploy and maintain as long as you have access to a managed Kubernetes.
+
+00:14:37.320 --> 00:14:40.200
+I still wouldn't recommend deploying Kubernetes itself to anybody.
+
+00:14:40.440 --> 00:14:43.920
+It seems fairly complicated to run and maintain that side of things.
+
+00:14:43.920 --> 00:14:44.140
+Yeah.
+
+00:14:44.140 --> 00:14:50.380
+But if you have a turnkey solution, the one I use the most is the, is GKE, the Google managed Kubernetes.
+
+00:14:50.380 --> 00:14:50.700
+Yeah.
+
+00:14:50.700 --> 00:14:56.140
+And Zero to JupyterHub will let you just step through and say, give me a cluster and run JupyterHub on it.
+
+00:14:56.140 --> 00:14:59.860
+And then all I really need to do is for the workshop is build the user images.
+
+00:14:59.860 --> 00:15:00.240
+Nice.
+
+00:15:00.240 --> 00:15:00.800
+Very cool.
+
+00:15:00.800 --> 00:15:02.280
+You also do some stuff with Binder.
+
+00:15:02.280 --> 00:15:02.640
+Is that right?
+
+00:15:02.780 --> 00:15:04.000
+I help operate Binder.
+
+00:15:04.000 --> 00:15:12.240
+So mybinder.org is a service built on top of JupyterHub that takes JupyterHub as a service for running notebooks on Kubernetes.
+
+00:15:12.240 --> 00:15:14.280
+In Binder's case, it's running on Kubernetes.
+
+00:15:14.280 --> 00:15:21.940
+And Binder ties in another Jupyter project called Repo to Docker that says, look at a repo, build a Docker image with the contents of that.
+
+00:15:21.940 --> 00:15:23.740
+Hopefully that can run everything.
+
+00:15:23.740 --> 00:15:25.320
+So like if it finds a requirement set txt.
+
+00:15:25.320 --> 00:15:26.000
+Yeah, exactly.
+
+00:15:26.120 --> 00:15:28.680
+It's got something that specifies its dependencies or something like that.
+
+00:15:28.680 --> 00:15:28.900
+Yeah.
+
+00:15:28.900 --> 00:15:30.780
+And there's a bunch of things that we support.
+
+00:15:30.780 --> 00:15:33.800
+And the idea is to automate existing best practices, right?
+
+00:15:33.800 --> 00:15:39.860
+So find anything that people are already using to specify environments and then install those and then build an image.
+
+00:15:39.860 --> 00:15:45.880
+And then what Binder does is, so I built an image, then send that over to JupyterHub to say launch a notebook server with that image.
+
+00:15:45.880 --> 00:15:46.120
+Right.
+
+00:15:46.120 --> 00:15:46.340
+Yeah.
+
+00:15:46.340 --> 00:15:53.800
+You can see like right here just on the main site, just put in a GitHub repo and maybe a branch or a tag or something and then click go.
+
+00:15:53.800 --> 00:15:57.460
+And then it spins up literally a Jupyter notebook that you can play with.
+
+00:15:57.460 --> 00:16:01.360
+This portion of Talk Python To Me is sponsored by Linode.
+
+00:16:01.360 --> 00:16:05.700
+Simplify your infrastructure and cut your cloud bills in half with Linode's Linux virtual machines.
+
+00:16:05.700 --> 00:16:09.760
+Develop, deploy, and scale your modern applications faster and easier.
+
+00:16:09.760 --> 00:16:17.160
+Whether you're developing a personal project or managing large workloads, you deserve simple, affordable, and accessible cloud computing solutions.
+
+00:16:17.160 --> 00:16:21.400
+As listeners of Talk Python To Me, you'll get a $100 free credit.
+
+00:16:21.400 --> 00:16:25.560
+You can find all the details at talkpython.fm/Linode.
+
+00:16:25.560 --> 00:16:31.280
+Linode has data centers around the world with the same simple and consistent pricing regardless of location.
+
+00:16:31.280 --> 00:16:34.140
+Just choose the data center that's nearest to your users.
+
+00:16:34.140 --> 00:16:40.820
+You'll also receive 24-7, 365 human support with no tiers or handoffs regardless of your plan size.
+
+00:16:40.820 --> 00:16:51.040
+You can choose shared and dedicated compute instances or you can use your $100 in credit on S3 compatible object storage, managed Kubernetes clusters, and more.
+
+00:16:51.040 --> 00:16:53.520
+If it runs on Linux, it runs on Linode.
+
+00:16:53.520 --> 00:16:58.220
+Visit talkpython.fm/Linode or click the link in your show notes.
+
+00:16:58.480 --> 00:17:00.920
+Then click that create free account button to get started.
+
+00:17:03.140 --> 00:17:07.040
+When people go to GitHub, they can oftentimes see the Jupyter Notebook.
+
+00:17:07.040 --> 00:17:13.680
+When I first saw that, I'm like, how in the world is GitHub computing this stuff for me to see?
+
+00:17:13.680 --> 00:17:17.580
+I'm like, maybe that is super computationally expensive.
+
+00:17:17.580 --> 00:17:18.780
+Here's the answer.
+
+00:17:18.780 --> 00:17:20.980
+How do they know the data and the dependencies?
+
+00:17:21.240 --> 00:17:25.740
+The reality is they've just taken what's stored in the Notebook, right?
+
+00:17:25.740 --> 00:17:28.060
+That is the last run and it's there.
+
+00:17:28.060 --> 00:17:29.860
+But if you want to play with it, you can't do that on GitHub.
+
+00:17:29.860 --> 00:17:32.120
+But you can on mybinder.org, right?
+
+00:17:32.120 --> 00:17:35.440
+That turns that into an interactive Notebook.
+
+00:17:35.440 --> 00:17:39.600
+It adds interactivity to the sharing that you already have with NVMe or GitHub.
+
+00:17:39.600 --> 00:17:40.500
+Yeah, very cool project.
+
+00:17:40.500 --> 00:17:47.080
+I didn't know that much about it, but I had Tim Head on the show a while ago on episode 256 to talk about that.
+
+00:17:47.080 --> 00:17:47.980
+And I learned a lot.
+
+00:17:47.980 --> 00:17:49.400
+So, yeah, quite neat.
+
+00:17:49.860 --> 00:17:51.920
+Now, let's jump into 0MQ.
+
+00:17:51.920 --> 00:17:58.060
+So 0MQ is not a Python thing, but it is very good for Python people, right?
+
+00:17:58.060 --> 00:18:00.200
+It has support for many different languages.
+
+00:18:00.200 --> 00:18:06.540
+And your work primarily has been to work on making this nice and easy from Python, right?
+
+00:18:06.540 --> 00:18:12.480
+Yeah, so 0MQ is a C++, a library written in C++ with a C API, which makes using it a little easier.
+
+00:18:12.480 --> 00:18:17.380
+And it's a very small API, which is part of why it's usable from so many languages,
+
+00:18:17.380 --> 00:18:20.740
+is that writing bindings for it is relatively easy.
+
+00:18:20.940 --> 00:18:25.820
+The idea of 0MQ is it's a messaging library.
+
+00:18:25.820 --> 00:18:30.520
+Naming is a little funky because it comes from the world, right?
+
+00:18:30.520 --> 00:18:35.020
+The people who create it come from the world of message brokers and message queues.
+
+00:18:35.020 --> 00:18:39.840
+And 0MQ is a bit tongue-in-cheek in that it's not actually a message queue at all.
+
+00:18:40.340 --> 00:18:50.500
+It's a messaging library where it's just adding a little bit of a layer of abstraction on the networking in terms of you have some distributed application where things need to talk to each other.
+
+00:18:50.500 --> 00:18:52.860
+And 0MQ is a tool for building that.
+
+00:18:52.860 --> 00:18:54.620
+And it's this library.
+
+00:18:54.860 --> 00:19:00.340
+And then you can write the bindings for that library so that you can use it from any of a variety of languages.
+
+00:19:00.340 --> 00:19:07.540
+And so Brian Granger and I worked on the Python bindings to use 0MQ from Python, which is called PyZMQ.
+
+00:19:07.540 --> 00:19:10.940
+Yeah, when I first thought of it, I imagined it is like a server.
+
+00:19:10.940 --> 00:19:15.220
+Something like Redis or Celery or something like that that you start up.
+
+00:19:15.460 --> 00:19:17.840
+And then you create queues or something on it.
+
+00:19:17.840 --> 00:19:19.640
+And then like different things can talk to it.
+
+00:19:19.640 --> 00:19:23.620
+But I think maybe a better conceptualization of it might be like Flask.
+
+00:19:23.620 --> 00:19:30.260
+Flask is not a server, but a Flask is a framework that you can put into your Python app and then run it.
+
+00:19:30.260 --> 00:19:32.340
+And it is the server itself, right?
+
+00:19:32.340 --> 00:19:32.860
+Yeah.
+
+00:19:32.860 --> 00:19:37.600
+And so I'd say that 0MQ, the best way I would describe it is it's a fancy socket library.
+
+00:19:37.600 --> 00:19:37.960
+Yeah.
+
+00:19:37.960 --> 00:19:39.960
+So you create sockets and you send messages.
+
+00:19:39.960 --> 00:19:41.800
+And the sockets talk to other sockets.
+
+00:19:41.800 --> 00:19:43.540
+You send messages, you receive messages.
+
+00:19:44.140 --> 00:19:51.040
+And then 0MQ is all about what abstractions and guarantees and things it gives around those sockets and messages.
+
+00:19:51.040 --> 00:19:55.580
+There seems to be a lot of culture and zen about 0MQ.
+
+00:19:55.580 --> 00:20:00.040
+Like there's a lot of interesting like nomenclature in the way that they talk about stuff over there.
+
+00:20:00.040 --> 00:20:03.100
+So they talk about the zero in 0MQ.
+
+00:20:03.100 --> 00:20:05.080
+And the philosophy starts with zero.
+
+00:20:05.080 --> 00:20:06.900
+Zero is for the zero broker.
+
+00:20:06.900 --> 00:20:07.740
+It's brokerless.
+
+00:20:07.740 --> 00:20:09.760
+Zero latency, zero cost.
+
+00:20:09.760 --> 00:20:10.320
+It's free.
+
+00:20:10.320 --> 00:20:11.060
+Zero admin.
+
+00:20:11.060 --> 00:20:13.060
+You don't have like a server type of thing.
+
+00:20:13.060 --> 00:20:16.920
+But also to a culture of minimalism that permeates the project.
+
+00:20:16.920 --> 00:20:20.940
+Adding power by removing complexity rather than exposing new functionality.
+
+00:20:20.940 --> 00:20:22.660
+You want to speak to that just a little bit?
+
+00:20:22.660 --> 00:20:23.560
+Like your experience with that?
+
+00:20:23.560 --> 00:20:25.140
+Well, so I can speak to that.
+
+00:20:25.140 --> 00:20:31.760
+As someone who doesn't work on LibZMQ that much and more somebody who writes bindings for it.
+
+00:20:31.760 --> 00:20:35.620
+I can speak to that as it's nice that LibZMQ doesn't change that much.
+
+00:20:35.760 --> 00:20:35.940
+Yeah.
+
+00:20:35.940 --> 00:20:39.900
+And that part of point of, so, ZMQ has all these features.
+
+00:20:39.900 --> 00:20:42.420
+They have, we'll talk a little bit about it in a second.
+
+00:20:42.420 --> 00:20:51.100
+But so it's structured so that there are sockets and there are different kinds of sockets that have different behaviors for building these different kinds of distributed applications.
+
+00:20:51.640 --> 00:20:53.560
+But in terms of the API, there's just one.
+
+00:20:53.560 --> 00:20:55.060
+Like a socket has an API.
+
+00:20:55.060 --> 00:20:57.140
+All sockets have the same API.
+
+00:20:57.640 --> 00:21:05.320
+So from the standpoint of writing bindings to a library, I just need to say, I know how to wrap the socket APIs.
+
+00:21:05.320 --> 00:21:09.120
+And then as they add new types, those are just constants that I need to handle.
+
+00:21:09.120 --> 00:21:11.680
+So I don't need to, oh, there's a new kind of socket.
+
+00:21:11.680 --> 00:21:14.500
+I need to implement a new Python class for that new kind of socket.
+
+00:21:14.500 --> 00:21:16.240
+I just need to wrap socket.
+
+00:21:16.240 --> 00:21:28.300
+So that's really, that's from my perspective in terms of as new features are developed and things in LibZMQ, from my perspective as a binding developer or binding maintainer, that's really nice.
+
+00:21:28.300 --> 00:21:31.140
+But it also, that also extends to the application layer.
+
+00:21:31.140 --> 00:21:36.860
+That once you have a socket and you understand sockets, changing the type of socket changes your message pattern.
+
+00:21:36.860 --> 00:21:40.180
+It doesn't change anything about the APIs you need to use and things like that.
+
+00:21:40.180 --> 00:21:48.200
+Yeah, so maybe we could talk a little bit about what the application model, I don't necessarily get into programming yet, but like the application model, right?
+
+00:21:48.200 --> 00:21:52.060
+So we've got contexts, we've got sockets, and we've got messages.
+
+00:21:52.060 --> 00:21:55.620
+And those are the basic building blocks of what working with this is like.
+
+00:21:55.620 --> 00:22:06.540
+So if I wanted to create something that could, you know, maybe other applications could talk to it and exchange data, one of my options might be to create a RESTful API that exchanges JSON, right?
+
+00:22:06.540 --> 00:22:07.140
+Yeah, sure.
+
+00:22:07.140 --> 00:22:08.780
+There's a lot of challenges with that.
+
+00:22:09.100 --> 00:22:12.560
+One, it's sort of send request only, right?
+
+00:22:12.560 --> 00:22:19.500
+I send over my JSON and then it gives me a response, but I can't subscribe to future changes, right?
+
+00:22:19.500 --> 00:22:24.540
+I got to do something like WebSockets in that world if I want something like that, which I guess might be closer to this.
+
+00:22:24.540 --> 00:22:27.220
+And then also it's doing the text conversion.
+
+00:22:27.220 --> 00:22:28.880
+It's probably a little bit slower.
+
+00:22:28.880 --> 00:22:31.020
+Got to do maybe extra work for async, right?
+
+00:22:31.020 --> 00:22:36.180
+So there's a lot of things that are maybe similar, but extra patterns, right?
+
+00:22:36.180 --> 00:22:45.240
+So instead of just request response, you might have pub sub, you might have like multicast, like something comes in and everyone gets notified about it.
+
+00:22:45.240 --> 00:22:47.060
+Can you talk about some of those differences?
+
+00:22:47.060 --> 00:22:51.020
+Like maybe compare it to what other more common APIs people might know about?
+
+00:22:51.180 --> 00:22:52.180
+Yeah.
+
+00:22:52.180 --> 00:23:00.340
+So the main thing that distinguishes ZRMQ is that you have you, so a context is kind of an implementation detail that you shouldn't need to care about, but you still need to create.
+
+00:23:00.340 --> 00:23:00.680
+Okay.
+
+00:23:00.840 --> 00:23:10.620
+Sockets are the main thing that you deal with and you create a, so you create a socket and every socket has a type and that type determines the messaging pattern.
+
+00:23:10.620 --> 00:23:15.240
+So that means that's where we're getting at these kinds of protocols and messaging patterns.
+
+00:23:15.240 --> 00:23:19.600
+So with a web server, that's usually a request reply pattern.
+
+00:23:19.600 --> 00:23:23.160
+So you have clients connect, send a request, and then they get a reply.
+
+00:23:23.160 --> 00:23:26.360
+Pub sub system might be, you know, some totally different thing.
+
+00:23:26.560 --> 00:23:32.520
+Maybe in web server land, maybe it's a server side events, you know, an event stream connection.
+
+00:23:32.520 --> 00:23:36.480
+And with ZRMQ, the difference between those is the socket type.
+
+00:23:36.480 --> 00:23:44.220
+So if you're creating a publish subscribe relationship, you create a publish socket on one side and you create a subscribe socket on the other side.
+
+00:23:44.220 --> 00:23:49.040
+If you're doing a request reply, you use a socket called a dealer and a router.
+
+00:23:49.040 --> 00:23:53.000
+There's a request and a reply socket in ZRMQ, but nobody should ever use them.
+
+00:23:53.000 --> 00:23:55.100
+They're just a special case of router dealer.
+
+00:23:55.280 --> 00:23:58.720
+And then there's another one called a pattern called like a ventilator and sink.
+
+00:23:58.720 --> 00:24:09.760
+So that's like what you'd use in a work queue, for instance, where you've got a source of work and then it sends a message to one destination, but you don't necessarily care which one.
+
+00:24:09.760 --> 00:24:10.060
+I see.
+
+00:24:10.060 --> 00:24:13.120
+So maybe you're trying to do a scaled out computing.
+
+00:24:13.120 --> 00:24:13.980
+Yeah, exactly.
+
+00:24:13.980 --> 00:24:20.420
+You've got 10 machines that could all do the work and you want to somehow evenly distribute that work, right?
+
+00:24:20.420 --> 00:24:23.300
+So you're like, all right, well, we're just going to throw it at ZRMQ.
+
+00:24:23.300 --> 00:24:26.500
+All the things that are available to do work can subscribe.
+
+00:24:26.500 --> 00:24:27.540
+They need to.
+
+00:24:27.540 --> 00:24:33.440
+They could even like drop out after doing some work, but then not receive anymore, potentially something like that.
+
+00:24:33.560 --> 00:24:43.500
+So that's what ZRMQ, one of the main things that ZRMQ does is it takes control over those things like multiple peers and connection events and stuff like that.
+
+00:24:43.940 --> 00:24:46.820
+Because take, for example, the publish subscribe.
+
+00:24:46.820 --> 00:24:48.380
+There's two key.
+
+00:24:48.380 --> 00:24:54.860
+The things to think about with ZRMQ are what happens when you've got more than one peer connected.
+
+00:24:54.860 --> 00:24:55.240
+Right.
+
+00:24:55.240 --> 00:24:57.580
+And what happens when you've got nobody to send to.
+
+00:24:57.580 --> 00:25:06.760
+So in the publish subscribe model, what it does is when you send a message on a socket, it will send it will immediately send that message to everybody who's connected and ready.
+
+00:25:06.900 --> 00:25:15.220
+So if somebody is not able to keep up, right, there's like a queue that's building up and it's gotten full, it'll just drop, stop, drop messages to that peer until they catch up.
+
+00:25:15.220 --> 00:25:20.320
+If there are no peers, then it's really fast because it just doesn't send anything and just deletes the memory.
+
+00:25:20.320 --> 00:25:20.680
+Yeah.
+
+00:25:20.680 --> 00:25:21.020
+Right.
+
+00:25:21.020 --> 00:25:29.560
+So with when you're thinking of ZRMQ from Python, sending messages is really the other thing about it is that it's asynchronous.
+
+00:25:29.560 --> 00:25:35.780
+That send is not actually send doesn't return when the message is on the TCP buffer or whatever.
+
+00:25:36.360 --> 00:25:42.800
+Send returns when you have handed control of the message to the ZRMQ IO thread.
+
+00:25:42.800 --> 00:25:45.720
+And this is why ZRMQ has this concept of context.
+
+00:25:45.720 --> 00:25:51.060
+Contexts are what own the IO threads that actually do all the real work of talking to over the network.
+
+00:25:51.060 --> 00:25:58.140
+So when you're sending in PyZMQ, you're really just passing ownership of the memory to ZRMQ and it returns immediately.
+
+00:25:58.140 --> 00:26:03.080
+And so you don't actually know when that message is actually is finally sent and you shouldn't care.
+
+00:26:03.080 --> 00:26:05.340
+Sometimes you do care and it can get complicated.
+
+00:26:05.340 --> 00:26:05.680
+Yeah.
+
+00:26:05.820 --> 00:26:07.740
+But ZRMQ tries to make you not care.
+
+00:26:07.740 --> 00:26:08.180
+Interesting.
+
+00:26:08.180 --> 00:26:14.780
+So basically you set up the relationships between the clients and the server through like these different models.
+
+00:26:14.780 --> 00:26:19.600
+And then you drop off the messages to ZRMQ and it just it deals from there.
+
+00:26:19.600 --> 00:26:19.820
+Right.
+
+00:26:19.820 --> 00:26:22.180
+It figures out who gets what and when.
+
+00:26:22.380 --> 00:26:29.680
+So your application, as soon as it gets the message passed off to the ZRMQ layer, it can go about doing other stuff, right?
+
+00:26:29.680 --> 00:26:30.100
+Exactly.
+
+00:26:30.100 --> 00:26:35.200
+So ZRMQ, because it's a C++ library, it's not going to grab the GIL or anything.
+
+00:26:35.200 --> 00:26:40.720
+So it's a true, even if you're using Python, it's a true multi-threaded application, even if you're only using one Python thread.
+
+00:26:40.720 --> 00:26:41.000
+Yeah.
+
+00:26:41.120 --> 00:26:43.940
+You handed that memory off to C++, which is running in the background.
+
+00:26:43.940 --> 00:26:49.940
+You can do some GIL holding intense operation and ZRMQ will be happily dealing with all the network stuff.
+
+00:26:49.940 --> 00:26:50.220
+Right.
+
+00:26:50.220 --> 00:26:50.480
+Right.
+
+00:26:50.480 --> 00:26:55.580
+It's got its own C++ thread, which has nothing to do with the GIL and they go do its own thing, right?
+
+00:26:55.760 --> 00:27:09.160
+Yeah, it can, there's, there is something that comes up in PyZMQ where it can come back and try to grab the GIL from the IO thread or it used to, it doesn't anymore because of Python does actually need to know when it let go of that memory in order to avoid segfaults.
+
+00:27:09.160 --> 00:27:09.420
+Yeah.
+
+00:27:09.420 --> 00:27:10.740
+But that's an implementation detail.
+
+00:27:10.740 --> 00:27:11.000
+Cool.
+
+00:27:11.000 --> 00:27:20.560
+So is there anything about reliable messaging here where you could say, I want to make sure that this message gets delivered to every client?
+
+00:27:20.560 --> 00:27:24.660
+Like if you said, for example, in this PubSub, if some of them fall behind, it can just drop the messages.
+
+00:27:24.820 --> 00:27:30.440
+Is there a way to say, you know, pile that up and then send it along when it catches up or whatever?
+
+00:27:30.440 --> 00:27:33.700
+The ZRMQ perspective is that that's an application level problem.
+
+00:27:33.700 --> 00:27:39.140
+So ZRMQ helps you build the messaging layer to not, so that it doesn't crash.
+
+00:27:39.140 --> 00:27:41.280
+And that's part of why it drops messages.
+
+00:27:41.280 --> 00:27:50.900
+And then it basically, it's up to you to say, you know, if you're sending messages and there's a generation counter, for instance, and then you notice I got message five and then I got message eight.
+
+00:27:51.080 --> 00:28:05.860
+It's up to your application to say, okay, keep a, you know, keep a recent history buffer so that folks can come back with a different pattern, a request reply pattern to say, give me a batch of recent messages that I missed so that I can resume.
+
+00:28:06.220 --> 00:28:08.320
+But ZRMQ doesn't help you with that.
+
+00:28:08.320 --> 00:28:11.220
+It handles all the networking stuff, you know, connections.
+
+00:28:11.220 --> 00:28:12.080
+You don't have to worry about that.
+
+00:28:12.080 --> 00:28:17.580
+You just have to worry about like, how do we set up a way to ask again or have the application ask if it wants more.
+
+00:28:17.580 --> 00:28:17.940
+Yeah.
+
+00:28:17.940 --> 00:28:18.500
+Nice.
+
+00:28:18.500 --> 00:28:24.740
+David out there on the live stream asks, what alternatives to ZRMQ could have been used to build the Jupyter protocol?
+
+00:28:24.940 --> 00:28:27.480
+So maybe before we, thanks for the question.
+
+00:28:27.480 --> 00:28:33.380
+Before we get to that though, maybe let's just talk about like, oh wait, ZRMQ was used to build the Jupyter protocol?
+
+00:28:33.380 --> 00:28:33.800
+Yeah.
+
+00:28:33.800 --> 00:28:37.720
+So the Jupyter protocol, which essentially started out in IPython parallel.
+
+00:28:37.720 --> 00:28:46.300
+So we had this interactive parallel computing networking framework that eventually evolved into, wait, we've got this network protocol for remote computation.
+
+00:28:46.860 --> 00:28:51.160
+We can build basically a REPL protocol, an interactive shell protocol.
+
+00:28:51.160 --> 00:29:03.320
+And that ultimately became the Jupyter protocol, which was built with this kind of ZRMQ mindset of, I want to be able to have multiple front ends at the same time.
+
+00:29:03.320 --> 00:29:11.980
+So let's say, and we had in 2010, I think, Fernando and Brian had a working prototype of real-time collaboration on a terminal.
+
+00:29:11.980 --> 00:29:19.040
+So you've got, using this protocol, so you've got two people with the terminal, you're typing, you can run code and you can see each other's output.
+
+00:29:19.040 --> 00:29:24.040
+So we built the Jupyter protocol with multiple connections in mind.
+
+00:29:24.040 --> 00:29:26.880
+So that means there's this request reply socket.
+
+00:29:26.880 --> 00:29:30.180
+So the front end sends a request, please run this code.
+
+00:29:30.180 --> 00:29:34.700
+And the back end sends a reply saying, I ran that, here's the result.
+
+00:29:34.700 --> 00:29:38.240
+And there's another channel called IOPub where we publish output.
+
+00:29:38.240 --> 00:29:49.120
+So when you do a print statement or you display a map.plit figure, that's a message that goes on PubSub channel, which means that every connected front end, right?
+
+00:29:49.120 --> 00:29:51.480
+So you could have multiple JupyterLab instances.
+
+00:29:51.480 --> 00:29:53.540
+They'll all receive the same message.
+
+00:29:53.540 --> 00:29:53.800
+Right.
+
+00:29:53.800 --> 00:29:56.400
+I mean, that sounds like the perfect example of PubSub.
+
+00:29:56.400 --> 00:29:57.980
+Somebody's making a change.
+
+00:29:57.980 --> 00:30:03.040
+Well, somebody has triggered the server to make a change, but it doesn't matter who started that change.
+
+00:30:03.040 --> 00:30:05.020
+Everybody looking at it wants to see the output, right?
+
+00:30:06.620 --> 00:30:09.360
+This portion of Talk Python to Me is brought to you by Mido.
+
+00:30:09.360 --> 00:30:13.320
+You feel like you're stumbling around trying to work with pandas within your Jupyter notebooks?
+
+00:30:13.320 --> 00:30:19.840
+What if you could work with your data frames visually like they were Excel spreadsheets, but have it write the Python code for you?
+
+00:30:19.840 --> 00:30:21.180
+With Mido, you can.
+
+00:30:21.180 --> 00:30:28.460
+Mido is a visual front end inside Jupyter notebooks that automatically generates the equivalent Python code within your notebook cells.
+
+00:30:28.460 --> 00:30:35.220
+Mido lets you generate production ready Python just by editing a spreadsheet, all right with inside Jupyter.
+
+00:30:35.520 --> 00:30:42.100
+You're sure to learn some interesting Python pandas tricks just by using the visual aspects of that spreadsheet.
+
+00:30:42.100 --> 00:30:49.440
+You can merge, pivot, filter, sort, clean, and create graphs all in the front end and get the equivalent Python code written right in your notebook.
+
+00:30:49.440 --> 00:30:53.300
+So stop spending your time Googling all that syntax and try Mido today.
+
+00:30:53.300 --> 00:30:57.320
+Just visit talkpython.fm/Mido to get early access.
+
+00:30:57.500 --> 00:31:02.060
+That's talkpython.fm/M-I-T-O or just click their link in the show notes.
+
+00:31:04.660 --> 00:31:15.220
+So to answer the question of, and this becomes particularly important in the design of IPython parallel, but getting to the question of what alternatives to 0.mq could have been used for the Jupyter protocol.
+
+00:31:15.660 --> 00:31:20.200
+So when we were designing it, we thought this protocol of talking directly to kernels was going to be the main thing.
+
+00:31:20.200 --> 00:31:25.820
+It turns out that the main way, you know, in 2020 or 2021, I guess we're in now.
+
+00:31:25.820 --> 00:31:30.880
+The most kernels talk one-to-one with a notebook web server.
+
+00:31:30.880 --> 00:31:34.720
+And it's the web server that's the one that's actually spanning out to multiple clients.
+
+00:31:34.720 --> 00:31:35.020
+Right.
+
+00:31:35.140 --> 00:31:49.520
+With that being the case, if we had required the notebook server to be the place where we do all this multiplexing and everything, we could have actually built the lower level Jupyter protocol on something much simpler, just an HTTP rest and event stream.
+
+00:31:49.520 --> 00:31:50.800
+Probably could have worked just fine.
+
+00:31:50.800 --> 00:31:51.040
+Right.
+
+00:31:51.040 --> 00:31:54.460
+Maybe just use WebSockets or something on the web server side.
+
+00:31:54.460 --> 00:31:54.800
+Yeah.
+
+00:31:54.800 --> 00:31:56.600
+If WebSockets had existed at the time.
+
+00:31:56.600 --> 00:31:57.160
+Yeah, yeah, yeah.
+
+00:31:57.160 --> 00:31:59.600
+Those were also years away.
+
+00:31:59.600 --> 00:32:00.120
+Yeah.
+
+00:32:00.120 --> 00:32:03.420
+So much of that stuff's easier now and the browser support it and so on.
+
+00:32:03.420 --> 00:32:04.820
+So yeah, super interesting.
+
+00:32:04.960 --> 00:32:15.660
+Now, one thing that that makes me think of is, you know, how much, how close are we or some sort of Google Docs, JupyterLab type of thing, right?
+
+00:32:15.660 --> 00:32:16.560
+I mean, we're not there, right?
+
+00:32:16.560 --> 00:32:19.900
+I know there's SageMath and there's Google Colab.
+
+00:32:19.900 --> 00:32:23.140
+There's other systems where this does exist, right?
+
+00:32:23.140 --> 00:32:27.440
+Where there's sort of, we can all type on the notebook, same cell, same time type of thing.
+
+00:32:27.440 --> 00:32:30.720
+Is there anything like that, JupyterLab, that I just didn't miss or I missed?
+
+00:32:31.100 --> 00:32:39.280
+There have been, I think, three prototypes at this point that have been developed and are, and ultimately not finished for various reasons.
+
+00:32:39.280 --> 00:32:45.200
+There's another one that's picking up again and going strong using YJS, working with QuantStack, I believe.
+
+00:32:45.200 --> 00:32:45.580
+Okay.
+
+00:32:45.760 --> 00:32:46.400
+Hopefully soon.
+
+00:32:46.400 --> 00:32:48.780
+That's not an area of the project where I've done a lot of work.
+
+00:32:48.780 --> 00:32:50.100
+I helped a little bit with the last one.
+
+00:32:50.100 --> 00:32:56.700
+Well, I mean, to me, it sounds like that's like just all JavaScript front end craziness and not a whole lot of other stuff, right?
+
+00:32:56.800 --> 00:33:03.620
+Yeah, the state probably lives on the server, so you need to have a server, whether it's running CRDT or whatever, to synchronize the state.
+
+00:33:03.620 --> 00:33:05.960
+And the PubSub, yeah, as well for the changes.
+
+00:33:05.960 --> 00:33:06.520
+Yeah.
+
+00:33:06.520 --> 00:33:12.540
+Going down this rabbit hole for a minute, also, Nawa asked an interesting question about 0MQ.
+
+00:33:12.540 --> 00:33:16.460
+What's the story with 0MQ and microservices, right?
+
+00:33:16.460 --> 00:33:25.040
+And I think microservices, people often set up a whole bunch of little small flask or FastAPI things that talk JSON exchange request response.
+
+00:33:25.040 --> 00:33:35.520
+But man, like the performance and the multiplexing, all those types of things sound like it actually could be a really awesome non-HTTP-based microservice.
+
+00:33:35.520 --> 00:33:40.880
+Yeah, I think 0MQ is a really good fit for microservice-based distributed applications.
+
+00:33:40.880 --> 00:33:48.360
+Because one of the things you do when you're designing with microservices is you're defining the communication relationship and you're scaling axes.
+
+00:33:48.360 --> 00:33:57.500
+And a nice thing to do with 0MQ is to say is that your application doesn't change when you've got a bunch of peers.
+
+00:33:57.500 --> 00:34:01.940
+Your application doesn't even need to know when a new peer comes and goes because 0MQ handles that.
+
+00:34:01.940 --> 00:34:11.320
+So one of the things that's nifty about, that's weird and magical, but also really useful about 0MQ is it abstracts binding and connecting and transports.
+
+00:34:11.320 --> 00:34:19.520
+So you can have the same application with the same connection pattern and maybe this one binds and maybe, you know, one side binds and one side connects.
+
+00:34:19.520 --> 00:34:21.340
+So pub binds and sub connects.
+
+00:34:21.340 --> 00:34:24.020
+But you can also have sub bind and pub connect.
+
+00:34:24.020 --> 00:34:27.800
+And you can also have your pub bind once and connect three times.
+
+00:34:27.800 --> 00:34:30.420
+And none of that changes how your application behaves.
+
+00:34:30.420 --> 00:34:32.080
+It just changes where the connections go.
+
+00:34:32.080 --> 00:34:32.520
+Right.
+
+00:34:32.520 --> 00:34:38.800
+Because with microservices, when you're doing HTTP requests, you always got to figure out, okay, well, what's the URL I'm going to?
+
+00:34:38.800 --> 00:34:43.560
+And sometimes that even gets real tricky with, all right, what is even the URL of the identity server?
+
+00:34:43.560 --> 00:34:48.100
+What is the URL of the thing that manages the catalog before I even request it?
+
+00:34:48.100 --> 00:34:53.400
+And then usually that's a single endpoint HTTP request type of thing if it's like an update notification.
+
+00:34:53.400 --> 00:34:56.660
+So yeah, I can imagine that there's some real interesting things here.
+
+00:34:56.660 --> 00:35:03.420
+You can have in, you know, a distributed work kind of situation, you can have one or a few sources of work.
+
+00:35:03.420 --> 00:35:08.720
+And then you have an elastic number of workers that just connect and start receiving messages.
+
+00:35:08.720 --> 00:35:11.520
+And the way this is in kind of the push-pull pattern.
+
+00:35:11.520 --> 00:35:18.060
+So pub sub is always send them every message you send, send it to everybody connected who can receive a message.
+
+00:35:18.420 --> 00:35:22.100
+Whereas push-pull is whenever you send a message, send it to exactly one peer.
+
+00:35:22.100 --> 00:35:23.240
+And I don't care which one.
+
+00:35:23.240 --> 00:35:27.380
+And so if more peers are connected, it will load balance across all those peers.
+
+00:35:27.380 --> 00:35:29.960
+But if only one's connected, it will just keep sending to that one.
+
+00:35:29.960 --> 00:35:35.980
+And at no point in the sender do you ever need to know how many.
+
+00:35:35.980 --> 00:35:38.540
+You never get notified that peers are connecting.
+
+00:35:38.540 --> 00:35:42.820
+You never need to know that there are any peers, that there's one peer, that there's a thousand peers.
+
+00:35:42.820 --> 00:35:43.860
+It doesn't matter.
+
+00:35:44.120 --> 00:35:51.240
+So then it's in your distributed application to say, you know, this one's sending with this push-pull pattern, ventilator sync pattern.
+
+00:35:51.240 --> 00:35:55.800
+And then I just elastically grow my number of workers and shut them down.
+
+00:35:55.800 --> 00:35:58.480
+And they just connect and close, disconnect and everything.
+
+00:35:58.480 --> 00:35:59.460
+And it just works.
+
+00:35:59.460 --> 00:35:59.860
+Interesting.
+
+00:36:00.360 --> 00:36:04.000
+Okay, so a follow-up question from Nawa that makes me think.
+
+00:36:04.000 --> 00:36:11.320
+So he asks, he, she, sorry, asks whether it is a good idea to replace REST communication with CRMQ.
+
+00:36:11.320 --> 00:36:13.160
+And so that leads me to wonder.
+
+00:36:13.160 --> 00:36:18.580
+You talked about, you send the message and it's sort of fire and forget style, like message sent success.
+
+00:36:18.720 --> 00:36:26.940
+But so often what I want to do is I need to know what products are offered on sale right now from the sale microservice or whatever.
+
+00:36:26.940 --> 00:36:28.660
+I need to get the answer back.
+
+00:36:28.660 --> 00:36:29.900
+These three products.
+
+00:36:29.900 --> 00:36:30.660
+Thank you.
+
+00:36:30.660 --> 00:36:31.300
+You know what I mean?
+
+00:36:31.300 --> 00:36:35.880
+How do I implement something like that where I send a message, but I want the answer?
+
+00:36:35.880 --> 00:36:37.560
+That's the request reply pattern.
+
+00:36:37.560 --> 00:36:44.440
+So you would use either the request reply sockets or the router dealer sockets for that kind of pattern.
+
+00:36:44.440 --> 00:36:45.600
+And that's, you send a message.
+
+00:36:45.600 --> 00:36:52.820
+So in that case, this does have multi-peer semantics, but usually the requester is connected to one endpoint.
+
+00:36:52.820 --> 00:36:57.080
+It can be connected to several, in which case it'll load balance its requests.
+
+00:36:57.080 --> 00:37:00.820
+And the router, so the receiver side, handles requests.
+
+00:37:00.820 --> 00:37:06.560
+And each request comes in with the message prefix that identifies who that message came from.
+
+00:37:07.200 --> 00:37:10.220
+And then it can send replies using that identity prefix.
+
+00:37:10.220 --> 00:37:13.020
+And it will go to whoever sent that request.
+
+00:37:13.020 --> 00:37:16.620
+And that's how most of the Jupyter protocol is a request reply pattern.
+
+00:37:16.620 --> 00:37:17.260
+Yeah, I guess so.
+
+00:37:17.260 --> 00:37:20.480
+That makes sense because you want the answer from the computation or whatever.
+
+00:37:20.480 --> 00:37:22.200
+You want to know that it's done and so on.
+
+00:37:22.200 --> 00:37:22.780
+Interesting.
+
+00:37:22.780 --> 00:37:23.320
+Okay.
+
+00:37:23.320 --> 00:37:23.560
+Yeah.
+
+00:37:23.560 --> 00:37:25.060
+Well, that's pretty neat.
+
+00:37:25.060 --> 00:37:28.860
+The other thing that comes to mind around this is serialization.
+
+00:37:28.860 --> 00:37:32.580
+So when I'm doing microservices, I make JSON documents.
+
+00:37:32.580 --> 00:37:34.580
+I know what things go in JSON, right?
+
+00:37:34.820 --> 00:37:37.520
+Like fundamental types, strings, integers, and so on.
+
+00:37:37.520 --> 00:37:41.240
+Surprisingly, dates and times can't go into JSON.
+
+00:37:41.240 --> 00:37:41.620
+That blow.
+
+00:37:41.620 --> 00:37:43.340
+I still like, this is 2021.
+
+00:37:43.340 --> 00:37:46.800
+We can't come up with a text representation of what time it is.
+
+00:37:46.800 --> 00:37:48.360
+Anyway, that's a bit of a pain.
+
+00:37:48.360 --> 00:37:54.060
+It seems to me like you might be able to exchange more data more efficiently using a binary.
+
+00:37:54.060 --> 00:37:57.260
+And it's not even going over the HTTP layer, right?
+
+00:37:57.260 --> 00:38:00.180
+It's going literally over a TCP socket.
+
+00:38:00.180 --> 00:38:00.500
+Yeah.
+
+00:38:00.500 --> 00:38:03.300
+Or IPC with BST sockets or UDP.
+
+00:38:03.300 --> 00:38:04.740
+Even lower level than that.
+
+00:38:04.740 --> 00:38:04.900
+Yeah.
+
+00:38:04.900 --> 00:38:06.040
+Not even touching the network stack.
+
+00:38:06.040 --> 00:38:06.260
+Right.
+
+00:38:06.260 --> 00:38:06.520
+Yeah.
+
+00:38:06.520 --> 00:38:10.600
+This gets us to the last piece of XeromQ that we haven't talked about yet.
+
+00:38:10.600 --> 00:38:11.980
+And that's what is a message.
+
+00:38:11.980 --> 00:38:12.280
+Right.
+
+00:38:12.280 --> 00:38:13.100
+They're nice things.
+
+00:38:13.100 --> 00:38:17.220
+You know, if you've worked with, you know, a lower level socket library, just talking TCP
+
+00:38:17.220 --> 00:38:21.680
+sockets, you know, you have to deal with like chunks and then figure out when you're done
+
+00:38:21.680 --> 00:38:22.840
+with your message protocol.
+
+00:38:22.840 --> 00:38:27.180
+But if you've ever written an HTTP server, you know, you need to find those double blank lines
+
+00:38:27.180 --> 00:38:31.500
+and all that stuff before you know that you have a request that you can hand off to your
+
+00:38:31.500 --> 00:38:32.140
+request handler.
+
+00:38:32.140 --> 00:38:32.440
+Right.
+
+00:38:32.440 --> 00:38:32.660
+Right.
+
+00:38:32.660 --> 00:38:35.600
+You're doing a whole lot of funky, like parsing the header.
+
+00:38:35.600 --> 00:38:36.080
+Okay.
+
+00:38:36.080 --> 00:38:39.600
+The header, it says it's the next hundred bytes of the thing that I'm getting.
+
+00:38:39.600 --> 00:38:40.720
+And this one is an end.
+
+00:38:40.720 --> 00:38:42.920
+So I'm at a part like it's, it's gnarly stuff.
+
+00:38:42.920 --> 00:38:47.240
+I've worked on projects where we did that and it's super fast, but boy, it is a, it's a low
+
+00:38:47.240 --> 00:38:47.900
+level business.
+
+00:38:47.900 --> 00:38:49.560
+Something like Flask does for you.
+
+00:38:49.560 --> 00:38:49.780
+Yeah.
+
+00:38:49.780 --> 00:38:50.020
+Right.
+
+00:38:50.020 --> 00:38:53.860
+It, it implements the HTTP protocol and then says, okay, here's a request.
+
+00:38:53.860 --> 00:38:54.960
+Please send a reply.
+
+00:38:54.960 --> 00:38:57.160
+And it helps you construct that reply message.
+
+00:38:57.160 --> 00:39:05.300
+So zero MQ or PyZMQ live at that, at that level of Flask where a message is a, not one
+
+00:39:05.300 --> 00:39:09.260
+binary blob, but a collection of binary blobs.
+
+00:39:09.260 --> 00:39:13.460
+And zero MQ always delivers whole messages.
+
+00:39:13.460 --> 00:39:17.840
+So it's, it's atomic and it's asynchronous and it's messaging, which means you will never
+
+00:39:17.840 --> 00:39:18.920
+get part of a message.
+
+00:39:18.920 --> 00:39:24.600
+There's no like, okay, I got the first third of this message, keep it in my own buffer until
+
+00:39:24.600 --> 00:39:26.460
+I get the, you know, get to the end.
+
+00:39:26.460 --> 00:39:31.660
+A zero MQ socket does not become readable until an entire message is ready to be read.
+
+00:39:31.660 --> 00:39:31.860
+Right.
+
+00:39:31.860 --> 00:39:35.980
+And there may be buffering down the C++ layer, but it's not going to tell you I've received
+
+00:39:35.980 --> 00:39:37.740
+a thing until it's fully baked.
+
+00:39:37.740 --> 00:39:38.520
+Got the answer.
+
+00:39:38.520 --> 00:39:38.740
+Right.
+
+00:39:38.740 --> 00:39:39.040
+Right.
+
+00:39:39.040 --> 00:39:39.260
+Yeah.
+
+00:39:39.260 --> 00:39:40.540
+All that stuff still happens.
+
+00:39:40.540 --> 00:39:42.800
+It's just zero MQ takes care of that.
+
+00:39:42.800 --> 00:39:49.780
+And then when, when at the PyZMQ level or at the ZMQ API level, when a socket, when you receive
+
+00:39:49.780 --> 00:39:55.580
+with a socket or in PyZMQ, you say receive multi-part, you get a list of blobs of memory.
+
+00:39:55.580 --> 00:40:00.500
+And so if you're talking about serialization with Jason, so PyZMQ has a helper function
+
+00:40:00.500 --> 00:40:05.000
+called send Jason, and it's literally just Jason that dumps thing and then send it.
+
+00:40:05.000 --> 00:40:05.280
+Yeah.
+
+00:40:05.280 --> 00:40:07.680
+With a little ensuring UTF eight bytes, I think.
+
+00:40:07.680 --> 00:40:07.960
+Yeah.
+
+00:40:07.960 --> 00:40:08.180
+Yeah.
+
+00:40:08.180 --> 00:40:08.460
+Nice.
+
+00:40:08.460 --> 00:40:15.140
+So PyZMQ, it's, and this is really turned out to be really important for more important
+
+00:40:15.140 --> 00:40:19.820
+for IPython parallel than it turned out to be for the Jupyter protocol.
+
+00:40:19.820 --> 00:40:21.600
+I'm not familiar with IPython parallel.
+
+00:40:21.600 --> 00:40:22.300
+Tell me about this.
+
+00:40:22.300 --> 00:40:27.100
+IPython parallel is, so if you're aware of the Jupyter protocol, it's a network protocol
+
+00:40:27.100 --> 00:40:30.840
+for, I've got somewhere over the network where I want to run code.
+
+00:40:30.840 --> 00:40:33.280
+And I have this protocol for sending messages.
+
+00:40:33.280 --> 00:40:34.220
+Please run this code.
+
+00:40:34.220 --> 00:40:35.780
+Give me a return output.
+
+00:40:35.780 --> 00:40:37.040
+Show me display stuff.
+
+00:40:37.540 --> 00:40:41.700
+IPython parallel is a kind of weird parallel computing library based on the fact that,
+
+00:40:41.700 --> 00:40:45.100
+so I've got a network protocol to talk to, to run code remotely.
+
+00:40:45.100 --> 00:40:49.740
+Why don't I just wrap that in a little bit to talk to N remote places.
+
+00:40:49.740 --> 00:40:52.340
+Maybe partition up the work across them or something like that.
+
+00:40:52.340 --> 00:40:57.820
+The fun thing about ZerumQ is that in a Jupyter notebook, the kernel is the server.
+
+00:40:57.820 --> 00:41:00.400
+The kernel listens for connections on its various sockets.
+
+00:41:00.400 --> 00:41:06.420
+And then the notebook server, the web server, or the Qt console, or the terminal is a client,
+
+00:41:06.820 --> 00:41:08.060
+and it connects to those sockets.
+
+00:41:08.060 --> 00:41:12.480
+So I Python parallel, because of this fun stuff about ZerumQ not caring about connection,
+
+00:41:12.480 --> 00:41:19.420
+direction, or count, adds a scheduler layer, and it modifies the kernel, the IPython kernel
+
+00:41:19.420 --> 00:41:20.700
+that you'd use in a Jupyter notebook.
+
+00:41:20.700 --> 00:41:27.160
+And the only change it makes is instead of binding on those sockets, it connects to a central scheduler.
+
+00:41:27.420 --> 00:41:28.980
+And the kernel is otherwise identical.
+
+00:41:28.980 --> 00:41:30.480
+The message protocol is otherwise identical.
+
+00:41:30.480 --> 00:41:35.040
+But the connection direction is different because the many-to-one relationship is different.
+
+00:41:35.040 --> 00:41:39.840
+There's one controller and many engines instead of many clients connecting to one kernel.
+
+00:41:40.180 --> 00:41:45.580
+And then, again, using kind of some of the magic of the ZerumQ routing identities,
+
+00:41:45.580 --> 00:41:54.120
+there's a multiplexer in PyZMQ called a monitored queue, where if you have router socket,
+
+00:41:54.120 --> 00:41:56.240
+so a router socket is one where the first...
+
+00:41:56.240 --> 00:42:00.160
+So we talked about a ZerumQ message is a sequence of blobs of memory.
+
+00:42:00.160 --> 00:42:01.360
+So it can just be one.
+
+00:42:01.360 --> 00:42:03.640
+With a router socket, it's always at least two,
+
+00:42:03.640 --> 00:42:07.980
+because the first part is the routing identity to tell the underlying ZerumQ
+
+00:42:07.980 --> 00:42:10.420
+which peer should it actually send to.
+
+00:42:10.480 --> 00:42:10.900
+Sure, okay.
+
+00:42:10.900 --> 00:42:11.460
+That's cool.
+
+00:42:11.460 --> 00:42:14.160
+And we don't have to worry about that, because that's down at the low level, right?
+
+00:42:14.160 --> 00:42:15.000
+But that's what happens.
+
+00:42:15.000 --> 00:42:17.800
+When you get a request, you need to remember that first part.
+
+00:42:17.800 --> 00:42:22.100
+So when you send the reply, the first part of the reply is the ID that came at the request.
+
+00:42:22.100 --> 00:42:22.640
+Got it, got it.
+
+00:42:22.640 --> 00:42:23.640
+So it goes back to the right place.
+
+00:42:23.640 --> 00:42:23.980
+Yeah.
+
+00:42:23.980 --> 00:42:26.280
+But you can also use that if you know the IDs,
+
+00:42:26.280 --> 00:42:32.100
+you can send messages to a destination without being in response to a request, right?
+
+00:42:32.100 --> 00:42:37.160
+What a router really is, is a socket that can route messages based on this identity prefix.
+
+00:42:37.160 --> 00:42:41.960
+So if you have a bundle of identity prefixes, then you can send messages to anyone at any time.
+
+00:42:41.960 --> 00:42:48.380
+And that allows us to build a multiplexing scheduler that from one client connected to one scheduler,
+
+00:42:48.380 --> 00:42:52.840
+just send messages, regular, plain old ZerumQ protocol messages,
+
+00:42:52.840 --> 00:42:55.380
+but with an identity prefix from the client.
+
+00:42:55.380 --> 00:42:59.900
+And those will end up at the right kernel just by the magic of ZerumQ routing identities.
+
+00:42:59.900 --> 00:43:00.480
+Yeah, yeah.
+
+00:43:00.480 --> 00:43:04.760
+And so this is a substantially different messaging pattern.
+
+00:43:04.760 --> 00:43:09.240
+So the request reply patterns are all the same, but the connection patterns are totally different.
+
+00:43:09.240 --> 00:43:13.900
+And the client and the endpoint don't need to know about it at all.
+
+00:43:13.900 --> 00:43:15.300
+We just have this adapter in the middle.
+
+00:43:15.300 --> 00:43:18.100
+I feel like to really get the zen of this and take full advantage,
+
+00:43:18.100 --> 00:43:22.940
+you've got to really think about these messaging patterns and styles a little bit,
+
+00:43:22.940 --> 00:43:25.740
+because they're fairly different than, oh, this is what I know from web servers.
+
+00:43:25.880 --> 00:43:29.860
+So the big thing to do with, if you're getting into ZerumQ is to read the, there's something called the guide.
+
+00:43:29.860 --> 00:43:32.220
+And there'll be a link in the notes.
+
+00:43:32.220 --> 00:43:34.760
+And if you go to zerumq.org, it'll be prominently linked.
+
+00:43:34.760 --> 00:43:38.580
+And this goes through kind of the different patterns that ZerumQ thinks about,
+
+00:43:38.580 --> 00:43:42.540
+the abstractions in ZerumQ, and the different socket types and what they're for.
+
+00:43:43.020 --> 00:43:44.400
+And the guide will help you.
+
+00:43:44.400 --> 00:43:47.360
+And there are examples in many languages, including Python.
+
+00:43:47.360 --> 00:43:48.400
+Yeah, this seems great.
+
+00:43:48.400 --> 00:43:48.640
+Yeah.
+
+00:43:48.640 --> 00:43:54.220
+It'll help you build kind of little toy example patterns of here's a publish subscribe application.
+
+00:43:54.220 --> 00:43:57.820
+Here's a ventilator sync application.
+
+00:43:57.820 --> 00:44:00.060
+And then it also does things with pictures.
+
+00:44:00.060 --> 00:44:00.700
+Yes.
+
+00:44:01.940 --> 00:44:06.860
+That's, I think, the way to internalize what are the ZerumQ concepts and how do I deal with this.
+
+00:44:06.860 --> 00:44:10.820
+So when it comes to serialization, this is really important for iPython Parallel.
+
+00:44:10.820 --> 00:44:13.840
+And it also comes up if you're in Jupyter and use the interactive widgets,
+
+00:44:13.840 --> 00:44:17.240
+if you use the really intense ones that do like 3D visualization,
+
+00:44:17.240 --> 00:44:22.040
+interactive 3D visualization in the browser that sometimes are streaming a lot of data from the kernel.
+
+00:44:22.040 --> 00:44:27.800
+Because a ZerumQ, this combines two things, one from PyZMQ and one from ZerumQ itself.
+
+00:44:27.800 --> 00:44:31.940
+So the ZerumQ concept that a message is actually a collection of frames.
+
+00:44:31.940 --> 00:44:38.140
+This lets you and another that ZerumQ can be zero copy and PyZMQ supports zero copy.
+
+00:44:38.140 --> 00:44:42.640
+So anything that supports the Python buffer interface can be sent without copying,
+
+00:44:42.640 --> 00:44:47.040
+meaning it's still copied over the network, but at no point are there any copies in memory.
+
+00:44:47.040 --> 00:44:51.880
+So you can send 100 megabyte NumPy array with ZerumQ without copying it.
+
+00:44:51.880 --> 00:44:57.260
+But then you've got to think about, oh, wait, if I send a NumPy array using the Python buffer interface,
+
+00:44:57.260 --> 00:44:58.300
+all I got were the bytes.
+
+00:44:58.300 --> 00:45:01.900
+Where are, you know, where's the D type information?
+
+00:45:01.900 --> 00:45:04.220
+Like, how do I know this is a 2D array of integers?
+
+00:45:04.220 --> 00:45:11.720
+Because a message is in Python language is a list of chunk of blobs instead of a single blob.
+
+00:45:11.720 --> 00:45:17.980
+You can serialize that metadata as like a header and the blob you don't want to copy, the big one, separately.
+
+00:45:17.980 --> 00:45:27.380
+So you can say like, Jason dumps the, some message metadata that tells you how to interpret the binary blob and then just the binary blob and you don't copy it.
+
+00:45:27.380 --> 00:45:30.140
+So then you can send as one message, right?
+
+00:45:30.140 --> 00:45:31.960
+We're not breaking the single message delivery.
+
+00:45:32.460 --> 00:45:36.020
+You have your metadata that's serialized with message pack.
+
+00:45:36.020 --> 00:45:38.700
+That comes in as like a frame or something like that in the message.
+
+00:45:38.700 --> 00:45:39.020
+Yeah.
+
+00:45:39.020 --> 00:45:39.400
+Yeah.
+
+00:45:39.780 --> 00:45:41.720
+So one frame is your header.
+
+00:45:41.720 --> 00:45:43.620
+One frame is the data itself.
+
+00:45:43.620 --> 00:45:48.960
+And we do this in the Jupyter protocol that the Jupyter protocol has an arbitrary number of buffers on the end.
+
+00:45:48.960 --> 00:45:52.960
+But then there are three frames that are actually Jason serialized dictionaries.
+
+00:45:53.140 --> 00:45:53.460
+Very cool.
+
+00:45:53.460 --> 00:45:53.840
+Very cool.
+
+00:45:53.840 --> 00:45:54.360
+Yeah.
+
+00:45:54.360 --> 00:46:01.280
+Looking at the guide here, it says there's 60 diagrams with 750 examples in 28 languages.
+
+00:46:01.280 --> 00:46:04.840
+That's a big cross product matrix of options in here.
+
+00:46:04.840 --> 00:46:10.160
+And you can also download it as a PDF to take with you, which, yeah, this looks like a really great place to get started.
+
+00:46:10.160 --> 00:46:15.480
+Speaking of getting started, let's talk about programming with the Python aspect here.
+
+00:46:15.480 --> 00:46:16.200
+All right.
+
+00:46:16.200 --> 00:46:21.000
+So here we'll use PyZMQ and this is a library that you work on as well.
+
+00:46:21.000 --> 00:46:21.180
+Yeah.
+
+00:46:21.180 --> 00:46:21.480
+Yeah.
+
+00:46:21.480 --> 00:46:23.000
+I maintain PyZMQ.
+
+00:46:23.000 --> 00:46:23.300
+Yeah.
+
+00:46:23.300 --> 00:46:23.600
+Awesome.
+
+00:46:23.600 --> 00:46:30.180
+So maybe, you know, it's hard to talk about code, but just give us a sense of what it's like to create a server.
+
+00:46:30.180 --> 00:46:33.380
+Like in Flask, you know, I say app equals Flask.
+
+00:46:33.380 --> 00:46:36.420
+Then I decorate app.route on a function.
+
+00:46:36.420 --> 00:46:40.120
+Like what's the 0MQ Python equivalent of that?
+
+00:46:40.120 --> 00:46:40.440
+Yeah.
+
+00:46:40.440 --> 00:46:46.940
+So first you always have to create a context and then use that context as a socket method that creates sockets.
+
+00:46:46.940 --> 00:46:50.800
+And then you either bind or connect those sockets.
+
+00:46:50.800 --> 00:46:52.720
+And then you start sending and receiving messages.
+
+00:46:52.920 --> 00:46:57.800
+So if you're writing a server, which usually means this is the one that binds.
+
+00:46:57.800 --> 00:46:58.140
+Yeah.
+
+00:46:58.140 --> 00:46:59.080
+So you'd create a socket.
+
+00:46:59.080 --> 00:47:05.560
+You'd call socket.bind and give it a URL, maybe a TCP URL or an IPC URL with a path, you know, a local path.
+
+00:47:05.640 --> 00:47:11.960
+And then you'd go into a loop saying, you know, receive a message, handle that message, send a reply.
+
+00:47:11.960 --> 00:47:13.580
+Or if it's a publisher.
+
+00:47:13.580 --> 00:47:16.380
+They often have a while true loop sort of thing, right?
+
+00:47:16.380 --> 00:47:19.660
+Just while true, wait for somebody to talk to me or while not exit.
+
+00:47:19.860 --> 00:47:20.000
+Yeah.
+
+00:47:20.000 --> 00:47:20.800
+That's a simple version.
+
+00:47:20.800 --> 00:47:26.980
+Or you could be integrated into asyncio or tornado or G event or whatever.
+
+00:47:26.980 --> 00:47:27.260
+Yeah.
+
+00:47:27.260 --> 00:47:27.820
+Yeah.
+
+00:47:27.820 --> 00:47:31.600
+One of the fundamental principles of 0MQ is that it's async all over the place.
+
+00:47:31.600 --> 00:47:35.520
+What's the async and await story with PyZMQ?
+
+00:47:35.520 --> 00:47:36.720
+Is there any integration there?
+
+00:47:36.960 --> 00:47:37.120
+Yeah.
+
+00:47:37.120 --> 00:47:47.600
+So if you do import zmq.asyncio instead of, if you do import zmq.asyncio as ZMQ, you will have the same thing, but send and receive are awaitable instead.
+
+00:47:47.600 --> 00:47:48.440
+Oh, that's glorious.
+
+00:47:48.440 --> 00:47:49.140
+Yeah.
+
+00:47:49.140 --> 00:47:50.920
+That's really, really fantastic.
+
+00:47:50.920 --> 00:47:54.920
+So you should be able to scale that to handling lots of concurrent exchanges.
+
+00:47:54.920 --> 00:47:56.740
+Pretty straightforward, right?
+
+00:47:56.740 --> 00:47:56.940
+Yeah.
+
+00:47:56.940 --> 00:47:59.900
+And that's how the, so taking Jupyter as an example again.
+
+00:47:59.900 --> 00:48:06.640
+So the Jupyter notebook uses the tornado framework, which if you're getting into asyncio, tornado is basically asyncio.
+
+00:48:06.800 --> 00:48:07.600
+Right.
+
+00:48:07.600 --> 00:48:07.820
+Yeah.
+
+00:48:07.820 --> 00:48:10.120
+It's the early days, early take asyncio.
+
+00:48:10.120 --> 00:48:10.340
+Yeah.
+
+00:48:10.340 --> 00:48:19.800
+And there we use something called a ZMQ stream, which is a, something inspired by tornadoes IO stream, which is their wrapper around a regular socket.
+
+00:48:19.800 --> 00:48:23.600
+That's like bytes are coming in, call events when bytes have arrived.
+
+00:48:23.600 --> 00:48:35.040
+ZMQ stream is a tornado thing that says when you have an on receive method that passes a callback, it says whenever there's a message, call this callback with the, with the message after receiving it.
+
+00:48:35.040 --> 00:48:35.280
+Yeah.
+
+00:48:35.280 --> 00:48:41.860
+And so that's actually how the IPython kernel and Jupyter notebook work on the ZMQ side is with these ZMQ stream objects.
+
+00:48:41.860 --> 00:48:42.140
+Cool.
+
+00:48:42.140 --> 00:48:53.000
+So the example you talked about is how to create a server, but you know, web version would be use request to do a request.get against the server to be the client that talks to it.
+
+00:48:53.080 --> 00:48:55.900
+What's the, that version in PysmQ?
+
+00:48:55.900 --> 00:49:01.260
+In PysmQ, a client looks very much like a server, except instead of bind, you'd call connect.
+
+00:49:01.260 --> 00:49:02.920
+And instead of receive, you do a send.
+
+00:49:02.920 --> 00:49:03.120
+Yeah.
+
+00:49:03.260 --> 00:49:03.440
+Yeah.
+
+00:49:03.440 --> 00:49:05.360
+And so in a request reply pattern.
+
+00:49:05.360 --> 00:49:05.920
+Yeah.
+
+00:49:05.920 --> 00:49:10.700
+So wherever you have a receive on the server side, you have a send on the client side and vice versa.
+
+00:49:10.700 --> 00:49:17.300
+So in a request reply pattern, the client is doing send a request and then receive to get the reply.
+
+00:49:17.300 --> 00:49:21.360
+In a server, you're doing receive a request and send the reply.
+
+00:49:21.740 --> 00:49:27.260
+In PubSub, you're just, you're only sending on the publisher side and on the subscriber side, you're only receiving.
+
+00:49:27.260 --> 00:49:27.560
+Nice.
+
+00:49:27.560 --> 00:49:35.020
+And when the way you set this, you basically choose these things is when you go to the context and you create the socket, you tell it what kind of pattern you're looking for.
+
+00:49:35.020 --> 00:49:36.380
+Is that where you specify that?
+
+00:49:36.380 --> 00:49:36.660
+Yeah.
+
+00:49:36.660 --> 00:49:40.400
+So ZMQ has a bunch of constants that identify socket types.
+
+00:49:40.400 --> 00:49:45.420
+So you'd use, when you create a socket, you always have to give it a single argument that is the socket type.
+
+00:49:45.500 --> 00:49:51.920
+So it'd be like ZMQ.pub for a publisher socket, ZMQ.sub for a subscriber socket, router, dealer, push, pull.
+
+00:49:51.920 --> 00:49:52.220
+Yeah.
+
+00:49:52.220 --> 00:49:55.900
+And that defines the messaging pattern of the underlying sockets.
+
+00:49:55.900 --> 00:50:02.660
+You also have some JupyterLab examples, which I guess we can link to as well, like some diagrams for that, right?
+
+00:50:02.660 --> 00:50:02.960
+Yeah.
+
+00:50:02.960 --> 00:50:08.240
+So the Jupyter protocol has a diagram of, a diagram that we maybe should redesign.
+
+00:50:08.240 --> 00:50:08.940
+Whoops.
+
+00:50:08.940 --> 00:50:09.920
+I didn't mean that far.
+
+00:50:09.920 --> 00:50:10.960
+There we go.
+
+00:50:11.040 --> 00:50:19.380
+It shows you what, basically what happens when you have one kernel and multiple front ends connected to it with the different socket types that we have in the Jupyter protocol.
+
+00:50:19.380 --> 00:50:31.200
+So the Jupyter kernel has two router sockets and a pub socket and a fully featured front end would have two dealer sockets or request sockets and a sub socket.
+
+00:50:31.200 --> 00:50:33.580
+It's just so much is happening below the scenes.
+
+00:50:33.580 --> 00:50:39.540
+I think getting your mind around these is really neat, but basically ZMQ is handling so much of this for everyone, right?
+
+00:50:39.640 --> 00:50:43.480
+It's handling all the, so we never care about, there's multiple peers connected.
+
+00:50:43.480 --> 00:50:45.080
+We don't need to deal with that.
+
+00:50:45.080 --> 00:50:46.420
+We have no connection events.
+
+00:50:46.420 --> 00:50:55.660
+Some folks working on different issues that causes headaches for them because there's some aspects of ZMQ, like the not guaranteed pub sub delivery.
+
+00:50:55.660 --> 00:51:00.880
+It's actually kind of a pain because we actually want all the messages.
+
+00:51:00.880 --> 00:51:02.120
+Yeah, yeah, of course.
+
+00:51:02.500 --> 00:51:07.300
+Is there any, you know, around a lot of libraries, there's stuff that like adds layers that does stuff.
+
+00:51:07.300 --> 00:51:10.000
+So like Flast extensions and stuff like that.
+
+00:51:10.000 --> 00:51:16.780
+Is there an extension that will like let you do reliable messaging that you can plug in on top of this or anything like that?
+
+00:51:16.780 --> 00:51:17.000
+Yeah.
+
+00:51:17.080 --> 00:51:22.520
+So if you look at the ZMQ guide, there are different patterns, some of which are basic uses of sockets.
+
+00:51:22.520 --> 00:51:30.060
+So there's no reason to build a, another layer of software on, in order to implement that, a simple ventilator pattern.
+
+00:51:30.060 --> 00:51:37.160
+But if you're talking about things like reliable messaging, there are some patterns in the guide and they, they have names.
+
+00:51:37.160 --> 00:51:52.080
+And so some people have written those protocols as standalone Python packages that say like implement this scheme on top of ZMQ that might have things like a message replay and, or, you know, election stuff.
+
+00:51:52.080 --> 00:51:57.360
+Like if you do Kubernetes things, they're often leader elections to allow you to scale and migrate things.
+
+00:51:57.360 --> 00:52:00.020
+So you can do that with a ZMQ applications.
+
+00:52:00.020 --> 00:52:00.260
+Yeah.
+
+00:52:00.260 --> 00:52:02.660
+And some of those reliable messaging things sound amazing.
+
+00:52:02.660 --> 00:52:03.640
+And I go, yeah, that's going to be great.
+
+00:52:03.640 --> 00:52:06.160
+But there's other drawbacks to those as well.
+
+00:52:06.160 --> 00:52:07.280
+Like poison messages.
+
+00:52:07.280 --> 00:52:11.640
+Like I got to make sure I send this, but the server, the client can't receive it.
+
+00:52:11.640 --> 00:52:12.240
+So they crash.
+
+00:52:12.240 --> 00:52:13.420
+So then I try to send it again.
+
+00:52:13.420 --> 00:52:17.180
+And you're just in these like weird loops and there's a lot of, they all have their challenges.
+
+00:52:17.180 --> 00:52:17.520
+Yeah.
+
+00:52:17.520 --> 00:52:26.840
+So another thing that I think would be interesting to touch on for our conversation, which we've spent so much time talking about all the programming patterns and stuff that I don't know.
+
+00:52:26.900 --> 00:52:35.260
+We have as much time anyway as we imagined, but building PyZMQ for basically to wrap this C library, right?
+
+00:52:35.260 --> 00:52:36.940
+This is some challenges you've had.
+
+00:52:36.940 --> 00:52:39.180
+It supports both CPython and PyPI.
+
+00:52:39.180 --> 00:52:40.200
+Sorry, PyPI.
+
+00:52:40.200 --> 00:52:40.540
+PyPI.
+
+00:52:40.540 --> 00:52:40.900
+Yeah.
+
+00:52:40.900 --> 00:52:41.840
+And whatnot.
+
+00:52:41.840 --> 00:52:44.020
+So maybe talk about some of the ways you did that.
+
+00:52:44.020 --> 00:52:48.200
+You had to do this like in the early days when there was Python 2 and 3.
+
+00:52:48.200 --> 00:52:50.680
+There's a lot of stuff going on, maybe pre-wheels, right?
+
+00:52:50.680 --> 00:52:51.140
+Yeah.
+
+00:52:51.140 --> 00:52:52.520
+So a few years pre-wheels.
+
+00:52:52.780 --> 00:52:56.200
+So with IPython and Jupyter, our target audience is pretty wide, right?
+
+00:52:56.200 --> 00:53:00.900
+We have a lot of people in education, a lot of students, a lot of people on Windows.
+
+00:53:00.900 --> 00:53:04.180
+A lot of those people don't even want to be programmers or care about like.
+
+00:53:04.180 --> 00:53:04.560
+Exactly.
+
+00:53:04.560 --> 00:53:05.800
+They just want this to work.
+
+00:53:05.800 --> 00:53:06.980
+And why won't this thing install?
+
+00:53:06.980 --> 00:53:09.560
+I just need to do this for my class or for my project.
+
+00:53:09.560 --> 00:53:10.820
+It needs to work, right?
+
+00:53:10.820 --> 00:53:11.680
+That kind of thing.
+
+00:53:11.780 --> 00:53:11.920
+Yeah.
+
+00:53:11.920 --> 00:53:18.280
+And so having a compiled dependency was a big deal for a lot of people.
+
+00:53:18.280 --> 00:53:24.800
+And so making binary releases as widely installable as possible was really important to us.
+
+00:53:24.800 --> 00:53:30.040
+And supporting as many Python implementations as possible was also important to us.
+
+00:53:30.680 --> 00:53:42.800
+So PyzianQ was originally written all in Cython, which is a wonderful library for this when you're interfacing with the C library, especially when you want to do things with the buffer interface.
+
+00:53:42.800 --> 00:53:48.980
+So when you have a C object and a Python object that represent the same memory, Cython is the best.
+
+00:53:48.980 --> 00:53:53.740
+And that's a lot of what we do for the zero copy stuff in PyzianQ.
+
+00:53:54.220 --> 00:53:56.500
+So when we were working on this, wheels didn't exist.
+
+00:53:56.500 --> 00:53:59.980
+Wheels being the binary version that you get from PyPI now.
+
+00:53:59.980 --> 00:54:00.840
+Yeah.
+
+00:54:00.840 --> 00:54:04.580
+So if you pip install something like PyzianQ, it doesn't compile it, right?
+
+00:54:04.580 --> 00:54:07.000
+You get a wheel and that just unzips it and it's really nice.
+
+00:54:07.000 --> 00:54:08.960
+But at the time there were only eggs.
+
+00:54:08.960 --> 00:54:15.860
+And there was a period of time when pip was taking over from easy install, which was eventually wonderful.
+
+00:54:15.860 --> 00:54:20.920
+But one of the drawbacks was during this time when pip was taking over, there was still no wheels.
+
+00:54:21.300 --> 00:54:25.660
+And so people had started shifting to pip because easy install did a lot of things that people don't like.
+
+00:54:25.660 --> 00:54:32.220
+But you had to use easy install if you wanted to get a binary, which means effectively, if you're on Windows, you had to use easy install.
+
+00:54:32.220 --> 00:54:38.640
+And so we had a really complicated, there actually used to be a big delay, might even still be there, in PyzianQ.
+
+00:54:38.640 --> 00:54:40.120
+No, this is definitely not.
+
+00:54:40.120 --> 00:54:47.060
+So there was a big delay in PyzianQ that if you ran setup.py, it would sleep for 10 seconds and show you a big message that says you might want to easy install.
+
+00:54:47.460 --> 00:54:49.500
+But now we're in a very different world, right?
+
+00:54:49.500 --> 00:54:54.700
+So even after wheels, it was a couple of years before we had many Linux wheels, right?
+
+00:54:54.700 --> 00:54:57.720
+There was a while before you were even allowed to make wheels for Linux.
+
+00:54:57.720 --> 00:55:09.420
+And now we're at a place where we've got wheels for ARM Macs and ARM Linux and a bunch of different Linux versions and Windows and everything.
+
+00:55:09.420 --> 00:55:11.980
+And it's a really different world.
+
+00:55:12.020 --> 00:55:14.120
+And a lot of things would be different if we were starting this project now.
+
+00:55:14.120 --> 00:55:16.100
+It would be easier if you started now, probably, right?
+
+00:55:16.100 --> 00:55:17.220
+Yeah, it would be a lot easier.
+
+00:55:17.220 --> 00:55:19.660
+We were getting in on some early stuff.
+
+00:55:19.660 --> 00:55:24.100
+But one of the wonderful things about Cython is if you're writing Cython, you're really writing C, right?
+
+00:55:24.100 --> 00:55:30.120
+If you're writing Cython code, it's generating a C program that calls the Python C API.
+
+00:55:30.120 --> 00:55:30.460
+Right.
+
+00:55:30.460 --> 00:55:33.440
+You write Python with a little typing stuff.
+
+00:55:33.440 --> 00:55:37.360
+It turns that into C and then compiles that to machine instructions, right?
+
+00:55:37.360 --> 00:55:39.600
+Like you're basically projecting C somehow.
+
+00:55:39.600 --> 00:55:40.020
+Yeah.
+
+00:55:40.020 --> 00:55:41.860
+You're basically writing C that looks like Python.
+
+00:55:41.860 --> 00:55:50.300
+The nice thing about C is that with directives and things, you can have one file that actually contains 10 different files.
+
+00:55:50.300 --> 00:55:54.220
+Because you could just turn off lines when it's compiling.
+
+00:55:54.220 --> 00:55:59.240
+And that means that it's much easier to write Cython code that supported Python.
+
+00:55:59.240 --> 00:56:02.380
+At the time, we were supporting Python 2.5 through 3.1.
+
+00:56:02.380 --> 00:56:11.460
+And with a single code base, we had no 2 to 3, none of that single code base in 2010 supporting Python 2.5 and Python 3.1 and everything in between.
+
+00:56:11.460 --> 00:56:12.280
+That's quite the accomplishment.
+
+00:56:12.280 --> 00:56:15.880
+And the tricks were all dealing with PyZMQ.
+
+00:56:15.880 --> 00:56:20.300
+We were early adopters a lot of the Python concepts, Python 3 concepts of we talk bytes.
+
+00:56:20.300 --> 00:56:21.160
+We don't talk str.
+
+00:56:21.160 --> 00:56:21.580
+Right.
+
+00:56:21.580 --> 00:56:22.480
+Disambiguate.
+
+00:56:22.480 --> 00:56:24.940
+We use bytes and Unicode everywhere.
+
+00:56:24.940 --> 00:56:26.700
+We never use the word str.
+
+00:56:26.700 --> 00:56:27.020
+Yeah.
+
+00:56:27.020 --> 00:56:31.100
+There's not necessarily that many differences between Python 2 and 3.
+
+00:56:31.100 --> 00:56:31.560
+Yeah.
+
+00:56:31.560 --> 00:56:33.200
+But you could make them different, right?
+
+00:56:33.200 --> 00:56:40.840
+But in a lot of the more modern Python 2, you could still be much closer to what eventually became Python 3, yeah?
+
+00:56:40.840 --> 00:56:44.640
+So I would say it was either 3.3 or 3.4.
+
+00:56:44.640 --> 00:56:50.500
+It became the norm to have single code base, single syntax, support 2.7.
+
+00:56:50.500 --> 00:56:52.920
+So drop support for 2.6, support 2.7.
+
+00:56:52.920 --> 00:56:57.360
+And I think 3.3 or above, or 3.4 and above, whenever they let you back in.
+
+00:56:57.360 --> 00:56:58.940
+Because then it became easier.
+
+00:56:58.940 --> 00:57:00.540
+What's the story with Python 2 now?
+
+00:57:00.540 --> 00:57:01.580
+Does it still support it?
+
+00:57:01.680 --> 00:57:03.960
+Just as of December, right?
+
+00:57:03.960 --> 00:57:06.800
+So Python 2 end of life was last December.
+
+00:57:06.800 --> 00:57:07.200
+Right.
+
+00:57:07.200 --> 00:57:09.160
+PyZMQ dropped support.
+
+00:57:09.160 --> 00:57:11.540
+The latest release requires Python 3.6, actually.
+
+00:57:11.540 --> 00:57:11.880
+Nice.
+
+00:57:11.880 --> 00:57:12.200
+Yeah.
+
+00:57:12.200 --> 00:57:14.960
+I feel like a lot of people are going to 3.6.
+
+00:57:15.280 --> 00:57:16.680
+Why did you guys choose 3.6?
+
+00:57:16.680 --> 00:57:18.560
+Is it f-strings or was it something else?
+
+00:57:18.560 --> 00:57:19.580
+It was actually the typing.
+
+00:57:19.580 --> 00:57:20.040
+All right.
+
+00:57:20.200 --> 00:57:25.200
+One of the main complaints about PyZMQ is it's so auto-generated and dynamically defined,
+
+00:57:25.200 --> 00:57:25.800
+right?
+
+00:57:25.800 --> 00:57:28.000
+Because we didn't just target multiple versions of Python.
+
+00:57:28.000 --> 00:57:29.860
+There's also multiple versions of LibZMQ.
+
+00:57:29.860 --> 00:57:36.540
+And that means that PyZMQ, what constants are defined is different depending on what version
+
+00:57:36.540 --> 00:57:40.640
+of LibZMQ is linked, which meant that a lot of the way it's written, a lot of static analysis
+
+00:57:40.640 --> 00:57:41.140
+fails.
+
+00:57:41.140 --> 00:57:46.820
+So when you're auto-completing based on static analysis, all the constants don't show up.
+
+00:57:46.820 --> 00:57:48.900
+And so that was an occasional focus.
+
+00:57:49.080 --> 00:57:51.000
+My auto-complete in PyCharm is not working.
+
+00:57:51.000 --> 00:57:53.780
+That's why I added the types was to allow static.
+
+00:57:53.780 --> 00:57:54.480
+Oh, yeah.
+
+00:57:54.480 --> 00:57:55.560
+That's fantastic.
+
+00:57:55.560 --> 00:58:01.500
+Does it do anything with what TypeShed does, where it's defining the structure in these stub
+
+00:58:01.500 --> 00:58:01.860
+files?
+
+00:58:01.860 --> 00:58:07.300
+So there's some type annotations in the pure Python code, but the relevant part was the stub
+
+00:58:07.300 --> 00:58:09.960
+files for the compiled part.
+
+00:58:09.960 --> 00:58:10.180
+Yeah.
+
+00:58:10.180 --> 00:58:15.320
+And if people haven't seen those stub files, those PYI files, it's a little like a C++ header
+
+00:58:15.320 --> 00:58:19.060
+thing where it has the definition, but then somewhere else is the implementation.
+
+00:58:19.060 --> 00:58:19.680
+of it.
+
+00:58:19.680 --> 00:58:23.860
+It's a little funky, but yeah, it's also useful for adding that in, right?
+
+00:58:23.860 --> 00:58:27.580
+So you could say, here's the structure, and we'll make that at runtime dynamically, but
+
+00:58:27.580 --> 00:58:29.200
+this is what you should think of it as, right?
+
+00:58:29.200 --> 00:58:29.600
+Yeah.
+
+00:58:29.600 --> 00:58:29.960
+Yeah.
+
+00:58:29.960 --> 00:58:30.560
+Very cool.
+
+00:58:30.560 --> 00:58:31.160
+Very cool.
+
+00:58:31.160 --> 00:58:34.760
+All right, Min, well, you know, I think we just honestly just scratched the surface.
+
+00:58:34.760 --> 00:58:36.040
+We could go on and on and on.
+
+00:58:36.120 --> 00:58:39.680
+But at the same time, I want to be respectful of your time.
+
+00:58:39.680 --> 00:58:43.580
+So maybe we should wrap it up on the main topic there.
+
+00:58:43.580 --> 00:58:46.500
+So I'll ask you the two questions on the way out.
+
+00:58:46.500 --> 00:58:50.980
+If you're going to write some code, if you're going to work on PYZMQ or something like that,
+
+00:58:50.980 --> 00:58:52.700
+what editor would you use?
+
+00:58:52.920 --> 00:58:54.760
+My favorite editor of all time is TextMate.
+
+00:58:54.760 --> 00:58:55.100
+Okay.
+
+00:58:55.220 --> 00:58:57.780
+But for various reasons, I don't use that anymore.
+
+00:58:57.780 --> 00:59:03.000
+It kind of, it hasn't kept up with activity and things, and I didn't feel sustainable anyway.
+
+00:59:03.000 --> 00:59:04.600
+So I haven't used it in a long time.
+
+00:59:04.600 --> 00:59:06.320
+I've tried pretty much everything.
+
+00:59:06.320 --> 00:59:10.560
+And I'm in a, I'm in constant search of the next TextMate.
+
+00:59:10.900 --> 00:59:14.040
+So right now I'm actually using Nova, the new editor from Panic.
+
+00:59:14.040 --> 00:59:16.480
+I was going to say, maybe Nova is your next TextMate.
+
+00:59:16.480 --> 00:59:17.140
+How about that?
+
+00:59:17.140 --> 00:59:21.640
+Like, I know if I say Visual Studio Code or PyCharm, people are like, oh yeah, I'm pretty sure I know what that means.
+
+00:59:21.640 --> 00:59:23.660
+Nova is pretty new.
+
+00:59:23.660 --> 00:59:24.580
+Tell folks about it.
+
+00:59:24.580 --> 00:59:29.820
+So Nova is a new text editor from Panic, one of the great Mac developers.
+
+00:59:29.820 --> 00:59:33.860
+Oh yeah, I use some of their apps, like Transmit for working with S3 files.
+
+00:59:33.860 --> 00:59:35.460
+They're really nice stuff, yeah.
+
+00:59:35.460 --> 00:59:37.120
+Yeah, so they do a great job designing things.
+
+00:59:37.400 --> 00:59:47.760
+And thanks to the recent work of the language server protocol and stuff, new editors are able to, there's a lot more shared infrastructure in editor features.
+
+00:59:47.760 --> 00:59:51.480
+So it's starting further from zero than it might otherwise be.
+
+00:59:51.480 --> 00:59:55.440
+But I'm not sure I could recommend it widely to Python developers.
+
+00:59:55.440 --> 00:59:57.780
+It's a bit of an early adopter situation.
+
+00:59:57.780 --> 01:00:02.160
+It is supposed to have Python support, but it's not specifically for Python, right?
+
+01:00:02.160 --> 01:00:03.660
+Yeah, no, it's a general purpose editor.
+
+01:00:04.080 --> 01:00:08.740
+And the target community is more in Mac developers, Ruby and web stuff.
+
+01:00:08.740 --> 01:00:10.740
+Yeah, I feel like it's pretty JavaScript friendly.
+
+01:00:10.740 --> 01:00:11.160
+Yeah.
+
+01:00:11.160 --> 01:00:12.740
+And maybe Mac developers as well, yeah.
+
+01:00:12.740 --> 01:00:14.400
+Yeah, and extensions are written in JavaScript.
+
+01:00:14.400 --> 01:00:19.560
+I've written a couple extensions to use the darker code formatter.
+
+01:00:19.560 --> 01:00:21.960
+Very cool.
+
+01:00:21.960 --> 01:00:23.680
+All right, well, that's quite neat.
+
+01:00:23.680 --> 01:00:26.040
+And I'm glad to hear that's working out for you.
+
+01:00:26.040 --> 01:00:28.100
+I've wanted to try it, but I just haven't.
+
+01:00:28.100 --> 01:00:30.280
+And then notable PyPI packages.
+
+01:00:30.280 --> 01:00:36.880
+I know you picked two that have some relation back to this challenge of building binary stuff and distributing it.
+
+01:00:36.880 --> 01:00:37.160
+Yeah.
+
+01:00:37.160 --> 01:00:42.580
+So up until December, there was exactly one computer in the world that could build PyZMQ releases.
+
+01:00:42.580 --> 01:00:44.180
+And now it's my laptop.
+
+01:00:44.480 --> 01:00:47.780
+And I finally solved that problem thanks to two wonderful packages.
+
+01:00:47.780 --> 01:00:51.100
+One is CI build wheel, which is a more generally useful.
+
+01:00:51.100 --> 01:00:59.460
+If you have compiled Python packages, CI build wheel is a wonderful thing for building and distributing all your wheels on all kinds of platforms.
+
+01:00:59.460 --> 01:01:04.600
+So now PyZMQ wheels are all built on GitHub actions, and I don't need to do anything other than tag a release.
+
+01:01:04.600 --> 01:01:06.300
+And it all happens magically.
+
+01:01:06.300 --> 01:01:06.880
+Nice.
+
+01:01:06.880 --> 01:01:18.140
+The other one that I wanted to highlight that probably fewer people know about that's related to CI build wheel, because when you build a Python package that has an external dependency, there's an extra step to say, I built PyZMQ.
+
+01:01:18.140 --> 01:01:20.820
+I linked it against LibZMQ over here.
+
+01:01:20.820 --> 01:01:25.600
+But if somebody else installs that wheel as it is, it's not going to work because it's going to say, like, I don't have LibZMQ.
+
+01:01:25.940 --> 01:01:38.200
+So for a long time, there's a Mac thing called Delocate and a Linux one called Audit Wheel that say, look at the binaries in there and find them on your system, bring them in and update the linking to make sure they load.
+
+01:01:38.200 --> 01:01:46.320
+So the wonderful thing that I just found is someone created something called Delve Wheel, which is Audit Wheel or Delocate, but for Windows.
+
+01:01:46.320 --> 01:01:48.640
+And I don't understand anything about Windows.
+
+01:01:48.640 --> 01:01:54.200
+You go grab the DLLs and all that kind of stuff that have to be there and, you know, put it in the right location.
+
+01:01:54.200 --> 01:01:54.740
+Perfect.
+
+01:01:54.980 --> 01:01:55.120
+Yeah.
+
+01:01:55.120 --> 01:02:03.420
+And so for a long, long time, for, yeah, I guess 10 years plus, PyZMQ built LibZMQ on Windows as an extension.
+
+01:02:03.420 --> 01:02:08.900
+So it actually took the XerunQ sources and then just said, hey, I have a Python, this is a Python extension.
+
+01:02:08.900 --> 01:02:12.500
+Don't, you don't need to worry about the fact that it's actually a C++ library.
+
+01:02:12.500 --> 01:02:15.820
+Just pass it to disutils and compile it as an extension.
+
+01:02:15.820 --> 01:02:17.240
+And there were a lot of issues with that.
+
+01:02:17.240 --> 01:02:21.740
+You never got up good optimized results, but it worked most of the time.
+
+01:02:21.820 --> 01:02:22.620
+And that was the point.
+
+01:02:22.620 --> 01:02:28.600
+And it was a wonderful contribution from Brandon Rhodes that was a huge step in making PyZMQ installable.
+
+01:02:28.600 --> 01:02:32.040
+A lot more of the time was this bundling LibZMQ as an extension.
+
+01:02:32.040 --> 01:02:37.300
+But thankfully, finally got to the point where I almost never do that anymore.
+
+01:02:37.300 --> 01:02:38.320
+Nice.
+
+01:02:38.320 --> 01:02:38.680
+That's beautiful.
+
+01:02:38.680 --> 01:02:39.360
+Thanks to Delve Wheel.
+
+01:02:39.360 --> 01:02:41.100
+So Delve Wheel is my big one.
+
+01:02:41.100 --> 01:02:41.360
+Yeah.
+
+01:02:41.360 --> 01:02:42.640
+The CI Build Wheel one.
+
+01:02:42.640 --> 01:02:45.460
+It makes me happy to see the macOS Apple Silicon.
+
+01:02:45.460 --> 01:02:47.160
+Got a little checkbox there.
+
+01:02:47.160 --> 01:02:50.680
+That's what I'm doing or recording from on my machine over here.
+
+01:02:50.680 --> 01:02:51.560
+Got the Mac Mini one.
+
+01:02:51.560 --> 01:02:53.260
+And man, that is a sweet device.
+
+01:02:53.260 --> 01:02:56.720
+But you're a little bit back in like, oh, we don't have wheels for your system.
+
+01:02:56.720 --> 01:02:57.080
+Sorry.
+
+01:02:57.460 --> 01:02:58.020
+Yeah, I have.
+
+01:02:58.020 --> 01:02:59.660
+So I have two Mac Silicon wheels.
+
+01:02:59.660 --> 01:03:03.580
+One that I just finished last week with CI Build Wheel.
+
+01:03:03.580 --> 01:03:05.060
+That's a universal wheel.
+
+01:03:05.060 --> 01:03:11.240
+And then I have another like Mac ARM wheel targeting macOS 11 plus basically just for Homebrew Python
+
+01:03:11.240 --> 01:03:14.800
+on Homebrew Python 3.9 on ARM Macs.
+
+01:03:14.800 --> 01:03:16.500
+That's pretty specific.
+
+01:03:16.500 --> 01:03:18.600
+But yes, that's a thing I have actually.
+
+01:03:18.600 --> 01:03:20.160
+It's not an insignificant target.
+
+01:03:20.160 --> 01:03:22.420
+And that one I build on my wife's new laptop.
+
+01:03:22.420 --> 01:03:23.360
+Very cool.
+
+01:03:23.360 --> 01:03:23.740
+Very cool.
+
+01:03:23.740 --> 01:03:25.360
+So that's the only one that's not built on CI yet.
+
+01:03:25.360 --> 01:03:25.700
+Right.
+
+01:03:25.700 --> 01:03:26.180
+Awesome.
+
+01:03:26.180 --> 01:03:29.940
+Well, thank you so much for sharing all the stuff.
+
+01:03:29.940 --> 01:03:31.020
+And of course, all your work.
+
+01:03:31.020 --> 01:03:35.060
+I feel like I have a lot to go learn, but it's exciting stuff to be able to think about
+
+01:03:35.060 --> 01:03:39.140
+new networking ways of doing stuff with networking and Python.
+
+01:03:39.140 --> 01:03:40.400
+So thanks so much for that.
+
+01:03:40.400 --> 01:03:41.840
+And, you know, final call to action.
+
+01:03:41.840 --> 01:03:43.260
+People want to get started with this stuff.
+
+01:03:43.260 --> 01:03:44.500
+What would you tell them to do?
+
+01:03:44.500 --> 01:03:45.300
+I'd say read the guide.
+
+01:03:45.300 --> 01:03:49.500
+So if you're interested in ZeroMQ, think about building distributed applications and things,
+
+01:03:49.500 --> 01:03:51.260
+read the ZeroMQ guide, the whole thing.
+
+01:03:51.260 --> 01:03:52.960
+And I think it'll give you some new ideas.
+
+01:03:53.040 --> 01:03:56.600
+Even if you don't use ZeroMQ, it'll give you some new, good new ideas for how to think
+
+01:03:56.600 --> 01:03:57.440
+about this kind of application.
+
+01:03:57.440 --> 01:03:57.760
+Right.
+
+01:03:57.760 --> 01:04:02.040
+Like these design patterns that maybe are not so common, but like PubSub or whatever.
+
+01:04:02.040 --> 01:04:02.700
+Yeah.
+
+01:04:02.700 --> 01:04:03.140
+Awesome.
+
+01:04:03.140 --> 01:04:04.520
+Well, thanks again for being on the show.
+
+01:04:04.520 --> 01:04:05.280
+It was great to chat with you.
+
+01:04:05.280 --> 01:04:05.580
+Yeah.
+
+01:04:05.580 --> 01:04:06.000
+Thanks so much.
+
+01:04:06.000 --> 01:04:06.300
+You bet.
+
+01:04:06.300 --> 01:04:06.540
+Bye.
+
+01:04:07.700 --> 01:04:10.360
+This has been another episode of Talk Python to Me.
+
+01:04:10.540 --> 01:04:12.900
+Our guest on this episode was Min Reagan Kelly.
+
+01:04:12.900 --> 01:04:15.540
+And it's been brought to you by Linode and Mido.
+
+01:04:15.540 --> 01:04:20.520
+Simplify your infrastructure and cut your cloud bills in half with Linode's Linux virtual machines.
+
+01:04:20.520 --> 01:04:23.880
+Develop, deploy, and scale your modern applications faster and easier.
+
+01:04:23.880 --> 01:04:28.840
+Visit talkpython.fm/Linode and click the create free account button to get started.
+
+01:04:29.840 --> 01:04:33.420
+Do you feel like you're stumbling around trying to work with pandas within your Jupyter notebooks?
+
+01:04:33.420 --> 01:04:38.480
+What if you could work with data frames visually just like they were an Excel spreadsheet, but
+
+01:04:38.480 --> 01:04:40.340
+have it write the Python code for you?
+
+01:04:40.340 --> 01:04:41.560
+With Mido, you can.
+
+01:04:41.560 --> 01:04:44.880
+Check them out at talkpython.fm/Mido.
+
+01:04:45.000 --> 01:04:45.800
+M-I-T-O.
+
+01:04:45.800 --> 01:04:47.800
+Want to level up your Python?
+
+01:04:47.800 --> 01:04:51.860
+We have one of the largest catalogs of Python video courses over at Talk Python.
+
+01:04:51.860 --> 01:04:57.040
+Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+01:04:57.040 --> 01:04:59.700
+And best of all, there's not a subscription in sight.
+
+01:04:59.700 --> 01:05:02.600
+Check it out for yourself at training.talkpython.fm.
+
+01:05:02.600 --> 01:05:07.500
+Be sure to subscribe to the show, open your favorite podcast app, and search for Python.
+
+01:05:07.500 --> 01:05:08.800
+We should be right at the top.
+
+01:05:08.800 --> 01:05:13.980
+You can also find the iTunes feed at /itunes, the Google Play feed at /play,
+
+01:05:13.980 --> 01:05:18.180
+and the direct RSS feed at /rss on talkpython.fm.
+
+01:05:18.180 --> 01:05:21.600
+We're live streaming most of our recordings these days.
+
+01:05:21.600 --> 01:05:25.000
+If you want to be part of the show and have your comments featured on the air,
+
+01:05:25.000 --> 01:05:29.420
+be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+01:05:29.420 --> 01:05:31.280
+This is your host, Michael Kennedy.
+
+01:05:31.280 --> 01:05:32.580
+Thanks so much for listening.
+
+01:05:32.580 --> 01:05:33.740
+I really appreciate it.
+
+01:05:33.740 --> 01:05:35.660
+Now get out there and write some Python code.
+
+01:05:35.660 --> 01:05:56.540
+I'll see you next time.
+
+01:05:56.540 --> 01:06:26.520
+Thank you.
+

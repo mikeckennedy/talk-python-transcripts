@@ -1,462 +1,1478 @@
-00:00:00 We're on the edge of a major jump in Python performance. With the work done by the faster CPython team and Python 311 do out in around a month, your existing Python code might see an increase of well over 25% in speed with no changes to your code. One of the main reasons is its new specializing Adaptive Interpreter.
+00:00:00 We're on the edge of a major jump in Python performance.
 
-00:00:19 This episode is about that new feature.
+00:00:03 With the work done by the FasterCpython team and Python 3.11 due out in around a month,
 
-00:00:22 And a great tool called Specialist, which lets you visualize how Python is speeding up your code and where it can't unless you make minor changes.
+00:00:08 your existing Python code might see an increase of well over 25% in speed with no changes to your code.
 
-00:00:29 Its creator, Brandt Bucher, is here to tell us all about it. This is Talk Python to me.
+00:00:15 One of the main reasons is its new specializing adaptive interpreter.
 
-00:00:33 Episode 381 recorded September 15, 2022.
+00:00:19 This episode is about that new feature and a great tool called Specialist,
 
-00:00:50 Welcome.
+00:00:23 which lets you visualize how Python is speeding up your code and where it can't unless you make minor changes.
 
-00:00:50 To Talk Python to Me, a weekly podcast on Python. This is your host, Michael Kennedy. Follow me on Twitter where I'm @mkennedy, and keep up with the show and listen to past episodes at Talkpython.FM and follow the show on Twitter via @talkpython. We started streaming most of our episodes live on YouTube, subscribe to our YouTube channel over at 'Talkpython/YouTube' to get notified about upcoming shows and be part of that episode. This episode is sponsored by Microsoft for Startups founders.
+00:00:29 Its creator, Brant Booker, is here to tell us all about it.
 
-00:01:18 Hub.
+00:00:32 This is Talk Python to Me, episode 381, recorded September 15th, 2022.
 
-00:01:18 Check them out at "Talkpython.FM/founders hub" to get early support for your startup. And it's brought to you by 'Compiler' from Red Hat. Listen to an episode of their podcast as they demystify the tech industry over at Talkpython.
+00:00:37 Welcome to Talk Python to Me, a weekly podcast on Python.
 
-00:01:35 Brandt welcome to Talk Python to me.
+00:00:53 This is your host, Michael Kennedy.
 
-00:01:37 Thank you for having me. I'm excited to talk about some of this stuff.
+00:00:54 Follow me on Twitter where I'm @mkennedy and keep up with the show and listen to past episodes at talkpython.fm.
 
-00:01:39 I am absolutely excited about it as well. I feel there's a huge renaissance coming, happening right now, or has been happening for a little while now, around Python performance.
+00:01:01 And follow the show on Twitter via at Talk Python.
 
-00:01:49 It's exciting to see, especially in just the last couple of years, that you definitely see these different focuses, whether it's improving single threaded Python performance, multi threaded Python performance, python in the browser. There's a lot of really cool stuff happening.
+00:01:04 We've started streaming most of our episodes live on YouTube.
+
+00:01:07 Subscribe to our YouTube channel over at talkpython.fm/youtube to get notified about upcoming shows and be part of that episode.
+
+00:01:14 This episode is sponsored by Microsoft for Startups Founders Hub.
+
+00:01:18 Check them out at talkpython.fm/founders hub to get early support for your startup.
+
+00:01:24 And it's brought to you by compiler from Red Hat.
+
+00:01:27 Listen to an episode of their podcast as they demystify the tech industry over at talkpython.fm/compiler.
+
+00:01:35 Brant, welcome to Talk Python to Me.
+
+00:01:37 Thank you for having me.
+
+00:01:38 I'm excited to talk about some of this stuff.
+
+00:01:39 I am absolutely excited about it as well.
+
+00:01:42 I feel there's a huge renaissance coming, happening right now, or has been happening for a little while now around Python performance.
+
+00:01:49 It's exciting to see, especially in just the last couple of years, that you definitely see these different focuses,
+
+00:01:55 whether it's, you know, improving single-threaded Python performance, multi-threaded Python performance, you know, Python in the browser.
+
+00:02:02 There's a lot of really cool stuff happening, right?
 
 00:02:04 Yeah.
 
-00:02:04 If we could talk WebAssembly and pyscript and all that is a very exciting thing. There's probably some performance side around it, maybe something we could touch on, but that's not the main topic for today. We're going to talk about just the core CPython and how it works, which is going to be awesome. Some work you've done with the team there at Microsoft and your contributions there. Before we get into all that stuff though, let's start with your story. How did you get into programming and Python?
+00:02:04 Oh, if we could talk WebAssembly and PyScript and all that, that is a very exciting thing.
 
-00:02:27 Yeah, so I originally studied computer engineering, so like hardware stuff at UC Irvine around my third or fourth year. So 2017, I encountered Python really for the first time in a project setting. Basically it was a senior design project. We get to kind of make whatever we want. We made this cool system that basically it's point cameras at a blackjack table and it takes card counters. And if you want to do something like that in four months or whatever, python is kind of the way to go.
+00:02:09 There's probably some performance side around it, maybe something we could touch on,
 
-00:02:57 Yeah.
+00:02:13 but that's not the main topic for today.
 
-00:02:58 CV stuff there is really good, right?
+00:02:14 We're going to talk about just the core CPython and how it works, which is going to be awesome.
+
+00:02:19 Some work you've done with the team there at Microsoft and your contributions there.
+
+00:02:23 Before we get into all that stuff, though, let's start with your story.
+
+00:02:26 How did you get into programming in Python?
+
+00:02:27 Yeah.
+
+00:02:27 So I originally studied computer engineering, so like hardware stuff at UC Irvine.
+
+00:02:34 Around my, like, third or fourth year, so like 2017, I encountered Python really for the first time
+
+00:02:41 in like a project setting.
+
+00:02:42 Basically, it was a senior design project.
+
+00:02:44 We get to kind of make whatever we want.
+
+00:02:46 So we made this cool system that basically it's point cameras at a blackjack table and it's X card counters.
+
+00:02:52 And if you want to do something like that in, you know, four months or whatever, Python is kind of the way to go.
+
+00:02:57 Yeah, the CV stuff there is really good, right?
 
 00:02:59 Yeah.
 
-00:03:00 So it was NumPy and OpenCV. And that was kind of my first exposure to stuff. And so I learned that I like developing software a lot more than developing hardware. So I kind of never looked back and just went full in about a year later. So, like 2018, I opened my first PR to the CPython repo and it was merged. And you're up to that.
+00:03:00 So it was NumPy and OpenCV, and that was kind of my first exposure to this stuff.
 
-00:03:24 There's this standard library module called module finder. Basically, it's one of those ones that's kind of just a historical oddity. And it's still in there. Basically, you can run it over any Python script. It detects all the imports. And so you can use it to build an import graph. And I forget exactly what I was using it for. I think it was for work. And I ran into some bugs that had been just kind of lingering there for years, and so I submitted patches for a bunch of them. And so that was kind of my first experience contributing to open source. In general, that PR was actually open for a while.
+00:03:03 And so I learned that I like developing software a lot more than developing hardware.
 
-00:03:57 It was open for a month or two or something like that. So in the meantime, I contributed other things to mypy, Type shed. But that's still my first open source contribution count. The data is open.
+00:03:08 So I kind of never looked back and just went full in.
 
-00:04:10 Yeah. Does it count as a beginning or the end of the PR?
+00:03:13 About a year later, so like 2018, I opened my first PR to the CPython Red Belt,
 
-00:04:14 Right? Yeah, exactly.
+00:03:19 and it was merged.
 
-00:04:15 Because those can be very different things.
+00:03:20 And you're up to that.
 
-00:04:17 Sometimes they can be very different. We have now in CPython. We have the just in Python. I guess we have the developer in residence with Łukasz Langa. He's there to sort of facilitate making that a lot faster. And I feel like people's experience there might be picking up speed and improving.
+00:03:21 What was that PR?
 
-00:04:32 Yeah, no, I think that's a great thing. And in general, just seeing this kind of shift towards full time Python core development being funded by these big companies is really exciting to see. I think it improves the end contributor experience, the user experience, and just get things done, which is nice. I don't have any numbers, but I imagine there are fewer of those kind of lingering months old PR's than there were back when I first started. Way long ago. Four years ago.
+00:03:22 Oh, there's this standard library module called Module Finder.
 
-00:05:01 So far back in the past.
+00:03:27 Basically, it's one of those ones that's kind of just a historical oddity,
 
-00:05:02 So long. So Long.
+00:03:32 and it's still in there.
 
-00:05:03 Yeah.
+00:03:33 Basically, you can run it over any Python script.
 
-00:05:04 So that was like, 2018. 2019, I became a member of the Triage team, which is basically a team for people who are kind of more involved in python than just your average drive by contributor. So while they're not full core developers, they basically can do anything at core developer can except both and actually press the merge button. So that was really nice because I made doing things like reviewing PRS easier. Tagging issues, closing issues, that sort of thing. A year later I became how do.
+00:03:36 It detects all the imports, and so you can use it to build an import graph.
 
-00:05:36 You get the experience for that?
+00:03:39 And I forget exactly what I was using it for.
 
-00:05:38 It's one thing to say, well, I've focused on this module, and here's the fix. And it's another to say, give me anything from CPython and I'll assess it.
+00:03:41 I think it was for work.
 
-00:05:45 Well, it wasn't give me anything from CPython. It was made. It part of my morning routine to wake up, go to a coffee shop, order a coffee, and just for a half hour, look at newly opened issues and PR.
+00:03:42 And I ran into some bugs that had been just kind of lingering there for years.
 
-00:05:59 Yeah, well, I focus mostly on PR review for new contributors. Basically, I had filter set up that said, you know, show me all the PR last 48 hours from a new contributor. I thought, okay, my first contribution experience wasn't that great? It would be great if these people who have never opened a PR C python before can get a response within 48 hours, whether that's telling them to sign the contributor license agreement or formatting fixes or pinging the relevant core dev or whatever. So that was kind of how I dove into that.
+00:03:46 And so I, you know, submitted patches for a bunch of them.
 
-00:06:27 All this terminology that you're using PR and stuff. No, this is great. What I was going to say is this is new to Python. Right. It wasn't that long ago that Python was on mercurial or before the subversion.
+00:03:50 And so that was kind of my first experience contributing to open source in general.
 
-00:06:41 Coming over to GitHub is kind of a big deal, and I feel like it's really open the door for more people to be willing to contribute. What do you think?
+00:03:54 That PR was actually open for a while.
 
-00:06:48 Oh, it absolutely lowered the barrier to entry for people like me. Using the old bug stoppython.org was tough at first, but I eventually kind of got used to it just in time for it to be replaced with get up issues, which I much prefer, but I have a hard time seeing myself emailing patches around or I have a lot of respect for people where that was the development flow. And a number of years ago. So I became a core developer in 2020. And I guess it was about exactly a year ago Almost exactly a year ago, I joined the Python Performance Team at Microsoft.
+00:03:57 It was open for like, I think it was like a month or two or something like that.
+
+00:04:02 So in the meantime, I contributed other things to like my Pi type shed, but that's still my first open source contribution.
+
+00:04:09 It counts the day it was open.
+
+00:04:10 Yeah, it counts as a beginning or the end of the PR, right?
+
+00:04:14 Yeah, exactly.
+
+00:04:15 Because those can be very different things sometimes.
+
+00:04:17 They can be very different.
+
+00:04:18 You know, we have now in CPython, we have the, just in Python, I guess, we have the developer in residence with Lucas Schlinger.
+
+00:04:25 He's there to sort of facilitate making that a lot faster.
+
+00:04:28 And I feel like people's experience there might be picking up speed and improving.
+
+00:04:32 Yeah, no, I think that's a great thing.
+
+00:04:34 And in general, just seeing this kind of shift towards full-time Python core development,
+
+00:04:38 you know, being funded by these big companies is really exciting to see.
+
+00:04:43 I think it improves the end contributor experience, the user experience,
+
+00:04:47 and just gets things done, which is nice.
+
+00:04:49 I don't have any numbers, but I imagine there are fewer of those kind of lingering,
+
+00:04:53 you know, months old PRs than there were back when I first started.
+
+00:04:57 Yeah.
+
+00:04:58 Way, way long ago, four years ago.
+
+00:05:00 So far back in the past.
+
+00:05:02 So long, so long, yeah.
+
+00:05:04 So yeah, so that was like 2018, 2019, I became a member of the triage team,
+
+00:05:10 which is basically a team for people who are kind of more involved in Python
+
+00:05:16 than just your average drive-by contributor.
+
+00:05:18 So while they're not full core developers, they basically can do anything a core developer can,
+
+00:05:24 except vote and actually, you know, press the merge button.
+
+00:05:26 So that was really nice because it made doing things like reviewing PRs easier.
+
+00:05:30 Tagging issues, closing issues, that sort of thing.
+
+00:05:34 A year later, I became a core developer.
+
+00:05:36 How did you get the experience for that?
+
+00:05:37 Like, how do you, you know, it's one thing to say, well, I've focused on this module and here's this fix.
+
+00:05:41 And it's another to say, you know, give me anything from CPython and I'll assess it.
+
+00:05:45 Well, it wasn't give me anything from CPython.
+
+00:05:47 And it was, you know, made it part of my morning routine to, you know, wake up,
+
+00:05:51 go to a coffee shop, order a coffee, and just for a half hour, look at newly opened issues.
+
+00:05:57 And for newly opened PRs.
+
+00:05:59 Yeah.
+
+00:05:59 Yeah.
+
+00:06:00 Well, I focus mostly on PR review for new contributors.
+
+00:06:03 Basically, I had filters set up that said, you know, show me all the PRs open the last 48 hours from a new contributor.
+
+00:06:09 I thought, okay, my first contribution experience wasn't that great.
+
+00:06:12 It'd be great if these people who have never opened a PR to CPython before can get a response within 48 hours.
+
+00:06:18 Whether that's telling them to sign the contributor license agreement or formatting fixes or pinging the relevant core dev or whatever.
+
+00:06:24 So that was kind of how I dove into that.
+
+00:06:27 All this terminology that you're using, PRs and stuff.
+
+00:06:30 No, this is great.
+
+00:06:31 What I was going to say is that this is new to Python, right?
+
+00:06:35 It wasn't that long ago that Python was on Mercurial or before then Subversion.
+
+00:06:40 It's, you know, it's coming over to GitHub is kind of a big deal.
+
+00:06:43 And I feel like it's really opened the door for more people to be willing to contribute.
+
+00:06:47 What do you think?
+
+00:06:48 Oh, it absolutely lowered the barrier to entry for people like me.
+
+00:06:51 Like using the old bugstoppython.org was tough at first, but I eventually kind of got used to it just in time for it to be replaced with GitHub issues, which I much prefer.
+
+00:07:01 But I have a hard time seeing myself emailing patches around or, you know, I have a lot of respect for people where that was the development flow a number of years ago.
+
+00:07:10 So I became a core developer in 2020.
+
+00:07:14 And I guess it was about exactly a year ago, almost exactly a year ago, I joined the Python performance team here at Microsoft.
 
 00:07:21 Were you at Microsoft before then?
 
-00:07:23 No, I was not. I worked for a company called Research Affiliates in Newport Beach. And I think you actually had my old manager, Chris Ariza, on the show.
+00:07:23 No, I was not.
 
-00:07:32 I have had Chris on the show. That's Fantastic. Small World.
+00:07:24 I worked for a company called Research Affiliates in Newport Beach.
 
-00:07:36 Yes.
+00:07:28 And I think you actually had my old manager, Chris Ariza, on the show a couple years ago.
 
-00:07:37 All python world.
+00:07:33 I have had Chris on the show.
 
-00:07:38 Yeah.
+00:07:34 That's fantastic.
 
-00:07:38 Small Python world. Just a couple of million of us. That's Great. So this brings us to our main topic. And let's start at the top. I guess there's the Faster Python team. I guess. I don't know. How do you all refer to yourself?
+00:07:34 Small world, huh?
 
-00:07:55 Yeah.
+00:07:36 Yep.
 
-00:07:55 We refer to ourselves as the faster c python team. I think internally, our distribution list is the CPython Performance Engineering team, which sounds a little gnarly open, so it's a lot work here.
+00:07:36 Small Python world.
 
-00:08:07 It's a cool title to have on a resume, isn't it?
+00:07:37 Yeah, small Python world.
 
-00:08:10 Yeah, I think I'll use that one.
+00:07:39 Just a couple million of us.
 
-00:08:11 There you go. There's Been A Ton Of Progress some of this work was done in 310, but there's this article here that I got pulled up on the screen. It says Python 311 performance benchmarks are looking fantastic. It's going to make you feel good.
+00:07:40 No, that's great.
+
+00:07:42 So this brings us to our main topic.
+
+00:07:45 And, you know, let's start at the top, I guess.
+
+00:07:49 You know, there's the faster Python team, I guess.
+
+00:07:52 I don't know.
+
+00:07:53 How do you all refer to yourself?
+
+00:07:55 Yeah, we refer to ourselves as the faster CPython team.
+
+00:07:58 I think internally our distribution list is the CPython performance engineering team, which sounds a little gnarlier, but it's a lot wordier.
+
+00:08:06 That's a cool title to have on a resume, isn't it?
+
+00:08:09 Yeah, I think I'll use that one.
+
+00:08:11 There you go.
+
+00:08:12 There's been a ton of progress.
+
+00:08:14 And some of this work was done in 3.10.
+
+00:08:17 But, you know, there's this article here that I got pulled up on the screen.
+
+00:08:21 It says, Python 3.11 performance benchmarks are looking fantastic.
+
+00:08:25 That's got to make you feel good, huh?
 
 00:08:27 I mean, they were looking fantastic back in, what, June?
 
-00:08:31 Small bit more fantastic now.
+00:08:29 Yeah.
 
-00:08:33 Yeah, exactly. This article is from June, so it's only better from there.
+00:08:30 They're a small bit more fantastic now.
 
-00:08:38 Right.
+00:08:33 So, yeah.
 
-00:08:38 It's really exciting. And like I said, this is a performance jump that at least since I've been involved in Python, we haven't seen this in a point release where we're seeing 25, 30%, sometimes more improvements for pure pipeline code rather than kind of 5 10 15% range that might be more typical. And again, I think that's kind of a product of this very conscious effort, whether it's my team or that a lot of people that we interact with. So, for example, Pablo, release Manager student Council Member at Bloomberg, has been working a lot on this stuff with us. Outside contributors that 2 come to mind are Dennis Sweeney, Kenjin there's definitely been a focus on this and it's bang up, which is really exciting, like you said.
+00:08:33 Yeah, exactly.
+
+00:08:34 This article's from June.
+
+00:08:35 So this is a, it's only better from here, you know, from there, right?
+
+00:08:38 It's really exciting.
+
+00:08:40 And like I said, it's, this is a performance jump that at least since I've been involved in Python, we haven't seen this in a point release.
+
+00:08:47 You know, where we're seeing 25, 30%, sometimes more improvements for pure Python code rather than kind of the 5, 10, 15% range that might be more typical.
+
+00:08:58 And again, I think that's kind of a product of this very conscious effort, whether it's my team or that a lot of people that we interact with.
+
+00:09:07 So, for example, Pablo, release manager, strength council member at Bloomberg has been working a lot on this stuff with us.
+
+00:09:14 Outside contributors, do they come to mind or Dennis Sweeney, Ken Jin.
+
+00:09:19 There's definitely been a focus on this and it's paying off, which is really exciting, like I said.
 
 00:09:24 Yeah.
 
-00:09:24 And maybe a little bit more in parallel instead of a cooperative effort. But there's also the Cinder folks over at Meta Facebook.
+00:09:24 And maybe a little bit more in parallel instead of a cooperative effort, but there's also the Cinder folks over at Meta Facebook.
 
-00:09:32 That's absolutely a cooperative effort. Even though Cinder isn't necessarily we're not merging all of Cinder back into CPython. Several of the changes are being upstreamed into CPython and in fact, just earlier this week on Tuesday, we had, I think, like a two hour meeting where the sender team walked our team through how their JIT works, even though yeah, it can be seen as a parallel effort. I think it's very collaborative.
+00:09:32 That's absolutely a cooperative effort.
 
-00:09:57 I think also, I like you. I'm very much blown away at the step size of the performance improvements. It's just super surprising to me that a 30 year old language and a 30 year old runtime can get that much better in that short of a time.
+00:09:34 You know, even though Cinder isn't necessarily, we're not merging all of Cinder back into CPython, several of the changes are being upstreamed into CPython.
+
+00:09:44 And in fact, just earlier this week on Tuesday, we had, I think, like a two-hour meeting where the Cinder team walked our team through how their JIT works.
+
+00:09:52 Yeah.
+
+00:09:53 So it's, even though, yeah, it can be seen as a parallel effort, I think it's very collaborative.
+
+00:09:57 I think also, I, like you, am very much blown away at the step size of the performance improvements.
+
+00:10:04 It's just super surprising to me that a 30-year-old language and a 30-year-old runtime can get that much better in that short of a time.
 
 00:10:12 Yeah.
 
-00:10:12 And I feel like I'm going to keep coming back to this. But having fulltime people dedicated to this. Having teams of people dedicated to this. I think that's a big part of sort of unlocking this because some of the things that are required for those big jumps are kind of larger architectural changes that a single volunteer who's doing this on their free time probably wouldn't have been able to do that coordinating with others and without throwing a significant amount of effort at it.
+00:10:12 And I think, again, I feel like I'm going to keep coming back to this, but having, you know, full-time people dedicated to this, having teams of people dedicated to this, I think that's a big part of sort of unlocking this.
+
+00:10:24 Because some of the things that are required for those big jumps are kind of larger architectural changes that, you know, a single volunteer who's, you know, doing this on their free time probably wouldn't have been able to do without coordinating with others and without throwing, you know, a significant amount of effort at it.
 
 00:10:41 Yeah.
 
-00:10:41 I mean, there are people out there core dev's who have done amazing stuff. Shout out to Victor Stoner. I feel like a lot of the performance stuff that I've seen in the last couple of years, he is somehow associated with some major change. But the changes that are being undertaken here, they're much more holistic and far reaching and it really does take a team, I think, to make it reasonable.
+00:10:41 I mean, there are people out there, core devs, who have done amazing stuff.
 
-00:11:03 Right.
+00:10:44 Shout out to Victor Stinner.
 
-00:11:03 What's cool about the 311 effort is it's a combination of kind of both sorts of changes. So we have a bunch of one off very targeted changes, probably five or six or ten of those, and then we have one or two of these kind of larger changes that we can build upon in the future and they're never really done, which, you know, that's exciting because it means we get to keep making Python faster.
+00:10:46 I feel like a lot of the performance stuff that I've seen in the last couple of years, he is somehow associated with, you know, some major change.
 
-00:11:28 It is exciting. I think another area to just highlight real quick before we get into too much detail is correct me if I'm wrong, but none of this is particularly focused on multicore parallelism, right?
+00:10:53 But the changes that are being undertaken here, they're much more holistic and far-reaching.
 
-00:11:41 No. So one member of our team, Eric so he's basically the subinterpreter guy.
+00:10:59 And it really does take a team, I think, to make it reasonable, right?
+
+00:11:03 What's cool about the 3.11 effort is it's a combination of kind of both sorts of changes.
+
+00:11:07 So we have, you know, a bunch of kind of one-off, very targeted changes, probably five or six or ten of those.
+
+00:11:15 And then we have, you know, one or two of these kind of larger changes that, you know, we can build upon in the future.
+
+00:11:21 And they're never really done, which, you know, that's exciting because it means we get to keep making Python faster.
+
+00:11:28 Yeah.
+
+00:11:28 It is exciting.
+
+00:11:29 I think another area to just highlight real quick before we get into too much detail is, correct me if I'm wrong, but none of this is particularly focused on multi-core parallelism, right?
+
+00:11:41 No.
+
+00:11:41 So one member of our team, Eric Snow, he's basically the sub-interpreter guy.
 
 00:11:46 Exactly.
 
-00:11:47 Yeah.
+00:11:46 Yeah.
 
-00:11:49 He is focusing most of his time on a perch or Per Gil and all that sort of stuff. But I mean, all the numbers that you're looking at here and all of our benchmarks is all single threaded, single process. If you're running Python code, it will get faster without you changing your code, which is awesome.
+00:11:47 So he is focusing most of his time on, you know, a per-interpreter kill and, you know, all that sort of stuff.
 
-00:12:07 Yeah, it's super awesome. I want to highlight that because if Eric manages to unlock multicore performance without much contention or trade offs, if you've got an eight core machine and you get seven x performance by using all the cores, that would be amazing. But all this work you're doing applies to everyone, even if they're trying to do that stuff.
+00:11:55 But, I mean, all the numbers that you're looking at here and all of our benchmarks, it's all single-threaded, single process.
 
-00:12:28 Right.
+00:12:02 If you're running Python code, it will get faster without you changing your code, which is awesome.
 
-00:12:28 So even if somehow we get this multicore stuff, the computational multicore stuff working super well. The work that you're doing and the team is doing is going to make it faster on every one of those cores.
+00:12:07 Yeah, it's super awesome.
 
-00:12:38 Right.
+00:12:09 I want to highlight that because if Eric manages to unlock multi-core performance without much contention or trade-offs or, you know, if you've got an eight-core machine and you get 7x performance by using all the cores, like, that would be amazing.
 
-00:12:38 So they're kind of multiplicative initiatives. So if we could get a big improvement in the parallel stuff, it's only going to just multiply how much better this aspect of it is going to be for people who use that.
+00:12:23 But all of this work you're doing applies to everyone, even if they're trying to do that stuff, right?
 
-00:12:49 Right.
+00:12:28 So even if somehow we get this multi-core stuff, the computational multi-core stuff working super well, the work that you're doing and the team is doing is going to make it faster on every one of those cores, right?
 
-00:12:49 It's great to be kind of pursuing all these different avenues because they pay off in different time frames. Right. Some of these are longer efforts in Eric's cases, have been prepared for very long effort, and you've done a great job sticking with it and seeing it through. And some of these were saying in point release, and so they absolutely build on each other. Like you said, you can get a seven x increase from subinterpreter just to throw out a number, but Python as a whole got 25 or 30% faster. Then you're seeing much more than a seven x.
+00:12:38 So they're kind of multiplicative initiatives, right?
 
-00:13:19 Right?
+00:12:41 So if we could get a big improvement in the parallel stuff, it's only going to just multiply how much better this aspect of it's going to be for people who use that, right?
 
-00:13:19 Absolutely. So very exciting times. Two things. Before we get into the details of particular, interpreter and stuff, tell me a bit about this team. I interviewed widow and Mark Shannon a while ago, about a year ago, I suppose, about this plan when they were kicking it off, and we didn't have these numbers or anything, but we did talk about what we were doing and he talked about the team that he's working with there. So certainly it's just more than the two of us. Tell us about the team.
+00:12:49 It's great to be kind of pursuing all these different avenues because they pay off in different timeframes, right?
 
-00:13:45 Yeah, so I think there are seven people. So there's Guido and Mark Shannon, Eric and me, as we mentioned, another core developer, Yurit, one other engineer, Elle, and a manager for the team who also does some engineering effort as well and is a member of the Triage team, Mike.
+00:12:54 Some of these are longer efforts.
+
+00:12:56 And in Eric's case, the 7x program for very long effort.
+
+00:12:59 I think he's done a great job sticking with it and seeing it through.
+
+00:13:03 And some of these we're seeing in point releases.
+
+00:13:05 And so they absolutely build on each other.
+
+00:13:09 Like you said, you can get a 7x increase from sub-interpreter just to throw out a number.
+
+00:13:13 But Python as a whole got 25% or 30% faster than you're seeing much more than a 7x increase.
+
+00:13:18 Right.
+
+00:13:19 Absolutely.
+
+00:13:19 So very, very exciting times.
+
+00:13:21 Two things before we get into the details of a particular interpreter and stuff.
+
+00:13:26 Tell me a bit about this team.
+
+00:13:27 You know, I interviewed Guido and Mark Shannon a while ago, about a year ago, I suppose, about this plan when they were kicking it off.
+
+00:13:35 And we didn't have these numbers or anything, but we did talk about what we were doing.
+
+00:13:39 And he talked about the team that he's working with there.
+
+00:13:41 So he said, certainly it's just more than the two of us.
+
+00:13:44 You know, tell us about the team.
+
+00:13:45 Yeah.
+
+00:13:46 So I think there are seven people.
+
+00:13:49 So there's Guido and Mark, Eric and me, as we mentioned.
+
+00:13:52 Another core developer, Urit.
+
+00:13:54 One other engineer, El.
+
+00:13:56 And a manager for the team who also does some engineering effort as well and is a member of the triage team, Mike Dronfum.
+
+00:14:04 Yeah.
 
 00:14:04 Nice.
 
-00:14:05 Yeah. He worked on Pyodide.
+00:14:05 Yeah.
 
-00:14:08 Pyodide, that's right.
+00:14:05 Yeah.
 
-00:14:10 Live.
+00:14:05 He worked on Pyoxidizer.
 
-00:14:14 Something.
+00:14:08 Pyodide.
 
-00:14:14 Or something.
+00:14:09 That's right.
 
-00:14:15 Exactly.
+00:14:09 Pyodide.
 
-00:14:18 That's right. That's the foundation for PY Script, actually, which is quite cool.
+00:14:10 Yeah.
 
-00:14:22 Python Three.
+00:14:10 I don't know why.
 
-00:14:25 Yeah. The other thing that I want to ask you about is we have these numbers and visibility into Python 311. That's got a lot of conversations going. People are saying they're looking amazing and fantastic and other nice adjectives, but this is in beta, maybe soon to be RC. I'm not sure. What is Python 311 status these days?
+00:14:11 It's a pie.
 
-00:14:46 311. We just released our last release candidate, I think, this week.
+00:14:13 There's some kind of like a molecule on the end.
+
+00:14:16 Exactly.
+
+00:14:16 Exactly.
+
+00:14:17 Pyoxidizer.
+
+00:14:18 That's right.
+
+00:14:18 That's the foundation for PyScript, actually, which is quite cool.
+
+00:14:22 Py3 is cool too.
+
+00:14:23 The other question.
+
+00:14:24 Yeah.
+
+00:14:24 Yeah.
+
+00:14:25 Yeah.
+
+00:14:25 Yeah.
+
+00:14:25 Yeah.
+
+00:14:25 The other thing that I want to ask you about is, so we have these numbers and visibility into Python 3.11 that's got a lot of conversations going.
+
+00:14:35 And people are saying they're looking amazing and fantastic and other nice adjectives.
+
+00:14:39 But this is in beta, maybe soon to BRC.
+
+00:14:42 I'm not sure.
+
+00:14:43 What is Python 3.11 status these days?
+
+00:14:46 3.11, we just released our last release candidate, I think this week.
 
 00:14:52 Right.
 
-00:14:52 So basically the idea is the final release candidate and the actual 3110 release should be the exact same thing. Unless we find any serious bugs that buried fixing before the release candidate is going to be 311. This is as close to stable as.
+00:14:52 So this, if basically the idea is this, the final release candidate and the actual 3.11 release should be the exact same thing.
 
-00:15:12 Any of the almost there.
+00:15:01 Unless we find any serious bugs that we're fixing before 3.11 won, the release candidate is going to be 3.11.
 
-00:15:14 Right. Okay, cool.
+00:15:10 Awesome.
 
-00:15:15 So the reason I ask that is a lot of the work you've been doing recently is probably on 312, right?
+00:15:10 This is as close to stable as any of the releases.
+
+00:15:13 Almost there, right?
+
+00:15:14 Okay.
+
+00:15:14 Yeah.
+
+00:15:15 Cool.
+
+00:15:15 So the reason I ask that is a lot of the work you've been doing recently is probably on 3.12, right?
 
 00:15:20 Yes.
 
-00:15:21 So beta freeze, which is basically when we go from alphas into betas, and there's no more, basically new features allowed at that point. That happens every May, and so everything that we've been working on since May goes into 12th.
+00:15:20 Yeah.
+
+00:15:21 So beta freeze, which is basically when we go from alphas into betas, and there's no more basically new features allowed at that point.
+
+00:15:29 That happens every May.
+
+00:15:30 And so everything that we've been working on since May goes into 3.12.
 
 00:15:35 Are you excited about the progress you've made?
 
-00:15:36 Yes.
+00:15:36 Yeah.
+
+00:15:37 Yeah.
 
 00:15:37 Very excited.
 
+00:15:38 It seems to be still coming along well.
+
 00:15:39 Yes.
 
-00:15:40 And it's nice we still have a lot of time before the next week.
+00:15:39 Yeah.
 
-00:15:43 Let's talk really quickly about the faster CPython thing put together by Mark Shannon. Guido called it the Shannon plan. And the idea is, how can we make Python five times faster? If we could take Python and make it five times faster, that would be a really huge deal. And again, none of that is multicore. If you could somehow unlock all the cores and you've got eight, that's 35 or 40 or something like that. This is an ambitious plan. It started out with a little bit of work with 310. Is that when the adaptive specializing interpreter first appeared? Did it actually wait until 311 to show up?
+00:15:40 And it's nice.
 
-00:16:19 No, I don't believe we don't have.
+00:15:41 We still have a lot of time before the next beta.
 
-00:16:21 It in yes, I didn't think so either.
+00:15:43 Let's talk really quickly about the faster-cpython thing put together by Mark Shannon.
 
-00:16:22 Missing something that's in 311. The rest of it looks accurate, though.
+00:15:48 Guido called it the Shannon plan.
 
-00:16:27 Yeah.
+00:15:50 And the idea is, how can we make Python five times faster?
 
-00:16:27 So then basically that was stage one. Stage two is 311, where there's a bunch of things, including kicking over the interpreter. We're going to talk about the specializing interpreter. Bunch of small changes here. And then stage three for 312 is JIT. Have you guys done any work on any of the Jit stuff right now?
+00:15:54 If we could take Python and make it five times faster, that would be a really huge deal.
 
-00:16:46 It's not looking like 312 will ship with a jit. We think there are other changes that we can make that don't require a jit that will still pay off. We're probably planning on at least experimenting with what a jit would look like. As I said, we already have gotten kind of a guided towards Cinders and so we're talking kind of high level architecture and prototyping and that sort of thing. But I would be surprised if retwell shift, it's a long effort. So starting the research is being done?
+00:15:57 And again, none of that is multi-core.
+
+00:16:00 If you could somehow unlock all the cores and you've got eight, that's 35 or 40 or something like that.
+
+00:16:07 This is an ambitious plan.
+
+00:16:09 It started out with a little bit of work with 3.10.
+
+00:16:12 Is that when the adaptive specializing interpreter first appeared, or did it actually wait until 3.11 to show up?
+
+00:16:18 No, I don't believe we.
+
+00:16:20 We don't have it at 3.10.
+
+00:16:21 Yeah, I didn't think so either.
+
+00:16:22 Missing something.
+
+00:16:23 Yeah.
+
+00:16:23 Yeah.
+
+00:16:24 So that's in 3.11.
+
+00:16:25 The rest of it looks accurate, though.
+
+00:16:26 Yeah.
+
+00:16:27 So then basically that was stage one.
+
+00:16:29 Stage two is 3.11, where there's a bunch of things, including kicking over the interpreter.
+
+00:16:34 We're going to talk about the specializing interpreter.
+
+00:16:37 A bunch of small changes here.
+
+00:16:38 And then stage three for 3.12 is JIT.
+
+00:16:42 Have you guys done any work on any of the JIT stuff?
+
+00:16:45 Right now, it's not looking like 3.12 will ship with a JIT.
+
+00:16:49 We think there are other changes that we can make that don't require a JIT that will still pay off.
+
+00:16:56 We're probably planning on at least experimenting with what a JIT would look like.
+
+00:17:01 Like I said, we already have gotten kind of a guide towards Cinder's JIT.
+
+00:17:04 And so we're talking kind of high-level architecture and prototyping and that sort of thing.
+
+00:17:08 But I would be surprised if 3.12 shipped with JIT.
+
+00:17:13 But it's a long effort.
+
+00:17:16 So starting now is a big part of that.
+
+00:17:17 Research is being done, huh?
 
 00:17:18 Yes.
 
-00:17:19 Active?
+00:17:19 Actively.
 
 00:17:19 Yeah.
 
-00:17:20 Cool. All right, well this was put together quite a while ago, back in 2020 as here's our plan and of course plans are meant to evolve, right? But still looks like this plan is working out quite well because of the changes in performance that we saw already in 311 beta and pretty fantastic. There are a bunch of changes here about things like zero overhead exception handling. I believe it used to there was an overhead for entering the try block.
+00:17:19 Yeah.
 
-00:17:48 Every time you went in or out of a try accept block. So even if I did try pass, there was overhead associated, right? So basically we would push a block that says oh, if an exception happens, jump to this location. Now what we do is we realize oh, we actually have that information ahead of time when we're actually compiling the byte code. So since the common case is that an exception is raised, then we can store that data in a separate table and say oh, if an exception is raised at this instruction, then jump here without actually having to do any of that management at a time. It's a little more expensive I believe, if an exception is raised. But in the case where an exception is not raised, I think it is basically as close to truly zero cost as possible.
+00:17:20 Cool.
 
-00:18:36 This portion of Talk Python to me is brought to you by Microsoft for Startups Founders Hub, starting a business is hard. By some estimates, over 90% of startups will go out of business in just their first year. With that in mind, Microsoft for Startups set out to understand what startups need to be successful and to create a digital platform to help them overcome those challenges, microsoft for Startups Founders Hub was born. Founders Hub provides all founders at any stage with free resources to solve their startup challenges. The platform provides technology benefits, access to expert guidance and skilled resources, mentorship and networking connections, and much more. Unlike others in the industry, Microsoft for Startups Founders Hub doesn't require startups to be investor backed or third party validated to participate. Founders Hub is truly open to all. So what do you get if you join them? You speed up your development with free access to GitHub and Microsoft cloud computing resources and the ability to unlock more credits over time. To help your startup innovate, Founders Hub is partnering with innovative companies like OpenAI, a global leader in AI research and development to provide exclusive benefits and discounts through Microsoft for startups Founders Hub. Becoming a founder is no longer about who you know. You'll have access to their mentorship network, giving you a pool of hundreds of mentors across a range of disciplines and areas like idea validation, fundraising, management and coaching, sales and marketing, as well as specific technical stress points. You'll be able to book a one on one meeting with the mentors, many of whom are former founders themselves. Make your idea a reality today with the critical support you'll get from Founder Hub. To join the program, just visit Talkpathon.FM/foundershub. All one word, no links in your show notes thank you to Microsoft for supporting the show.
+00:17:20 All right.
 
-00:20:22 I think that's the way it should be. Exceptions, as the word implies, is not the main thing that happens. It's some unusual case that has happened, right?
+00:17:21 Well, this was put together quite a while ago, back in 2020, as here's our plan.
 
-00:20:32 Not always, but often means something has gone wrong. So if something goes wrong, well, you kind of put performance to the side anyway, right?
+00:17:26 And of course, plans are meant to evolve, right?
 
-00:20:39 Yes.
+00:17:28 But still, looks like this plan is working out quite well because of the changes in performance that we saw already in 3.11 beta.
 
-00:20:39 And a lot of the sort of optimizations that you want to see, especially in for example, Jitter code or whatever, exceptions are the sort of thing that messed that up, where if an exception is raised, if they get out of the jit code, go back to slow land where we know what's going on and have better control of context everything. But yeah, it's really exciting to see. It's really cool design.
+00:17:35 And pretty fantastic.
 
-00:21:01 Yeah.
+00:17:37 There are a bunch of changes here about things like zero overhead exception handling.
 
-00:21:02 Mark Shannon did this.
+00:17:43 I believe there was an overhead for entering the try block.
 
-00:21:05 There's a bunch of improvements coming along. But what I want to really focus on here is the Pep659. The specializing adaptive interpreter. And in addition to being on the team. You've created a really cool project. Which we're going to talk about as soon as we cover this one. About how you actually visualize this and maybe even change your code to make it faster. Understanding how maybe opportunities might be missed for your code to be specialized or adapted.
+00:17:47 Every time you went in or out of a try accept block.
 
-00:21:33 Pep659 the concepts are not too difficult, but the implementation is really hairy. So I think it definitely deserves to be gone over 70. It's really cool when you get down to how it actually works and what it's doing.
+00:17:51 So even if I did try pass, accept pass, there was overhead associated with that.
 
-00:21:47 Is this the biggest reason for performance boosts?
+00:17:56 Right.
 
-00:21:51 I think it's the most important reason for performance. I mean, any performance boost kind of depends on what you're doing, right?
+00:17:57 So basically, we would push a block that says, oh, if an exception happens, jump to this location.
 
-00:21:58 For example, Pablo and Mark work together on making Python to Python calls way faster and way more efficient. So if you're doing lots of recursive stuff, that's going to be the game changer.
+00:18:03 Now what we do is we realize, oh, we actually have that information ahead of time when we're actually compiling the bytecode.
 
-00:22:07 We did also spend all your time writing loops that just do try accept, try accept that one's better.
+00:18:10 So since the common case is that an exception is raised, then we can store that data in a separate table and say, oh, if an exception is raised at this instruction, then jump here without actually having to do any of that management at runtime.
 
-00:22:15 Yeah, if you've got tried accept and tight loops, or if you do lots of regular expressions, then our improvements in that area will probably matter more than this. But this is cool because we can build upon it to kind of unlock additional performance improvements. Sure. We can kind of get that one. You have a better idea how, exactly?
+00:18:24 So it's a little more expensive.
 
-00:22:36 When I look at PEPs, usually it'll say what its status is and what version of Python it applies to, and I see this Pep, it doesn't say which version it applies to, and it's status as draft. What's the story here?
+00:18:27 I believe if an exception is raised.
 
-00:22:48 I'm actually not sure what the story is behind the PEP itself. I think it's a good informational document that explains the changes that we did get into Python 311, but I don't think that Pep was ever formally accepted.
+00:18:28 But in the case of an exception, it's not raised.
 
-00:23:03 As you can see, it's just an informational Pep. So it's kind of more than design of what exactly we're doing and how we plan to do it.
+00:18:30 I think it is basically as close to truly zero cost as possible.
 
-00:23:09 Right. Because it's not really talking about the implementation so much as, like, here's the roadmap and here's what we plan to do and stuff.
+00:18:36 This portion of talk, I think it's a little bit more.
 
-00:23:17 Right. Yeah.
+00:18:38 This portion of talk, Python to me is brought to you by Microsoft for startups, founders hub.
 
-00:23:18 There's a lot of pros in there that says, here's how we might do it, but no promises. We could change this literally anytime, and we have.
+00:18:41 Starting a business is hard.
 
-00:23:26 The design has changed fairly significantly since this PEP was first published, but we've updated that.
+00:18:43 By some estimates, over 90% of startups will go out of business in just their first year.
+
+00:18:48 With that in mind, Microsoft for startups set out to understand what startups need to be successful and to create a digital platform to help them overcome those challenges.
+
+00:18:57 Microsoft for startups founders hub was born.
+
+00:18:59 Founders hub provides all founders at any stage with free resources to solve their startup challenges.
+
+00:19:05 The platform provides technology benefits, access to expert guidance and skilled resources, mentorship and networking connections, and much more.
+
+00:19:14 Unlike others in the industry, Microsoft for startups founders hub doesn't require startups to be investor backed or third party validated to participate.
+
+00:19:23 Founders hub is truly open to all.
+
+00:19:26 So what do you get if you join them?
+
+00:19:27 You speed up your development with free access to GitHub and Microsoft cloud computing resources and the ability to unlock more credits over time.
+
+00:19:35 To help your startup innovate, founders hub is partnering with innovative companies like open AI, a global leader in AI research and development to provide exclusive benefits and discounts.
+
+00:19:45 Through Microsoft for startups founders hub, becoming a founder is no longer about who you know.
+
+00:19:50 You'll have access to their mentorship network, giving you a pool of hundreds of mentors across a range of disciplines and areas like idea validation, fundraising, management and coaching sales and marketing, as well as specific technical stress points.
+
+00:20:03 You'll be able to book a one-on-one meeting with the mentors, many of whom are former founders themselves.
+
+00:20:08 Make your idea a reality today with a critical support you'll get from founders hub to join the program.
+
+00:20:14 Just visit talkpython.fm/founders hub, all one word, no links in your show notes.
+
+00:20:19 Thank you to Microsoft for supporting the show.
+
+00:20:21 I think that's the way it should be.
+
+00:20:23 You know, exceptions, as the word implies, is not the main thing that happens.
+
+00:20:28 It's some unusual case that has happened, right?
+
+00:20:31 So not always, but often means something has gone wrong.
+
+00:20:34 So if something goes wrong, well, you kind of put performance to the side anyway, right?
+
+00:20:39 Yeah.
+
+00:20:39 Well, and, you know, a lot of the sort of optimizations that you want to see, especially in, for example, JIT code or whatever, exceptions are the sort of thing that mess that up.
+
+00:20:49 Where, you know, if an exception is raised, okay, get out of the TUDIC code, go back to slow land where we know what's going on and have better control of context and everything.
+
+00:20:57 But yeah, no, it's really exciting to see.
+
+00:20:59 It's really cool design.
+
+00:21:01 Yeah, it was Mark Shannon who did this.
+
+00:21:03 Mark Shannon did a lot of this.
+
+00:21:05 There's a bunch of improvements coming along, but what I want to really focus on here is the PEP 659, the specializing adaptive interpreter.
+
+00:21:15 And in addition to being on the team, you've created a really cool project, which we're going to talk about as soon as we cover this one, about how you actually visualize this and maybe even change your code to make it faster.
+
+00:21:27 Understanding how maybe opportunities might be missed for your code to be specialized or adapted.
+
+00:21:32 No, PEP 659.
+
+00:21:34 I mean, the concepts are not too difficult, but the implementation is really hairy.
+
+00:21:39 So I think it definitely deserves to be gone over 70.
+
+00:21:43 Because it's really cool when you get down to how it actually works and what it's doing.
+
+00:21:47 Is this the biggest reason for performance boosts in 3.11?
+
+00:21:51 I think it's the most important reason for performance boosts.
+
+00:21:54 I mean, any performance boost kind of depends on what you're doing, right?
+
+00:21:57 Like we did, for example, Pablo and Mark worked together on making Python to Python calls way faster and way more efficient.
+
+00:22:04 So if you're doing lots of recursive stuff, that's going to be the game changer.
+
+00:22:07 If you spend all your time writing loops that just do try, accept, try, accept.
+
+00:22:12 Yeah.
+
+00:22:13 That one's better.
+
+00:22:14 Yeah.
+
+00:22:15 If you're, yeah, got it.
+
+00:22:17 Try accept in tight lubes or, you know, if you're, you do lots of regular expressions,
+
+00:22:21 then our improvements in that area will probably matter more than this.
+
+00:22:24 But this is cool because we can build upon it to kind of unlock additional performance improvements.
+
+00:22:32 Sure.
+
+00:22:33 We can kind of get to that once we have a better idea of how exactly.
+
+00:22:35 When I look at PEPs, usually it'll say what its status is and what version of Python it applies to.
+
+00:22:42 And I see this PEP, it doesn't say which version it applies to and its status is draft.
+
+00:22:46 What's the story here?
+
+00:22:48 I'm actually not sure what the story is behind the PEP itself.
+
+00:22:52 I think it's a good informational document that explains, you know, the changes that we did get into Python 3.11.
+
+00:22:58 But I don't think the PEP was ever formally accepted.
+
+00:23:02 As you can see, it's just an informational PEP.
+
+00:23:05 So it's kind of more the design of what exactly we're doing and how we plan to do it.
+
+00:23:09 Right.
+
+00:23:10 Because it's not really talking about the implementation so much as like, here's the roadmap and here's what we plan to do and stuff.
+
+00:23:17 Right?
+
+00:23:18 Yeah.
+
+00:23:18 There's a lot of pros in there that says, here's how we might do it.
+
+00:23:20 But, you know, no promises.
+
+00:23:22 We could change this literally anytime.
+
+00:23:24 And we have.
+
+00:23:25 Yeah.
+
+00:23:25 The design has changed fairly significantly since this PEP was first published.
+
+00:23:30 But we've updated that so it can remain.
 
 00:23:32 Yeah.
 
 00:23:33 Cool.
 
-00:23:33 Okay, so the background is when we're running code. It's not compiled, and it's not static types because it's Python, it's dynamic. And the types could change. They could change because it just uses duck typing, and we might just happen to pass different things over. We do have type hints, but as the word there is, it applies as a hint, not a requirement like C or C# or something.
+00:23:33 Okay.
 
-00:23:58 You have to have the CPython Runtime be as general as possible for many of its operations.
+00:23:34 So the background is when we're running code, it's not compiled and it's not static types.
 
-00:24:05 Right? Yeah, absolutely.
+00:23:41 Right?
 
-00:24:06 And beyond just types, things like I could create a global variable at any time, I could delete a global variable at any time.
+00:23:41 It's because it's Python.
 
-00:24:13 I could add or remove arbitrary attributes, all these sort of very Pythonic things about Python or on Pythonic, depending on how you're looking at it. These are all things that would never fly compiledly.
+00:23:43 It's dynamic.
 
-00:24:25 Yeah.
+00:23:43 And the types could change.
 
-00:24:25 And they mean you can't be overly specific about how you work with operations. So, for example, if you say, I want to work with, call this function and pass it the value of X. Well, where did X come from? Is X a built in? Is it a global variable? Is it at the module level? Is it a parameter? Is it a local variable? All these things have to be discovered at Runtime, right? For the most part, yeah, for the most part. Part of this adapting interpreter is it will run the code, and it says every single time they said, load this variable called X, it came out of the built in, not out of a module. And so we're going to replace that code specialize it or Quicken. It I've heard of Quickening, so I'll have to work on the nomenclature.
+00:23:45 They could change because it just uses duck typing and we might just happen to pass different things over.
 
-00:25:11 Yeah, we can clear up the terms a bit.
+00:23:50 I mean, we do have type hints.
 
-00:25:13 Yeah.
+00:23:52 But as the word there is, it applies as a hint, not a requirement like C++ or C# or something.
 
-00:25:14 But you're going to take this code and you're going to replace it. And don't say just load an attribute or load of value from somewhere and go look at all the places you're like. No, go look in the built in and just get it from there. And that skips a lot of steps, right?
+00:23:58 You have to have the CPython runtime be as general as possible for many of its operations.
 
-00:25:27 Yes.
+00:24:05 Right?
 
-00:25:28 Or maybe I'm doing math here and every single time it's been an integer. So let's just do integer math and not arbitrary addition operator with the huge.
+00:24:06 Yeah, absolutely.
 
-00:25:37 Asterisk that if it does become a global variable, or if it does start throwing floats at your addition operation, that we don't set false or even produce an incorrect result.
+00:24:06 And beyond just types, things like I could create a global variable at any time.
 
-00:25:49 Right.
+00:24:11 I could delete a global variable at any time.
 
-00:25:49 Because you could say use X, but before that you might say if some value is true, x equals this thing, but it goes from being a built into a local variable or some weird thing like that.
+00:24:13 I could add or remove arbitrary attributes.
 
-00:25:59 Right.
+00:24:16 All these sort of very Pythonic things about Python or un-Pythonic, depending on how you're looking at it.
+
+00:24:22 These are all things that would never fly in pilot length.
+
+00:24:25 Yeah, and they mean you can't be overly specific about how you work with operations.
+
+00:24:31 So, for example, if you say, I want to work with call this function and pass it the value of X.
+
+00:24:36 Well, where did X come from?
+
+00:24:38 Is X a built-in?
+
+00:24:39 Is it a global variable?
+
+00:24:41 Is it at the module level?
+
+00:24:43 Is it a parameter?
+
+00:24:45 Is it a local variable?
+
+00:24:46 All these things have to be discovered at runtime, right?
+
+00:24:49 For the most part, yeah.
+
+00:24:50 Yeah, for the most part.
+
+00:24:51 Part of this adapting interpreter is it will run the code and it says, look, every single time they said load this variable called X, it came out of the built-ins, not out of a module.
+
+00:25:04 And so we're going to replace that code, specialize it, or quicken it.
+
+00:25:08 I've heard of quickening, so I'll have to work on the nomenclature a little bit there.
+
+00:25:11 We can clear up the terms a bit, yeah.
+
+00:25:14 Yeah, yeah, but you're going to take this code and you're going to replace it and don't say just load an attribute or load a value from somewhere and go look in all the places.
+
+00:25:22 You're like, no, no, no, go look in the built-ins and just get it from there.
+
+00:25:25 And that skips a lot of steps, right?
+
+00:25:27 Yep, yeah.
+
+00:25:28 Or maybe I'm doing math here and every single time it's been an integer.
+
+00:25:31 So let's just do integer math and not arbitrary addition operator.
+
+00:25:35 With the huge asterisk that if it does become a global variable or if it does start throwing floats at your addition operation, that we don't say false or even produce an incorrect result.
+
+00:25:49 Right, because you could say, use x.
+
+00:25:51 But before that, you might say, if some value is true, x equals this thing.
+
+00:25:55 And it goes from being a built-in to a local variable or some weird thing like that, right?
 
 00:26:00 And if it overly specialized and couldn't fall back, well, bad things happen, right?
 
-00:26:05 Yeah.
+00:26:05 Yeah, it would be surprising if you were getting len, the len function from the built-ins over and over and over.
 
-00:26:05 It would be surprising if you were getting the Len function from the built in over and over and then you for some reason defined the Len as a global Python. The language specification says it's going to start loading the global now, regardless of where it be.
+00:26:10 And then you, for some reason, define len as a global.
 
-00:26:21 And that's the same for attribute accesses. If you used to be getting an attribute of the class and then you shadow it on the instance, you need to start getting it from the instance that you can't keep getting it from the class. Correct.
+00:26:14 Python, you know, the language specification says it's going to start loading the global now,
+
+00:26:18 regardless of, you know, where it made it be able to pull.
+
+00:26:21 And that's the same for, you know, like attribute accesses.
+
+00:26:24 If you used to be getting an attribute off the class and then you shadow it on the instance,
+
+00:26:28 you need to start getting it from the instance now.
+
+00:26:30 You can't keep getting it from the class.
+
+00:26:31 Is it correct?
 
 00:26:32 Right.
 
-00:26:32 This is one of those problems that arises from this being a static dynamic language that can be changed as the code runs. Because if this was compiled, wherever those things came from and what they were, they can't change. Their type was set, their location was set, and so then the compiler can say, well, it's better if we inline this or it's better if we do this machine operation that works on integers better, or some special thing like that.
+00:26:32 And this is one of those problems that arises from this being a static dynamic language that can be changed as the code runs.
+
+00:26:39 Because if this was compiled, wherever those things came from and what they were, they can't change.
+
+00:26:44 Their type was set.
+
+00:26:45 Their location was set.
+
+00:26:47 And so then the compiler can say, well, it's better if we inline this.
+
+00:26:51 Or it's better if we do this machine operation that works on integers better or some special thing like that.
 
 00:26:59 Right.
 
-00:26:59 It doesn't have to worry about it falling back. And I feel like that ability to adapt and change and just be super dynamic is what's kind of held it back a lot, right?
+00:26:59 It doesn't have to worry about it falling back.
 
-00:27:07 Yes.
+00:27:01 And I feel like that ability to adapt and change and just be super dynamic is what's kind of held it back a lot.
 
-00:27:08 And I like that word they use adapt because that's kind of a big part of how the new interpreter works. You can change your code and the interpreter adapts it. If x starts being an attribute on the instance rather than from the class, well, soon the interpreter will learn that sometime later after running a program and they start doing the best path. For instance, access rather than class tax.
+00:27:07 Right.
 
-00:27:29 Let's start there. How does it know right? It doesn't compile, so it has to figure this stuff out.
+00:27:07 Yep.
+
+00:27:08 And I like that word they used, adapt, because that's kind of a big part of how the new interpreter works.
+
+00:27:12 You can change your code and the interpreter adapts with it.
+
+00:27:15 If X starts being an attribute on the instance rather than from the class, well, soon the interpreter will learn that sometime later after running your program.
+
+00:27:24 And then, OK, start doing the fast path for instance access rather than class access.
+
+00:27:29 Let's start there.
+
+00:27:30 How does it know?
+
+00:27:31 Right.
+
+00:27:31 It doesn't compile.
+
+00:27:32 So it has to figure this stuff out.
 
 00:27:36 Right.
 
-00:27:36 I run my code. Why does it know that I can now treat these things x and y integers versus strings?
+00:27:36 I run my code.
+
+00:27:37 Why does it know that I can now treat these things X and Y's integers versus strings?
 
 00:27:42 Yeah.
 
-00:27:42 So stepping back a little bit, like how does this new interpreter work? So the big change kind of the headline is that the byte code instructions can change themselves while they're running something that used to be a generic ad operation and become something that is specialized, which is kind of the specialized instruction terminology we use for adding two integers or adding two quotes. And so this happens sort of in a couple of different phases after you've run your code for some amount of time, basically after we've determined it's worth optimizing because optimization is free. So something's only run once it's module level code or a class body, there's no reason to optimize that at all. For like later run, we have heuristics for okay, this code is warm and that's a term that you hear in jit.
+00:27:42 So stepping back a little bit, like how does this new interpreter work?
 
-00:28:35 Basically, after we've determined that a block of code is more, we quicken it, which is the term that you used earlier. And this basically means walking over the byte instructions and replacing many of them with what we call adaptive variant. And you can see an example in the pep, but to kind of walk through that example, if you have an attribute load, once the code is quickened, after we've determined its warm, we walk over all the instructions. All of the load attributes by code instructions become load add or adaptive. And what those adaptive instructions do is when we hit them, when we're actually doing the attribute load, in addition to actually loading the attribute, they will kind of do some facts finding they'll gather some information, say okay, I loaded the attribute. Did it come from the class? Did it come from the instance, did it come from addict? Did it come from mod tool? There's a bunch of different possibilities.
+00:27:46 So the big change, kind of the headline is that the bytecode instructions can change themselves while they're running.
 
-00:29:30 So using that information, the adaptive instruction can turn itself into one specialized instruction. So the example you have here on the screen can either be loaded or instance value or modular slot. And what the specialized instructions do is really cool. Basically they start with a couple of checks just to make sure if the assumptions are holding true. So for a load at or instance value we check and make sure that for example, the class of the object is as we expect, then our attribute isn't shadowed by a descriptor or something like that, or that we're not now getting it off of a class object or whatever. And then it has a very optimized form of getting the actual attribute. There's a lot of expensive work that you could skip if you know that you have an attribute that is coming.
+00:27:54 Something that used to be a generic ad operation can become something that is specialized, which is kind of the specialized instruction is the terminology we use for adding two integers or adding two floats.
 
-00:30:18 Directly off the end or another one is load at our slot slots are really interesting for Python performance and they kind of capture more than a lot of the stuff, the difference of the possible and the common. And by that I mean it's possible that every time you access a field off of a class that it was dynamically added and it came from somewhere else and it's totally new and it could be any type. What's more likely though, is that the customer always has a name and the name is always a string. Right. And with slots you can sort of say, I don't want this particular class to be dynamic. And because of that, you can say, well, it doesn't need to have a dictionary that can evolve dynamically, which improves the access speed and the storage and all of that. And here you are pointing out that, well, we could actually have a special opcode that knows whenever I access X, x is a slot thing. Skip all the other checks you might have to do before you get there.
+00:28:07 And so this happens sort of in a couple of different phases.
 
-00:31:12 Well, yeah, and even accessing the slot is going to be fast. So I'm not rested upon how low our slot works, but the slots are implemented using descriptors. So to get the slot from your class, from your instance, you still need to go to the class, look up the attribute in the class dict, find the descriptor, verify it's a descriptor, call.
+00:28:10 After you've run your code for some amount of time, basically after we've determined it's worth optimizing because optimization is free.
 
-00:31:34 The descriptor into that list. Yeah, exactly.
+00:28:18 So if something's only run once, you know, it's module level code or a class body.
 
-00:31:37 We can do it even faster than that. So even if you do have slots, this happens really fast without even any dictionary. Lookups, we say, has the class changed?
+00:28:22 There's no, no reason to optimize that at all for like leader runs.
+
+00:28:26 Yeah.
+
+00:28:26 Yeah.
+
+00:28:27 We have heuristics for, okay, this, this code is warm.
+
+00:28:30 And that's, you know, a term that you hear in JITs often because it's a higher order for specializing.
+
+00:28:35 Basically after we've determined that a block of code is warm, we quicken it, which is that term that you used earlier.
+
+00:28:43 And this basically means walking over the bytecode instructions and replacing many of them with what we call adaptive variant.
+
+00:28:51 And, you know, you can, you can see an example in the pet, but you have to kind of walk through that example.
+
+00:28:55 If you have an attribute load, once the code is quickened after we've determined it's warm, we walk over all the instructions.
+
+00:29:01 All of the load attributes by code instructions become load adder adaptive.
+
+00:29:06 And what those adaptive instructions do is when we hit them, when we're actually doing the attribute load, in addition to actually loading the attribute, they will kind of do some fact finding.
+
+00:29:18 They'll gather some information and say, okay, I loaded the attribute, did it come from the class, did it come from the instance, did it come from the plot, did it come from a dict, did it come from a module?
+
+00:29:26 You know, there's, there's a bunch of different possibilities.
+
+00:29:28 Oh.
+
+00:29:29 And so using that information, the adaptive instruction can turn itself into one of the specialized instructions.
+
+00:29:36 So the example you have here on the screen can either be load adder instance value or module or slot.
+
+00:29:41 And what the specialized instructions do is really cool.
+
+00:29:44 Basically, they start with a couple of checks just to make sure if the assumptions are holding true.
+
+00:29:49 So for a load adder instance value, we, you know, check and make sure that, for example, the class of the object is as we expect.
+
+00:29:58 Then our attribute isn't shadowed by a descriptor or something weird like that, or that we're not now getting it off of a class object or whatever.
+
+00:30:06 And then it has a very optimized form of getting the actual attribute.
+
+00:30:11 There's a lot of expensive work that you can skip if you know that, you know, you have an attribute that is coming directly off the instance.
+
+00:30:19 Or another one is load adder slot.
+
+00:30:22 Slots are really interesting for Python performance.
+
+00:30:25 And, you know, they kind of capture more than a lot of the stuff, the difference of the possible and the common.
+
+00:30:31 And by that, I mean, it's possible that every time you access a field off of a class, that it was dynamically added and it came from somewhere else and it's totally new and it could be any type.
+
+00:30:41 What's more likely, though, is it's, you know, the customer always has a name and the name is always a string.
+
+00:30:46 Right.
+
+00:30:47 And with slots, you can sort of say, I don't want this particular class to be dynamic.
+
+00:30:52 And because of that, you can say, well, it doesn't need to have a dictionary that can evolve dynamically, which improves the access speed and the storage and all of that.
+
+00:31:01 And here you all are pointing out that, well, we could actually have a special opcode that knows whenever I access X, X is a slot thing.
+
+00:31:09 Skip all the other checks you might have to do before you get there.
+
+00:31:12 Well, yeah.
+
+00:31:13 And even accessing the slot is going to be faster.
+
+00:31:16 So I'm not 100% brushed up on how load adder slot works, but the slots are implemented using descriptors.
+
+00:31:23 So to get the slot from your class, you still, or from your instance, you still need to go to the class, look up the attribute in the class dict, find the descriptor, verify it's a descriptor, call the descriptor.
+
+00:31:35 Into that list.
+
+00:31:36 Yeah.
+
+00:31:36 Exactly.
+
+00:31:37 We can do it even faster than that.
+
+00:31:39 So even if you do have slots, this happens really fast without even any dictionary lookups.
+
+00:31:44 We say, has the class changed?
 
 00:31:46 No.
 
-00:31:47 Okay, cool, we'll get to this later. But we remember what offset this lot was at last time and we just reached directly to the object, grab it, there's no dictionary. Lookups, we're not calling any descriptors doing anything like that. It's about as close to a compiled language as a dynamic language. Yeah, just verify, process a change if they reach in. I remember where it was, I tried.
+00:31:46 Okay, cool.
 
-00:32:09 To kind of align this up, saying the possible and the common most likely your code is not changing. And when it's well written, it's probably using the same type. It's not like, well, sometimes it's a string and sometimes that is the quote seven, and sometimes it's the actual integer seven. It should probably always be one. You just don't express that in code unless you're using type hints. Right, and they're not enforced.
+00:31:47 We'll get to this later, but we remember what offset the slot was at last time and we just reach directly to the object.
+
+00:31:55 Grab it.
+
+00:31:55 There's no dictionary lookups.
+
+00:31:57 We're not calling any descriptors, doing anything like that.
+
+00:32:00 It's about as close to, you know, a compiled language as a dynamic language would be.
+
+00:32:04 Yeah.
+
+00:32:05 Just verify it.
+
+00:32:06 Class has a change.
+
+00:32:06 Okay, reach in.
+
+00:32:07 I remember where it was.
+
+00:32:08 You know, I tried to kind of align this up saying the possible and the common.
+
+00:32:11 Most likely your code is not changing.
+
+00:32:14 And when it's well written, it's probably using the same type.
+
+00:32:17 You know, it's not like, well, sometimes it's a string and sometimes like that is the quote seven.
+
+00:32:22 And sometimes it's the actual integer seven.
+
+00:32:24 Like it should probably always be one.
+
+00:32:26 You just don't express that in code unless you're using type hints, right?
+
+00:32:30 And they're not enforced.
 
 00:32:31 Yeah.
 
-00:32:32 And getting back to the adaptive nature and making sure that we are correct. If we had something that was a slotted instance coming through a bunch of times. And that's how you throw a module in or something with an instance dictionary or something else. Or maybe the attribute doesn't exist. Or those quick checks that I mentioned that happen before. We actually do the fast implementation of loading a slot. If any of those checks fail, then we basically fall back on the generic implementation. We say, oh, our assumptions don't hold, go back. And if that happens enough time, then we go back to the adaptive form in the whole cycle. So if I'm throwing a bunch of integer into an add instruction and then later I stop and I start throwing a bunch of strings into an ad instruction, we'll do the generic version of that for a little bit while we're kind of switching over, but then the interpreter will kind of get the hint and start and start specializing for string edition here. And it's really cool to see that.
+00:32:31 Yeah.
 
-00:33:28 This portion of Talk Python to Me is brought to you by the compiler podcast from Red Hat. Just like you, I'm a big fan of podcasts and I'm happy to share a new one from a highly respected and open source company, Compiler, an original podcast from Red Hat. With more and more of us working from home, it's important to keep our human connection with technology. With Compiler, you'll do just that. The compiler podcast unravels industry topics, trends and things you've always wanted to know about tech through interviews with people who know it best. These conversations include answering big questions like what is technical debt? What are hiring managers actually looking for? And do you have to know how to code to get started in open source? I was a guest on Red Hat's previous podcast, Command line Heroes and Compiler follows along in that excellent and polished style we came to expect from that show. I just listened to episode twelve of Compiler how should we handle Failure? I really valued their conversation about making space for developers to fail so that they can learn and grow without fear of making mistakes or taking down the production website. It's a conversation we can all relate to, I'm sure. Listen to an episode of compiler by visiting Talkpython.Fm/compiler. The link is in your podcast players show notes. You can listen to compiler on Apple podcast, overcast Spotify Podcast or anywhere you listen to your podcast. And yes, of course you could subscribe by just searching for it in your podcast player, but do so by following talkpython.fm/compiler so that they know that you came from Talk Python to me, my thanks to the compiler podcast for keeping this podcast going strong.
+00:32:32 And getting back to the adaptive nature and making sure that we are correct.
 
-00:35:01 Right, so we shouldn't we, being Python developers that write code that just executes without thinking too very much about what that means, we should not have to worry or maybe even know that this is happening, right? If everything goes as it's supposed to, it should be completely transparent to us.
+00:32:36 You know, if we had something that was a slotted instance coming through a bunch of times and that suddenly you throw a module in or something with an instance dictionary or something else,
+
+00:32:45 or maybe the attribute doesn't exist or those quick checks that I mentioned that happen before we actually do the fast implementation of loading a slot.
+
+00:32:55 If any of those checks fail, then we basically fall back on the generic implementation.
+
+00:33:00 We say, oh, our assumptions don't hold.
+
+00:33:03 Go back.
+
+00:33:03 And if that happens enough time, then we go back to the adaptive form and the whole cycle.
+
+00:33:07 So if I'm throwing a bunch of integers into an add instruction and then later I stop and I start throwing a bunch of strings into an add instruction,
+
+00:33:15 we'll do the generic version of add for a little bit while we're kind of switching over.
+
+00:33:19 But then the interpreter will kind of get the hint and start, you know, specializing for string edition later.
+
+00:33:25 And it's really cool to see that happen.
+
+00:33:28 This portion of Talk Python to Me is brought to you by the Compiler Podcast from Red Hat.
+
+00:33:32 Just like you, I'm a big fan of podcasts.
+
+00:33:35 And I'm happy to share a new one from a highly respected and open source company.
+
+00:33:40 Compiler, an original podcast from Red Hat.
+
+00:33:43 With more and more of us working from home, it's important to keep our human connection with technology.
+
+00:33:48 With Compiler, you'll do just that.
+
+00:33:50 The Compiler Podcast unravels industry topics, trends, and things you've always wanted to know about tech through interviews with people who know it best.
+
+00:33:58 These conversations include answering big questions like, what is technical debt?
+
+00:34:01 What are hiring managers actually looking for?
+
+00:34:04 And do you have to know how to code to get started in open source?
+
+00:34:07 I was a guest on Red Hat's previous podcast, Command Line Heroes, and Compiler follows along in that excellent and polished style we came to expect from that show.
+
+00:34:16 I just listened to episode 12 of Compiler, How Should We Handle Failure?
+
+00:34:20 I really valued their conversation about making space for developers to fail
+
+00:34:24 so that they can learn and grow without fear of making mistakes or taking down the production website.
+
+00:34:29 It's a conversation we can all relate to, I'm sure.
+
+00:34:32 Listen to an episode of Compiler by visiting talkpython.fm/compiler.
+
+00:34:36 The link is in your podcast player's show notes.
+
+00:34:38 You can listen to Compiler on Apple Podcasts, Overcast, Spotify, Pocket Cast, or anywhere you listen to your podcasts.
+
+00:34:44 And yes, of course, you could subscribe by just searching for it in your podcast player,
+
+00:34:49 but do so by following talkpython.fm/compiler so that they know that you came from Talk Python to me.
+
+00:34:55 My thanks to the Compiler Podcast for keeping this podcast going strong.
+
+00:35:01 Right, so we shouldn't, we being Python developers that write code that just executes without thinking too very much about what that means,
+
+00:35:09 we should not have to worry or maybe even know that this is happening, right?
+
+00:35:14 If everything goes as it's supposed to, it should be completely transparent to us.
 
 00:35:18 Yes.
 
-00:35:19 The only way that you should know that anything is different about 311 is your CPU cycles the cloud hosting bill. At the end of the month, you should be able to upgrade, and if behavior changes, that's a buck.
+00:35:19 The only way that you should know that anything is different about 3.11 is your CPU cycles.
 
-00:35:32 Tell us about that going from this adaptive version. The adaptive instance sounds slightly more expensive than just the old school load adder, for example, because it has to keep track and it does a little bit of inspecting to see what's going on. But then the new ones, once it gets adapted and quickened, it should be much faster. Is there a chance that it gets into some weird loop where just about the time the adaptive one has decided to specialize. It hits a case where it falls back and it ends up being slower rather than faster before.
+00:35:25 The cloud hosting bill is the end of the month.
 
-00:36:03 Well, yeah, the worst case scenario would be you send the same type through any number of times and right when it's going to try to specialize, you to set it through a different time.
+00:35:28 You should be able to upgrade and if behavior changes, that's a buck.
 
-00:36:13 Exactly. Whatever the limit. Like if it goes through N plus one times and then trips it back.
+00:35:32 Tell us about that.
 
-00:36:20 That would be sort of the worst case scenario. But we have kind of ways of trying to avoid that if at all possible. So for example, if we fail one of those checks, we don't immediately turn into the adaptive form. We will do it after that check has failed a certain number of times. And as just a concrete example, the number of times that we have hard coded is a prime number. So it's less likely that you'll fall into these sort of patterns where it's like, oh, I send three ints through that string three ends.
+00:35:33 Going from this adaptive version, the adaptive instance sounds slightly more expensive than the,
 
-00:36:50 It'd be hard to get that worst case behavior without being intentionally.
+00:35:39 just the old school load adder, for example, because it has to keep track and it does a little bit of inspecting to see what's going on.
 
-00:36:55 By the way, we got to keep in mind these are extremely small steps in our code.
+00:35:46 But then the new ones, once it gets adapted and quickened, it should be much faster.
 
-00:37:01 Right.
+00:35:50 Is there a chance that it gets into some like weird loop where just about the time the adaptive one has decided to specialize it,
 
-00:37:01 We might have multiple ones of these happening on a single line of what looks like oh, there's one line of code, there's five or however many instructions, bytecode instructions happening and some of them may be specialized in, some of them not.
+00:35:58 it hits a case where it falls back and it like it ends up being slower rather than faster before?
 
-00:37:15 Right?
+00:36:03 Well, yeah, the worst case scenario would be, you know, you send the same type through n number of times
 
-00:37:15 Yeah, exactly. And so the overall effect definitely smooths out where sure, you may have a worst case behavior, one or two or three individual bitecode instructions, but your typical function is going to have a much more even a smallish function is going to have 20 or 300 instructions doing it real.
+00:36:10 and then right when it's going to try to specialize you, set it through a different type.
 
-00:37:32 Yeah. If you care about it's performance, it will be doing a lot there.
+00:36:13 Exactly.
+
+00:36:14 Whatever, if n is the limit, like if it goes to n plus one times and then trips it back.
+
+00:36:18 Yeah.
+
+00:36:19 Yeah.
+
+00:36:19 Yeah.
+
+00:36:20 So that would be sort of the worst case scenario.
+
+00:36:22 But we have kind of ways of trying to avoid that if at all possible.
+
+00:36:26 Okay.
+
+00:36:27 So, for example, if we fail one of those checks, we don't immediately turn into the adaptive form.
+
+00:36:33 We will do it after, you know, that check has failed a certain number of times.
+
+00:36:38 And as just a concrete example, that number of times that we have hard coded is a prime number.
+
+00:36:43 So it's less likely that you'll fall into these sort of patterns where it's like, oh, I send three ins through that string.
+
+00:36:49 Three ins.
+
+00:36:50 It'd be hard to, you know, get that worst case behavior without being intentionally malicious.
+
+00:36:54 By the way, we got to keep in mind, like these are extremely small steps in our code, right?
+
+00:37:01 We might have multiple ones of these happening on a single line of what looks like, oh, there's one line of code.
+
+00:37:07 Like, well, there's five or however many instructions, bytecode instructions happening.
+
+00:37:12 And some of them may be specialized and some of them not, right?
+
+00:37:15 Yeah, exactly.
+
+00:37:16 And so the overall effect definitely smooths out where, sure, you may have a worst case behavior at one or two or three individual bytecode instructions.
+
+00:37:24 But your typical function is going to have much more than that, even a smallish function is going to have, you know, 20 or 30 instructions doing it, you know, real.
+
+00:37:32 Yeah.
+
+00:37:32 Yeah.
+
+00:37:33 If you care about its performance, it'll be doing a lot there.
 
 00:37:35 Exactly.
 
-00:37:36 And so some will specialize fastly, some won't, but in general your code will get 25% faster.
+00:37:36 And so some will specialize successfully, some won't.
 
-00:37:42 Is there a way you could know? Is there a way that you might be able to know if it specializes or not? We'll get to that.
+00:37:38 But in general, your code will get 25-ish percent faster.
 
-00:37:48 But it looks like if I go and use the dismount, d is not for disrespect but for disassembling.
+00:37:42 Is there a way you could know?
 
-00:37:57 So you can say import disk and then maybe from display disk, you can say this and give it a function or something, it will write out the byte code of what's happening.
+00:37:44 I mean, is there a way that you might be able to know if it specializes or not?
 
-00:38:07 Does all of this mean that if I do this in 311, I might see additional byte codes than before? Instead of load adder, where I maybe see load adder instance value, will I actually be able to observe these specializations?
+00:37:46 We'll get to that.
 
-00:38:20 If you pass a keyword argument to your dis utilities, then yes, you will be able to.
+00:37:47 But it looks like if I go and use the disk module, D-I-S, not for disrespect, but for disassembly.
 
-00:38:26 Okay, but if I don't, for compatibility reasons like load add or adaptive and load at or instance, those are just going to return as load adder.
+00:37:57 Disassembly, yeah.
 
-00:38:34 Load adder, exactly.
+00:37:57 So you can say, you know, import disk and then maybe from disk, import disk.
+
+00:38:02 You can say disk and give it a function or something.
+
+00:38:04 It'll write out the bytecode of what's happening.
+
+00:38:07 Does all of this mean that if I do this in 3.11, I might see additional bytecodes than before?
+
+00:38:14 You know, instead of load adder, would I maybe see the load adder instance value?
+
+00:38:17 Will I actually be able to observe these specializations?
+
+00:38:20 If you pass a keyword argument to your disk utilities, then yes, you will be able to see.
+
+00:38:26 Okay.
+
+00:38:26 But if I don't, for compatibility reasons like load adder adaptive and load adder instance,
+
+00:38:32 those are just going to return as load adder?
+
+00:38:34 Load adder.
+
+00:38:35 Exactly.
 
 00:38:35 Okay.
 
-00:38:36 Yeah. So the idea is anyone that's currently consuming the byte coat. They shouldn't have to worry about specialization because the idea is they're totally transparent, so they should only see what the original byte code was. But if you want to get at it, then yeah, any of the dis utilities capacity adaptively.
+00:38:36 Yeah.
 
-00:38:53 True.
+00:38:36 So the idea is anyone that's currently consuming the bytecode, they shouldn't have to worry about specialization because the idea is they're totally transparent.
 
-00:38:53 And that will show you the adaptive and again, you only see them if it actually gets quicker. Meaning if you run it a number of times or so.
+00:38:43 You know, so they should only see what the original bytecode was.
 
-00:39:02 Okay, so if I wrote say a function, so often what you're doing if you're playing with disk is like you write the function and then you immediately print out the disk output. Maybe you've never called it right. And so that might actually give you a different even if you said yes to the specialization output, that still might not give you anything interesting.
+00:38:47 But if you want to get at it, then yeah, if you get any of the disk utilities,
 
-00:39:22 It won't give you yeah, it'll just give you as if you hadn't passed it through. Because again, this all happens at runtime. So if the code is being run, nothing happens. We don't specialize code that is ever run.
+00:38:51 you could pass it adaptive through and that will show you the adaptive.
 
-00:39:33 What counts as warm? How many times do I got to call it?
+00:38:56 And again, you'll only see them if it's actually gets quick at meaning if you run it,
 
-00:39:37 The official answer is that's an implementation detail, the interpreter subject to change at any time. The actual answer is either eight calls or eight times through a loop in a function. So if your function has a loop, that executes more than eight times or if you call it more than eight times. So just calling your function eight times should be enough to quicken it, right?
+00:39:00 you know, a dozen times or something.
 
-00:39:56 Well, maybe that number changes in the future, but just having a sense, is it ten or is it 10000? You know what I mean?
+00:39:02 Okay.
 
-00:40:04 Where is the scale up before I see something?
+00:39:02 So if I wrote, say a function and so often what you're doing, if you're playing with disk is like you write the function and then you immediately write,
 
-00:40:07 Yeah, if you want to make sure it's clicking but you don't want to take up too much time, I'd say just run it up. Time as shorthand. When we're writing tests and stuff, we do like 100 or thousand because that also gives you time to actually adapt to the actual data that you're sending because it's not enough to just quicken it. Then you'll just have a bunch of adaptive instructions. They actually have to see something.
+00:39:10 print out the disk output.
 
-00:40:24 Well, now we're paying attention. Like great house having to pay attention too, right?
+00:39:12 Maybe you've never called it.
 
-00:40:29 Yeah, and you'll see that too, because if you have any sort of logic flow inside of your function when you're looking at the bike code, any paths that are hit will be specialized, but any paths that aren't obviously won't because we don't specialize that code.
+00:39:13 Right.
 
-00:40:43 So it has a bit of a code coverage aspect.
+00:39:14 And so that might actually give you a different, even if you said yes to the specialization output,
 
-00:40:46 Think about it. If you look at it, you might see part of your code and it's just unmodified because whatever you're doing to it didn't hit this else case ever.
+00:39:19 that still might not give you anything interesting.
 
-00:40:55 Yeah, and that's what's really exciting about this too.
+00:39:22 It won't give you it.
 
-00:40:59 If you run your code a bunch of times and then you call this on it, you see a lot of information that would potentially be useful if you are, for example, JIT compiling that function you see at every edition site, you're adding floats or INTs you see in every attribute load site, whether it's a slot or not. You see where the dead code is, you see the hot code. All that stuff is sort of getting back to what I said, how this sort of enables us to build upon it in the future. Not only can we add more specializations or specialize, more op cos or do that more efficiently, we can also use that information to kind of infer additional properties about the code that are useful for other faster, lower representation.
+00:39:23 Yeah.
 
-00:41:41 Yes, I can certainly see how that might be might inform some kind of jit engine in the future.
+00:39:23 It'll just give you as if you hadn't passed the keyboard argument.
 
-00:41:46 I think the PEP is interesting. The pep659 people can check it out. But like you said, it's informational, so it's not really the implementation. Exactly.
+00:39:25 Because again, this all happens at runtime.
 
-00:41:55 So let's talk a bit about your project that you did in addition to being on the team, the personal project that you did that basically takes all of these ideas we've been talking about and says, well, two things.
+00:39:27 So if the code isn't being run, nothing happens.
 
-00:42:08 One, can I take code and look at that and get that answer again, kind of back to my code coverage example, like coloring code lines to mean stuff. And then what's interesting about this and we'll talk to this example that you put up, is there's actionable stuff you could do to make your code faster if you were in a super tight loop section? I feel like applying this visualization could help you allow Python to specialize more rather than less.
+00:39:29 You know, we don't specialize code that is ever run.
+
+00:39:33 What counts as warm, Mike?
+
+00:39:35 How many times do I got to call it?
+
+00:39:36 The official answer is that's an implementation detail of the interpreter subject to change at any time.
+
+00:39:41 The actual answer is either eight calls or eight times through a loop in a function.
+
+00:39:46 So if your function has a loop that executes more than eight times, or if you call it more than eight times.
+
+00:39:52 So just calling your function eight times should be enough to quicken it.
+
+00:39:55 Right.
+
+00:39:56 Well, maybe that number changes in the future, but just having a sense, like, is it 10 or is it 10,000?
+
+00:40:02 You know what I mean?
+
+00:40:03 Like, where's the scale up before I see something?
+
+00:40:07 Yeah, if you want to make sure it's quickened, but you don't want to take up too much time,
+
+00:40:09 I'd say just run it a couple less at a time.
+
+00:40:11 As short man, when we're writing tests and stuff, we do like 100 or 1,000.
+
+00:40:15 Because that also gives it time to actually adapt to the actual data that you're sending.
+
+00:40:19 Because it's not enough to just quicken it, then you'll just have a bunch of adaptive instruction.
+
+00:40:23 They actually have to see something.
+
+00:40:24 Yeah, well, now we're paying attention.
+
+00:40:25 Like, great.
+
+00:40:26 You need to have something to pay attention to, right?
+
+00:40:29 Yeah, and you'll see that too.
+
+00:40:30 Because if you have any sort of logic flow inside of your function, when you're looking at the bytecode, any paths that are hit will be specialized,
+
+00:40:38 but any paths that aren't obviously won't because we don't specialize dead code.
+
+00:40:42 So it has a bit of a code coverage aspect, right?
+
+00:40:46 You can think about it like that.
+
+00:40:47 If you look at it, you might see part of your code and it's just, it's unmodified because whatever you're doing to it didn't hit this else case ever.
+
+00:40:55 Yeah, well, and that's what's really exciting about this too, is when you're, if you run your code a bunch of times and then you call this on it,
+
+00:41:03 you see a lot of information that would potentially be useful if you were,
+
+00:41:07 for example, JIT compiling that function.
+
+00:41:09 You see at every addition site, you're adding floats or ints.
+
+00:41:14 You see at every attribute load site, whether it's a slot or not, you see where the dent code is, you see where the hot code.
+
+00:41:19 All that stuff is sort of getting back to what I said, how this sort of enables us to build upon in the future.
+
+00:41:25 Not only can we add more specializations or specialize more op codes or,
+
+00:41:29 you know, do that more efficiently, we can also use that information to kind of infer additional
+
+00:41:35 properties about the code that are useful for, you know, other faster, lower representation.
+
+00:41:40 Yeah, I can certainly see how that might be.
+
+00:41:42 Might inform some kind of JIT engine in the future.
+
+00:41:45 Yeah.
+
+00:41:46 I think the PEP is interesting.
+
+00:41:48 The PEP 659, people can check that out.
+
+00:41:50 But like you said, it's informational.
+
+00:41:52 So it's not really the implementation exactly.
+
+00:41:54 Yeah.
+
+00:41:55 So let's talk a bit about your project that you did.
+
+00:41:59 In addition to just being on the team, the personal project that you did,
+
+00:42:03 that basically takes all of these ideas we've been talking about and says, well, two things.
+
+00:42:08 One, can I take code and look at that and get that answer?
+
+00:42:12 Again, kind of back to my code coverage example, like coloring code lines to mean stuff.
+
+00:42:16 And then what's interesting about this, and we'll talk to this example that you put up,
+
+00:42:20 is there's actionable stuff you could do to make your code faster if you were in a super
+
+00:42:25 tight loop section.
+
+00:42:26 Like I feel like applying this visualization could help you allow Python to specialize more
+
+00:42:32 rather than less.
 
 00:42:33 Yeah.
 
-00:42:34 In general, this tool is really useful for us as maintainers of the specialization stuff, because we get to see where we're failing to specialize, because ideally, if we've done our job well, you should get past your Python without changing your code at all. First and foremost, this is a tool for us in our work so that we can see, okay, what can we still work on here? But that is sort of a cool knockout effect, is that if you do run on your coat, you also know where it's not specializing. And if you know enough about how specialization works, you may be able to fix that. But I would say word of caution against getting too in the weeds and try to get every single bite code to do what you want, because there are much better ways of making it faster. Right.
+00:42:34 I mean, in general, this tool is really useful for us as maintainers of the specialization
 
-00:43:18 There are places where you're like these two functions. I know we got 200 lines of Python, but these two, which are like 20 lines, they are so important and they happen so frequently, anything you can do to make them faster matters. People rewrite that kind of stuff in Rust or in Python before you go that far. Maybe adding a zero on the end of a number is all it takes. Something like that.
+00:42:40 stuff because we get to see, you know, where we're failing to specialize.
 
-00:43:41 Right.
+00:42:44 Because ideally, you know, if we've done our job well, you should get past your Python
 
-00:43:41 That's kind of what I'm getting. Not to go crazy or try to think you should mess with the whole program, but there are these times where, like, five lines matter a lot.
+00:42:48 without changing your code at all.
+
+00:42:49 First and foremost, this is a tool for, you know, us in our work so that we can see, okay,
+
+00:42:54 what can we still work on here?
+
+00:42:56 But that is sort of a cool knockout effect is that if you do run on your code, you also
+
+00:43:01 know where it's not specializing.
+
+00:43:02 And if you know enough about how specialization works, you may be able to fix that.
+
+00:43:06 But I would say a word of caution against, you know, like getting two in the weeds and
+
+00:43:12 trying to get every single bytecode to do what you want, because that's, there are much
+
+00:43:16 better ways of making it faster, right?
+
+00:43:18 There are places where you're like, these two functions, I know we got 20,000 lines
+
+00:43:22 of Python, but these two, which are like 20 lines, they are so important.
+
+00:43:27 And they happen so frequently.
+
+00:43:28 Anything you can do to make them faster matters.
+
+00:43:31 You know, people rewrite that kind of stuff in Rust or in Cython.
+
+00:43:34 Before you go that far, maybe adding a dot zero on the end of a number is all it takes.
+
+00:43:40 You know, something like that, right?
+
+00:43:41 That's kind of what I'm getting at.
+
+00:43:42 Not to go crazy or try to think you should mess with the whole program.
+
+00:43:45 But there are these times where like five lines matter a lot.
 
 00:43:49 Yeah.
 
@@ -464,356 +1480,1053 @@
 
 00:43:50 Well, tell us about your project specialist.
 
-00:43:53 One really cool thing that our specializing adaptive interpreter does is we've worked really hard to basically make it easy for us to get information about how well specializations are working. So you can actually compile Python. It will run a lot slower, but you can compile Python with this option with Py stats, and that basically dumps all of the specialization stats.
+00:43:53 One really cool thing that our specializing adaptive interpreter does is we've worked really
 
-00:44:15 Yes.
+00:43:59 hard to basically make it easy for us to get information about how well specializations
 
-00:44:15 You actually pointed out that in the faster Python idea section, it lists out yes.
+00:44:03 are working.
 
-00:44:22 There's tons of counters. So you can see that when we run our benchmarks load, at or instance value is run, what, 2 billion times? Almost 3 billion times. And it misses its assumptions, 1% of those.
+00:44:04 So you can actually compile Python.
 
-00:44:35 And so there's tons of these counters.
+00:44:06 It'll run a lot slower, but you can compile Python with this option with PyStats.
 
-00:44:36 That you can dump.
+00:44:11 And that basically dumps all of the specialization stats.
 
-00:44:37 And that's really cool because we can run our performance benchmarks and see how this changed. And even cooler than that, it allows us separately to for example, there's been at least one case where we've worked with a large company that has a big private internal app, and they can run it using Python 311. And we can get these stats without actually looking at the source code, which is really cool.
+00:44:14 Yeah.
 
-00:44:58 And so we want to help you be faster. And we're working on the runtime, but we don't want to.
+00:44:15 And you actually pointed out that you can, in the faster CPython idea section, it like lists
 
-00:45:02 But you don't want to show us your code, but we're not going to look at it. And so those stats are really useful for kind of knowing, okay, 90% of my attribute access. We're able to be specialized. What about the remaining 10%? Where are they?
+00:44:21 out like a...
 
-00:45:14 An additional question, like, why couldn't they be specialized?
+00:44:22 Yeah.
 
-00:45:18 And that's something that's a lot easier to tell when you're looking at the code. And so this tool was basically my original intention for writing. It is once we get beyond seeing stats for benchmark and we run something on it that makes it easy to tell at a glance where we're failing and how.
+00:44:22 So there's tons of counters.
+
+00:44:23 So you can see that when we run our benchmarks, you know, load adder instance value is run
+
+00:44:28 what, 2 billion times, almost 3 billion times.
+
+00:44:30 And it misses its assumptions, 1% of those.
+
+00:44:34 And yeah.
+
+00:44:35 And so there's tons of these counters that you can dump.
+
+00:44:37 And that's really cool because we can run our performance benchmarks and see how those numbers
+
+00:44:41 have changed.
+
+00:44:41 And even cooler than that, it allows us kind of separately to, for example, there's been
+
+00:44:47 at least one case where we've worked with a large company that has a big private internal
+
+00:44:51 app and they can run it using Python 3.11 and we can get these stats without actually looking
+
+00:44:56 at the source code, which is really cool.
+
+00:44:57 And so we want to help you be faster and we're working on the runtime, but we don't want you
+
+00:45:03 don't want to show us your code.
+
+00:45:04 And so we're not going to look at it.
+
+00:45:05 And so those stats are really useful for kind of knowing, okay, 90% of my attribute access
+
+00:45:10 were able to be specialized.
+
+00:45:11 What about the remaining 10%?
+
+00:45:13 Where are they?
+
+00:45:14 So, you know, an additional question, like why couldn't they be specialized?
+
+00:45:17 And that's something that's a lot easier to tell when you're looking at the code.
+
+00:45:21 And so this tool was basically my original intention for writing it is, you know, once we get beyond,
+
+00:45:28 you know, seeing the stats for benchmark and we run something on it, that makes it easy to
+
+00:45:32 tell at a glance where we're failing and how.
 
 00:45:36 Right.
 
-00:45:36 It's like they have 96% code coverage versus these two lines are the ones that are not getting covered.
+00:45:36 It's like saying you have 96% code coverage versus these two lines are the ones that are not
 
-00:45:42 Exactly. You get a lot more information from actually getting those line numbers then from the 97th. And so basically the way it works, we already talked about how in the disk module, you can see which instructions are adaptive or specialized and all that. This tool does visualize literally, the implementation of this tool is just a for loop over this, where we just kind of categorize the different instructions and then map those two colors and all sorts of great.
+00:45:41 getting covered.
+
+00:45:42 Exactly.
+
+00:45:43 You get a lot more information from actually getting those line numbers than from the 97%.
+
+00:45:47 And so basically the way it works, we already talked about how in the disk module, you can
+
+00:45:54 see which instructions are adaptive or specialized.
+
+00:45:57 And all that this tool does, it visualizes.
+
+00:46:00 Literally the implementation of this tool is just a for loop over this, where we just kind
+
+00:46:08 of categorize the different instructions and then map those to colors and all sorts of crazy
+
+00:46:12 concepts.
 
 00:46:12 Yeah.
 
-00:46:12 And for people listening, imagine some code. And here you've got a four loop with the tuple decomposition. So you got four I comma, t and enumerate of text that you got to do some stuff and it has the I and the T turned green, but then some dictionary access turned yellow. And it talks about is it not at all specialized?
+00:46:12 Yeah.
 
-00:46:34 Did it try but fail to get specialized? And things like that, right?
+00:46:12 And for people listening, you know, imagine some code and here you've got a for loop with
 
-00:46:38 Yes.
+00:46:18 the tuple decomposition.
 
-00:46:39 So green indicates successful specializations. Red are those adaptive instructions that are slightly slower and represent missed specialization. Yellow and orange are kind of green. As we talked about, one line of Python coat easily be ten or 25 code instructions.
+00:46:20 So you got for I comma T in enumerative text that are going to do some stuff.
+
+00:46:24 And it has the I and the T turned green, but then some dictionary access turned yellow.
+
+00:46:30 And it talks about, is it not at all specialized?
+
+00:46:33 Is it, did it try but fail to get specialized?
+
+00:46:37 And things like that, right?
+
+00:46:38 Yep.
+
+00:46:38 Yeah.
+
+00:46:39 So green indicates successful specializations.
+
+00:46:42 Red are those adaptive instructions that are slightly slower and represent missed specializations.
+
+00:46:47 Yellow and orange are kind of a gradient.
+
+00:46:50 As we talked about, you know, one line of Python code easily be 10 or 20 byte code instruction.
 
 00:46:56 Right.
 
+00:46:56 Yeah.
+
+00:46:57 Yeah.
+
 00:46:57 It's kind of a way of compressing that information.
 
-00:47:00 And one thing I want to point out about this too, is you'll notice it's actually you see characters within a line. And this is something that's really cool because this is piggybacking on a feature that's completely unrelated specialization.
+00:46:59 It's really.
 
-00:47:14 Originally, when I was writing this, it highlighted each line. So you can see this line was kind of green or this line was kind of yellow. But then I remembered maybe you're familiar.
+00:47:00 And one thing I want to point out about this too is, you know, you'll notice it's actually,
 
-00:47:25 In Python 311, we have really formative trace backs where it will actually underline the part of the code that has a syntax error, that has an exception that was raised or something. And so that's the pet that's linked first in the description there. It's called fine grained locations trace backs. And so what that means is that previously we just had line number information in the byte code, but now we have line number and end line number and start column and end column information, which means that due to this completely unrelated feature, we can now also map it directly to which characters file corresponds to individual type.
+00:47:06 you see characters within a line.
+
+00:47:08 And this is something that's really cool because this is piggybacking on a feature that's completely
+
+00:47:12 unrelated to specialization.
+
+00:47:13 Originally, when I was writing this, it highlighted each line.
+
+00:47:18 So you could see this line was kind of green or this line was kind of yellow.
+
+00:47:21 But then I remembered, maybe you're familiar, in Python 3.11, we have really, really formative
+
+00:47:29 tracebacks where it will actually underline the part of the code that has a syntax error that
+
+00:47:34 has an exception that was raised or something.
+
+00:47:37 And so that's the PEP that's linked first in the description there.
+
+00:47:41 It's, you know, called fine-grained error locate or fine-grained locations tracebacks.
+
+00:47:46 And so what that means is that previously we just had line number information in the bytecode,
+
+00:47:51 but now we have line number and end line number and start column and end column information,
+
+00:47:56 which means that due to this completely unrelated feature, we can now also map it directly to which
+
+00:48:01 characters in source file correspond to individual bytecode.
 
 00:48:04 That's super cool.
 
 00:48:05 Yeah.
 
-00:48:05 So for example, we've got a string and you're accessing it by element by passing an index. And you were able to highlight the square brackets as a separate classification on that array indexing or that string indexing.
+00:48:05 So for example, here we've got a string and you're accessing it by element, by passing an index,
+
+00:48:12 and you were able to highlight the square brackets as a separate classification on that array indexing
+
+00:48:19 or that string indexing.
 
 00:48:20 Exactly.
 
-00:48:21 So it wouldn't have been as helpful to just see that line was kind of yellow orange.
+00:48:21 So it wouldn't have been as helpful to just see that that line was kind of yellow-orange-ish.
 
-00:48:26 We see that the fast variable store was really quick. We see that the modularo operation and the indexing of string by it wasn't that fast. We weren't able to specialize it, but we were able to specialize the lookup of the name, weren't able to specialize the function call that sort of information. That granularity is really, really cool.
+00:48:25 You know, we see that the fast variable store was really, really quick.
 
-00:48:51 Yeah, it is super cool. And I think a good way to go through this, you got some more background that you write about here, but we've already talked a lot about especially.
+00:48:29 We see that, you know, the modulo operation and the indexing of string by int wasn't that fast.
 
-00:48:58 This is just summarizing.
+00:48:37 We weren't able to specialize it, but, you know, we were able to specialize, you know, the lookup of the name TILEN.
 
-00:48:59 Yeah, exactly. People can check it out there if they want the too long getting read version. But you've got this really nice example of what may be in the first few weeks of some kind of Python programming class.
+00:48:46 We weren't able to specialize the function column.
 
-00:49:12 Write a program that converts fahrenheit to celsius and Celsius to fahrenheit and then just test that round tripping numbers. Gives you basically the same answer back within floating point variations, right?
+00:48:47 So that sort of information, that granularity is really, really cool.
 
-00:49:24 Yeah.
+00:48:51 Yeah, it is super cool.
 
-00:49:24 I really like this example because as we'll show, it's kind of presented through the lens of performance optimization, but it also does a good job of showing you kind of how the interpreter works and how those little tweaks kind of cascade.
+00:48:52 And I think a good way to go through this, you know, you've got some more background that you write about here,
 
-00:49:38 Absolutely. And it highlights certain things. You can take advantage of that if you just slightly change the order. It actually has a different runtime behavior, which we don't often think about in Python. We're doing C++. We would maybe debate, do you dereference that pointer first or can you do it in the loop, but not so much here. So let's go through. I guess just to remind people fahrenheit celsius you would say x equals f -32 and then you multiply the result once you've shifted zero by five divided by nine. And the reverse is you multiply the celsius by nine divided by five and then you add the 32 to shift to zero again. And basically that's all there is to it. And then you go through and say, well, let's run the specialist on it to get its output. And maybe talk about this first variation that we get here.
+00:48:56 but we've already talked a lot about specializing.
 
-00:50:24 Yeah, so as we were talking about, the red indicates adaptive instructions and the green indicates the specialized structure. So we can see here that some things were specialized very well. For instance, look at a cert round trip that's break green because it's in that hot loop, we got enough information about it to say, okay, a certain round trip is being loaded from the global namespace and it's a Python function. So we can do that cool. Python to python call optimization. And that's basically as fast as any function called Python is going to be. But some things aren't specialized. So the things that jump out, the things that we may want to actually take a closer look at would be the map, which is yellow and red. So, for instance, the loads of the local variable f in that first function and the load of the constant 32, those are yellow because the math that they're involved in the subtraction operation wasn't specialized, but the individual loads of those were specialized.
+00:48:58 Yeah, this is just summarizing the pet piece.
+
+00:48:59 Yeah, exactly.
+
+00:49:00 People can check it out there if they want the TILEN, the too-long-didn't-read version.
+
+00:49:04 But you've got this really nice example of, you know, what may be in the first few weeks of some kind of Python programming class.
+
+00:49:11 Write a program that converts Fahrenheit to Celsius and Celsius to Fahrenheit,
+
+00:49:16 and then just tests that, you know, round-tripping numbers gives you basically the same answer back within floating-point variations, right?
+
+00:49:24 Yeah, I really like this example because it, you know, as we'll show, it's kind of presented through the lens of performance optimization,
+
+00:49:31 but it also does a good job of showing you kind of how the interpreter works and how those little tweaks kind of cascade.
+
+00:49:37 Mm-hmm, absolutely.
+
+00:49:38 And it highlights certain things you can take advantage of that, you know, if you just slightly change the order,
+
+00:49:44 it actually has a different runtime behavior, which we don't often think about in Python.
+
+00:49:48 We're doing C++.
+
+00:49:49 We would maybe debate, do you dereference that pointer first, or can you do it in the loop?
+
+00:49:53 Yeah.
+
+00:49:54 But not so much here.
+
+00:49:56 So let's go through, I mean, I guess just to remind people, Fahrenheit to Celsius, you would say X equals F minus 32,
+
+00:50:03 and then you multiply the result once you've shifted the zero by five divided by nine,
+
+00:50:08 and the reverse is you multiply the Celsius by nine divided by five, and then you add the 32 to shift the zero again.
+
+00:50:15 And basically that's all there is to it.
+
+00:50:17 And then you go through and say, well, let's run the specialist on it to get its output.
+
+00:50:21 And maybe talk about this first variation that we get here.
+
+00:50:24 Yeah.
+
+00:50:24 So as we were talking about, you know, the red indicates is adaptive instructions, and the green indicates the specialized instruction.
+
+00:50:32 So we can see here that some things were specialized very well.
+
+00:50:35 For instance, look at a cert roundtrip.
+
+00:50:37 You know, that's great green.
+
+00:50:38 Because it's in that hot loop, we got enough information about it to say, okay, a cert roundtrip is being loaded from the global namespace.
+
+00:50:47 And it's a Python function.
+
+00:50:48 So we can do that cool Python to Python call optimization.
+
+00:50:53 And, you know, that's basically as fast as any function call in Python is going to be.
+
+00:50:58 But some things aren't specialized.
+
+00:51:01 So the things that jump out, you know, the things that we may want to actually take a closer look at would be the map, which is, you know, yellow and red.
+
+00:51:08 So, for instance, we can, the loads of the local variable f in that first function and the load of the constant 32, those are yellow because the map that they're involved in, the subtraction operation, wasn't specialized.
+
+00:51:23 But the individual loads of those instructions were specialized.
 
 00:51:26 I see.
 
 00:51:26 So half yes, half no for what they were involved in.
 
-00:51:29 Yeah, green plus red equals yellow.
+00:51:29 Yeah, yeah.
 
-00:51:33 So that subtraction wasn't specialized. And the reason is, in 311, just based on heuristics that we gathered, we determined it was worth it, at least for the time being, to optimize int, but not in the flow+flow. In what we're doing here is we're subtracting a float, and an int. And so we're able to do that, and that is specializable. But if we were to somehow change that, so that two ints and two floats, then it would be specializable.
+00:51:29 Green plus red equals yellow.
 
-00:52:01 Right, because when I look at it, it looks like it absolutely should have been specialized. I have a float minus an int. The int is even a constant like you're. Okay, well, this is standard math and it's always a Float and it's always an end and it's always subtraction. Right. It seems like that should just well, the math should be obvious and fast, but because as you pointed out, there's this pecularity or maybe an implementation detail for the most.
+00:51:31 So, yeah.
 
-00:52:26 Absolutely an implementation.
+00:51:33 So that subtraction wasn't specialized.
 
-00:52:27 Yeah, if it's an int and a Float, well, right now that problem is not solved. Maybe it will be in the future, right? It seems like pretty low hanging fruit, but well, specializations, right?
+00:51:35 And the reason is, is in 3.11, just based on heuristics that we gathered, we determined it was worth it, at least for the time being, to optimize int plus int, float plus float, but not int plus float, float plus int.
 
-00:52:38 Yeah, specializations aren't free. So, for instance, like when we're running those adaptive instructions, we need to check for all of the different possible specializations. So every time we add a new specialization that has some cost and basically we determined, at least for the time being, like I said, that we've tried to do int plus float to Float plus int at least based on the benchmarks that we have and the code that we've seen, it just isn't worth.
+00:51:48 And so what we're doing here is we're subtracting a float and an int.
+
+00:51:52 And so we're able to see that that isn't specializable.
+
+00:51:55 But if we were to somehow change that so that it was two floats, two ints, then it would be specializable.
+
+00:52:01 Right.
+
+00:52:01 Because when I look at it, it looks like it absolutely should have been specialized.
+
+00:52:04 I have a float minus an int.
+
+00:52:07 The int is even a constant.
+
+00:52:08 Like you're, okay, well, this is standard math.
+
+00:52:13 And it's always a float and it's always an int and it's always subtraction.
+
+00:52:16 Right.
+
+00:52:16 It seems like that should just, well, the math should be obvious and fast.
+
+00:52:20 But because, as you pointed out, there's this peculiarity or maybe an implementation detail for the moment.
+
+00:52:26 Absolutely an implementation detail.
+
+00:52:27 Yeah, yeah, yeah.
+
+00:52:28 Yeah.
+
+00:52:28 If it's an int and a float, well, right now that problem is not solved.
+
+00:52:33 Maybe it will be in the future, right?
+
+00:52:34 It seems like pretty low hanging fruit, but you've got all the variations, right?
+
+00:52:37 Yeah.
+
+00:52:38 Specializations aren't free.
+
+00:52:39 So for instance, like when we're running those adaptive instructions, we need to check for all of the different possible specializations.
+
+00:52:46 So every time we add a new specialization that has some cost.
+
+00:52:50 And basically we determined, at least for the time being, like I said, that we've tried to do int plus float and float plus int.
+
+00:52:57 At least based on the benchmarks that we have and the code that we've seen, it just isn't worth it.
+
+00:53:02 Sure.
 
 00:53:02 Okay.
 
-00:53:03 And it's something like int+int is very easy to do quickly. Float is very quickly int plus Float, there's some coercion that needs to happen there anyway, conversion. So it's not something that it's something that costs some time to check, but we don't have a significantly faster way.
+00:53:03 Yeah.
 
-00:53:23 Which does happen on a register on the CPU or something.
+00:53:03 Yeah.
+
+00:53:04 And it's something like int plus int is very easy to do quickly.
+
+00:53:08 Float plus float is very easy to do quickly.
+
+00:53:10 Int plus float, there's some coercion that needs to happen there.
+
+00:53:13 Right.
+
+00:53:14 So it's already constant anyway.
+
+00:53:15 Yeah.
+
+00:53:16 Yeah.
+
+00:53:16 So it's not something that, it's something that caught some time to check, but we don't have a significantly faster wave.
+
+00:53:23 It doesn't happen on a register on the CPU or something.
 
 00:53:26 Yeah, exactly.
 
-00:53:27 Okay, so then you say, well, look what the problem is, it's Float and Int, where we have F -32, which seems, again, completely straightforward. What if we are both floats? Well, what if you know it's going to end up a Float in the end anyway? How about make it 32.0 instead of 32 and then Bam, that whole line turns green, right?
+00:53:27 Okay.
 
-00:53:47 Yes.
+00:53:28 So then you say, well, look what the problem is.
 
-00:53:47 So now you're basically doing that entire line using fast local variables and native floating point operations. You're adding literally two C doubles together.
+00:53:31 It's float in int where we have f minus 32, which seems again, completely straightforward.
 
-00:53:59 Yeah, and this is what I was talking about, where you could look at that line and go, oh, well, I just wrote the integer 32, but I'm doing floating point math, not like I'm doing integer math. So if you just put write it as a constant with a zero on it, that's a pretty low effort change. And here you go, python can help you more and go faster.
+00:53:36 What if they're both floats?
 
-00:54:18 Right? Yeah.
+00:53:38 Well, what if like, you know, it's going to end up a float in the end anyway.
 
-00:54:19 And that's not a transformation that we can do for you, because if F is an instance of some user class that defines Thunderstell, that would be a visible change if it started receiving a Float as the right int argument. So those are things that we can't do while making the language still.
+00:53:41 How about make it 32.0 instead of 32?
 
-00:54:35 Right.
+00:53:44 Yep.
 
-00:54:35 But your specialist tool can show you and again, figure out where your code is slow and then consider like, well, we only got 100,000 lines, who's assigned to specializing today?
+00:53:44 And then bam, that whole line turns green, right?
 
-00:54:47 Yeah, and it also requires this is a simpler example, but it does require a somewhat deep knowledge of how a specialization work, because for things other than binary operation, it's not going. To become clear what the fix it you just see kind of where I hesitate to even call it a problem, but you see where there's the potential for improvement, but not necessarily how to improve.
+00:53:47 Yep.
+
+00:53:47 Yeah.
+
+00:53:47 So now you're basically doing that entire line using fast local variables and look like native floating point operation.
+
+00:53:55 You're just adding literally two C doubles together, which is.
+
+00:53:59 Yeah.
+
+00:53:59 And this is what I was talking about where you could look at that line and go, oh, well, I just wrote the integer 32, but I'm doing floating point math.
+
+00:54:07 It's not like I'm doing integer math.
+
+00:54:08 So if you just put, you know, write it as a constant with a zero, you know, dot zero on it, that's a pretty low effort change.
+
+00:54:15 And here you go.
+
+00:54:16 Python can help you more and go faster, right?
+
+00:54:18 Yeah.
+
+00:54:19 And that's not a transformation that we can do for you.
+
+00:54:21 Because if F is an instance of some user class that defines dunder, so that would be a visible change if it started receiving a float as a right hand argument.
+
+00:54:30 So those are things that we can't do while making the language still.
+
+00:54:34 Right.
+
+00:54:35 But your specialist tool can show you.
+
+00:54:38 And again, figure out where your code is slow and then consider whether they're just like, well, we only got 100,000 lines.
+
+00:54:44 Let's who's assigned to specializing today.
+
+00:54:47 Yeah.
+
+00:54:47 And it also requires, this is a simpler example, but it does require, you know, a somewhat deep knowledge of how the specialization work.
+
+00:54:55 Because for things other than binary operation, it's not going to become clear what the fix is.
+
+00:55:01 You just see kind of where the, I hesitate to even call it a problem, but you see where there's the potential for improvement, but not necessarily how to improve.
 
 00:55:08 Yeah.
 
-00:55:08 And then you have another one in here that's I think really interesting because so often when we're talking about math and at least commutative operations, it doesn't matter which order you do them in, like five times seven times three if it's the first two and then the result, or you multiply the last two. And unless there's some weird floating point edge case that the IEEE representation goes haywire, it doesn't matter. Right. For example, here you've got to finish off the fahrenheit to celsius conversion. It's the x times five divided by nine. And that one is busted too, for the same reason.
+00:55:08 And then you have another one in here that's, I think, really interesting because it, so often when we're talking about math and at least commutative operations, it doesn't matter which order you do them in.
 
-00:55:42 Right?
+00:55:19 Like five times seven times three.
+
+00:55:21 If it's the first two and then the result or multiply the last two.
+
+00:55:25 And, you know, unless there's some weird floating point edge case that, you know, the IEEE representation goes haywire.
+
+00:55:31 It doesn't matter.
+
+00:55:31 Right.
+
+00:55:32 And so, for example, here you've got, you know, to finish off the Fahrenheit to Celsius conversion, it's the X times five divided by nine.
+
+00:55:40 And that one is busted too for the same reason, right?
 
 00:55:43 Because it's a five.
 
 00:55:43 Yeah.
 
-00:55:45 So this is kind of for two reasons. This line isn't as good as it could be under ideal position. So x is a floating point, number five is an integer. We have the same problem. We specialize multiplication for intent flow flows, but not for intent flows. And the division is a different problem. We don't try to specialize division at all for the reason that it's kind of problematic, because the right hand side can be zero. And then you have to check for that and all sorts of things that you need to check for, and that make it not as much of a pay off. So if we have both an operation that we can't specialize, but it isn't being specialized, and then another one that we're not even trying to specialize, but.
+00:55:44 Because, so this is kind of for two reasons.
 
-00:56:24 Then back to the community of thinking you're like, well, what if we did the division?
+00:55:47 This line isn't as good as it could be under ideal conditions.
 
-00:56:29 Right? What if we did the division like parentheses five divided by nine and then x times that right.
+00:55:50 So, you know, X is a floating point number, five is an integer.
 
-00:56:35 Yes.
+00:55:54 So we have the same problem.
 
-00:56:37 Waiting through more of these implementation details, python's compiler, we have a bytecode compiler. It's not compiling to machine code, but it can perform simple optimization. So by changing the order of operations, the byte code compiler sees, oh, five divided by nine. I can do that at compile time once rather than at run time, literally every time. That's never going to change.
+00:55:55 We specialize multiplication for int and int and float flows, but not for int and float.
 
-00:56:58 And so by changing the specialization yeah, sorry. Regardless of specialization. That's better anyway.
+00:56:00 And the division is a different problem.
 
-00:57:04 Right?
+00:56:03 We don't try to specialize division at all for the reason that it's kind of problematic because the right hand side could be zero.
 
-00:57:04 Because that happens when the PYC file is generated or when the equivalent thing in memory is generated. And then it's just known as a constant, right?
+00:56:08 And then you have to check for that and all sorts of things that you need to check for that make it not as much of a payoff.
+
+00:56:14 So, you know, we have both an operation that we can't specialize, but it isn't being specialized.
+
+00:56:21 And then another one that we're not even trying to specialize at all.
+
+00:56:24 But then back to the commutative thing, you're like, well, what if we did the division, right?
+
+00:56:29 What if we did the division, like, parenthesis five divided by nine?
+
+00:56:33 And then X times that, right?
+
+00:56:35 Yep.
+
+00:56:35 And so wading through more of these implementation details, Python's compiler, you know, we have a bytecode compiler.
+
+00:56:42 It's not a compiling to machine code, but it can perform simple optimization.
+
+00:56:46 So by changing the order of operations, the bytecode compiler sees, oh, five divided by nine.
+
+00:56:52 I can do that at compile time once rather than at runtime literally every time.
+
+00:56:57 That's never going to change.
+
+00:56:58 And so by changing that order of a problem.
+
+00:57:00 Yeah.
+
+00:57:01 Sorry.
+
+00:57:01 Regardless of specialization, that's better anyway.
+
+00:57:04 Right.
+
+00:57:04 Because that happens when the PYC file is generated or when the equivalent thing in memory is generated.
+
+00:57:09 And then it's just known as a constant, right?
 
 00:57:13 Yeah.
 
-00:57:13 And you're doing no division of runtime anymore. So you turn this from two operations, one of which is pretty expensive, to just one operation.
+00:57:13 And you're doing no division of runtime anymore.
+
+00:57:15 So you turn this from two operations, one of which is pretty expensive, to just one operation.
 
 00:57:20 All you're doing is a multiply by a constant.
 
-00:57:23 And so you can see that once we apply that transformation to our code, everything's all break as specialized as it.
+00:57:22 Oh.
+
+00:57:23 Yep.
+
+00:57:23 And so you can see that, you know, once we apply that transformation to our code, everything's all break green.
+
+00:57:29 This is as specialized as it is.
 
 00:57:32 Right.
 
-00:57:32 Because in Python three, five divided by nine is a floating point.
+00:57:32 Because in Python 3, five divided by nine is a floating point, right?
 
-00:57:36 Right.
+00:57:36 Yes.
 
 00:57:36 Doesn't module it out or whatever.
 
 00:57:38 Yeah.
 
-00:57:39 So then it becomes float times float, which then can be specialized in that first division part is something that is done at Runtime when it first runs, but only once, which is fantastic, like pars time, basically. So, yeah, this function or these functions, this code is much better as understanding.
+00:57:39 So then it becomes float times float, which then can be specialized.
+
+00:57:43 And that first division part is something that is done at runtime when it first runs, but only once, which is fantastic.
+
+00:57:50 Like parse time, basically.
+
+00:57:51 Yeah.
+
+00:57:52 So, yeah, this function or these functions, this code is much better as a result of just understanding.
 
 00:57:58 Yeah.
 
-00:57:58 And this transformation isn't something that Python can do for you because it changes the semantics of the language. Again, if that is some user object, then it can serve the types that are being passed to it.
+00:57:58 And this transformation isn't something that Python can do for you because it changes the semantics of the language.
 
-00:58:08 Yeah.
+00:58:03 Again, if X is some user object, then it can serve the types that are being passed to it.
 
-00:58:08 If it implements multiply, it expected to receive the five, it didn't expect to receive 1.2715, or whatever the heck that is.
+00:58:07 Yeah.
 
-00:58:16 Right? Yes.
+00:58:08 If it implements multiply, it expected to receive the five.
 
-00:58:17 Cool. All right, well, this is a really cool tool. I definitely encourage people, if they're listening, just come over and just pictures of code and color, just scroll quickly through to see what we're talking about. And I find it super valuable because it highlights with color right on the code that you wrote. It doesn't spit out the Byte code and say, here's the byte code improvements, but it highlights your code and says the code you wrote is being improved by Python or not being improved by Python here.
+00:58:11 It didn't expect to receive 1.2715 or whatever the heck that is, right?
+
+00:58:16 Yep.
+
+00:58:17 Yeah.
+
+00:58:17 Cool.
+
+00:58:17 All right.
+
+00:58:18 Well, this is a really cool tool.
+
+00:58:19 I definitely encourage people if they're listening, just, you know, come over and just there's pictures of code and color.
+
+00:58:26 Just scroll quickly through it to see what we're talking about.
+
+00:58:29 And I find it super valuable because it highlights with color right on the code that you wrote.
+
+00:58:34 It doesn't spit out the byte code and say, here's the byte code improvements, but it highlights your code and says the code you wrote is being improved by Python or not being improved by Python here.
 
 00:58:45 Right.
 
-00:58:45 And just understanding that it might not matter and it might matter a lot to you. It depends.
+00:58:45 And just understanding that it might not matter.
+
+00:58:47 And it might matter a lot to you.
+
+00:58:49 It depends.
 
 00:58:49 Yeah.
 
-00:58:49 And another thing to highlight too, that's kind of different about this tool for maybe most tools that you would use is this isn't static analysis like mypy or Pilot, where it's running over your code just in its file. You actually need to run your code under this tool for it to be able to do. Because again, all this happens at Runtime. So it's only after running the code that specialist walk over and see where.
+00:58:49 And another thing to highlight, too, that's kind of different about this tool from maybe most tools that you would use is, you know, this isn't this isn't static analysis.
 
-00:59:13 Running the code out enough. Right?
+00:58:58 It's not like my pie or pilot where it's running over your code just in its file.
 
-00:59:15 Yes. So, for example, if I just had this function and I didn't actually call test conversions at the bottom there name equals eight, everything would just be white because nothing actually ran.
+00:59:02 You actually need to run your code under this tool for it to be able to do it.
+
+00:59:06 Because, again, all this happens at runtime.
+
+00:59:08 So it's only after running the code that specialists walk over and see where you're running the code out.
+
+00:59:14 Enough, right?
+
+00:59:15 Yes.
+
+00:59:15 Yeah.
+
+00:59:16 So, for example, if I just had this function and I didn't actually call test convergence at the bottom there, the dunder name equals paint, everything would just be white because nothing actually ran.
+
+00:59:26 Right.
 
 00:59:27 Right.
 
-00:59:27 So in this example here, you've got, let's see, 24689. Surprising that number, you have nine test values that you're passing in and you're looping over all those values and testing it. If you're going to apply this to your code, it's super important that you come up with a scenario of representative data for now, and greater than eight. Who knows?
+00:59:27 So in this example here, you've got, let's see, two, four, six, eight, nine.
 
-00:59:48 Something that's loopy it runs loops eight times or something. Basically, if the same byte code instructions are being executed a bunch of times, that's how we tell it's hot. Whether that's in a loop or from repeated calls, I can see it's pretty.
+00:59:32 Surprising that number.
 
-01:00:02 Easy to forget that and people might run it and go, it didn't do anything, it did nothing, it's just all white.
+00:59:33 You have nine test values that you're passing in and you're looping over all those values and testing it.
+
+00:59:38 You need to, if you're going to apply this to your code, it's super important that you come up with a scenario of representative data.
+
+00:59:44 And for now, n greater than eight.
+
+00:59:46 Who knows?
+
+00:59:47 Or something that's loopy.
+
+00:59:50 It's, you know, it runs loops eight times or something.
+
+00:59:53 Basically, if the same bytecode instructions are being executed a bunch of times, that's how we tell that it's hot.
+
+00:59:58 Whether that's in a loop or for repeated calls.
+
+01:00:00 I can see it's pretty easy to forget that.
+
+01:00:03 And people might run it and go, it didn't do anything.
+
+01:00:05 It did nothing.
+
+01:00:05 It's just all white.
 
 01:00:06 Yeah.
 
-01:00:08 I mean, I'm not trying to issue an audio PR or anything, but maybe it should have some kind of warning. Like if there's zero color at all, like a warning, are you sure you ran it? Because we don't think you did anything.
+01:00:07 Yeah.
 
-01:00:20 I actually really liked that request. Do that.
+01:00:07 Maybe you should add, I mean, I'm not, I'm not trying to issue a, an audio PR or anything, but maybe it should have some kind of warning.
 
-01:00:24 Yeah. Because you would know, right? You'd know, if I've colored nothing in any color or whatsoever.
+01:00:14 Like if there's zero color at all, like a warning, like, are you sure you ran it?
 
-01:00:29 And I look at them like, oh, I did something wrong with someone else's. Like Frank did something wrong.
+01:00:19 Because we don't think you did anything.
+
+01:00:20 I actually really liked that request.
+
+01:00:22 Do that.
+
+01:00:22 Yeah.
+
+01:00:24 Cause you would know, right?
+
+01:00:25 Like, you'd know if like I've colored nothing in any color whatsoever.
+
+01:00:28 Yeah.
+
+01:00:29 And I look at him like, oh, I did something wrong.
+
+01:00:31 But someone else is going to be like, Fran did something wrong.
 
 01:00:33 Yes, exactly.
 
-01:00:34 Got to protect my reputation well and.
+01:00:34 Got to protect, got to protect my reputation.
 
-01:00:37 Just like limit the issues being raised like how many times you want to say did you remember to call it enough times? Yeah.
+01:00:36 Well, and just like limit the issues being raised.
+
+01:00:40 Like how many times you want to say, did you remember to call, call it enough times?
+
+01:00:44 Yeah.
+
+01:00:45 Yeah.
 
 01:00:46 Cool.
 
-01:00:46 I definitely think people should check this out if they're interested in seeing how the adaptive specializing adaptive interpreter from Python 311 is applied to their code. I guess. Also other caveat like really not super handy. If you try to do this with 310 Got to have 311.
+01:00:46 I definitely think people should check this out if they're interested in seeing how the adaptive specializing, specializing adaptive interpreter from Python 3.11 is applied to their code.
 
-01:01:02 It refuses to run under 310.
+01:00:56 I guess also other caveat, like really not super handy.
 
-01:01:05 I accidentally made that mistake enough times where I just had the python environment. I had active with 310 argument doesn't Exist. Yeah, all that stuff.
+01:00:59 If you try to do this with 3.10, you got to have 3.11.
+
+01:01:01 It refuses to run under 3.10.
+
+01:01:03 Yeah.
+
+01:01:04 Cause I accidentally made that mistake enough times where I just had the Python environment I had acted with 3.10.
+
+01:01:10 I'm like, not working.
+
+01:01:11 Darn.
+
+01:01:11 Yeah.
+
+01:01:12 It's all like again.
+
+01:01:13 It doesn't exist.
+
+01:01:14 Yeah.
+
+01:01:14 All that stuff.
 
 01:01:15 Yeah.
 
-01:01:16 No.
+01:01:15 Yeah.
 
-01:01:17 You need to be running at 311 or for 312.
+01:01:16 Yeah.
 
-01:01:22 But as you showed earlier, you can download iPad.org. My favorite way of installing Python versions. Py n has had 311 Dev for a while now. They also have 312. Dev are crazy, and you want to try it out, but yeah, you do need a 311.
+01:01:16 So, so yeah, no, you need to be running at 3.12, but, or sorry, 3.11 or 4.3.12.
 
-01:01:40 Fantastic. Well, really great work. I think it's quite a contribution. That really highlights all the work that's being done in 311. So well done. All right, now, before you get out of here, I got to ask you the final two questions. If you're going to write some Python code, if you're going to work on specialist, what editor do you use?
+01:01:22 But, you know, as you showed earlier, you can download it from Python.org.
 
-01:01:56 I use Vs code.
+01:01:26 My favorite way of installing Python versions, PyN, has had 3.11 dev for a while now.
+
+01:01:34 They also have 3.12 dev for crazy and you want to try it out.
+
+01:01:37 But, but yeah, you do need, you do need a 3.11.
+
+01:01:40 Fantastic.
+
+01:01:41 Well, really great work.
+
+01:01:42 I think it's quite a contribution.
+
+01:01:44 It really highlights all the work that's being done in 3.11.
+
+01:01:46 So well done.
+
+01:01:47 All right.
+
+01:01:48 Now, before you get out of here, I got to ask you the final two questions.
+
+01:01:51 If you're going to write some Python code, if you're going to work on specialist, what
+
+01:01:55 editor do you use?
+
+01:01:56 I use VS Code.
 
 01:01:57 Okay.
 
-01:01:57 Right on. And then notable PyPI package. Something you came across, like, oh, this thing is cool. Maybe not the most popular, but something.
+01:01:57 Right on.
 
-01:02:05 Yes.
+01:01:58 And then notable PyPI package, something you came across, like, oh, this thing is cool.
 
-01:02:06 I thought about this. Can I say two? Is it only limited?
+01:02:02 Maybe not the most popular, but something that you want to give a shot at.
 
-01:02:09 Two is fine. Okay.
+01:02:05 Yeah.
 
-01:02:10 I really like creative packages that kind of blur the line between what is python and what is not?
+01:02:06 I thought about this.
+
+01:02:06 Can I say two?
+
+01:02:08 Is it only limited?
+
+01:02:09 Two is fine.
+
+01:02:09 Okay.
+
+01:02:09 Cool.
+
+01:02:10 So there's two.
+
+01:02:11 I really like creative packages that kind of blur the line between like, what is Python
+
+01:02:15 and what isn't.
 
 01:02:16 Okay.
 
-01:02:17 So the first one is called Py metal. Three. I MTL three. This is so cool. It Allows You To Design hardware using Python, and you can basically design everything from Just A Small set of logic Gates to A Full chip, then export it to Verilog. You run on an FPGA. And this is kind of my hardware background coming through. Right. Yeah. My brother is actually studying at cal poly San Luis Obispo right now, and he's on a research team that's designing an entire processor in Python.
+01:02:17 So the first one is called PyMetal 3, PyMTL 3.
 
-01:02:49 Basically, the processor itself is designed in Python, and you can test it with Python. So they're testing the hypothesis, and it's a really cool, creative way of doing this sort of stuff.
+01:02:20 This is so cool.
+
+01:02:21 It allows you to design hardware using Python.
+
+01:02:23 Interesting.
+
+01:02:24 Okay.
+
+01:02:25 And you can basically design everything from just a small, you know, set of logic gates
+
+01:02:30 to a full chip, then export it to Verilog.
+
+01:02:33 You run it on an FPGA.
+
+01:02:34 And, you know, this is kind of my hardware background coming through.
+
+01:02:37 Right, right, right.
+
+01:02:39 Yeah.
+
+01:02:39 My brother is actually studying at Cal Poly San Luis Obispo right now.
+
+01:02:43 And he is on a research team that's designing an entire processor in Python.
+
+01:02:48 And so basically the processor itself is designed in Python and you can test it with Python.
+
+01:02:53 So they're testing with hypothesis.
+
+01:02:55 And it's a really cool, creative way of kind of doing this sort of stuff.
+
+01:03:01 Yeah.
 
 01:03:01 You don't need any special hardware to make it happen either, right?
 
 01:03:04 Yeah, exactly.
 
-01:03:05 You can just run it on your local machine. And now you've got a risk five tip running.
+01:03:05 You can just run it on your local machine and now you've got a RISC-V chip running.
 
-01:03:10 Nice.
+01:03:09 Nice.
 
 01:03:10 Yeah.
 
-01:03:11 The other one is another kind of cool, weird old hardware package. I don't know if account is pip installed. It's called Peach Py. I don't know how well it maintained it is, but you have to do that thing where you tell pip to install from, like, a GitHub link.
+01:03:10 So the other one is another kind of cool, weird, low-level hardware package.
 
-01:03:25 All right, well, you can pip install from a GitHub link.
+01:03:16 I don't know if I count this pip installable.
 
-01:03:28 Yeah.
+01:03:17 It's called PeachPy.
 
-01:03:29 You got to give it a really weird URL instead of just okay. Got it.
+01:03:18 I don't know how well maintained it is, but you have to do that thing where you tell pip
+
+01:03:23 to install from like a GitHub link.
+
+01:03:25 All right.
+
+01:03:26 Well, you can pip install from a GitHub link.
+
+01:03:28 Yeah, yeah, yeah.
+
+01:03:29 You got to give it a really weird URL instead of just the name.
+
+01:03:32 Yeah, yeah.
+
+01:03:32 Okay.
+
+01:03:33 Got it.
 
 01:03:33 Sure.
 
-01:03:33 And so this is super cool. It's an X 86 64 assembler in Python.
+01:03:33 And so this is super cool.
+
+01:03:35 It's an x86-64 assembler in Python.
 
 01:03:39 Okay.
 
-01:03:39 So with this you can basically implement a compiler or if you like it, a just in time compiler or basically X 86 hardware. So what this allows you to do is in your python code. It takes care of doing things like allocating hardware registers and labeling jumps and all that sort of stuff. Calling conventions. And so you can specify exactly what assembly instructions you want to execute, assemble them, and then it will package them up in a python function object. And you can call your assembly code from Python, which I think is wow.
+01:03:39 So with this, you can basically implement a compiler or if you like it, a just-in-time
 
-01:04:14 And it actually executes as assembly instructions.
+01:03:46 compiler for basically x86 hardware.
 
-01:04:17 Yes.
+01:03:49 So what this allows you to do is in your Python code, it takes care of doing things like allocating
+
+01:03:55 hardware registers and labeling jumps and all that sort of stuff, calling conventions.
+
+01:04:01 And so you can specify exactly what assembly instructions you want to execute, assemble them,
+
+01:04:06 and then it will package them up in a Python function object and you can call your assembly
+
+01:04:11 code from Python, which I think is so cool.
+
+01:04:13 Wow.
+
+01:04:13 And it actually executes as assembly instructions?
+
+01:04:16 Yes.
+
+01:04:17 Yeah.
 
 01:04:17 So it's like faults and everything.
 
-01:04:20 Yeah, of course. It's the most common thing it does.
+01:04:19 Yeah.
 
-01:04:22 Yeah, like a simple example. You can pass in a Py object pointer and then add 8 or 16 or whatever to get the type of it, and then return. That no return.
+01:04:20 Yeah, of course.
 
-01:04:33 Yeah.
+01:04:20 It's the most common thing it does.
 
-01:04:33 Very cool. So you can see the code example on here for Peach Py. I'll put the link in the show notes, but you do things like create an argument, and then you create a general purpose register and you load the argument onto the register. And you might call the issa SSE for operation or whatever. Pretty Cool. Two really good ones.
+01:04:22 Yeah.
+
+01:04:22 But I mean, like a simple example, you can pass in a Pyaltic pointer and then add, you know,
+
+01:04:28 eight or 16 or whatever to get the type of it and then return that and it will return.
+
+01:04:32 Yeah.
+
+01:04:33 Very cool.
+
+01:04:33 So you can see the code example on here for PeachBuy.
+
+01:04:37 I'll put the link in the show notes.
+
+01:04:38 But you do things like create an argument and then you create a general purpose register
+
+01:04:43 and you load the argument onto the register and you might call the ISA SSE4 operation or
+
+01:04:49 whatever.
+
+01:04:49 Pretty cool.
+
+01:04:49 Yeah.
+
+01:04:50 Two really good ones.
 
 01:04:51 All right.
 
-01:04:51 Final call to action. People are interested in specialist and exploring the specializing adaptive interpreter. What do you tell them?
+01:04:51 Final call to action.
 
-01:04:58 I think the most important thing that you can do is download or, if you're feeling like it built, python 311 and try running it for yourself. See if your code gets faster. It probably will. If it doesn't, then specialists could help show you where it's not. And if that is surprising to you, then you could report it to us. If, like, oh, my code got slower for some reason.
+01:04:52 People are interested in specialist and exploring the specializing adaptive interpreter.
 
-01:05:20 And it looks like this specific pattern. What's causing it? That's something that we care about.
+01:04:57 What do you tell them?
 
-01:05:25 Yes.
+01:04:58 I think the most important thing you can do is download or if you're feeling like it,
 
-01:05:25 I suspect this interpreter is something that's never done.
+01:05:02 build Python 3.11 and try running it for yourself.
 
-01:05:29 It's Clear.
+01:05:05 See if your code gets faster.
 
-01:05:29 You could always add more cases. You could make it decide sooner or easier or more accurately, when and how to specialize and add more bite. There's, like, a lot of stuff you can do, right? As opposed to oh, yeah. Now you read CSV file, that part is done.
+01:05:06 It probably will.
 
-01:05:44 And again, if you're feeling up to it and you've got a huge, pure Python app, you can even compile the stats and dump that out. Take a peek at it. I think you showed our repository earlier where we have our issue tracker, where we kind of just spitball ideas and keep track of work in progress. This one, if you go to the.
+01:05:08 If it doesn't, then specialists could help show you where it's not.
 
-01:06:00 Issue tracker here sorry, the ideas one. So you've got it's faster. CPython ideas on GitHub.
+01:05:12 And if that is surprising to you, then you could report it to us.
+
+01:05:16 You know, if like, oh, my code got slower for some reason, you know, and it looks like
+
+01:05:22 this specific pattern, what's causing it.
+
+01:05:24 That's something that we care about.
+
+01:05:25 Yeah, I suspect this interpreter is something that's never done.
+
+01:05:28 It's clear you could always add more cases.
+
+01:05:31 You could make it decide sooner or easier or more accurately when and how to specialize and
+
+01:05:37 add more by.
+
+01:05:38 There's like a lot of stuff you could do, right?
+
+01:05:40 As opposed to, well, yeah, now you read CSV files.
+
+01:05:42 That part is done.
+
+01:05:44 Yeah.
+
+01:05:44 And again, if you're feeling up to it and you've got a huge pure Python app, you can
+
+01:05:48 even compile with stats and dump that out and take a peek at it.
+
+01:05:52 I think you showed our repository earlier where we have our issue tracker, where we kind
+
+01:05:56 of just spitball ideas and keep track of work in progress.
+
+01:05:59 Yeah, this one.
+
+01:05:59 If you go to the issue tracker here.
+
+01:06:01 Sorry, I was wrong.
+
+01:06:02 And the ideas one.
+
+01:06:03 Yeah.
+
+01:06:03 So you've got it's faster dash CPython slash ideas on GitHub.
 
 01:06:07 Yeah.
 
-01:06:07 So if you go to issues there, that's all our work in progress. And if you have experience optimizing dynamic languages, or if you see a cool research paper or something that you want us to know about opening an issue here and where things get done.
+01:06:07 So if you go to issues there, that's all our work in progress.
 
-01:06:21 Yeah.
+01:06:10 And if you have experience optimizing dynamic languages or if you see a cool research paper
 
-01:06:21 Fantastic. Well, thank you for making Python faster. I think it's really important.
+01:06:15 something that you want us to know about opening issue here and where things get done.
 
-01:06:27 I'm always a little bit conflicted because I have some pretty complicated web apps to get a decent amount of traffic and they've been fine, like really handful of milliseconds response time and they're doing all sorts of madness with databases and HTML and all kinds of stuff. So on one hand, I don't know if I need Python to be faster, but on the other, people are deciding which language they're going to choose and where they can do their work. And sometimes, either perceived or real reasons, people think Python is not fast enough.
+01:06:20 Yeah.
+
+01:06:21 Fantastic.
+
+01:06:21 Well, thank you for making Python faster.
+
+01:06:24 I think it's really, really important.
+
+01:06:26 I mean, I'm always a little bit conflicted because I have some pretty complicated web apps
+
+01:06:31 that get a decent amount of traffic and they've been fine, like really, really fine.
+
+01:06:35 You know, handful of milliseconds response time.
+
+01:06:37 I mean, they're doing all sorts of madness with databases and HTML and all kinds of stuff.
+
+01:06:42 So on one hand, I don't know if I need Python to be faster, but on the other, people are
+
+01:06:46 deciding which language they're going to choose and where they can do their work.
+
+01:06:50 And sometimes either perceived or real reasons, people think Python is not fast enough.
 
 01:06:56 Right.
 
-01:06:56 And so this is important work that will really help some people and will help the community be stronger. So thank you.
+01:06:56 And so this is important work that will really help some people and will help the community
+
+01:07:01 to be stronger.
+
+01:07:01 So thank you.
 
 01:07:02 We love Python program.
 
-01:07:04 Right on. Cool. Well, thank you so much for being here. It's great to chat with you.
+01:07:04 Right on.
 
-01:07:09 Thanks again.
+01:07:05 Right on.
 
-01:07:09 Yeah, you bet.
+01:07:05 Cool.
+
+01:07:05 Well, thank you so much for being here.
+
+01:07:07 It's great to chat with you.
+
+01:07:08 Thanks again for having me.
+
+01:07:10 Yeah, you bet.
 
 01:07:10 Bye.
 
-01:07:12 This has been another episode of Talk Python to me. Thank you to our sponsors. Be sure to check out what they're offering.
+01:07:10 This has been another episode of Talk Python to Me.
+
+01:07:14 Thank you to our sponsors.
+
+01:07:16 Be sure to check out what they're offering.
 
 01:07:17 It really helps support the show.
 
-01:07:19 Starting a business is hard. Microsoft for Startups Foundershub provides all founders at any stage with free resources and connections to solve startup challenges. Apply for free today at Talkpython.FM/Foundershub. Listen to an episode of Compiler, an original podcast from Red Hat Compiler unravels industry topics, trends and things you've always wanted to know about tech through interviews with the people who know it best. Subscribe today by following talkpython.Fm/compiler. Want to level up your Python? We have one of the largest catalogs.
+01:07:19 Starting a business is hard.
 
-01:07:51 Of Python video courses over at Talk Python.
+01:07:20 Microsoft for Startups, Founders Hub provides all founders at any stage with free resources
 
-01:07:53 Our content ranges from true beginners to deeply advanced topics like memory and Async. And best of all, there's not a subscription in site. Check it out for yourself at training.talkpython.FM.
+01:07:26 and connections to solve startup challenges.
+
+01:07:29 Apply for free today at talkpython.fm/foundershub.
+
+01:07:33 Listen to an episode of Compiler, an original podcast from Red Hat.
+
+01:07:37 Compiler unravels industry topics, trends, and things you've always wanted to know about
+
+01:07:41 tech through interviews with the people who know it best.
+
+01:07:44 Subscribe today by following talkpython.fm/compiler.
+
+01:07:48 Want to level up your Python?
+
+01:07:50 We have one of the largest catalogs of Python video courses over at Talk Python.
+
+01:07:53 Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+01:07:58 And best of all, there's not a subscription in sight.
+
+01:08:01 Check it out for yourself at training.talkpython.fm.
 
 01:08:04 Be sure to subscribe to the show.
 
-01:08:05 Open your favorite podcast app and search for Python. We should be right at the top.
+01:08:05 Open your favorite podcast app and search for Python.
 
-01:08:09 You can also find the itunes feed.
+01:08:08 We should be right at the top.
 
-01:08:11 At /itunes, the Google Play feed at /Play and the Direct rss feed at rss on talkpython.FM. We're live streaming most of our recordings these days. If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at talkpython.fm/youtube. This is your host, Michael Kennedy. Thanks so much for listening.
+01:08:09 You can also find the iTunes feed at /itunes, the Google Play feed at /play,
 
-01:08:32 I really appreciate it. Get out there and write some Python code.
+01:08:14 and the direct RSS feed at /rss on talkpython.fm.
+
+01:08:18 We're live streaming most of our recordings these days.
+
+01:08:21 If you want to be part of the show and have your comments featured on the air,
+
+01:08:24 be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+01:08:29 This is your host, Michael Kennedy.
+
+01:08:30 Thanks so much for listening.
+
+01:08:31 I really appreciate it.
+
+01:08:33 Now get out there and write some Python code.
+
+01:08:34 I really appreciate it.
+

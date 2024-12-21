@@ -1,0 +1,1482 @@
+00:00:00 Is your Python code running a little slow?
+
+00:00:02 Did you know the PyPy runtime could make it run up to 10 times faster?
+
+00:00:06 Seriously.
+
+00:00:07 Maja Falkowski is here to tell us all about it.
+
+00:00:10 This is episode number 21, recorded Wednesday, July 8th, 2015.
+
+00:00:16 Developers, developers, developers, developers.
+
+00:00:19 I'm a developer in many senses of the word because I make these applications, but I also
+
+00:00:25 use these verbs to make this music.
+
+00:00:27 I construct it line by line, just like when I'm coding another software design.
+
+00:00:31 In both cases, it's about design patterns.
+
+00:00:34 Anyone can get the job done.
+
+00:00:36 It's the execution that matters.
+
+00:00:37 I have many interests.
+
+00:00:39 Welcome to Talk Python to Me, a weekly podcast on Python, the language, the libraries, the
+
+00:00:45 ecosystem, and the personalities.
+
+00:00:47 This is your host, Michael Kennedy.
+
+00:00:49 Follow me on Twitter, where I'm @mkennedy.
+
+00:00:51 Keep up with the show and listen to past episodes at talkpython.fm.
+
+00:00:56 And follow the show on Twitter via at talkpython.
+
+00:00:59 This episode, we'll be talking with Maja Falkowski about the amazing alternative Python implementation,
+
+00:01:05 PyPy.
+
+00:01:06 This episode is brought to you by Hired and Codeship.
+
+00:01:10 Thank them for supporting the show via Twitter, where they're at hired underscore HQ,
+
+00:01:15 and at codechip.
+
+00:01:16 Before we get to Maja, let me share a little news with you.
+
+00:01:19 First off, Talk Python to Me has a new domain name, talkpython.fm.
+
+00:01:24 I put the idea of a shorter .fm-based domain out on Twitter, and I'd say about 80% of the
+
+00:01:30 listeners said they liked it better than the longer .com domain.
+
+00:01:32 So here you go.
+
+00:01:34 About a month ago, I moved all the MP3 file traffic out of Amazon S3 and into a dedicated
+
+00:01:39 audio file cache server.
+
+00:01:41 It's a lightweight Flask Python 3 app running through Nginx and Microwiskey.
+
+00:01:47 A few listeners expressed interest in seeing the code, so I did a little work to try to generalize
+
+00:01:52 this a bit, and I open sourced it.
+
+00:01:53 I'm calling the project Cachedier.
+
+00:01:55 And you can find a blog post as well as a link to the GitHub project on the show notes.
+
+00:02:01 Next up, we have a new Python podcast.
+
+00:02:03 I'm super happy to announce a Python podcast by Brian Okken called Python Test Podcast.
+
+00:02:11 You can find it at pythontesting.net slash category slash podcast.
+
+00:02:16 Now, let's get on to the show.
+
+00:02:18 Maja, welcome to the show.
+
+00:02:19 Thanks for inviting me.
+
+00:02:20 Yeah, I'm super excited to talk about our topic today, which is PyPy.
+
+00:02:25 And I think what you guys are doing with PyPy is so incredibly cool to be taking some of
+
+00:02:32 these JIT compilation GC sort of semi-compiled languages or concepts and applying them to
+
+00:02:38 Python.
+
+00:02:38 So really happy to talk about that.
+
+00:02:40 The story of compiling dynamic languages is really sort of old and half-forgotten.
+
+00:02:47 Like, we know these days that you can do this with JavaScript, but the original work on small
+
+00:02:54 talk dates back to at least mid-90s, if not earlier, which is what we are all building on
+
+00:03:02 top of anyway.
+
+00:03:03 So it's nothing new.
+
+00:03:05 The new part is just applying this to Python.
+
+00:03:07 That's right.
+
+00:03:09 That's right.
+
+00:03:09 Well, I think it's great.
+
+00:03:11 Maybe before we get into the details of what you guys are doing, maybe you could give the
+
+00:03:16 listeners who are not familiar with PyPy a little history and introduction to it.
+
+00:03:21 So PyPy is essentially a Python interpreter, which works very, very similarly to the normal
+
+00:03:29 thing that you would call Python, that technically is called CPython.
+
+00:03:34 It's a Python interpreter written in C.
+
+00:03:35 And we have a different Python interpreter, which is implemented slightly differently.
+
+00:03:40 And for the most part, glancing over all the details, it should run faster on most of the
+
+00:03:48 examples because it can dynamically compile Python down all the way to the assembler level.
+
+00:03:55 So it's like a normal Python interpreter, except sometimes faster, most times faster, in fact.
+
+00:04:02 That's it.
+
+00:04:03 It sounds very simple, but it's actually quite a big project.
+
+00:04:07 It has been around more or less 10 years by now.
+
+00:04:10 Wow.
+
+00:04:11 It started 10 years ago.
+
+00:04:12 And when did you get involved with it?
+
+00:04:14 I got involved, I think, 2006 or 2007.
+
+00:04:19 I was doing, I sort of got interested in Python static analysis, which PyPy, part of PyPy is doing
+
+00:04:29 that, is taking a restricted subset of Python, which PyPy is implemented in and compiling it
+
+00:04:35 down to the C level.
+
+00:04:36 So I was interested in Python static analysis and I glanced over PyPy project and sort of
+
+00:04:42 started getting involved.
+
+00:04:44 And then I got a spot at Google Summer of Code to work on PyPy for the summer.
+
+00:04:50 And that's essentially how it all started.
+
+00:04:52 How many people work on PyPy or contribute to PyPy?
+
+00:04:55 Depending how you count, it's anything between three and 30.
+
+00:05:00 PyPy is a big umbrella project for a vast variety of anything from, as I said, a Python interpreter
+
+00:05:09 to very researchy stuff that people at various universities try to experiment with.
+
+00:05:15 Like there is a couple of people working on running Python and PHP in the same process.
+
+00:05:22 So you run PHP code in the server, but you can still call Python functions in that process.
+
+00:05:29 There are people working on software transactional memory.
+
+00:05:33 So it's a big umbrella project that is a research vehicle for a lot of people, additionally to
+
+00:05:39 being the Python interpreter.
+
+00:05:40 Yeah, I can see how that would work for if you're doing some sort of academic research,
+
+00:05:45 especially something with JIT and GC, then it makes a lot of sense.
+
+00:05:50 I think one of the things that people either who are new to Python or have kind of dabbled
+
+00:05:54 in it, but are not, you know, deeply working with it and thinking about the internals of
+
+00:06:00 it every day, don't realize that there's actually a whole variety of different interpreters out
+
+00:06:05 there.
+
+00:06:05 There's a bunch.
+
+00:06:07 They're all slightly different.
+
+00:06:10 So let's glance over them because I think it's important to know there's like the CPython is
+
+00:06:17 the normal Python interpreter that is probably used by 99% of people using Python.
+
+00:06:22 Yeah.
+
+00:06:23 If I open up Linux or my Mac and I type the word Python and enter that's CPython, right?
+
+00:06:27 That's CPython.
+
+00:06:28 So that's what most people would use.
+
+00:06:30 CPython internals that you need to know is the fact that it's implemented in C.
+
+00:06:36 And another internal detail that's important to know is that it exposes the C API, which
+
+00:06:43 goes quite low.
+
+00:06:45 So it's possible to write C extensions in C for Python.
+
+00:06:49 So you write a bunch of C code, use a special API for accessing Python objects, and then it
+
+00:06:54 can be called from Python code, your C functions.
+
+00:06:59 Then we have Jiton, which is quite old, actually.
+
+00:07:04 And it's a Python interpreter written in Java and a similar project called Iron Python, which
+
+00:07:11 is a Python interpreter written in C#.
+
+00:07:13 And those two interpreters, they're quite widely used for people who write Java and want a better
+
+00:07:22 language.
+
+00:07:22 So they, so their main big advantage is integration with the underlying platform.
+
+00:07:31 So Jiton is very well integrated with Java and Iron Python with C#.
+
+00:07:35 So if you're writing C#, but you would really love to write some Python, you can do that these
+
+00:07:40 days.
+
+00:07:40 And then there's PyPy, which is another Python interpreter written slightly differently with
+
+00:07:46 a just-in-time compiler.
+
+00:07:48 So those are the four main interpreters.
+
+00:07:50 And there is, there is quite a few projects that try to enter this space, like PyStone, which
+
+00:07:57 is another Python interpreter written by Dropbox people.
+
+00:08:00 Yeah.
+
+00:08:01 I wanted to ask you about PyStone because that's, that seems to me to be somewhat similar to
+
+00:08:07 what you guys are doing.
+
+00:08:08 And, and it comes, the fact that it comes from Dropbox where Guido is and a lot, there's a
+
+00:08:13 lot of sort of gravity for the Python world at Dropbox that made it more interesting to me.
+
+00:08:17 Do you know anything about it or can you speak to how it compares or the goals or anything
+
+00:08:21 like that?
+
+00:08:23 So, well, I know that it's very, very similar to the project that once existed at Google
+
+00:08:28 called Unladen Swallow.
+
+00:08:29 So the main idea is that it's a Python interpreter that contains a just-in-time compiler that uses
+
+00:08:38 LLVM as the underlying assembler platform.
+
+00:08:41 Let's call it that way.
+
+00:08:42 And this is the main goal.
+
+00:08:44 The main goal is to run fast.
+
+00:08:46 Now, the current status is that it doesn't run fast.
+
+00:08:50 That's for sure.
+
+00:08:52 It runs roughly at the same speed as CPython for stuff that I've seen on their website.
+
+00:08:57 As for the future, I don't know.
+
+00:09:01 I really think the future is really hard.
+
+00:09:02 Especially when you don't have much visibility into it, right?
+
+00:09:06 Yeah.
+
+00:09:07 Like, I can tell you that like PyPy, PyPy has a bunch of different problems to PyStone.
+
+00:09:15 So, for example, we consciously choose to not implement the C API at first because the
+
+00:09:23 C API ties you a lot into the CPython model.
+
+00:09:28 We choose not to implement it at first.
+
+00:09:31 We implement it later as a compatibility layer.
+
+00:09:34 So the first problem is that it's quite slow.
+
+00:09:38 It's far, far slower than the one in CPython.
+
+00:09:41 And as far as I know, right now, Dropbox uses the same C API, which gives you a lot of problems,
+
+00:09:48 like a lot of constraints of your design.
+
+00:09:51 But also, like, gives you a huge, huge benefit, which is being able to use the same C modules, which are a huge part of the Python ecosystem.
+
+00:10:00 Yeah, especially some of the really powerful ones that people don't want to live without, things like NumPy and, to a lesser degree, SQLAlchemy, the things that have the C extensions that are really popular as well.
+
+00:10:11 So you guys don't want to miss out on that, right?
+
+00:10:14 Right.
+
+00:10:15 So you brought two interesting examples.
+
+00:10:18 So, for example, NumPy is so tied to the C API that it's very hard to avoid.
+
+00:10:24 It's not just NumPy.
+
+00:10:27 It's the entire ecosystem.
+
+00:10:28 We, in PyPy, we re-implemented most of NumPy, but we are still missing out on the entire ecosystem.
+
+00:10:37 And we have some stories how to approach that problem, but it's a hard problem to tackle, that we choose to make harder by not implementing the C API.
+
+00:10:47 However, for example, the SQLAlchemy stuff.
+
+00:10:50 SQLAlchemy is Python.
+
+00:10:53 It's not C, but it uses the database drivers, which are implemented in C, like a lot of them.
+
+00:11:01 So our answer to that is CFFI, which is a very, very simple way to call C from Python.
+
+00:11:08 And CFFI took off like crazy.
+
+00:11:12 Like, for most things, like database drivers, there's a CFFI-ready replacement that works as well and usually a lot better on PyPy that made it possible to use PyPy in places where you would normally not be able to do that.
+
+00:11:31 And CFFI is like really, really popular.
+
+00:11:35 It gets like over a million downloads a month, which is quite crazy.
+
+00:11:39 And CFFI is not just a PyPy thing.
+
+00:11:42 It also works in CPython, right?
+
+00:11:44 Yeah, it works in CPython in between like 2.6 and 3.something, I think.
+
+00:11:50 3.whatever is the latest.
+
+00:11:51 And it works on both PyPy and PyPy3.
+
+00:11:54 And since it's so simple, it will probably work one day in JITON too.
+
+00:12:01 You said you have a plan for the NumPy story and these other heavy sort of C-based ones.
+
+00:12:07 Currently, the way you support it, this is a question I don't know, is that you've kind of re-implemented a lot of it in Python?
+
+00:12:15 So we, to be precise, we re-implemented a lot of it in our Python.
+
+00:12:22 Our Python is the internal language that we use in PyPy.
+
+00:12:26 Right, that's the restricted Python that you guys actually target, right?
+
+00:12:29 Yes.
+
+00:12:30 Yeah, but we don't, generally don't encourage anybody to use it.
+
+00:12:35 Unless you're writing interpreters, then it's great.
+
+00:12:38 But if you're not writing interpreters, it's an awful language.
+
+00:12:41 But we, so the problem with NumPy is that NumPy ties so closely that we added special support in the JIT for parts of it and things like that, that we decided are important enough that you want to have them implement in the core of PyPy.
+
+00:12:57 So we have, most of NumPy actually works on PyPy.
+
+00:13:01 And this is sometimes not good enough because if you're using NumPy, chances are you're using SciPy, Scikit, Learn, Matplotlib, and all this stuff.
+
+00:13:11 We have some story how to use it, which is to, the simplest thing is just to embed the Python interpreter inside PyPy and call it using CFFI.
+
+00:13:23 It's a great hack.
+
+00:13:24 It works for us.
+
+00:13:25 Really?
+
+00:13:25 You can like fall back to regular Cpython within your PyPy app?
+
+00:13:30 Yeah, it's called PyMetabiosis.
+
+00:13:33 That's awesome.
+
+00:13:34 I'm pretty sure there's at least one video online with the author talking about it.
+
+00:13:44 It works great for the numeric stack, which is its goal.
+
+00:13:49 So this is our story.
+
+00:13:51 We are still raising funds to finish implementing NumPy.
+
+00:13:56 It says a very, very long tale of features.
+
+00:13:58 And once we are done with NumPy, we'll try to improve the story of calling other numeric libraries on top of PyPy to be able to mostly seamlessly be able to use stuff like SciPy and Matplotlib.
+
+00:14:13 It will still take a while.
+
+00:14:15 I'm not even willing to give an estimate.
+
+00:14:17 Sure.
+
+00:14:19 But it's great.
+
+00:14:20 And it does look like there's a lot of support there.
+
+00:14:21 We'll talk about that stuff in a little bit because I definitely want to call attention to that and let people know how they can help out.
+
+00:14:27 Before we get into those kind of details, though, can we talk just briefly about why would I use PyPy or when and why would I use PyPy over, say, CPython or Jython?
+
+00:14:39 Like, what do you guys excel at?
+
+00:14:41 When should a person out there is thinking, like, they've just realized, oh, my gosh, there's more than one interpreter?
+
+00:14:46 How do I choose?
+
+00:14:48 Like, can you help give some guidance around that?
+
+00:14:49 So typically, if you just discovered, oh, there's more than one interpreter, you just want to use CPython.
+
+00:14:55 That's like the simplest answer.
+
+00:14:57 You want to use CPython, but if you're writing an open source library, you want to support PyPy at least, which is what most people are doing.
+
+00:15:04 They're using CPython and the libraries support PyPy for the most part.
+
+00:15:08 Our typical user, and this is a very terrible description, but this is our typical user.
+
+00:15:14 This episode is brought to you by Hired.
+
+00:15:27 Hired is a two-sided, curated marketplace that connects the world's knowledge workers to the best opportunities.
+
+00:15:33 Each offer you receive has salary and equity presented right up front, and you can view the offers to accept or reject them before you even talk to the company.
+
+00:15:43 Typically, candidates receive five or more offers in just the first week, and there are no obligations, ever.
+
+00:15:49 Sounds pretty awesome, doesn't it?
+
+00:15:51 Well, did I mention there's a signing bonus?
+
+00:15:53 Everyone who accepts a job from Hired gets a $2,000 signing bonus, and as Talk Python listeners, it gets way sweeter.
+
+00:16:01 Use the link Hired.com slash Talk Python to me, and Hired will double the signing bonus to $4,000.
+
+00:16:10 Opportunity's knocking.
+
+00:16:11 Visit Hired.com slash Talk Python to me and answer the call.
+
+00:16:14 You have a large Python application that's spanning servers, serving millions of users,
+
+00:16:30 and you're running into corners.
+
+00:16:33 Like, you can't serve requests quickly enough.
+
+00:16:37 You can't serve enough users from machine.
+
+00:16:40 You're running into problems.
+
+00:16:41 Now, your application is too big to, say, rewrite it in C or Go, or it's just, like, too scary for whatever reason.
+
+00:16:50 So, you look, like, what it would take to run stuff in PyPy.
+
+00:16:54 It usually takes, like, a bit of, your code should run, but it usually takes a bit of effort to, like, see what sort of libraries do you use.
+
+00:17:06 Do you use NSE extensions?
+
+00:17:07 If their C extensions are, like, crucial, can you replace them with something?
+
+00:17:11 So, yeah, this is our typical user.
+
+00:17:13 And I have people, I run a consulting company that does that.
+
+00:17:18 There are people coming and asking, like, okay, I have this set up.
+
+00:17:22 It's impossible to do anything with it now.
+
+00:17:25 Can I just, like, swap the interpreters, make it run faster, and make the problems go away?
+
+00:17:30 This is our typical user.
+
+00:17:33 I hear why you described it that way is maybe not the best way, but, you know, you're right.
+
+00:17:38 If you have 100,000, half a million lines of Python, and really you just need to make it a little faster.
+
+00:17:44 If switching to a different interpreter like PyPy will solve that, that's great.
+
+00:17:49 So, speaking of faster, can you talk about the performance comparisons?
+
+00:17:53 I have a little example I'll tell you, but I'll let you go first.
+
+00:17:57 So, as usual, performance comparisons are usually very hard to do and flawed.
+
+00:18:04 Everybody, yes, absolutely.
+
+00:18:05 Everybody's thing they care about is not exactly what you're measuring, and so it might be totally misleading.
+
+00:18:10 But give it a shot.
+
+00:18:12 One good estimate is if you don't have benchmarks, you don't care about performance.
+
+00:18:17 Like, if you never wrote benchmarks for your applications, then chances are you don't actually care all that much.
+
+00:18:24 And you shouldn't really...
+
+00:18:27 That's the first step.
+
+00:18:28 Like, make sure you know how fast your applications run.
+
+00:18:32 Once you know that, you can measure it on different interpreters.
+
+00:18:34 But as far as expectations go, PyPy tends to run heavy computations a lot faster.
+
+00:18:41 Like, a lot is anything between 10 and 100 times faster, depending on the workload.
+
+00:18:49 For stuff that's more...
+
+00:18:50 And again, what is a typical Python program?
+
+00:18:54 Typical Python program is probably Hello World.
+
+00:18:56 How fast Python runs Hello World.
+
+00:18:58 Roughly at the same speed as CPython, you won't notice.
+
+00:19:01 But for a typical web application, the speed up, if you're not heavily relying on C extensions, would be around 2x.
+
+00:19:09 So, 2x faster for a lot of people makes a lot of difference.
+
+00:19:13 Absolutely.
+
+00:19:14 It also depends on where are you waiting.
+
+00:19:16 Like you said, you should profile it and figure this out.
+
+00:19:18 If your Python web app is slow because 80% of the time you're waiting on the database, well, it doesn't really matter how fast your Python code is.
+
+00:19:26 Your database is a problem.
+
+00:19:27 Or something like this, right?
+
+00:19:29 Exactly.
+
+00:19:30 Exactly.
+
+00:19:30 And like, the thing is like, so let's narrow it down to, say, web applications.
+
+00:19:36 Like, okay, let me first talk about other stuff and then let's go to web applications.
+
+00:19:40 Like, where people found Piper incredibly useful is things like high-frequency trading.
+
+00:19:46 Like, not the very crazy high-frequency where you have to make decisions like multiple times per millisecond.
+
+00:19:52 But like the sort of frequency where you want to make decisions within a few milliseconds.
+
+00:19:58 And then those decisions are like tens of milliseconds.
+
+00:20:02 Those decisions can, then you want to be able to modify your algorithms fast, which is a lot easier on Python than, say, on C++.
+
+00:20:10 And you're running into less problems with how to shoot yourself in the foot and segfault all your trading.
+
+00:20:16 So, that's when people tend to use Piper because like, in this sort of scenario, it would be like 10 times faster.
+
+00:20:24 So, super low latency stuff where 10 milliseconds makes a huge difference to you.
+
+00:20:28 Something like that.
+
+00:20:29 Yeah.
+
+00:20:29 Okay.
+
+00:20:30 Another example is there's, for example, a project called MyHDL, which is the hardware emulation layer.
+
+00:20:40 And these tend to emit sort of low-level Python code that just do computations to emulate hardware.
+
+00:20:48 And then again, on Piper, it's like over 10 times faster.
+
+00:20:51 So, those are the very good examples.
+
+00:20:53 The very bad examples, as you said.
+
+00:20:54 If your program, if your staff is waiting on the database, then you're out of luck.
+
+00:21:00 Like, no matter how fast your interpreter responds.
+
+00:21:02 But yeah.
+
+00:21:05 On the typical web server load, even if there is such a thing, it would be around two times speed up.
+
+00:21:11 Sometimes more, sometimes less.
+
+00:21:13 Depending on the setup, really.
+
+00:21:15 But as I said, you should really measure yourself.
+
+00:21:18 The things where Python is quite better, if you spend most of the time in C extensions,
+
+00:21:26 then it's either not helping or actually prevent you from doing so.
+
+00:21:29 And the second time where it's not that great is when the program is short running.
+
+00:21:36 So, because it's just-in-time compilation, it means that each time you run your program,
+
+00:21:41 the interpreter has to look what's going on, pick things to compile to Assembler, compile them to Assembler,
+
+00:21:49 and that all takes time.
+
+00:21:50 Right.
+
+00:21:50 There's a little more initial startup when that happens.
+
+00:21:54 Yeah, the warm-up time is usually quite bad.
+
+00:21:57 Well, I like to think that warm-up time of PyPy is quite bad.
+
+00:22:01 And then I look at Java, when it's absolutely outrageous.
+
+00:22:04 It's a relative statement.
+
+00:22:07 It's a relative term.
+
+00:22:08 Like, compared to CPython, PyPy time is really terrible.
+
+00:22:11 And compared to Luach, it's, again, the warm-up time is terrible.
+
+00:22:14 But compared to Java, it's not that bad.
+
+00:22:17 So, yeah, it really depends on your setup.
+
+00:22:20 And it's typically important for long-running applications.
+
+00:22:23 Then again, this is a typical PyPy user.
+
+00:22:26 When stuff like server-based applications where your programs run for a long time.
+
+00:22:32 Right.
+
+00:22:33 You start it up and it's going to serve a million requests an hour until it gets recycled or something, yeah?
+
+00:22:38 Something like that.
+
+00:22:40 I mean, these days, even JavaScript is long-running up.
+
+00:22:44 Like, how long do you keep your Gmail open?
+
+00:22:46 For usually, for longer than a few seconds.
+
+00:22:49 Yeah, that's for sure.
+
+00:22:51 So, let's talk a little bit about the internals.
+
+00:22:55 Could you describe just a little bit of...
+
+00:23:00 So, if I take a Python script and it's got some classes and some functions and they're calling each other and so on.
+
+00:23:05 What does it look like in terms of what's happening when that code runs?
+
+00:23:09 Okay.
+
+00:23:11 So, I'll maybe start from, like, how PyPy is built and then get back to your question directly.
+
+00:23:16 Yeah, great.
+
+00:23:17 So, PyPy is two things.
+
+00:23:19 And it has been very confusing because we've been calling them PyPy and PyPy.
+
+00:23:24 And calling two things which are related but not identical the same name is absolutely terrible.
+
+00:23:30 We'll probably fix that at some point.
+
+00:23:32 But, like, PyPy is mostly two things.
+
+00:23:35 So, one thing is a Python interpreter.
+
+00:23:38 And the other thing is a part that I would call RPython, which is a language for writing interpreters.
+
+00:23:44 It tends to be similar to Python in a sense that it's a restricted subset of Python.
+
+00:23:51 But this is largely irrelevant for the architectural question.
+
+00:23:54 So, you have an interpreter written in RPython that can be PyPy.
+
+00:24:01 We have a whole variety.
+
+00:24:03 There's Hippie, which is a PHP interpreter.
+
+00:24:05 There's a bunch of Scheme interpreters.
+
+00:24:08 And there's even a Prolog interpreter and a whole bunch of other interpreters written in RPython.
+
+00:24:14 And then...
+
+00:24:14 Is RPython a compiled language?
+
+00:24:17 Yes.
+
+00:24:18 And the other part is essentially the translation toolchain or a compiler for RPython.
+
+00:24:25 So, it contains various things like garbage collector implementation for RPython,
+
+00:24:31 the data types like strings, unicodes, and all the things that RPython supports.
+
+00:24:36 It also contains a just-in-time compiler for RPython and for interpreters written in RPython,
+
+00:24:43 which is one level in direction compared to what you usually do.
+
+00:24:49 So, the just-in-time compiler would be sort of generated from your RPython interpreter and not implemented directly,
+
+00:24:59 which is very, very important for us because Python, despite looking simple,
+
+00:25:03 is actually an incredibly complicated language.
+
+00:25:06 If you're trying to encode all the descriptor protocol or how actually functions and parameters are called,
+
+00:25:11 chances are you'll make a mistake.
+
+00:25:13 So, if you're implementing an interpreter and a just-in-time compiler, it's very, very hard to get all the details right.
+
+00:25:19 So, we implement the Python semantics once in the Python interpreter, and then it gets either directly executed or compiled to assembly.
+
+00:25:32 So, if you're coming back to your question, if you have a Python program,
+
+00:25:37 first, what it does, it will compile to bytecode, and bytecode is quite high level.
+
+00:25:42 There's a thing called this module, which you can just call this.this on any sort of Python object,
+
+00:25:51 and it will display bytecode.
+
+00:25:54 And the basic idea, which is what CPython does, and which is what PyPy does too at first,
+
+00:26:00 is to take bytecodes one by one, look what's it, and then execute it.
+
+00:26:06 Yeah.
+
+00:26:08 And is that like what's in the PyCache folders and things like that?
+
+00:26:11 Like those PYC files?
+
+00:26:13 Yeah.
+
+00:26:13 The PYC files are essentially a serialized version of Python bytecode.
+
+00:26:17 Okay.
+
+00:26:18 It's just a cache to store to not have to parse Python files each time you import a giant project.
+
+00:26:25 Right.
+
+00:26:25 Okay.
+
+00:26:26 And so then CPython takes those instructions and executes them via an interpreter,
+
+00:26:30 but that's not what happens on PyPy, right?
+
+00:26:32 That's what happens on PyPy initially.
+
+00:26:35 So, all your code will be like executed like CPython, except if you hit a magic number of like function calls
+
+00:26:43 or loop iterations, I think it's 1037 for loop iterations, then you compile this particular loop,
+
+00:26:53 in fact, this particular execution of a loop, into assembler code.
+
+00:26:56 Then if you have a mix of interpreter code and assembler code, and if you,
+
+00:27:04 the assembler code is a linear sequence of instructions that contains so-called guards.
+
+00:27:11 So, the guards will be anything from if something in the Python source to is the type of this thing stays the same.
+
+00:27:19 Then if you happen to fail those guards, then you, okay, I failed this guard,
+
+00:27:25 I'm going to go and start compiling assembler again.
+
+00:27:29 I mean, at first you jump back to the interpreter, but if you, again, hit a magic number,
+
+00:27:34 you compile the assembler again from this guard.
+
+00:27:36 And then you end up with like a tree of execution that resembles both your Python code
+
+00:27:43 and the type structure that you're passing in a few other things that are automatically determined.
+
+00:27:48 So, at the end of the day, you end up with a Python function or like multiple Python functions
+
+00:27:54 that got compiled to assembler if you warm stuff for long enough.
+
+00:27:57 Okay.
+
+00:27:58 That's, that is super interesting.
+
+00:27:59 I didn't expect that it would have this initial non-assembled assembler version.
+
+00:28:05 That's, that's very cool.
+
+00:28:06 What was, do you know what the thinking around that was?
+
+00:28:08 Is it just better performance?
+
+00:28:09 So, there's a variety of things.
+
+00:28:12 Like, one thing is that if you try to, to compile everything like upfront,
+
+00:28:17 it would take you forever.
+
+00:28:19 But also you are, you can do some optimizations.
+
+00:28:24 Like, a lot of optimizations done in PyPy are sort of optimistic.
+
+00:28:28 Like, we're going to assume special things like sys.setTrace or sys.getFrame
+
+00:28:35 just does not happen.
+
+00:28:37 And until it doesn't happen, things can run nicely and smoothly.
+
+00:28:41 But you're trying to figure out on the fly what's going on.
+
+00:28:45 And then you compile pieces that you know about.
+
+00:28:47 So, at the moment when you are compiling a Python loop or a function or something like that,
+
+00:28:53 you tend to know more about the, the state of execution than, that is just in the source.
+
+00:28:58 Like, you tend to know the types, the precise shape of objects.
+
+00:29:02 Like, is this an object that's class X and has two attributes A and B?
+
+00:29:07 Or is it an object of class X that has three attributes A, B, and C?
+
+00:29:11 And those decisions can lead to better performance, essentially.
+
+00:29:15 So, on your website, you say that this, that PyPy may be better in terms of memory usage as well.
+
+00:29:22 How does that work?
+
+00:29:23 It's a trade-off, right?
+
+00:29:25 So, first of all, PyPy does consume memory memory for the compound assembler
+
+00:29:32 and the associated bookkeeping data.
+
+00:29:34 That depends on how much code you actually run.
+
+00:29:38 But, the object representation of Python, of Python objects is more compact
+
+00:29:43 than PyPy.
+
+00:29:43 So, the actual amount of memory consumed by your heap tends to be smaller.
+
+00:29:50 Like, all PyPy objects are as memory compact as see Python objects using
+
+00:29:56 slots.
+
+00:29:58 Right, okay.
+
+00:29:58 So, it's the same optimization except it's transparent.
+
+00:30:01 Then, the, like, list of only integers would not allocate the entire objects.
+
+00:30:10 It would allocate only small integers.
+
+00:30:12 Then, the, the objects are smaller themselves because we use a different garbage collection
+
+00:30:18 strategy.
+
+00:30:18 It's not ref counting.
+
+00:30:20 it's a garbage collector.
+
+00:30:21 Right, so, let's talk about the garbage collector just for a moment.
+
+00:30:24 Is it a mark and sweep garbage collector?
+
+00:30:27 This episode is brought to you by CodeShip.
+
+00:30:43 CodeShip has launched organizations, create teams, set permissions for specific team members,
+
+00:30:49 and improve collaboration in your continuous delivery workflow.
+
+00:30:52 Maintain centralized control over your organization's projects and teams
+
+00:30:56 with CodeShip's new organizations plan.
+
+00:30:58 And, as Talk Python listeners, you can save 20% off any premium plan for the next three months.
+
+00:31:03 Just use the code TALKPYTHON, all caps, no spaces.
+
+00:31:07 Check them out at CodeShip.com and tell them thanks for supporting the show
+
+00:31:11 on Twitter where they're at, CodeShip.
+
+00:31:13 It's in, very convoluted variant of mark and sweep.
+
+00:31:21 Yeah.
+
+00:31:21 It has two generations of objects, young objects and old objects, and old objects
+
+00:31:27 are mark and sweep, and young objects are pointer bump allocations.
+
+00:31:31 So, the net effect is that if you are having a lot of small objects that get allocated
+
+00:31:39 all the time and forgotten really quickly, allocation takes, like, on average,
+
+00:31:43 around one CPU instruction.
+
+00:31:45 It's, on average, one, because it takes, like, slightly more, but then you have
+
+00:31:51 pipelining, so sometimes it takes slightly less.
+
+00:31:53 Okay, do you guys do compaction and things like that as well?
+
+00:31:57 No, but we do copy old objects from the young generation to the old generation.
+
+00:32:04 Then we don't compact the old generation, but usually more compact than your normal setup
+
+00:32:10 where you have lots of objects that are scattered all over the place because you only
+
+00:32:14 have to deal with objects that survive minor collection.
+
+00:32:17 Right, and that's the majority of objects that we interact with all die right away.
+
+00:32:22 Vast majority.
+
+00:32:22 Yeah, absolutely.
+
+00:32:23 For the most part.
+
+00:32:25 Okay, yeah, that's very cool.
+
+00:32:27 One of the things that is not super easy in regular Python is parallelism
+
+00:32:33 and asynchronous programming and so on.
+
+00:32:35 And you guys have this thing called stackless mode.
+
+00:32:39 What's the story with that?
+
+00:32:40 It's the same thing as stackless Python.
+
+00:32:44 It gives you an ability to have coroutines that can be swapped out without an explicit
+
+00:32:50 yield keyword.
+
+00:32:51 So it's not like Python 3 coroutines.
+
+00:32:54 it's like normal coroutines when you can swap them randomly.
+
+00:32:59 For example, GEvent uses I think GEvent uses stackless mode for swapping
+
+00:33:05 the coroutines.
+
+00:33:06 Okay, so you said that you can get better concurrency.
+
+00:33:10 Can you kind of describe speak to that any or what are your thoughts there?
+
+00:33:14 I personally don't use stackless all that much but the net effect is that you
+
+00:33:20 you can write code like with Python 3 coroutines without the yield keyword.
+
+00:33:27 So you just call function then you can swap the functions for other things.
+
+00:33:31 It's a bit like implicit twisted where you don't get better concurrency than twisted
+
+00:33:37 but you're not you don't need to write your programs in the style that twisted requires.
+
+00:33:43 I was going to say it's just a little more automatic and you don't have to be so explicit
+
+00:33:48 that you're doing threading.
+
+00:33:49 Yeah, exactly.
+
+00:33:51 Like the normal normal threads especially in Python where you have the global interpreter log
+
+00:33:57 they don't scale all that well and like the solution is usually twisted but twisted requires
+
+00:34:02 you to have all the libraries and everything written twisted aware which stackless
+
+00:34:08 does not generally requires.
+
+00:34:09 I don't have any particular feelings towards all of that to be honest.
+
+00:34:15 Sure.
+
+00:34:16 Does it also support Twisted running on PyPy?
+
+00:34:18 Do you know?
+
+00:34:19 Yeah, obviously.
+
+00:34:20 Twisted is a Python program.
+
+00:34:21 We had from the very early days we had good contact with twisted people and people who use twisted
+
+00:34:30 tend to be from the same category as people who use PyPy.
+
+00:34:32 People who have large running code bases that are boring but have problems
+
+00:34:38 because they're actually huge.
+
+00:34:39 I mean not huge in terms of code base but huge in terms of number of requests
+
+00:34:44 they serve and stuff like this.
+
+00:34:46 So they tend to be very, very focused on how to make the stuff work both reliably
+
+00:34:54 and fast.
+
+00:34:56 So for example like a typical answer to Python performance problems oh just rewrite
+
+00:35:02 pieces in C.
+
+00:35:03 Well that's all cool if you have like few small loops that you can
+
+00:35:09 rewrite in C and have everything fast.
+
+00:35:11 But like most web servers are not like this.
+
+00:35:14 If you look at the profile it's just flat.
+
+00:35:15 It's tons of dictionaries and things that are not easy to write in C.
+
+00:35:20 And C introduces security problems like suddenly dealing in C with untrusted data
+
+00:35:26 is not that much fun.
+
+00:35:28 No.
+
+00:35:28 So it's definitely not.
+
+00:35:29 Or even reliability right?
+
+00:35:31 Yeah.
+
+00:35:32 So all those problems.
+
+00:35:33 So Twisted people tend to write like Python better than C and they've been very supportive
+
+00:35:40 of PyPy from the very first day.
+
+00:35:43 So they generally PyPy is running Twisted and it's running Twisted quite fast
+
+00:35:48 for quite a few years right now.
+
+00:35:50 Yeah that's excellent.
+
+00:35:51 It seems like if you have a problem that Twisted would solve you also probably
+
+00:35:55 want to look into PyPy.
+
+00:35:57 Exactly.
+
+00:35:57 This is like the same category of problems that you're trying to solve.
+
+00:36:02 Another interesting stuff about concurrency which I guess I'm slightly more excited
+
+00:36:07 about is the software transactional memory that Armin Rigo is working on right
+
+00:36:12 now.
+
+00:36:12 So this is one of our fundraisers just like NumPy.
+
+00:36:15 Yeah so this is one of your three sort of major going forward projects if you will.
+
+00:36:20 Yeah those are the three publicly funded projects.
+
+00:36:24 Right and if you go to PyPy.org right there on the right it says donate towards
+
+00:36:28 STM and you guys have quite a bit of money towards this project and so it's excellent.
+
+00:36:36 What is software transactional memory for the listeners?
+
+00:36:38 There are two ideas.
+
+00:36:40 First problem they're related but not identical.
+
+00:36:44 First problem is that Python has the global interpreter log.
+
+00:36:48 So global interpreter log essentially prevents you from running multiple threads
+
+00:36:54 on multiple cores on one machine.
+
+00:36:57 So if you write Python program and you write it multi threaded it will only
+
+00:37:01 ever consume one CPU which is not great if you want to compute anything.
+
+00:37:06 So that's one problem that STM is solving and I'm going to explain just now how
+
+00:37:11 it's solving it.
+
+00:37:11 But another problem is that it's trying to provide a much better model for writing
+
+00:37:18 programs with threads.
+
+00:37:19 If you start using threads the Python mutability model makes it so hard to write
+
+00:37:25 correct programs.
+
+00:37:26 you're essentially running into problems like suddenly okay but I have to think
+
+00:37:31 who modified what in what order and consider all the possible combinations.
+
+00:37:36 Make sure that every bit of code that's going to work with this segment of
+
+00:37:41 data is taking the right locks and all that kind of stuff that gets really tricky
+
+00:37:45 to ensure right?
+
+00:37:47 yeah so essentially the model is where if you write program in C you write
+
+00:37:54 the program it's all fine then you switch to threading and you get performance
+
+00:37:59 immediately like your program if you write threads correctly it will run
+
+00:38:05 four times faster on four cores or whatever but it will likely crash and it will
+
+00:38:12 likely crash for the next couple of weeks months years whatever you throw
+
+00:38:16 into it because you need to get 100% correctness back so the S-team works slightly
+
+00:38:23 differently where you you essentially write programs in a mode where it looks like
+
+00:38:30 you put a gigantic lock around everything that matters in your program so you
+
+00:38:36 write one event loop and you know like okay this loop will consume blocks
+
+00:38:42 or whatever consume some sort of data in an unordered queue and you can add to the
+
+00:38:47 queue in an unordered way and then you put a giant lock over like the whole
+
+00:38:52 processing if you write that sort of program with normal threads and normal
+
+00:38:55 locks it will it will be correct but it won't run fast because everything
+
+00:39:00 will be giant will be inside the giant locks to be more or less serial but all
+
+00:39:05 the complexity in your code of doing parallelism anyway yeah so this so STM
+
+00:39:12 stands for software transactional memory it means it works roughly like a
+
+00:39:16 database where you run multiple transactions and then if you don't touch
+
+00:39:23 the memory from two threads at the same time then it's all cool and if you
+
+00:39:29 touch one of those gets aborted and reverted and you can only commit a transaction
+
+00:39:34 if the memory access was right so if you think again about the model where
+
+00:39:39 you have one gigantic log it means it will run in parallel optimistically
+
+00:39:43 a few versions of the same code on different data and if they tend not to
+
+00:39:49 conflict if they can be run serially in a sense like they modify some global
+
+00:39:56 data but not in a conflicting manner then you'll get parallelism for free
+
+00:40:04 but if they do conflict every now and again then one of the guys gets reverted
+
+00:40:10 back to the start so the net effect is that it looks like you're running
+
+00:40:14 stuff serially for the programmer and you get correctness for free if you
+
+00:40:19 write it in a way that that's naive then you won't get performance because your
+
+00:40:26 stuff will collide all the time but then you can use tools and look where it
+
+00:40:30 collides and remove those contention points and you get more and more performance
+
+00:40:34 which is almost the same goal but the difference is that if you have 100%
+
+00:40:40 performance and 99% correctness your program is still incorrect and you can't run
+
+00:40:45 it if you have 100% correctness and 99% performance you're mostly good to
+
+00:40:50 go yeah would you rather be fast and wrong or slow and right it's sort of
+
+00:40:55 that you know there's a really interesting classification of those types of
+
+00:41:00 problems that you only see every very very rarely from the you know sort of
+
+00:41:06 some kind of race condition or timing threading problem and I've heard people
+
+00:41:10 describe those as Heisen bugs because because as you interact with a program
+
+00:41:15 trying to see the problem you might not be able to observe it but if you're not
+
+00:41:18 looking all of a sudden boom the timing realigns and it's a problem again
+
+00:41:21 they're very frustrating so it's important to look at so that the usual answer
+
+00:41:27 for those problems in Python is just use multiple processes and using multiple
+
+00:41:32 processes works for a category of applications and web servers tend to be one
+
+00:41:36 of those because they only ever share data that's either caches or database
+
+00:41:42 usually that's another process anyway like Redis or it's in a database like
+
+00:41:46 Mongo or SQL or something like that yeah so you don't care but like there's a
+
+00:41:50 whole set of problems where this is not what you have you have data that's
+
+00:41:56 mostly not contentious but you still have to share it and work on it you can't
+
+00:42:01 afford to serialize and deserialize and pass between processes and yet you want
+
+00:42:07 to have a correct result so this is what STM is trying to address a set of problems
+
+00:42:14 that can be solved by just splitting stuff into processes right maybe something
+
+00:42:19 very computational or scientific where it's iterative or something would be
+
+00:42:23 way harder well essentially anything where you have data that mostly does not
+
+00:42:29 conflict and you can do it in parallel but every now and again it's a big data
+
+00:42:35 set that you work on and every now and again you tend to conflict like graph
+
+00:42:41 algorithms are a great example and you have this large complicated data structure
+
+00:42:44 in memory and most of the time you're walking different parts of graphs so you don't
+
+00:42:49 care but every now and again you'll find contention on one graph because two
+
+00:42:54 parts are doing stuff on the same node and then you're like that's wrong
+
+00:42:59 and writing this sort of stuff using threads is really hard yeah so that
+
+00:43:03 has a lot of promise do you know when it might start to show up as a thing
+
+00:43:07 people can use is it there yet so it's already there to an extent you can
+
+00:43:13 download the STM demo somewhere and the STM demo works it might not scale
+
+00:43:20 how you want it it might not work how you want it but it should generally
+
+00:43:23 work and scale so the current version only scales to like two or three cores
+
+00:43:30 and given that it comes at a quite hefty cost of like 1.5 to two times slower
+
+00:43:38 on each core it's not that useful so the next version will try to reduce the
+
+00:43:43 overhead of single core and improve the scalability to more cores and then
+
+00:43:47 we'll see how it goes it's going along quite well I would expect like I mean
+
+00:43:52 there are consecutive prototypes that are usable to some extent like we managed to
+
+00:43:58 get some performance improvements running on multiple cores but they have
+
+00:44:02 20-30% range which is just not that exciting but on the other hand they were
+
+00:44:08 mostly for free which is again something that you might what if I rewrite
+
+00:44:16 no no the point is you don't have to rewrite it's a very simple change and then
+
+00:44:20 you might get some performance benefit yeah that's fantastic the other one of the
+
+00:44:25 other projects that you have on your donation list is a major thing you guys
+
+00:44:29 are working on is Pi3k in PiPi what's that it's the Python 3 implementation
+
+00:44:36 of PiPi so as I said before we have various interpreters in PiPi that are
+
+00:44:44 all implemented in our Python and one of those interpreters is a Python 2
+
+00:44:48 interpreter and one of those interpreters which is less complete is Python 3
+
+00:44:53 interpreter that supports like 3.2 by now so we need money to push it forward
+
+00:44:59 and help I guess too to push it forward to like 3.3 or 3.4 or even 3.5 to bring
+
+00:45:08 it more up to speed one thing that we don't do in PiPi is we don't debate
+
+00:45:13 the Python language choices and I think it serves us well so for example
+
+00:45:18 I don't work much on the Python interpreter itself I work a lot on the R
+
+00:45:22 Python side of things and most of the improvements help all of the interpreters
+
+00:45:27 not just Python interpreter so I personally don't care if it's Python 2 or Python 3
+
+00:45:34 the improvements are all the same to me right that's great then you also
+
+00:45:38 have a section towards general progress and the last one is NumPy what are
+
+00:45:43 you trying to accomplish with that sprint or whatever you call it so as I
+
+00:45:49 said before the NumPy stuff is we want to reimplement the NumPy so the numeric
+
+00:45:54 part the operation on arrays and we have a very exciting project for summer
+
+00:46:01 of code that does vectorization so using SSE for NumPy and then we want to integrate
+
+00:46:08 more of the have a way to call more of the whole ecosystem of numeric Python
+
+00:46:16 so scipy mat world lib all this stuff that's outside of the scope so we want
+
+00:46:21 to have the core of NumPy implemented in PyPy because those things are too
+
+00:46:25 low level to just call external library and then we want to have a way or
+
+00:46:32 multiple ways depending on the setup to call all the other ecosystem and
+
+00:46:37 this is essentially what those goals are here those are three ambitious and
+
+00:46:44 very cool goals very nice well they've been around for a couple years I think
+
+00:46:49 so we are working towards them and we have people working right now on all
+
+00:46:54 three proposals as far as I can tell yeah that's great so one thing that
+
+00:46:59 is related to PyPy that you've done individually is the JIT viewer can you
+
+00:47:05 talk about that briefly so JIT viewer is a bit of an internal tool for visualizing
+
+00:47:13 assembler and the intermediate representation of your Python program so it's
+
+00:47:19 very useful for if you're really interested how PyPy compiles your program
+
+00:47:23 you can look into that so one related project that I've been working on recently
+
+00:47:28 quite a lot is called VMProf and VMProf is a low overhead statistical profiler
+
+00:47:36 for Python or for VMs in general but we're going to start with CPython and
+
+00:47:40 PyPy so those are tools that help developers find their bottlenecks in the
+
+00:47:46 code and find how to improve performance usually because if you can understand
+
+00:47:51 it you can usually improve it yeah that's excellent yeah we've been talking
+
+00:47:56 a lot about how PyPy makes stuff faster but before you just say well we're
+
+00:48:01 switching to some new interpreter maybe it makes sense to think about your
+
+00:48:04 algorithms and where they're slow and whether or not that switch would even
+
+00:48:07 help it it really depends on the situation sometimes you switch without thinking
+
+00:48:12 about it and sometimes it doesn't make sense and you have to think about
+
+00:48:15 it first it really depends on your program and what are you trying to achieve
+
+00:48:19 and sometimes you want to switch look improve sometimes you want to do both
+
+00:48:23 yeah well at minimum you probably want to measure and profile your app and
+
+00:48:28 try it on you definitely want to measure you definitely want to know how
+
+00:48:36 fast your application is running before attempting anything it felt a little
+
+00:48:41 faster let's do it exactly you're laughing but we've seen people like that
+
+00:48:47 like my application runs faster on my local machine but not on the server
+
+00:48:52 okay how did you benchmark oh I looked at the loading time Chrome like developer
+
+00:48:58 tools that's not good enough usually that's like yes it might be slower because
+
+00:49:06 your network is slower I don't know what your setup is maybe the ping time
+
+00:49:10 is 100 milliseconds the request time is 10 milliseconds so geez it's really
+
+00:49:14 slow on the server right awesome all right Manja this is probably a good
+
+00:49:20 place to wrap up the show this has been such an interesting conversation
+
+00:49:22 I'm really excited about what you are doing and you know I hope you keep
+
+00:49:26 going I want to make sure that people know that the source code is on bitbucket
+
+00:49:30 they can go to bitbucket.org slash pipi that's the main repo the main way to
+
+00:49:36 contact us is usually through either mailing list or irc we hang out on irc
+
+00:49:41 a lot it's hash pipi on free node and we're usually quite approachable when you
+
+00:49:46 come with problems and one interesting thing is if you find your program
+
+00:49:51 running slower on their pipi than c python it's usually considered a bug
+
+00:49:56 unless you're using a lot of c extensions right so if people run into that
+
+00:50:00 maybe they should communicate with you guys and they can definitely file a
+
+00:50:04 bug and complain excellent two quick questions I typically ask people at
+
+00:50:09 the end of the show what what's your favorite editor how do you write code
+
+00:50:12 during the day I have heavily hacked emux actually that does all kinds of
+
+00:50:18 weird stuff and I'm way more proficient with elisp than I would ever want
+
+00:50:23 to be actually a skill you didn't really want to earn but you you've done
+
+00:50:28 it anyway huh something like that yeah and then also what's a notable or
+
+00:50:34 interesting pypi package that you want to tell people about that's a tough
+
+00:50:40 one for me because I don't actually write all that much Python code that's
+
+00:50:44 using libraries you can't import too much into the like the core core bits
+
+00:50:49 right right but definitely and I mean it is self promotion but definitely
+
+00:50:54 cffi is something that I would recommend people to look at as a way to call
+
+00:50:58 c because this is something very low that has been very successful as a simple
+
+00:51:04 simple simple way to call c that's cool and if I was writing some program
+
+00:51:08 in Python and I had some computational bits I'd written in c I could wire
+
+00:51:14 them together with cffi you'll be surprised how few people actually do that
+
+00:51:19 most of the time I have this Python program and I have this obscure c library
+
+00:51:23 that accesses this weird device that nobody heard about and I need to call
+
+00:51:28 it somehow and that's why you call c the computational bits it's actually
+
+00:51:33 quite rare but that would be an option too yeah sure sure okay awesome and
+
+00:51:39 then finally just you said that you do some consulting do you want to maybe
+
+00:51:43 talk a little bit about what you do so if people want to contact you or anything
+
+00:51:47 like that so the website is barocksoftware.com and essentially what we do
+
+00:51:52 is we make your Python programs run faster like the same thing as we do in
+
+00:51:57 open source except on the commercial side so typically if your open source
+
+00:52:01 software is running too slow just come to IRC and if your commercial software
+
+00:52:05 is running too slow we can definitely do a contract with you to make it run
+
+00:52:10 faster yeah that's awesome yeah so I'm sure people who are having trouble
+
+00:52:13 might be interested in checking that out so great Machia this has been super
+
+00:52:18 fun I've learned a lot thanks thank you Michael have a good day yeah you too
+
+00:52:23 this has been another episode of talk Python to me today's guest was Machia
+
+00:52:28 Falkowski and this episode has been sponsored by Hired and Codeship thank
+
+00:52:33 you guys for supporting the show Hired wants to help you find your next big
+
+00:52:37 thing visit Hired.com slash Talk Python to me to get five or more offers
+
+00:52:42 with salary and equity presented right up front and a special listener signing
+
+00:52:47 bonus of $4,000 Codeship wants you to always keep shipping check them out
+
+00:52:53 at Codeship.com and thank them on Twitter via at Codeship don't forget the
+
+00:52:57 discount code for listeners it's easy Talk Python all caps no spaces you can
+
+00:53:03 find the links from the show at talkpython.fm episodes show 21 and be sure to
+
+00:53:10 subscribe to the show open your favorite podcatcher and search for Python
+
+00:53:13 we should be right at the top you can also find the iTunes and direct RSS
+
+00:53:17 feeds in the footer of the website our theme music is developers developers
+
+00:53:22 developers by Corey Smith who goes by Smix you can hear the entire song on
+
+00:53:27 talk python.fm this is your host Michael Kennedy thanks for listening Smix
+
+00:53:33 take us out of here dating with my voice there's no norm that I can feel
+
+00:53:38 within haven't been sleeping I've been using lots of rest I'll pass the mic
+
+00:53:42 back to who rocked it best I'm first developers, developers, developers, developers, developers.
+
+00:53:52 Developers, developers, developers, developers, developers.
+

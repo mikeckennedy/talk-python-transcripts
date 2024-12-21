@@ -1,0 +1,3335 @@
+WEBVTT
+
+00:00:00.001 --> 00:00:03.540
+Have you heard that Python is not good for writing concurrent asynchronous code?
+
+00:00:03.540 --> 00:00:08.720
+This is generally a misconception, but there is one class of parallel computing that Python is
+
+00:00:08.720 --> 00:00:14.380
+not good at, CPU-bound work running in the Python layer. What's the main problem? It's Python's
+
+00:00:14.380 --> 00:00:18.700
+GIL or global interpreter lock, of course. Yet the fix for this restriction might have been hiding
+
+00:00:18.700 --> 00:00:25.420
+inside Python for 20 years, sub-interpreters. Join me to talk about PEP 554 with core developer
+
+00:00:25.420 --> 00:00:31.460
+Eric Snow. This is Talk Python to Me, episode 225, recorded August 2nd, 2019.
+
+00:00:31.460 --> 00:00:49.820
+Welcome to Talk Python to Me, a weekly podcast on Python, the language, the libraries, the ecosystem,
+
+00:00:49.820 --> 00:00:54.500
+and the personalities. This is your host, Michael Kennedy. Follow me on Twitter, where I'm at
+
+00:00:54.500 --> 00:00:59.500
+M. Kennedy. Keep up with the show and listen to past episodes at talkpython.fm, and follow the
+
+00:00:59.500 --> 00:01:06.280
+show on Twitter via at Talk Python. This episode is supported by Linode and TopTal. Please check out
+
+00:01:06.280 --> 00:01:10.340
+what they're offering during their segments. It really helps support the show. Eric, welcome to
+
+00:01:10.340 --> 00:01:14.700
+Talk Python to Me. Hi, how's it going? It's going really well. It's an honor to have you on the show.
+
+00:01:14.700 --> 00:01:20.120
+We met up at PyCascades and talked a little bit, but this latest work you're doing to address
+
+00:01:20.120 --> 00:01:25.300
+concurrency and parallelism in Python is super interesting. So I'm looking forward to talking
+
+00:01:25.300 --> 00:01:30.080
+to you about that. Well, it's super interesting to me too. Yeah, I can imagine. I'm glad you're
+
+00:01:30.080 --> 00:01:33.320
+interested. This kind of stuff is, I don't know, there's just something that draws me in and I'm
+
+00:01:33.320 --> 00:01:38.260
+really enjoy exploring it. But before we do, let's start with your story. How'd you get into programming
+
+00:01:38.260 --> 00:01:46.340
+Python? Oh boy. I had all sorts of ideas on what I wanted to do growing up and computers was not
+
+00:01:46.340 --> 00:01:55.280
+really one of them. But then I ended up at school and somehow ended up signed up for computer stuff,
+
+00:01:55.280 --> 00:02:01.160
+ended up getting a CS degree. And then it's funny because I actually, while I was in school, I was
+
+00:02:01.160 --> 00:02:06.700
+working for a web hosting company doing technical support. Once I graduated, I moved over to a development
+
+00:02:06.700 --> 00:02:11.580
+team. And the guy I replaced is, you may know him, he's named Van Lindberg.
+
+00:02:11.580 --> 00:02:12.560
+Okay. Yeah.
+
+00:02:12.560 --> 00:02:20.940
+So it's kind of funny. So I ended up working on this project that Van had been running and ultimately
+
+00:02:20.940 --> 00:02:26.660
+ended up kind of being the tech lead on that project. It was all written in Python. And so I
+
+00:02:26.660 --> 00:02:29.640
+have Van to thank for my introduction to Python.
+
+00:02:29.640 --> 00:02:34.800
+That's really cool. So you went from talking to the customers and helping them with the problems
+
+00:02:34.800 --> 00:02:38.780
+the developers created to creating the problems for the person who took the job.
+
+00:02:38.780 --> 00:02:40.260
+Just kidding.
+
+00:02:40.260 --> 00:02:41.020
+Kind of.
+
+00:02:41.020 --> 00:02:45.820
+Yeah. That's a really great progression, right? Like you sort of get your foot in the tech space
+
+00:02:45.820 --> 00:02:49.180
+and then, you know, you make your way over to kind of running the team. That's great.
+
+00:02:49.180 --> 00:02:54.680
+It was a good experience. One neat thing is that it was pretty flexible as far as the job goes.
+
+00:02:55.220 --> 00:03:01.040
+There were only a handful of us on the team and we're doing a pretty big job, but we had taken an
+
+00:03:01.040 --> 00:03:07.760
+approach of highly automating stuff. So it was mostly just a matter of making the effort to address
+
+00:03:07.760 --> 00:03:15.380
+automation stuff, which meant that otherwise we had a little more time to kind of delve into issues and
+
+00:03:15.380 --> 00:03:22.240
+solve problems in a better way. And as part of that, whenever I'd run into Python stuff, like I couldn't
+
+00:03:22.240 --> 00:03:26.520
+figure out what was going on or I wanted to understand how something worked, I had the time
+
+00:03:26.520 --> 00:03:32.880
+to go and explore it. And, you know, within a year or something, I discovered the mailing lists.
+
+00:03:32.880 --> 00:03:39.000
+And then, you know, before long, I was actually active in email threads and, you know, I started
+
+00:03:39.000 --> 00:03:45.040
+getting involved with the import system. And by 2012, so this is over the course of a few years,
+
+00:03:45.040 --> 00:03:50.280
+I got commit rights and was pretty heavily active in core development.
+
+00:03:50.280 --> 00:03:55.480
+That's so cool. I think there's something special for working for a small company. You get to touch a
+
+00:03:55.480 --> 00:03:59.860
+lot of different things. You get this freedom that you're talking about to kind of solve the problems
+
+00:03:59.860 --> 00:04:05.100
+the way you see they should be solved and then go and, you know, kind of explore. Right. I work for a
+
+00:04:05.100 --> 00:04:10.360
+small company and I think I really attribute like being in that company in the early days to like a lot
+
+00:04:10.360 --> 00:04:14.080
+of the success of my career because it gave me a chance to like round out the corners that I didn't
+
+00:04:14.080 --> 00:04:19.360
+really know. I wasn't like just pigeonholed into like some super narrow role. Right. You work on what
+
+00:04:19.360 --> 00:04:25.120
+this button does. That's your job. Like, right. Right. Right. Exactly. That reminds me what you
+
+00:04:25.120 --> 00:04:30.420
+just said. That's been my experience with CPython that as I've gotten involved in the mail list and
+
+00:04:30.420 --> 00:04:37.200
+the bug tracker and everything, I feel like is really rounded me out a lot because I'm exposed to
+
+00:04:37.200 --> 00:04:44.860
+so many things, you know, the breadth of programming and just 90% of it, I probably never really would have
+
+00:04:44.860 --> 00:04:49.540
+been introduced to because probably isn't that interesting to me, but because, you know, their
+
+00:04:49.540 --> 00:04:56.480
+email threads and whatever, you know, I learned about it and that's, it's really made a huge
+
+00:04:56.480 --> 00:05:00.800
+difference for me, I think. Yeah. I can imagine. It's just, it's an amazing group of people working
+
+00:05:00.800 --> 00:05:05.080
+on there and then get down into the technical details. Oh yeah. So you started out and in this
+
+00:05:05.080 --> 00:05:08.960
+web hosting company and now you work for a really big web hosting company, right? Yeah.
+
+00:05:09.740 --> 00:05:14.020
+With Azure? Oh yeah. No, not exactly. But definitely, definitely I got some web hosting
+
+00:05:14.020 --> 00:05:19.380
+going on. What do you do day to day over at Microsoft? So I work with Brett Cannon on the
+
+00:05:19.380 --> 00:05:23.880
+Python extension for VS Code. I joined the team a little over a year and a half ago.
+
+00:05:23.880 --> 00:05:28.540
+Nice. That's got to be a fun team to work on. You know, the excitement around VS Code is massive,
+
+00:05:28.540 --> 00:05:32.220
+right? It's, you know, I always ask this question, what's your favorite editor? What editor do you use?
+
+00:05:32.220 --> 00:05:38.320
+Things like that in the show. And yeah, VS Code is definitely tracking as a major thing. And
+
+00:05:38.320 --> 00:05:46.260
+it used to sometimes be Sublime or Atom or something. It's, it seems like certainly for like that type
+
+00:05:46.260 --> 00:05:50.120
+of interface, what would you call it? So what would you call it? I mean, it's, it's not an IDE
+
+00:05:50.120 --> 00:05:56.780
+really. It's not like a terminal app. What, what category of editor is our Sublime Atom VS Code?
+
+00:05:56.780 --> 00:05:58.840
+What's the name? What should I be calling these things?
+
+00:05:58.840 --> 00:06:02.540
+I don't know why. Like a full featured editor?
+
+00:06:02.540 --> 00:06:04.340
+Yeah, exactly.
+
+00:06:04.340 --> 00:06:07.520
+You can't call it an IDE because that's, that's verboten.
+
+00:06:07.520 --> 00:06:11.060
+Yeah. And there's not enough buttons. It needs more buttons and windows, right?
+
+00:06:11.060 --> 00:06:15.540
+It needs more menus and more stuff so you can get lost in there, right? Right now.
+
+00:06:15.540 --> 00:06:16.080
+Yes, exactly.
+
+00:06:16.080 --> 00:06:17.420
+It's too easy not to get lost.
+
+00:06:17.420 --> 00:06:20.840
+Yeah. There's not enough floating windows. Congratulations. I'm sure that's a super
+
+00:06:20.840 --> 00:06:23.680
+exciting thing to be working on and it's, it's really growing quickly.
+
+00:06:23.680 --> 00:06:28.140
+No, it's funny. This is a team that I first talked with them about getting on the team
+
+00:06:28.140 --> 00:06:34.940
+in 2014 and it almost happened. And then there were some complications because I was only going
+
+00:06:34.940 --> 00:06:40.040
+to work remote. At the time I was working for Canonical who makes Ubuntu. So I ended up just
+
+00:06:40.040 --> 00:06:46.160
+kind of waiting and it took like what, two, three years or something like that. But it worked
+
+00:06:46.160 --> 00:06:51.700
+out in the end. But that's, it's kind of a story of my life. I just kind of find a good
+
+00:06:51.700 --> 00:06:56.240
+thing and then wait for it to work out. I'm not, I'm never really in a big hurry, which,
+
+00:06:56.240 --> 00:07:00.900
+which I suppose we'll talk about relative to the stuff I've been working on.
+
+00:07:00.900 --> 00:07:06.140
+Yeah, absolutely. So, well, that's, that's really good. And that's, that's a great project
+
+00:07:06.140 --> 00:07:10.140
+to be working on day to day. And you said that Microsoft actually gives you a decent amount
+
+00:07:10.140 --> 00:07:12.740
+of time to focus on CPython as well.
+
+00:07:12.740 --> 00:07:13.020
+Yep.
+
+00:07:13.020 --> 00:07:17.220
+As they do with Brett and some other folks. And that's, that's really quite, quite cool.
+
+00:07:17.220 --> 00:07:25.820
+Yeah. I get to work basically my Fridays. I work on exclusively on Python. So that's been
+
+00:07:25.820 --> 00:07:28.260
+a big boost to, to what I've been able to get done.
+
+00:07:28.260 --> 00:07:31.660
+That's awesome. So you're saying the fact that we scheduled this on Friday is actually
+
+00:07:31.660 --> 00:07:34.160
+cutting in your time to make Python better for everyone.
+
+00:07:34.160 --> 00:07:37.800
+You know, it's actually part of why I just, yeah, no, it's cool.
+
+00:07:37.800 --> 00:07:38.620
+That's the cost.
+
+00:07:38.620 --> 00:07:42.620
+Yeah. But I think awareness of what you're doing is really good because I think it can make a
+
+00:07:42.620 --> 00:07:46.360
+big difference. So let's just talk about parallelism and concurrency and asynchronous
+
+00:07:46.360 --> 00:07:52.160
+programming and stuff kind of in general and in the, in the Python space. I feel like there's a lot
+
+00:07:52.160 --> 00:07:58.280
+of people who look at what Python does with async. They see things like the GIL and they say, well,
+
+00:07:58.280 --> 00:08:03.560
+this just doesn't work for parallelism. I'm switching to go or some, you know, some,
+
+00:08:03.560 --> 00:08:09.060
+something like that. And I feel like it's, you know, there may be situations where you got to
+
+00:08:09.060 --> 00:08:13.980
+switch to see you, you got to switch to go, but they're like 1% of the situations where people
+
+00:08:13.980 --> 00:08:18.900
+actually do that. Right. Like most of the time, I think that's just not taking advantage of what's
+
+00:08:18.900 --> 00:08:23.680
+out there. So maybe like, let's just set the stage with talking about like concurrency in general.
+
+00:08:23.680 --> 00:08:29.200
+Yeah, you bet. If you look at it, the history of computing, other than really large systems,
+
+00:08:29.200 --> 00:08:34.800
+most computers have been single processor, single core until relatively recently.
+
+00:08:34.800 --> 00:08:40.280
+Yeah. Like 2005 or so, it just used to be the clock speed went up and up and up.
+
+00:08:40.280 --> 00:08:42.720
+And that was how computers got faster.
+
+00:08:42.720 --> 00:08:48.920
+So it's kind of funny because threading, sure, you can kind of logically program for different threads,
+
+00:08:48.920 --> 00:08:56.760
+but ultimately it was just a single thread getting switched by the OS. And that's kind of the,
+
+00:08:56.760 --> 00:08:59.880
+what you had to deal with, but it's a different story now.
+
+00:08:59.880 --> 00:09:03.440
+Yeah. And back in the early days, you didn't even have preemptive multi-threading.
+
+00:09:03.440 --> 00:09:08.460
+Oh yeah. Cooperative multi-threading, like you had to like give it up. Right. It was like in
+
+00:09:08.460 --> 00:09:13.300
+Windows 3.1 in the early days, there was some weird stuff where like you had to be a good citizen on
+
+00:09:13.300 --> 00:09:16.980
+the operating system to even allow that. We're kind of full circle here with async.
+
+00:09:16.980 --> 00:09:18.960
+Yeah. Async it away is exactly the same thing.
+
+00:09:18.960 --> 00:09:24.960
+Yeah. So it's kind of a conceptually the same. So it's really interesting, but now not only do we
+
+00:09:24.960 --> 00:09:32.760
+have concurrency where you have to deal with matters of who's running at a given time, but now we also
+
+00:09:32.760 --> 00:09:39.020
+have parallelism, which gives us performance boosts. But of course with Python, it's an issue with the
+
+00:09:39.020 --> 00:09:41.160
+GIL, which everyone likes to complain about.
+
+00:09:41.160 --> 00:09:48.260
+Right. Exactly. So within a single process, you can't really, unless you are doing certain operations
+
+00:09:48.260 --> 00:09:53.340
+that release the GIL, you can't really run more than one interpreter instruction at the same time.
+
+00:09:53.340 --> 00:09:56.380
+Right. Right. It's really a CPU bound code that suffers.
+
+00:09:56.380 --> 00:10:01.760
+Right. Yeah, exactly. So if you're talking to like databases or you're waiting on web services,
+
+00:10:01.760 --> 00:10:06.640
+all that stuff's fine, right? Like CPython interpreter, once it opens a network socket down
+
+00:10:06.640 --> 00:10:11.160
+the C level, like while it's waiting, we'll release the GIL. And you can do those kinds of things in
+
+00:10:11.160 --> 00:10:13.040
+parallel with threads already. Right. Yeah.
+
+00:10:13.100 --> 00:10:17.600
+Not computationally. Yeah. It's kind of funny because if you look at it and I think Guido's
+
+00:10:17.600 --> 00:10:22.740
+mantra has always been, well, you aren't really hurt by the GIL as much as you think you are,
+
+00:10:22.740 --> 00:10:30.220
+because a lot of code that we write really isn't CPU bound. Very often it's not. And especially
+
+00:10:30.220 --> 00:10:35.200
+for some of the CPU bound stuff, you know, a lot of the critical stuff, people have moved into C
+
+00:10:35.200 --> 00:10:43.020
+extensions anyway. There's still a set of problems that are affected by the GIL. And people have had
+
+00:10:43.020 --> 00:10:47.440
+to work around that number of solutions. You know, asyncio is kind of one thing,
+
+00:10:47.440 --> 00:10:52.380
+but you also have multiprocessing and you have, you know, all sorts of distributed frameworks.
+
+00:10:52.380 --> 00:10:54.920
+Right. Like Dask and other types of things. Yeah.
+
+00:10:54.920 --> 00:11:00.520
+So all that stuff is in part, well, for distribute, it's a little different, but
+
+00:11:00.520 --> 00:11:07.400
+part of the motivation there has just been to leverage parallelism better. So that's one of the
+
+00:11:07.400 --> 00:11:13.480
+biggest complaints that people have with Python. It has been for a while, just parallelism,
+
+00:11:13.480 --> 00:11:18.960
+multicore. And it's a bigger problem now that multiple cores are essentially ubiquitous.
+
+00:11:18.960 --> 00:11:25.260
+Right. Even here on my MacBook, if I go and ask it how many processors it has, how many cores rather,
+
+00:11:25.260 --> 00:11:29.720
+it says it has six and each of those are hyper-threaded. So as far as the OS is concerned,
+
+00:11:29.720 --> 00:11:31.300
+I effectively have like 12.
+
+00:11:31.300 --> 00:11:31.600
+Yeah.
+
+00:11:31.680 --> 00:11:35.140
+And yet it's super difficult to take advantage of those.
+
+00:11:35.140 --> 00:11:35.560
+Yeah. Yeah.
+
+00:11:35.560 --> 00:11:36.140
+In Python.
+
+00:11:36.140 --> 00:11:41.700
+Yeah. Yeah. It's just, it's really interesting. So it's funny the way things have gone and it's,
+
+00:11:41.700 --> 00:11:46.160
+it's going to go even more, more this way. I mean, I expect that the way people program
+
+00:11:46.160 --> 00:11:52.780
+will be different as we think about multiple cores more, but maybe not. I mean, because how often are
+
+00:11:52.780 --> 00:11:55.080
+we writing, you know, CPU bound code?
+
+00:11:55.240 --> 00:12:00.060
+I feel like there's just a couple of situations where it really matters and there are already to
+
+00:12:00.060 --> 00:12:06.200
+some degree, some escape hatches, right? So the most obvious place where in Python,
+
+00:12:06.200 --> 00:12:11.880
+it really matters for computational parallelism is in data science, right? Like I've got a billion of
+
+00:12:11.880 --> 00:12:16.340
+these things. I want to run some crazy algorithm on it and like machine learning training or whatever.
+
+00:12:16.880 --> 00:12:22.960
+But a lot of the libraries that the machine learning folks already have, have some capability
+
+00:12:22.960 --> 00:12:29.820
+for, or for data science folks have, have some capability for parallelism at their lower C levels
+
+00:12:29.820 --> 00:12:30.460
+anyway, right?
+
+00:12:30.460 --> 00:12:35.960
+Yep. That's exactly right. I mean, a lot of these libraries have C extensions where they need them.
+
+00:12:35.960 --> 00:12:43.180
+Exactly. The other place where I feel like you really could get a lot better support is on the web.
+
+00:12:43.340 --> 00:12:43.520
+Yeah.
+
+00:12:43.520 --> 00:12:50.940
+Right. Like we have some of the newer frameworks, we have Molten and Jepronto and Starlette and all these things,
+
+00:12:50.940 --> 00:12:59.320
+Responder that let us write async def, some web method and truly leverage the asyncio components there.
+
+00:12:59.320 --> 00:13:06.120
+But, you know, the main ones, Flask, Django, others, Pyramid, whatever, they don't, right?
+
+00:13:06.120 --> 00:13:09.760
+They're all WSGI based and it's, you just can run into issues, right?
+
+00:13:09.860 --> 00:13:16.240
+I mean, I know the web servers themselves have some capability just to parallelize it out, but it's still, it's, it would be much easier if you did.
+
+00:13:16.240 --> 00:13:18.360
+So I don't think it's that big of a problem.
+
+00:13:18.360 --> 00:13:26.200
+Like there's these two areas, the data science space, and I think the sort of like high-end web serving space that could be handled a little bit better.
+
+00:13:26.200 --> 00:13:26.560
+Yeah.
+
+00:13:26.660 --> 00:13:30.240
+We're already seeing some stuff with async and away on the web, which is, I think, where it's appropriate.
+
+00:13:30.240 --> 00:13:43.360
+I think there's one important caveat too, and it's something that we, we don't really bring up a whole lot in the community, which is that there are a lot of enterprise users of Python that we never hear about how they're using it.
+
+00:13:43.440 --> 00:13:49.240
+In part because of, you know, competitive advantage and that sort of thing, but we don't really hear about it.
+
+00:13:49.240 --> 00:13:49.460
+Yeah.
+
+00:13:49.460 --> 00:13:53.680
+Or they just, they just don't go to the conferences and they don't like spend all their time on Twitter.
+
+00:13:53.680 --> 00:13:55.300
+They just see it as a job.
+
+00:13:55.300 --> 00:13:56.040
+They do their work.
+
+00:13:56.040 --> 00:13:56.580
+They go home.
+
+00:13:56.580 --> 00:13:58.740
+Like they don't, not also their hobby necessarily.
+
+00:13:58.740 --> 00:13:58.980
+Yeah.
+
+00:13:58.980 --> 00:13:59.160
+Yeah.
+
+00:13:59.160 --> 00:14:07.280
+So in a lot of those cases, performance matters and not just performance, of course, efficiency and, and that sort of thing.
+
+00:14:07.360 --> 00:14:09.120
+I mean, it really adds up.
+
+00:14:09.120 --> 00:14:18.740
+So I'm sure there are a lot of folks that we don't even think about who would benefit from better multi-core support in CPython.
+
+00:14:18.740 --> 00:14:22.360
+But, you know, we just, we don't hear about those folks.
+
+00:14:22.360 --> 00:14:24.340
+Well, maybe that's not even them directly.
+
+00:14:24.340 --> 00:14:24.940
+Right.
+
+00:14:24.940 --> 00:14:25.180
+Yeah.
+
+00:14:25.180 --> 00:14:30.580
+Maybe they, they pip install a thing and that thing now works better and they don't even know that it's using multi-core support.
+
+00:14:30.580 --> 00:14:31.160
+Right.
+
+00:14:31.160 --> 00:14:37.240
+But somebody who's really clever found a way to make something they were doing much, much better using that.
+
+00:14:37.320 --> 00:14:37.500
+Right.
+
+00:15:07.280 --> 00:15:37.240
+This work that you're approaching basically tries to deal with this limited,
+
+00:15:37.240 --> 00:15:46.320
+implementation of the Python's guild, the global interpreter lock, which basically has the effect of what I said before, that only a single interpreter instruction can run at a time.
+
+00:15:46.320 --> 00:15:54.100
+Maybe some low level C stuff can also happen, but like the stuff that you write runs, you know, only one like bytecode instruction at a time, basically.
+
+00:15:54.100 --> 00:15:54.440
+Yeah.
+
+00:15:54.600 --> 00:15:59.660
+So maybe just tell people like, that sounds bad.
+
+00:15:59.660 --> 00:16:02.300
+But it's here for a reason, right?
+
+00:16:02.300 --> 00:16:04.680
+It solves a lot of problems for us, right?
+
+00:16:04.680 --> 00:16:05.240
+Oh yeah.
+
+00:16:05.240 --> 00:16:15.340
+It hides a lot of problems that you face when dealing with threads that you don't have to worry about in Python.
+
+00:16:16.020 --> 00:16:19.720
+But not only that, it's also when you're writing C extensions.
+
+00:16:19.720 --> 00:16:23.120
+In C, you have to do a lot of stuff yourself.
+
+00:16:23.120 --> 00:16:27.320
+And when you're dealing with threads, you have to deal with all that.
+
+00:16:27.480 --> 00:16:34.140
+So when you're using Python and you're holding the GIL, you don't have to worry about other Python threads.
+
+00:16:34.140 --> 00:16:42.920
+You don't have to manage your own locks for those threads, which is, I think, makes a threading at the C level in the C API easier.
+
+00:16:43.120 --> 00:16:52.580
+But also, there's a lot of implementation details in CPython that depend on the fact that the GIL protects them.
+
+00:16:52.580 --> 00:16:54.560
+We deal with re-entrancy a lot.
+
+00:16:54.560 --> 00:17:05.580
+But other than that, we don't really have to worry about race conditions on any of the C types, the built-in types or any of those, because they're protected by the GIL.
+
+00:17:05.580 --> 00:17:06.380
+Yeah, which is great.
+
+00:17:06.380 --> 00:17:09.300
+And the GIL is largely a memory management thing.
+
+00:17:09.300 --> 00:17:11.080
+It's not initial job.
+
+00:17:11.320 --> 00:17:16.460
+I mean, it is for threading, but it's mostly to protect the memory management and making that thread safe, right?
+
+00:17:16.460 --> 00:17:21.180
+In large part, it's to protect the runtime state, especially memory management.
+
+00:17:21.180 --> 00:17:21.500
+Yeah.
+
+00:17:21.500 --> 00:17:21.800
+Yeah.
+
+00:17:21.800 --> 00:17:24.980
+So it serves this important role.
+
+00:17:24.980 --> 00:17:34.980
+I mean, we still do have R-lock and things like that, because we might write algorithms that a whole bunch of different steps can't be interrupted, temporarily invalid state or whatever.
+
+00:17:34.980 --> 00:17:36.120
+So we might have to think.
+
+00:17:36.120 --> 00:17:39.360
+But it's very rare, actually, that you end up doing locks and stuff.
+
+00:17:39.420 --> 00:17:46.000
+And other languages like C++ or C# or something, it's common to do locking all over the place, right?
+
+00:17:46.000 --> 00:17:48.440
+For all kinds of funky things.
+
+00:17:48.440 --> 00:17:50.240
+So it's nice that it's not there.
+
+00:17:50.780 --> 00:18:00.540
+And there have been several attempts to take it out to switch to other types of memory management, other things that let us avoid it.
+
+00:18:00.540 --> 00:18:10.580
+But it's always had these problems of making the C extensions not working well or breaking them, of actually making the single threaded case slower.
+
+00:18:11.400 --> 00:18:18.260
+It's one thing to say, okay, we could switch to some other system that's not using the GIL, but now your code's 1.5 times slower.
+
+00:18:18.260 --> 00:18:22.420
+Unless you send like six cores on it, then now it's faster, sort of, sometimes.
+
+00:18:23.100 --> 00:18:24.980
+Like, that's not a great solution either, is it?
+
+00:18:24.980 --> 00:18:29.340
+One of the key things that we protect with the GIL is ref counts.
+
+00:18:29.340 --> 00:18:38.760
+Because we use ref counting for our, essentially for memory management, then we have to keep those ref counts safe from race conditions.
+
+00:18:39.320 --> 00:18:45.080
+So we would have to do locking around all ref count operations, and that would get really expensive real fast.
+
+00:18:45.080 --> 00:18:45.660
+Right, exactly.
+
+00:18:45.660 --> 00:18:47.920
+There have been other projects in the past.
+
+00:18:47.920 --> 00:18:54.800
+Several people have tried to get rid of the GIL, including most recently Larry Hastings with the Gilectomy.
+
+00:18:55.320 --> 00:19:04.780
+And each time it comes down to having to add a lot of locks or similar mechanisms to protect those global resources.
+
+00:19:04.780 --> 00:19:13.900
+And those things kind of fall apart and cause performance issues that ultimately kind of kill the goals of the project.
+
+00:19:13.900 --> 00:19:15.920
+Right, or break the C APIs.
+
+00:19:15.920 --> 00:19:16.720
+Yeah, yeah.
+
+00:19:16.720 --> 00:19:23.960
+If you're looking for performance and you're like, well, we made the Python bit 1.5 times faster, but the C parse doesn't work.
+
+00:19:23.960 --> 00:19:25.660
+Like, all of a sudden, it's much slower, right?
+
+00:19:25.660 --> 00:19:27.140
+Like, that's a problem.
+
+00:19:27.140 --> 00:19:37.680
+If we were able to just break the C API, or even get rid of it and use something else, then we'd be able to solve this problem, I think, without a lot of trouble.
+
+00:19:37.680 --> 00:19:44.700
+But because people in C extensions rely on a lot of these details, we just can't get rid of them that easily.
+
+00:19:44.700 --> 00:19:50.200
+There has been recognition of this kind of in the core team in the last few years,
+
+00:19:50.940 --> 00:19:55.940
+and a recognition that we really got to figure out how to solve this.
+
+00:19:55.940 --> 00:19:59.420
+So I'm hopeful that we're going to figure this out.
+
+00:19:59.420 --> 00:20:04.700
+There have been a lot of smart people thinking about this and a lot of good ideas over the last year or two.
+
+00:20:04.700 --> 00:20:08.140
+There are some things that will have to break, but I think we'll be able to sort it out.
+
+00:20:08.140 --> 00:20:08.480
+That's good.
+
+00:20:08.580 --> 00:20:17.080
+Let's talk about the proposal that you've been working on, PEP 554, which has this concept of a sub-interpreter.
+
+00:20:17.080 --> 00:20:34.360
+And when I heard about this, I thought, wow, okay, this is like some creation that's going to be like this new thing that allows for isolation so you can effectively mimic what you're doing with sub-processing or multi-processing,
+
+00:20:34.360 --> 00:20:38.500
+but without actually the overhead of processes and the inter-process communication.
+
+00:20:38.500 --> 00:20:39.500
+I'm like, okay, this is great.
+
+00:20:39.740 --> 00:20:45.200
+But then as I looked into it, this is not a new idea at the very core of it, right?
+
+00:20:45.200 --> 00:20:45.300
+No.
+
+00:20:45.300 --> 00:20:47.080
+But it's just not something anybody's leveraged.
+
+00:20:47.080 --> 00:20:47.700
+Tell us about it.
+
+00:20:47.700 --> 00:20:48.320
+It's interesting.
+
+00:20:48.320 --> 00:20:49.320
+It really is.
+
+00:20:49.320 --> 00:20:58.200
+Nick Coghlan kind of expressed it as the isolation of processes with the efficiency of threads.
+
+00:20:58.740 --> 00:21:03.160
+And it's not a pure explanation, but it's pretty close.
+
+00:21:03.160 --> 00:21:06.720
+Sub-interpreters have been around as part of Python.
+
+00:21:06.720 --> 00:21:14.860
+Originally, CPython was just implemented as kind of a blob of state, and there was an effort to kind of bring a little sanity to that
+
+00:21:14.860 --> 00:21:27.940
+and isolate all of the state related to Python threads in one C struct and interpreters, which can have multiple threads, in another C struct.
+
+00:21:27.940 --> 00:21:30.980
+And then there's run type state still all over the place.
+
+00:21:30.980 --> 00:21:32.440
+That's just global.
+
+00:21:32.440 --> 00:21:39.100
+So at that point, that was, I don't know, 20, 21, 22 years ago, something like that.
+
+00:21:39.100 --> 00:21:46.220
+And at that time, C API was added for creating and destroying sub-interpreters.
+
+00:21:46.220 --> 00:21:53.120
+And the threading API is built around sub-interpreters to an extent.
+
+00:21:53.660 --> 00:21:57.740
+But it's funny because, like you said, it's not a new thing.
+
+00:21:57.740 --> 00:22:01.900
+And yet, a lot of core developers didn't even know about sub-interpreters.
+
+00:22:01.900 --> 00:22:04.360
+Very few users knew about it.
+
+00:22:04.580 --> 00:22:12.280
+I knew of only one project that was actually using sub-interpreters meaningfully up until four or five years ago.
+
+00:22:12.280 --> 00:22:14.660
+And that was Mod Whiskey, Graham Dumbledon.
+
+00:22:14.660 --> 00:22:22.360
+And it's funny because sub-interpreters now, there's more awareness and people are starting to use them more, and some big projects including.
+
+00:22:22.960 --> 00:22:32.400
+And at the same time, a lot of old users, so Graham, and I've since heard from a few people that use sub-interpreters internally for a long time.
+
+00:22:32.400 --> 00:22:37.760
+Now that we're fixing all the problems with them, they're actually moving off of sub-interpreters because they gave up.
+
+00:22:38.220 --> 00:22:40.580
+It's like, no, just wait another year.
+
+00:22:40.580 --> 00:22:42.700
+We'll probably have a lot of this stuff.
+
+00:22:42.700 --> 00:22:43.240
+Yeah.
+
+00:22:43.240 --> 00:22:46.440
+And you can benefit from performance improvements that we're doing.
+
+00:22:46.440 --> 00:22:47.960
+So it's really funny.
+
+00:22:47.960 --> 00:22:49.480
+A lot of people just didn't know about it.
+
+00:22:49.480 --> 00:22:52.580
+And the people who did didn't really think about it all that much.
+
+00:22:52.800 --> 00:23:01.020
+But it's funny, as C-Python progressed, things would get added in, and they would affect sub-interpreters, but nobody would realize it.
+
+00:23:01.020 --> 00:23:02.720
+There wasn't good tests of sub-interpreters.
+
+00:23:02.720 --> 00:23:05.560
+There weren't many users, so nobody would report problems.
+
+00:23:05.560 --> 00:23:11.360
+Poor Graham, he'd report things, and nobody would really pick up the bugs and work on them.
+
+00:23:11.360 --> 00:23:12.640
+Well, this guy's crazy.
+
+00:23:12.640 --> 00:23:14.260
+What's he talking about, this weird sub-interpreter?
+
+00:23:14.260 --> 00:23:14.600
+Yeah.
+
+00:23:14.600 --> 00:23:15.900
+Is that even a thing?
+
+00:23:15.900 --> 00:23:16.440
+Exactly.
+
+00:23:16.440 --> 00:23:17.940
+There are a number of problems.
+
+00:23:17.940 --> 00:23:25.440
+In my opinion, it never really was quite finished, because they're not as isolated as they probably should be.
+
+00:23:25.440 --> 00:23:30.360
+And there are a number of other rough corners, bugs, and stuff.
+
+00:23:30.360 --> 00:23:37.480
+So what's interesting is the stuff I'm doing, one consequence is that those things have to get fixed.
+
+00:23:37.480 --> 00:23:37.800
+Yeah.
+
+00:23:38.480 --> 00:23:51.720
+So the idea is to lift this concept of a sub-interpreter up out of the C layer, create a standard library module called interpreters, that allows you to program against this concept of the sub-interpreter.
+
+00:23:51.720 --> 00:23:52.020
+Correct.
+
+00:23:52.020 --> 00:23:56.180
+So it's definitely, I'm doing this with isolation in mind.
+
+00:23:56.180 --> 00:24:04.840
+You know, at first, the proposal was just wrap the C-API in Python in a C extension and call it good.
+
+00:24:04.840 --> 00:24:06.140
+Because it's there, right?
+
+00:24:06.140 --> 00:24:14.580
+And somebody early, early on pointed out, well, if you can't share stuff between sub-interpreters, all you can do is just start one up.
+
+00:24:14.580 --> 00:24:17.260
+It's not really nearly as useful.
+
+00:24:17.260 --> 00:24:24.140
+In C, you just do the C thing, you know, pass stuff around however you want and shoot yourself in the foot if you want.
+
+00:24:24.140 --> 00:24:25.100
+Here's a bunch of pointers.
+
+00:24:25.100 --> 00:24:25.580
+Uh-huh.
+
+00:24:25.580 --> 00:24:26.720
+You can talk to them all you want.
+
+00:24:26.720 --> 00:24:27.020
+Exactly.
+
+00:24:27.020 --> 00:24:28.660
+Make sure you don't talk to them at the same time.
+
+00:24:28.660 --> 00:24:30.900
+Don't hurt yourself.
+
+00:24:30.900 --> 00:24:31.600
+Yeah, exactly.
+
+00:24:31.600 --> 00:24:35.740
+But in Python, you know, we don't have the opportunity, which is, I think, a good thing here.
+
+00:24:35.740 --> 00:24:43.380
+So they're like, yeah, well, it's not nearly as useful as it would be if you had just at least some basic way of sharing data between them.
+
+00:24:43.380 --> 00:24:45.260
+So I was like, oh, yeah, that's a good point.
+
+00:24:45.260 --> 00:25:03.380
+And so really got me thinking about sub-interpreters more than just as a tool to achieve other goals, which I expect we'll talk about, but also as actually a vehicle to a concurrency model that I think fits the human brain better, at least in my opinion.
+
+00:25:03.380 --> 00:25:05.080
+I'm not a big fan of async.
+
+00:25:05.300 --> 00:25:07.020
+I'm sure it's great.
+
+00:25:07.020 --> 00:25:09.080
+Some people really get it.
+
+00:25:09.080 --> 00:25:12.060
+For me, it's just, it's, I don't like it.
+
+00:25:12.060 --> 00:25:12.240
+Yeah.
+
+00:25:12.240 --> 00:25:13.120
+But, you know, that's fine.
+
+00:25:13.120 --> 00:25:17.240
+I think there are other ways of thinking about concurrency that work a lot better.
+
+00:25:17.240 --> 00:25:20.020
+Things have been studied since the 60s.
+
+00:25:20.020 --> 00:25:20.340
+Right.
+
+00:25:20.340 --> 00:25:30.340
+Message passing and some of these types of concepts where you're more explicitly like, I'm going to send this over to the thread and the thread's going to pick it up and work on it or things like this, right?
+
+00:25:30.480 --> 00:25:30.860
+Yeah, yeah.
+
+00:25:30.860 --> 00:25:37.380
+Before I moved to Microsoft, I was at Canonical for three years working on various projects written in Go.
+
+00:25:37.380 --> 00:25:53.980
+And Go has a concurrency model that's, I would say, loosely based on CSP, which is kind of a concurrency model that was researched and developed since the 60s, especially by a guy named Tony Hoare from over in the UK.
+
+00:25:53.980 --> 00:25:55.940
+Really powerful stuff.
+
+00:25:55.940 --> 00:25:59.560
+And, you know, it has a lot of similar roots with like the actor model.
+
+00:25:59.560 --> 00:26:00.120
+Yeah, exactly.
+
+00:26:00.340 --> 00:26:06.540
+Go is one of these languages that very explicitly controls how concurrency works.
+
+00:26:06.540 --> 00:26:11.260
+And it's part of the language that this data sharing and whatnot happens, right?
+
+00:26:11.260 --> 00:26:21.880
+I don't think it's great what they did because they took CSP and then they broke some of the fundamental ideas behind it, like isolation in these processes, right?
+
+00:26:21.880 --> 00:26:24.700
+I mean, CSP is communicating sequential processes.
+
+00:26:25.480 --> 00:26:31.320
+So the idea is that you have a process that is just, it's like a single threaded program, right?
+
+00:26:31.680 --> 00:26:37.260
+You could break it down into just a linear flow of code, no matter what, deterministically.
+
+00:26:37.260 --> 00:26:42.380
+And then you have a mechanism by which these processes can communicate.
+
+00:26:42.380 --> 00:26:44.520
+Basically, just send messages back and forth.
+
+00:26:44.520 --> 00:26:46.340
+And they block at those points.
+
+00:26:46.340 --> 00:26:50.900
+I'm going to send a message and wait for the other process to pick it up.
+
+00:26:51.340 --> 00:26:54.820
+And then at that point, both processes will move on.
+
+00:26:54.820 --> 00:27:06.440
+So I spent a while trying to figure out really what would be the best way to set up rudimentary communication between subinterpreters.
+
+00:27:07.540 --> 00:27:19.120
+And my experience with Go came about, so I don't know if I just said this, but Go routines, which are kind of the idea of these processes in Go, they're not isolated.
+
+00:27:19.120 --> 00:27:20.960
+So you can share data between them.
+
+00:27:20.960 --> 00:27:24.940
+So basically invalidates a lot of the ideas behind CSP.
+
+00:27:24.940 --> 00:27:26.420
+I mean, it's interesting.
+
+00:27:26.660 --> 00:27:30.640
+So I want to take advantage of the isolation between subinterpreters.
+
+00:27:30.640 --> 00:27:38.520
+And so essentially, you end up with kind of opt-in data sharing or opt-in concurrency.
+
+00:27:38.520 --> 00:27:40.760
+You don't have to worry about races and stuff like that.
+
+00:27:40.760 --> 00:27:46.040
+It's very much kind of like what the multiprocessing communication flow is, right?
+
+00:27:46.040 --> 00:27:52.600
+I'm giving this data over to this other process, and then they can just have it and they own it and don't have to worry about it.
+
+00:27:52.600 --> 00:27:54.580
+Or they get a copy of it or something like that.
+
+00:27:54.640 --> 00:27:57.420
+So I looked for a lot of prior art that kind of followed this model.
+
+00:27:57.420 --> 00:28:00.120
+And the stuff in multiprocessing was one.
+
+00:28:00.120 --> 00:28:05.140
+The queue module has a lot of stuff that's kind of a similar idea.
+
+00:28:05.140 --> 00:28:07.640
+And there are a few other things out there.
+
+00:28:07.640 --> 00:28:15.260
+And of course, in other languages, I really stuck with this idea of following the model of CSP as much as I could.
+
+00:28:15.260 --> 00:28:23.960
+And really, while the proposal isn't like some CSP implementation, the whole thing is kind of with CSP in mind.
+
+00:28:24.140 --> 00:28:28.600
+Okay, could I build like a nice CSP library on top of this?
+
+00:28:28.600 --> 00:28:28.860
+Right.
+
+00:28:28.860 --> 00:28:36.120
+Because like you said, without the communication, like you said, it's like, it's kind of interesting, but it's just like a task spawning type of thing.
+
+00:28:36.120 --> 00:28:36.300
+Right.
+
+00:28:36.300 --> 00:28:39.700
+Like it's not really any sort of cooperation.
+
+00:28:42.480 --> 00:28:45.180
+This portion of Talk Python to me is brought to you by TopTal.
+
+00:28:45.180 --> 00:28:48.260
+Are you looking to hire a developer to work on your latest project?
+
+00:28:48.260 --> 00:28:51.860
+Do you need some help rounding out that app you just can't seem to get finished?
+
+00:28:51.860 --> 00:28:54.840
+Maybe you're even looking to do a little consulting work yourself.
+
+00:28:54.840 --> 00:28:56.620
+You should give TopTal a try.
+
+00:28:56.620 --> 00:29:00.660
+Maybe you've heard we launched some mobile apps for our courses over on iOS and Android.
+
+00:29:00.940 --> 00:29:05.020
+I use TopTal to hire a solid developer at a fair rate to help create those mobile apps.
+
+00:29:05.020 --> 00:29:07.820
+It was a great experience and I can totally recommend working with them.
+
+00:29:07.820 --> 00:29:12.220
+I met with a specialist who helped figure out my goals and technical skills required.
+
+00:29:12.220 --> 00:29:14.880
+Then they did all the work to find the right person.
+
+00:29:14.880 --> 00:29:18.120
+I had a short interview with two folks and hired the second one.
+
+00:29:18.120 --> 00:29:20.560
+Then we released the apps just two months later.
+
+00:29:20.940 --> 00:29:36.920
+I think what we ended up with, which is channels, really basic, but I wanted to keep the PEP as
+
+00:29:36.920 --> 00:29:37.860
+minimal as possible.
+
+00:29:37.860 --> 00:29:41.680
+And I think it really, I came up with a good solution for this.
+
+00:29:41.680 --> 00:29:47.380
+So one of the tricks though, is that because of the isolation, you can't just share objects
+
+00:29:47.380 --> 00:29:48.520
+between sub interpreters.
+
+00:29:48.520 --> 00:29:50.500
+I mean, currently you can at the C layer.
+
+00:29:51.080 --> 00:29:56.440
+But in the Python, I didn't want to give anybody ever the opportunity to share objects, at least
+
+00:29:56.440 --> 00:29:57.080
+not at first.
+
+00:29:57.080 --> 00:29:59.380
+Maybe we can come up with some clever solutions for that.
+
+00:29:59.380 --> 00:30:00.840
+But currently you can't.
+
+00:30:00.840 --> 00:30:06.680
+So, I mean, there's really a limit to what can be shared between sub interpreters as proposed.
+
+00:30:06.680 --> 00:30:10.620
+And I want to keep it as minimal as possible so we can build from there.
+
+00:30:10.620 --> 00:30:11.200
+Yeah, absolutely.
+
+00:30:11.200 --> 00:30:16.420
+Well, one of the really exciting parts of that is one thing that is not shared between sub
+
+00:30:16.420 --> 00:30:18.600
+interpreters is the global interpreter lock, right?
+
+00:30:18.600 --> 00:30:20.460
+Well, currently it is.
+
+00:30:20.460 --> 00:30:22.300
+That's the problem.
+
+00:30:22.300 --> 00:30:26.120
+So right now, sub interpreters do share the gil.
+
+00:30:26.120 --> 00:30:30.280
+So one of the things I'm working on is kind of the bigger problem.
+
+00:30:30.280 --> 00:30:36.240
+And really, I'm trying to tackle this problem of supporting multi-core parallelism in CPython
+
+00:30:36.240 --> 00:30:37.880
+using sub interpreters.
+
+00:30:38.400 --> 00:30:45.120
+So kind of PEP 554 is just a vehicle to make sub interpreters accessible to Python users.
+
+00:30:45.120 --> 00:30:53.860
+But really, the actual goal is to fix sub interpreters, including to stop sharing the gil between sub interpreters, which is kind of crazy.
+
+00:30:53.860 --> 00:30:54.680
+That is crazy.
+
+00:30:54.680 --> 00:30:58.780
+But at that point, then you can say start five threads.
+
+00:30:58.780 --> 00:31:02.340
+Each thread starts a sub interpreter as its startup process.
+
+00:31:02.340 --> 00:31:05.320
+And then all of a sudden, the gil is no longer a problem.
+
+00:31:05.320 --> 00:31:05.840
+Precisely.
+
+00:31:05.840 --> 00:31:06.120
+Potentially.
+
+00:31:06.120 --> 00:31:08.260
+And because you're not sharing the objects, right?
+
+00:31:08.260 --> 00:31:09.160
+You don't have to worry about that.
+
+00:31:09.240 --> 00:31:14.380
+And now you have these channels where you can pass data back and forth in a thread-safe way.
+
+00:31:14.380 --> 00:31:15.180
+That's super cool.
+
+00:31:15.180 --> 00:31:19.120
+It sounds like sub interpreters as they exist don't do that.
+
+00:31:19.120 --> 00:31:20.780
+But that's kind of the ultimate goal.
+
+00:31:20.780 --> 00:31:21.020
+Yeah, yeah.
+
+00:31:21.020 --> 00:31:24.620
+Create this exposure of the API to actually create sub interpreters.
+
+00:31:24.620 --> 00:31:28.500
+Move the gil down so it's one per sub interpreter.
+
+00:31:28.500 --> 00:31:30.480
+And then a way to communicate between them.
+
+00:31:30.480 --> 00:31:32.020
+So that's the Harrier problem, right?
+
+00:31:32.020 --> 00:31:33.000
+Is the gil.
+
+00:31:33.240 --> 00:31:39.220
+What we have is, like I said earlier, we have a whole bunch of runtime state all over the place.
+
+00:31:39.220 --> 00:31:44.200
+So one of the things I did a couple of years ago for this project, there are a bunch of things that we've done.
+
+00:31:44.200 --> 00:31:48.400
+Big things that probably nobody even notices because they're all internal.
+
+00:31:48.400 --> 00:31:55.240
+But one of the things I did was I took all the global state I could find and I pulled it all into one single C struct.
+
+00:31:55.240 --> 00:32:00.820
+So what's neat about this project, the ultimate goal of not sharing the gil between sub interpreters
+
+00:32:00.820 --> 00:32:04.980
+is that it requires just a ton of other things.
+
+00:32:04.980 --> 00:32:13.080
+I think I list out 80 different tasks that are probably not even super fine grained that have to get done in order to make this work.
+
+00:32:13.080 --> 00:32:22.460
+And probably 70, 75 of those are things that are a good idea regardless of the outcome of my ultimate goal.
+
+00:32:22.460 --> 00:32:23.000
+Right?
+
+00:32:23.000 --> 00:32:23.340
+Right.
+
+00:32:23.340 --> 00:32:24.880
+See, Python is going to be cleaner.
+
+00:32:24.880 --> 00:32:25.420
+Uh-huh.
+
+00:32:25.700 --> 00:32:29.800
+If we get to those 75 things and then we're like, oh, it's not going to work.
+
+00:32:29.800 --> 00:32:34.520
+Well, that's okay because, dang, you know, we got some good stuff done anyway.
+
+00:32:34.520 --> 00:32:37.200
+Stuff that we wouldn't have done because we weren't really that motivated.
+
+00:32:37.200 --> 00:32:38.700
+I mean, this is open source.
+
+00:32:39.480 --> 00:32:43.680
+So I have a motivation and other people share some of the motivations.
+
+00:32:43.680 --> 00:32:44.500
+It's really neat.
+
+00:32:44.500 --> 00:32:50.420
+There's a lot of collaboration going on now because not just for the whole sub interpreter thing.
+
+00:32:50.420 --> 00:32:55.320
+Some of the stuff that I need is stuff that other people need for different reasons.
+
+00:32:55.320 --> 00:32:57.580
+And it's working out pretty well.
+
+00:32:57.580 --> 00:33:02.620
+But the whole thing is I took all this state and smashed it into a single struct.
+
+00:33:02.620 --> 00:33:08.540
+And as kind of a side effect, I just want to make sure I didn't hurt performance by doing that.
+
+00:33:08.540 --> 00:33:16.020
+So I ran Python's performance suite and it turned out that I was getting a 5% improvement in performance.
+
+00:33:16.020 --> 00:33:16.460
+Interesting.
+
+00:33:16.460 --> 00:33:17.020
+Do you know why?
+
+00:33:17.020 --> 00:33:17.400
+It's crazy.
+
+00:33:17.400 --> 00:33:20.900
+Well, I expect it's because of cache locality of that struct.
+
+00:33:20.900 --> 00:33:22.680
+That was my first guess as well, right?
+
+00:33:22.680 --> 00:33:29.340
+As you load one element of that struct, everything drags along onto L2 cache or the local cache.
+
+00:33:29.340 --> 00:33:31.480
+And it's just a little quicker, right?
+
+00:33:31.480 --> 00:33:35.100
+You just accidentally do fewer deep memory lookups.
+
+00:33:35.100 --> 00:33:41.740
+Somebody pointed out to me that it probably doesn't have quite the same effect on performance for a PGO build.
+
+00:33:41.740 --> 00:33:51.140
+Where the compiler can optimize the layout of memory and various other things relative to what's hottest in the code, right?
+
+00:33:51.140 --> 00:33:51.980
+Yeah.
+
+00:33:51.980 --> 00:33:59.240
+So it kind of runs the thing through a workload and determines what's the hottest chunks of memory and pushes those together.
+
+00:33:59.240 --> 00:34:01.480
+So you get those same cache locality benefits.
+
+00:34:01.480 --> 00:34:06.080
+So ultimately under a PGO build, probably not the same performance benefits.
+
+00:34:06.080 --> 00:34:09.140
+But I only bring that up because...
+
+00:34:09.140 --> 00:34:10.860
+PGO performance guided optimization.
+
+00:34:10.860 --> 00:34:11.140
+Yes.
+
+00:34:11.140 --> 00:34:11.560
+Thank you.
+
+00:34:11.560 --> 00:34:12.280
+For everyone out there.
+
+00:34:12.280 --> 00:34:12.420
+Yeah.
+
+00:34:12.420 --> 00:34:12.960
+Yeah.
+
+00:34:12.960 --> 00:34:13.820
+Acronyms.
+
+00:34:13.820 --> 00:34:14.340
+Yeah.
+
+00:34:14.340 --> 00:34:14.540
+Yeah.
+
+00:34:15.060 --> 00:34:17.320
+So maybe it's not as big necessarily.
+
+00:34:17.320 --> 00:34:21.520
+Is that theoretical or is that something that is actually done on CPython builds?
+
+00:34:21.520 --> 00:34:22.100
+Yeah, yeah, yeah.
+
+00:34:22.100 --> 00:34:23.000
+People do it.
+
+00:34:23.000 --> 00:34:25.520
+If the one that I brew install, is that one?
+
+00:34:25.520 --> 00:34:25.940
+PGO?
+
+00:34:25.940 --> 00:34:26.380
+I don't know.
+
+00:34:26.380 --> 00:34:27.360
+Optimize?
+
+00:34:27.360 --> 00:34:27.940
+Okay.
+
+00:34:28.740 --> 00:34:28.980
+Yeah.
+
+00:34:28.980 --> 00:34:28.980
+Yeah.
+
+00:34:28.980 --> 00:34:29.000
+Yeah.
+
+00:34:29.000 --> 00:34:31.380
+You get some real benefits from a PGO build.
+
+00:34:31.380 --> 00:34:33.380
+There are lots of these little things.
+
+00:34:33.380 --> 00:34:42.940
+One of the things I needed to happen was there was some work that Nick Coughlin started like four or five years ago to clean up runtime startup.
+
+00:34:43.400 --> 00:34:48.800
+And I needed that because otherwise there were certain things I just couldn't do.
+
+00:34:48.800 --> 00:34:50.420
+So I was blocked on that.
+
+00:34:50.420 --> 00:35:02.360
+So finally, I got around to taking the branch that he had, which is on subversion, and moving it over to Git and then at the same revision.
+
+00:35:02.360 --> 00:35:09.320
+And then I had to rebase it against master and fix all the conflicts and finally got that merge like two years ago.
+
+00:35:09.320 --> 00:35:10.600
+And that was a big thing.
+
+00:35:10.600 --> 00:35:16.560
+And then because of that, we're able to do a lot of really good things with startup that we weren't able to before.
+
+00:35:16.560 --> 00:35:17.920
+So that's a side effect.
+
+00:35:17.920 --> 00:35:20.080
+And there are all these things that are just good.
+
+00:35:20.080 --> 00:35:27.140
+That was one of the larger goals of Python 3 as well is try to like fix the just the cold startup times, right?
+
+00:35:27.140 --> 00:35:27.520
+No.
+
+00:35:27.520 --> 00:35:27.860
+No.
+
+00:35:27.860 --> 00:35:34.760
+One of the goals that we have is to fix startup times so they're at least on par with Python 2, which they weren't.
+
+00:35:34.760 --> 00:35:35.640
+Yeah, that's what I was thinking.
+
+00:35:35.640 --> 00:35:36.360
+Weren't nearly at first.
+
+00:35:36.360 --> 00:35:36.940
+That's what I was thinking.
+
+00:35:36.940 --> 00:35:37.740
+Yeah.
+
+00:35:37.740 --> 00:35:39.540
+So we're mostly on par now.
+
+00:35:39.540 --> 00:35:42.740
+The biggest problem was all the codecs and Unicode stuff.
+
+00:35:42.740 --> 00:35:45.300
+That really hits startup performance.
+
+00:35:45.300 --> 00:35:50.380
+So if you think about subinterpreters, if you start up a new subinterpreter, it has to build all this state.
+
+00:35:50.380 --> 00:35:51.900
+It has to load all these modules.
+
+00:35:51.900 --> 00:35:54.420
+There's a ton of stuff that has to happen, right?
+
+00:35:54.420 --> 00:35:57.200
+So you're going to incur that cost for each subinterpreter.
+
+00:35:57.420 --> 00:36:02.020
+As a consequence of what I'm working on, I want to make sure that startup time is as small as possible.
+
+00:36:02.020 --> 00:36:19.420
+So it's definitely one of the things, maybe not one of the immediate concerns, but kind of one of the relatively low-hanging fruit for this project once I finish this first phase is to go in and do things like make interpreter startup more efficient, whether it's sharing or whatever.
+
+00:36:19.580 --> 00:36:24.180
+And those are things that are a good idea regardless of use of subinterpreters.
+
+00:36:24.180 --> 00:36:27.280
+I mean, just for the main interpreter, getting startup faster is a good idea.
+
+00:36:27.280 --> 00:36:29.560
+And that's something that I want for subinterpreters.
+
+00:36:29.560 --> 00:36:31.220
+And I'm motivated to do it.
+
+00:36:31.220 --> 00:36:37.760
+And I think other people, once subinterpreters get in widespread use, people are going to be like, oh, yeah, this is great.
+
+00:36:37.760 --> 00:36:42.320
+And people are going to be motivated to fix some of these deficiencies in subinterpreters.
+
+00:36:42.520 --> 00:36:42.940
+Yeah, absolutely.
+
+00:36:42.940 --> 00:36:46.640
+And it'll definitely, as it's a little bit of a catch-22, right?
+
+00:36:46.640 --> 00:36:50.260
+You said it wasn't even hardly quite finished because here's this idea.
+
+00:36:50.260 --> 00:36:55.000
+But at the same time, if no one's really using it, why do you care about fixing this thing?
+
+00:36:55.000 --> 00:36:58.640
+And if no one's fixing it, I'm not going to use it because it doesn't quite work.
+
+00:36:58.640 --> 00:37:01.040
+And then here you are in this lock, right?
+
+00:37:01.040 --> 00:37:04.940
+So it reaches a point where, well, for me, it was in 2014.
+
+00:37:04.940 --> 00:37:07.740
+I was having a conversation with somebody at work.
+
+00:37:08.000 --> 00:37:14.340
+And they were saying, yeah, Python's going to die because it doesn't do multicore because of the GIL.
+
+00:37:14.340 --> 00:37:23.160
+And it was just, I don't know, one of those moments, you know, when something hits you so deep, you know, they dig a little too hard.
+
+00:37:23.160 --> 00:37:24.840
+And you're like, okay, fine.
+
+00:37:24.840 --> 00:37:25.500
+Forget you.
+
+00:37:25.500 --> 00:37:26.560
+I'm going to fix this.
+
+00:37:26.560 --> 00:37:29.560
+And I'm never going to hear anybody complain about the GIL again.
+
+00:37:29.560 --> 00:37:29.860
+Yeah.
+
+00:37:29.860 --> 00:37:30.980
+Yeah, absolutely.
+
+00:37:30.980 --> 00:37:32.460
+That's what this project is.
+
+00:37:32.460 --> 00:37:34.580
+That's what I've been working on for several years now.
+
+00:37:34.840 --> 00:37:40.420
+It's basically just to get people to stop complaining about the GIL.
+
+00:37:40.420 --> 00:37:46.340
+I definitely think, you know, rightly or wrongly, it's one of the perceived deep limitations of Python.
+
+00:37:46.340 --> 00:37:46.660
+Yeah.
+
+00:37:46.660 --> 00:37:55.440
+I think wrongly, but I do think that it is perceived to be that like Python is not nearly, is barely appropriate for like parallel computing.
+
+00:37:55.440 --> 00:37:55.940
+Yeah, yeah, yeah.
+
+00:37:55.940 --> 00:37:58.100
+I don't think that's right, but I think that's the perception.
+
+00:37:58.100 --> 00:37:58.380
+Yeah.
+
+00:37:58.380 --> 00:38:00.800
+Outside of a lot of Python, or maybe within it.
+
+00:38:00.800 --> 00:38:04.600
+I think it's a fair perception for a class of users.
+
+00:38:04.600 --> 00:38:07.280
+And as a community, we like to be inclusive.
+
+00:38:07.280 --> 00:38:08.540
+We don't want to leave anybody out.
+
+00:38:08.540 --> 00:38:11.540
+We want to make sure that things work out for folks.
+
+00:38:11.540 --> 00:38:13.420
+It's just being open source.
+
+00:38:13.420 --> 00:38:18.460
+It's nothing's going to happen until somebody cares enough to do something about it.
+
+00:38:18.460 --> 00:38:19.620
+And that happened for me.
+
+00:38:19.620 --> 00:38:20.220
+That's awesome.
+
+00:38:20.220 --> 00:38:20.520
+Yeah.
+
+00:38:20.720 --> 00:38:21.840
+And so here we are.
+
+00:38:21.840 --> 00:38:22.040
+Yeah.
+
+00:38:22.040 --> 00:38:28.800
+So it sounds like around September 2017, you introduced PEP 554 to address this.
+
+00:38:28.800 --> 00:38:31.400
+Probably you've been working prior to that.
+
+00:38:31.400 --> 00:38:36.420
+2018, you talked about it at PyCon US at the Language Summit and whatnot.
+
+00:38:36.420 --> 00:38:38.140
+And then also, again, in 2019.
+
+00:38:38.140 --> 00:38:41.380
+And like those, also, it sounds like those experiences were a little bit different.
+
+00:38:41.380 --> 00:38:46.620
+Do you want to maybe recount those for us and tell us how this is being perceived over time?
+
+00:38:46.620 --> 00:38:47.120
+You bet.
+
+00:38:47.240 --> 00:38:49.820
+I mean, I've gotten support from the core team.
+
+00:38:49.820 --> 00:38:59.700
+I think my first post about all of this to the Python dev mailing list was probably 2016, early 2016, I think.
+
+00:38:59.700 --> 00:39:04.340
+And, you know, and there was a lot of discussion about it.
+
+00:39:04.340 --> 00:39:18.080
+And there were really only a handful of people that had any sort of opposition to it, any major concerns, which I took as kind of a valid litmus test on if it was worth pursuing.
+
+00:39:18.080 --> 00:39:18.480
+Yeah.
+
+00:39:18.480 --> 00:39:21.600
+And when you initially presented it, what was the scope?
+
+00:39:21.600 --> 00:39:27.080
+Was the scope like the final end goal where there's like you're trying to use it for concurrency and all that?
+
+00:39:27.080 --> 00:39:28.400
+That was like from the start.
+
+00:39:28.400 --> 00:39:35.320
+Talking about using subinterpreters and not sharing the GIL to achieve these goals of multi-core parallelism.
+
+00:39:36.320 --> 00:39:43.000
+So, you know, at some level to the details, pursuing kind of a CSP model, a standard library module.
+
+00:39:43.000 --> 00:39:45.820
+And, you know, and the response was pretty good.
+
+00:39:45.820 --> 00:39:51.320
+There was several long threads and I incorporate all the feedback into the PEP ultimately.
+
+00:39:51.860 --> 00:39:54.120
+But, yeah, the feedback from the PEP was great.
+
+00:39:54.120 --> 00:40:06.240
+And then come PyCon 2018, I basically asked everybody I talked to, explained subinterpreters and what I was working on and asked them what they thought of it, how they would use it.
+
+00:40:06.240 --> 00:40:09.480
+And it seemed like everybody had a different response.
+
+00:40:09.480 --> 00:40:12.640
+Everybody was excited about it, almost universally.
+
+00:40:12.640 --> 00:40:17.320
+And everybody had a different response on how they would use it.
+
+00:40:17.320 --> 00:40:20.080
+Most people, I didn't even have to ask them.
+
+00:40:20.220 --> 00:40:23.120
+The big guy, go like, wow, I have the perfect use case for that.
+
+00:40:23.120 --> 00:40:24.400
+This, this, this, this.
+
+00:40:24.400 --> 00:40:30.320
+And I even at one point asked, oh, his name escapes me, the maintainer of Dask.
+
+00:40:30.320 --> 00:40:31.200
+Matthew Rockland.
+
+00:40:31.200 --> 00:40:32.420
+Matthew Rockland.
+
+00:40:32.420 --> 00:40:32.680
+You're welcome.
+
+00:40:32.680 --> 00:40:33.880
+I asked him about this.
+
+00:40:33.880 --> 00:40:36.180
+He's like, wow, subinterpreters sound neat.
+
+00:40:36.180 --> 00:40:50.180
+But I doubt I would incorporate, I would make use of them for Dask, except Dask internally has all these control threads and all this machinery built out.
+
+00:40:50.180 --> 00:40:54.140
+For managing all of the distributed programming.
+
+00:40:54.140 --> 00:40:59.900
+Just so people know, Dask is a way to run your Python code potentially on a bunch of different systems.
+
+00:40:59.900 --> 00:41:05.520
+It's kind of like, like a Pandas data frame style programming.
+
+00:41:05.520 --> 00:41:08.700
+But you say run this computation, but like all over the place.
+
+00:41:08.700 --> 00:41:10.440
+That's the problem that Das solves.
+
+00:41:10.440 --> 00:41:10.820
+And then.
+
+00:41:10.820 --> 00:41:11.660
+So it's really interesting.
+
+00:41:11.660 --> 00:41:16.720
+He said, but yeah, I would totally use that for my internal stuff.
+
+00:41:16.720 --> 00:41:18.580
+I mean, for these control threads.
+
+00:41:18.580 --> 00:41:21.460
+I mean, I would totally make use of that because it was, it's perfect.
+
+00:41:21.460 --> 00:41:27.960
+Or, you know, talking to web folks and they're like a bunch of different use cases for how this apply to web frameworks.
+
+00:41:27.960 --> 00:41:30.780
+Or basically everybody had ideas.
+
+00:41:30.780 --> 00:41:31.180
+Yeah.
+
+00:41:31.180 --> 00:41:32.580
+There's a ton of great ways.
+
+00:41:32.580 --> 00:41:32.820
+Yeah.
+
+00:41:32.940 --> 00:41:33.600
+It was really neat.
+
+00:41:33.600 --> 00:41:37.680
+So I got excited and then come the sprints that year.
+
+00:41:37.680 --> 00:41:44.480
+Oh, and one of the people that was really supportive was Davin Potts, who's one of the maintainers of multiprocessing.
+
+00:41:44.480 --> 00:41:49.560
+Which is, you know, I thought that was a pretty good sign that I was in the right direction.
+
+00:41:49.560 --> 00:41:50.820
+It is absolutely a good sign.
+
+00:41:50.820 --> 00:41:54.080
+I mean, this is like the next gen multiprocessing in my mind, kind of.
+
+00:41:54.080 --> 00:41:58.300
+I still wonder if once we have sub interpreters, do we even need multiprocessing?
+
+00:41:58.300 --> 00:41:59.960
+Subprocesses make sense.
+
+00:42:00.140 --> 00:42:02.100
+But does multiprocessing make sense?
+
+00:42:02.100 --> 00:42:02.800
+I'm not sure.
+
+00:42:02.800 --> 00:42:11.080
+I mean, it's kind of like the big hammer to solve the GIL problem and this isolation problem by just going fine, the operating system will do it.
+
+00:42:11.080 --> 00:42:14.800
+But if CPython itself does it, then I mean, maybe there's a memory.
+
+00:42:14.800 --> 00:42:16.540
+But it's interesting to think about.
+
+00:42:16.540 --> 00:42:16.720
+Yeah.
+
+00:42:16.720 --> 00:42:20.460
+What's funny is now after I'm charged up, I'm excited.
+
+00:42:20.460 --> 00:42:21.780
+I've got all sorts of notes.
+
+00:42:21.780 --> 00:42:24.680
+I'm like, wow, you know, there's all this stuff.
+
+00:42:24.680 --> 00:42:27.940
+Several people have said that they'd like to help out.
+
+00:42:28.520 --> 00:42:33.020
+You know, and then I get to the sprints and you can imagine that Guido's a busy guy at PyCon.
+
+00:42:33.020 --> 00:42:36.140
+You know, everybody wants to talk to Guido, taking pictures.
+
+00:42:36.140 --> 00:42:38.760
+He can't get even a moment piece.
+
+00:42:38.760 --> 00:42:41.620
+I know it's, yeah, it's definitely got people chasing him around.
+
+00:42:41.620 --> 00:42:42.680
+It wears him out.
+
+00:42:42.680 --> 00:42:44.540
+And there's always stuff going on.
+
+00:42:44.540 --> 00:42:48.780
+There are people that he needs to talk to about different proposals and whatever.
+
+00:42:48.780 --> 00:42:50.660
+And this is 2018.
+
+00:42:50.660 --> 00:42:51.700
+He's still BDFL.
+
+00:42:51.700 --> 00:42:55.100
+And there's a lot going on.
+
+00:42:55.100 --> 00:42:56.100
+And what happens?
+
+00:42:56.100 --> 00:42:59.460
+He actually comes and finds me, sits me down.
+
+00:42:59.460 --> 00:43:05.540
+And for 45 minutes, he basically tells me that he thinks it's a bad idea.
+
+00:43:06.500 --> 00:43:10.920
+And I can tell you, I walked to, so I understood where he's coming from.
+
+00:43:10.920 --> 00:43:14.560
+And I think in part, he had misunderstood what I was trying to do.
+
+00:43:14.560 --> 00:43:14.880
+Yeah.
+
+00:43:14.880 --> 00:43:19.780
+It's like that telephone game where one person tells a person who tells a person something and
+
+00:43:19.780 --> 00:43:21.080
+it's not the same on the other side.
+
+00:43:21.080 --> 00:43:24.900
+And in the conversation, you know, I tried to clarify a few points, but it really wasn't
+
+00:43:24.900 --> 00:43:29.460
+a great opportunity to try and explain really why this was a good idea.
+
+00:43:29.460 --> 00:43:38.640
+I mean, the PEP to an extent does, but I think there's kind of a gap in the justification that
+
+00:43:38.640 --> 00:43:42.220
+really Guido was just, I hadn't communicated well to him.
+
+00:43:42.220 --> 00:43:43.560
+So 45 minutes.
+
+00:43:43.560 --> 00:43:49.760
+And basically, you know, I conceded some of the points that he made and tried to explain
+
+00:43:49.760 --> 00:43:50.440
+the others.
+
+00:43:50.440 --> 00:43:54.680
+And ultimately, you know, it's not like he said, stop.
+
+00:43:54.680 --> 00:43:58.980
+He basically said he thought it was a waste of my time that I should work on something
+
+00:43:58.980 --> 00:44:01.320
+that's going to benefit people more.
+
+00:44:01.320 --> 00:44:08.460
+Also, he was coming from thinking about the problem in a different way than I was and a
+
+00:44:08.460 --> 00:44:12.920
+different understanding of exactly what I was trying to solve and what I was trying, what
+
+00:44:12.920 --> 00:44:14.620
+the proposal was, what the solution was.
+
+00:44:14.620 --> 00:44:19.160
+Well, he probably also has a lot of Gil fatigue hearing how Gil is ruining Python and all that,
+
+00:44:19.160 --> 00:44:19.400
+right?
+
+00:44:19.400 --> 00:44:19.740
+Yeah.
+
+00:44:19.740 --> 00:44:24.000
+And I think in part, he was just worried that I was going to get people excited about something
+
+00:44:24.000 --> 00:44:26.440
+that wasn't going to actually end up happening.
+
+00:44:26.440 --> 00:44:27.160
+Okay.
+
+00:44:27.160 --> 00:44:28.700
+So it was kind of a bummer.
+
+00:44:28.700 --> 00:44:31.220
+I was bummed out probably the rest of the day.
+
+00:44:31.220 --> 00:44:35.840
+Did you walk away less inspired or are you still excited after all the other input you
+
+00:44:35.840 --> 00:44:36.020
+got?
+
+00:44:36.020 --> 00:44:37.340
+I was still determined.
+
+00:44:37.340 --> 00:44:37.760
+Yeah.
+
+00:44:37.760 --> 00:44:42.720
+I probably, my excitement level was lower only because it'd been suppressed a little, but
+
+00:44:42.720 --> 00:44:44.120
+you know, that wears off.
+
+00:44:44.540 --> 00:44:49.360
+And talking to more people about it, same level of excitement, the same excitement about how
+
+00:44:49.360 --> 00:44:50.260
+they would use it.
+
+00:44:50.260 --> 00:44:55.680
+And so, you know, I didn't worry about it, but I was worried that if I couldn't convince
+
+00:44:55.680 --> 00:44:59.440
+Guido, then A, of course, I didn't think it would happen.
+
+00:44:59.440 --> 00:45:01.560
+And B, maybe it really wasn't a good idea.
+
+00:45:01.680 --> 00:45:04.160
+Because Guido is smart and he's been doing this a long time.
+
+00:45:04.160 --> 00:45:10.320
+And I have absolute trust in that uncanny ability he has to understand whether something
+
+00:45:10.320 --> 00:45:12.220
+is good for Python or not.
+
+00:45:12.220 --> 00:45:12.460
+Yeah.
+
+00:45:12.620 --> 00:45:13.740
+I mean, he's amazing.
+
+00:45:13.740 --> 00:45:17.780
+So it did make me wonder, well, what if he's right?
+
+00:45:17.780 --> 00:45:19.340
+Maybe I'm not understanding.
+
+00:45:19.340 --> 00:45:20.580
+That's probably more likely.
+
+00:45:20.580 --> 00:45:22.200
+So, but I kept at it.
+
+00:45:22.200 --> 00:45:22.920
+I was determined.
+
+00:45:23.420 --> 00:45:28.360
+You know, like I said, I waited three years for the job I have now.
+
+00:45:28.360 --> 00:45:31.160
+So I was like, you know, I'll just keep going.
+
+00:45:31.160 --> 00:45:37.460
+And if nothing else comes of it, I was convinced that 80 or 90% of stuff that I was doing was
+
+00:45:37.460 --> 00:45:38.520
+a good idea regardless.
+
+00:45:38.520 --> 00:45:40.540
+So I was like, I'll just keep going.
+
+00:45:40.540 --> 00:45:45.280
+And if it ends up that it's not going to work out, I won't feel too bad about it.
+
+00:45:45.280 --> 00:45:47.200
+I'll have made a difference, I think.
+
+00:45:47.200 --> 00:45:48.780
+So kept going.
+
+00:45:48.780 --> 00:45:55.020
+But then 2019 rolls around and Guido pulls me aside again and says, oh yeah, that's
+
+00:45:55.020 --> 00:45:55.580
+a good idea.
+
+00:45:55.580 --> 00:45:57.220
+Been thinking about it.
+
+00:45:57.220 --> 00:45:58.100
+Because he got it.
+
+00:45:58.100 --> 00:46:02.840
+Well, the point that we were fixing, he saw over the course of the year, he saw that I was
+
+00:46:02.840 --> 00:46:08.480
+working on all these things that I needed for the goal, but they were a good idea regardless.
+
+00:46:08.480 --> 00:46:11.080
+And he's like, oh yeah, you're working on all this stuff.
+
+00:46:11.080 --> 00:46:18.420
+And also, he probably heard my explanation a few more times and it clicked on how I was trying
+
+00:46:18.420 --> 00:46:19.300
+to solve this problem.
+
+00:46:19.300 --> 00:46:21.000
+And he said, yeah, that could work.
+
+00:46:21.000 --> 00:46:23.540
+And so I was floating around for a while.
+
+00:46:23.540 --> 00:46:24.440
+It was exciting.
+
+00:46:24.440 --> 00:46:25.260
+That's super cool.
+
+00:46:25.260 --> 00:46:32.800
+One of the challenges a lot of peps and projects have had recently, let's say since July 2018,
+
+00:46:32.800 --> 00:46:41.720
+maybe, is we, more like you guys, have not really had a way to decide to make decisions
+
+00:46:41.720 --> 00:46:47.460
+after Guido said, I'm stepping down, I'm just stepping back to standard core developer or
+
+00:46:47.460 --> 00:46:51.720
+steering council now, but stepping back saying, you guys have to figure out a new way to like
+
+00:46:51.720 --> 00:46:54.220
+make decisions and sort of govern yourself.
+
+00:46:54.220 --> 00:46:54.560
+Right?
+
+00:46:54.640 --> 00:46:57.540
+So that, your PEP spanned that gap.
+
+00:46:57.540 --> 00:46:58.440
+So I'm sure that didn't.
+
+00:46:58.440 --> 00:46:59.480
+Oh man, it was brutal.
+
+00:46:59.480 --> 00:46:59.960
+Was it?
+
+00:46:59.960 --> 00:47:06.600
+It literally killed a lot of the momentum I had coming out of PyCon 2018 because that happened
+
+00:47:06.600 --> 00:47:08.720
+just a couple months after.
+
+00:47:09.380 --> 00:47:14.920
+And basically, I kept working on stuff, but there was all these discussions about governance
+
+00:47:14.920 --> 00:47:19.140
+and governance and governance, and it just dominated a lot of what we were working on.
+
+00:47:19.140 --> 00:47:22.360
+So there wasn't a lot of collaboration going on with this project.
+
+00:47:22.360 --> 00:47:28.920
+And there was a lot of just cognitive effort to stay on top of this stuff because it's important.
+
+00:47:28.920 --> 00:47:35.520
+So really, until all this was solved, pep554 was ready.
+
+00:47:35.520 --> 00:47:43.240
+Basically, right after PyCon, I was 2018, I'd worked up kind of a separate list of arguments
+
+00:47:43.240 --> 00:47:48.080
+to make to Guido on why this was a good idea and try and kind of fill that gap that I had
+
+00:47:48.080 --> 00:47:48.580
+perceived.
+
+00:47:48.700 --> 00:47:54.780
+And then on top of that, I had updated the PEP to kind of iron out some of the small things.
+
+00:47:54.780 --> 00:47:55.860
+I felt like it was ready.
+
+00:47:55.860 --> 00:48:02.680
+And literally, right before I was going to ask for pronouncement on the pep, then, or no,
+
+00:48:02.680 --> 00:48:06.660
+I think I was going to wait until the core sprints in September so that I could talk to
+
+00:48:06.660 --> 00:48:09.880
+Guido in person and try and make the case and then ask for pronouncement.
+
+00:48:09.880 --> 00:48:15.740
+So, you know, this was, it was brutal because then no peps got decided.
+
+00:48:16.120 --> 00:48:21.560
+And the core sprint was mostly spent talking about governance stuff, which that's fine.
+
+00:48:21.560 --> 00:48:24.980
+It was productive, but I wasn't able to get a lot of progress.
+
+00:48:24.980 --> 00:48:28.480
+So it just kind of slowed things down so much.
+
+00:48:28.480 --> 00:48:32.140
+And then when we finally got governance ironed out, you know, there's transition.
+
+00:48:32.660 --> 00:48:39.040
+So this whole time I was honestly aiming to solve it, to get PEP 554 landed for three, eight,
+
+00:48:39.040 --> 00:48:44.660
+and then even get the, the stop sharing the GIL stuff done for three, eight.
+
+00:48:44.660 --> 00:48:48.660
+Neither one happened in large part because of the whole governance issue.
+
+00:48:48.660 --> 00:48:52.780
+It's probably good in the longterm that this transition happened, but in the short term,
+
+00:48:52.780 --> 00:48:55.640
+it definitely threw a bunch of molasses in, you know,
+
+00:48:55.760 --> 00:48:59.020
+it's a little disappointed every release you miss on something.
+
+00:48:59.020 --> 00:49:01.460
+It's a little part of you hurts, but.
+
+00:49:01.460 --> 00:49:02.380
+I can imagine.
+
+00:49:02.380 --> 00:49:05.800
+Well, and the releases are long, like the gaps are wide between them, right?
+
+00:49:05.800 --> 00:49:08.140
+18 months is a long time in technology.
+
+00:49:08.140 --> 00:49:10.280
+It's not like, well, maybe next month it'll come out.
+
+00:49:10.280 --> 00:49:16.140
+We're actually talking about reducing the release cycle to a lot smaller, six or 12 months.
+
+00:49:16.140 --> 00:49:17.260
+Depending.
+
+00:49:17.400 --> 00:49:18.360
+I think that's interesting.
+
+00:49:18.360 --> 00:49:21.000
+What's the trade-off there?
+
+00:49:21.000 --> 00:49:26.520
+So our currently released manager, Rukash, he, he said for three, nine, I want it to be shorter.
+
+00:49:26.520 --> 00:49:30.860
+So he basically said there are a variety of reasons.
+
+00:49:30.860 --> 00:49:38.780
+The main opposition to having shorter release cycles was that it's more of a burden on the release team,
+
+00:49:38.780 --> 00:49:40.680
+but that's less of an issue.
+
+00:49:40.680 --> 00:49:41.900
+Now there's a lot more automation.
+
+00:49:41.900 --> 00:49:45.460
+And so this is coming from the release manager.
+
+00:49:45.620 --> 00:49:49.280
+So he was in a position to determine what made sense.
+
+00:49:49.280 --> 00:49:52.620
+So that's, that's kind of how that's played out.
+
+00:49:52.620 --> 00:49:54.160
+He's, he's like, let's do this.
+
+00:49:54.160 --> 00:49:57.900
+And so there was some discussion for a stretch on what would be the best time.
+
+00:49:57.900 --> 00:50:01.820
+And if it made sense at all, of course, but if we went with it, you know,
+
+00:50:01.820 --> 00:50:10.100
+what kind of release interval we'd have and how that would work logistically and how that would play into other factors of core development.
+
+00:50:10.100 --> 00:50:12.660
+So I, I don't remember where that's gotten to.
+
+00:50:12.800 --> 00:50:24.760
+I think there was some consensus that it would make sense to look at it further, but I think like most long discussions do, it kind of tailed off without a good conclusion quite yet.
+
+00:50:24.760 --> 00:50:25.760
+I don't know.
+
+00:50:25.760 --> 00:50:26.380
+I don't remember.
+
+00:50:26.380 --> 00:50:28.480
+It's, I don't remember what the PEP number is.
+
+00:50:28.480 --> 00:50:32.140
+It's the, the release PEP for three, nine is where he started this discussion.
+
+00:50:32.140 --> 00:50:35.500
+So there's a number of threads related to that PEP.
+
+00:50:35.500 --> 00:50:39.000
+You know, to me, it sounds generally positive, right?
+
+00:50:39.000 --> 00:50:48.940
+Like smaller releases that you can understand a little bit more completely rather than just like, here's a huge dump of 18 months of work.
+
+00:50:48.940 --> 00:50:50.700
+But I definitely do understand it.
+
+00:50:50.700 --> 00:50:57.660
+I mean, you've got all the places, all the Linux distributions, all the other places that are shipping it.
+
+00:50:57.720 --> 00:50:59.840
+They have to now think probably about that more frequently.
+
+00:50:59.840 --> 00:51:01.840
+That was definitely one of the concerns.
+
+00:51:01.840 --> 00:51:11.620
+But now that the Linux distributions are moving away from exposing their system Python, that it's less of a concern.
+
+00:51:11.620 --> 00:51:12.020
+Right.
+
+00:51:12.020 --> 00:51:19.200
+So one interesting thing in this discussion was just the idea of moving to Calver for versioning Python.
+
+00:51:19.200 --> 00:51:22.180
+I think that was something that Brett had talked about.
+
+00:51:22.180 --> 00:51:24.920
+So, you know, there are a number of different ideas.
+
+00:51:24.920 --> 00:51:32.340
+Like actually having the version number be like 2019.6 for June or something like that.
+
+00:51:32.340 --> 00:51:32.500
+Yeah.
+
+00:51:32.500 --> 00:51:38.440
+So then you'd end up with 2019.6.0.1, you know, for bug fixes and all that.
+
+00:51:38.500 --> 00:51:38.780
+Definitely.
+
+00:51:38.780 --> 00:51:42.340
+I like the calendar versioning for like packages and stuff.
+
+00:51:42.340 --> 00:51:45.280
+But for the actual core, like that's pretty interesting.
+
+00:51:45.280 --> 00:51:45.880
+I don't know.
+
+00:51:45.880 --> 00:51:47.480
+It may not make sense.
+
+00:51:47.480 --> 00:51:50.200
+There are a lot of things that people talked about.
+
+00:51:50.200 --> 00:51:55.220
+We talked about the possibility of LTS releases or some variation on that.
+
+00:51:55.220 --> 00:51:57.700
+And so that we'd be maintaining multiple.
+
+00:51:57.700 --> 00:52:04.820
+But, you know, I think a lot of people are kind of burnt out on having maintained 2.7 and Python 3.
+
+00:52:05.240 --> 00:52:07.800
+At this point, like, have we just about gotten out of this?
+
+00:52:07.800 --> 00:52:12.340
+Most people don't bother with 2.7 at this point, core developers.
+
+00:52:12.340 --> 00:52:14.440
+So it's really interesting.
+
+00:52:14.440 --> 00:52:15.200
+I don't know.
+
+00:52:15.200 --> 00:52:16.440
+There are lots of ideas.
+
+00:52:16.440 --> 00:52:19.480
+I think ultimately we'll settle on the right thing.
+
+00:52:19.480 --> 00:52:21.300
+Something that'll work well for us.
+
+00:52:21.300 --> 00:52:24.660
+Even if it's a status quo, if we figure out that's the best way forward.
+
+00:52:24.660 --> 00:52:32.480
+But we've already since 3.6, I think it was, we started doing a shorter release cycle, more like 14 months.
+
+00:52:32.480 --> 00:52:37.100
+Because we used to do release cycle from release to release.
+
+00:52:37.100 --> 00:52:40.300
+But now we do, or from final to final.
+
+00:52:40.300 --> 00:52:44.300
+Now we do, if you think about it, it's more like final to beta 1.
+
+00:52:44.300 --> 00:52:44.580
+Right.
+
+00:52:44.580 --> 00:52:47.720
+Which we're already like way past 3.8 beta 1.
+
+00:52:47.720 --> 00:52:54.960
+The final release date for the next version is basically 18 months from beta 1 now instead of final.
+
+00:52:54.960 --> 00:52:57.700
+That's the way we've been doing the last few releases.
+
+00:52:57.700 --> 00:53:00.260
+So it breaks it, shortens it to like 14 months.
+
+00:53:00.260 --> 00:53:02.800
+So 12 months really wouldn't be that different.
+
+00:53:02.800 --> 00:53:03.700
+Yeah, that's true.
+
+00:53:03.700 --> 00:53:05.200
+We'll see what happens there.
+
+00:53:05.200 --> 00:53:06.700
+But, you know, interesting topic.
+
+00:53:06.700 --> 00:53:07.080
+For sure.
+
+00:53:07.160 --> 00:53:14.720
+So the final takeaway is you're targeting Python 3.9, which will be basically where the work is going into now, right?
+
+00:53:14.720 --> 00:53:16.220
+Like you're already in beta of 3.8.
+
+00:53:16.220 --> 00:53:17.800
+It's kind of frozen and whatnot.
+
+00:53:17.800 --> 00:53:20.920
+So it's going to be probably the next version of Python.
+
+00:53:20.920 --> 00:53:22.100
+Maybe that will be shorter.
+
+00:53:22.100 --> 00:53:22.640
+Maybe not.
+
+00:53:22.640 --> 00:53:24.300
+A little undetermined at this point.
+
+00:53:24.300 --> 00:53:27.440
+Might be 12 months from now or who knows.
+
+00:53:27.440 --> 00:53:33.660
+I expect, regardless of when it is, that we're close enough that we'll be able to get all of this sub-interpreter stuff done for that.
+
+00:53:33.780 --> 00:53:37.380
+Assuming PEP55R gets accepted, which I expect.
+
+00:53:37.380 --> 00:53:38.180
+I hope it does.
+
+00:53:38.180 --> 00:53:39.220
+I expect it will.
+
+00:53:39.220 --> 00:53:41.020
+I don't see a reason why it wouldn't.
+
+00:53:41.020 --> 00:53:43.980
+Yeah, it seems like the excitement is there for it.
+
+00:53:43.980 --> 00:53:53.740
+To me, it clearly solves the problem, assuming like the startup time of the sub-interpreters is not just equal to multiprocessing and things like that.
+
+00:53:53.740 --> 00:53:56.040
+It seems like it's going to be really great.
+
+00:53:56.040 --> 00:54:00.560
+Yeah, and what's nice is I've done this in a way that will start really minimal.
+
+00:54:00.960 --> 00:54:08.280
+Like you'll only be able to pass bytes or strings or other basic immutable types between sub-interpreters.
+
+00:54:08.280 --> 00:54:16.380
+But with this foundation, then there's like a whole list of really neat projects that people can work on to improve things for sub-interpreters.
+
+00:54:16.380 --> 00:54:25.980
+Like I talked about earlier, improving startup time, but also things like one neat idea is the idea of for memory allocators in CPython.
+
+00:54:25.980 --> 00:54:30.040
+Right now, we use one memory allocator throughout the whole lifetime of the runtime.
+
+00:54:30.040 --> 00:54:34.460
+Memory allocator is in charge of, of course, allocating and deallocating memory.
+
+00:54:34.900 --> 00:54:39.140
+So what if you could use a different memory allocator per interpreter?
+
+00:54:39.140 --> 00:54:47.140
+Well, what if you could at any arbitrary time swap out an allocator so that objects are allocated using different allocators?
+
+00:54:47.140 --> 00:54:54.300
+Then you could manage relative to the allocators for those objects and you get some neat things.
+
+00:54:54.400 --> 00:54:58.460
+Like what if you had an allocator that was page size, right?
+
+00:54:58.460 --> 00:55:10.360
+And so then you actually can, in Python, have a class that kind of wraps that allocator so that you can create objects relative to that class.
+
+00:55:10.360 --> 00:55:20.280
+Or create an object that represents allocator and then any attribute that you create on the object is in that allocator or whatever.
+
+00:55:20.280 --> 00:55:27.340
+So now you have this self-contained memory page that then you could mark, let's say, read-only.
+
+00:55:27.340 --> 00:55:33.060
+Suddenly, all that memory is read-only and you have truly read-only objects in Python.
+
+00:55:33.060 --> 00:55:46.660
+What if you take that read-only and now you can pass that whole memory page over to another interpreter and you don't have to worry about any race conditions relative to that memory page?
+
+00:55:46.660 --> 00:55:49.620
+One of the best ways to get parallelism is to have immutability.
+
+00:55:49.900 --> 00:55:51.280
+I think there are lots of...
+
+00:55:51.280 --> 00:55:52.960
+And so there's a...
+
+00:55:52.960 --> 00:55:59.460
+I have a project open for this and a number of other resources where I've basically written all this stuff down.
+
+00:55:59.460 --> 00:56:05.220
+Like, here's a whole list of awesome things that we can do once we have this foundation set.
+
+00:56:05.220 --> 00:56:09.440
+Would you get things like maybe less memory fragmentation for long-running processes?
+
+00:56:09.440 --> 00:56:14.200
+If you could start up these sub-interpreters, like give them a block of memory, let them throw that away.
+
+00:56:14.200 --> 00:56:19.880
+And like things like this, like other benefits, possible memory leaks for like badly written code, but like it was all within a sub-interpreter.
+
+00:56:19.880 --> 00:56:22.940
+There are a number of things there.
+
+00:56:22.940 --> 00:56:26.000
+One is that I have a list of...
+
+00:56:26.000 --> 00:56:29.040
+Like I said, there's all this global state all over.
+
+00:56:29.040 --> 00:56:31.680
+This is kind of the main blocker for me right now.
+
+00:56:31.680 --> 00:56:36.640
+And so we have all these static globals in the C code all over the place, thousands of them.
+
+00:56:36.860 --> 00:56:40.280
+Most of them can't be global.
+
+00:56:40.280 --> 00:56:44.360
+So I can't even pull them into the runtime state struct.
+
+00:56:44.360 --> 00:56:54.440
+I have to pull them down into the interpreter state, which means I have to collect them out of static globals and kind of migrate them into this pi interpreter state struct.
+
+00:56:54.440 --> 00:56:56.260
+And it's just a lot of work.
+
+00:56:56.260 --> 00:57:01.440
+And then I have to make sure that nobody adds any static globals that they shouldn't in the future.
+
+00:57:01.440 --> 00:57:04.060
+Or else, same problem all over again.
+
+00:57:04.060 --> 00:57:08.040
+So, I mean, this is probably the main problem right now.
+
+00:57:08.040 --> 00:57:19.320
+Aside from all those globals, there are some parts of the pi runtime state, which is this struct where I pulled in a lot of globals earlier, a couple years ago.
+
+00:57:19.320 --> 00:57:28.040
+There are key items of that struct that I've identified that need to move over into the interpreter state.
+
+00:57:28.040 --> 00:57:30.180
+The gil will be the last one of those.
+
+00:57:30.180 --> 00:57:33.280
+But right before that is memory allocators.
+
+00:57:33.280 --> 00:57:37.100
+So I'm pretty sure that we'll be able to do this just fine.
+
+00:57:37.100 --> 00:57:40.500
+But I need to see how it affects performance.
+
+00:57:40.500 --> 00:57:45.000
+But moving the memory allocators to per interpreter.
+
+00:57:45.180 --> 00:57:53.980
+So I think one of the side effects, I mean, it really could be reducing memory fragmentation down, you know, isolating it to per interpreter.
+
+00:57:53.980 --> 00:57:56.960
+Which, if you're using multiple interpreters, that's a good thing.
+
+00:57:56.960 --> 00:57:57.940
+Yeah, it's really interesting.
+
+00:57:57.940 --> 00:58:05.600
+And certainly the pressure that hardware is putting on top of programming languages and runtimes is not getting less, right?
+
+00:58:05.600 --> 00:58:09.420
+Like, we're only going to have more cores, not fewer going forward.
+
+00:58:09.760 --> 00:58:17.760
+So it's only going to be a problem that stands out more starkly if Python only reasonable runs on like one core at a time.
+
+00:58:17.760 --> 00:58:22.740
+When you have 16, 32, 64 cores, whatever it is in like five years, right?
+
+00:58:22.740 --> 00:58:23.060
+Yep.
+
+00:58:23.060 --> 00:58:24.620
+So it's definitely a good project.
+
+00:58:24.620 --> 00:58:30.040
+I'm really excited about it still after first motivated to work on this and five years ago.
+
+00:58:30.040 --> 00:58:31.980
+You know, I'm still motivated.
+
+00:58:31.980 --> 00:58:33.540
+Almost gave up at one point.
+
+00:58:33.540 --> 00:58:35.100
+But plugging away.
+
+00:58:35.100 --> 00:58:36.680
+And now a lot of people are excited.
+
+00:58:36.680 --> 00:58:38.940
+Looks like it's really going to happen for 3.9.
+
+00:58:38.940 --> 00:58:40.760
+Are some of the other core developers helping you?
+
+00:58:40.760 --> 00:58:41.340
+Somewhat.
+
+00:58:41.340 --> 00:58:45.260
+Everybody's got different goals in mind.
+
+00:58:45.260 --> 00:58:50.620
+Victor Stinners, he's been really helpful for some of this stuff, especially relative to the CPI.
+
+00:58:50.620 --> 00:58:54.400
+I've had offers of help from others.
+
+00:58:54.400 --> 00:59:00.800
+Before Emily Morehouse became a committer, I was helping to mentor her.
+
+00:59:00.800 --> 00:59:03.920
+And one of the things that we did, we met basically weekly.
+
+00:59:04.840 --> 00:59:09.540
+And for the most part, we paired up on working on sub-interpreters.
+
+00:59:09.540 --> 00:59:10.820
+And that was a big help.
+
+00:59:10.820 --> 00:59:11.500
+Now she's...
+
+00:59:11.500 --> 00:59:11.980
+Yeah, that's cool.
+
+00:59:11.980 --> 00:59:13.180
+She's all important now.
+
+00:59:13.180 --> 00:59:15.020
+No, no.
+
+00:59:15.020 --> 00:59:15.920
+Emily's great.
+
+00:59:15.920 --> 00:59:17.360
+But she's so busy.
+
+00:59:17.360 --> 00:59:18.000
+Yeah, she's great.
+
+00:59:18.000 --> 00:59:19.400
+She's running a successful company.
+
+00:59:19.400 --> 00:59:20.780
+It's really busy.
+
+00:59:21.240 --> 00:59:27.440
+And on top of that, she's the chair for PyCon 2020 and 2021.
+
+00:59:27.440 --> 00:59:29.420
+Well, I'm guessing 2021.
+
+00:59:29.420 --> 00:59:31.160
+Anyway, at least next year.
+
+00:59:31.160 --> 00:59:33.200
+And then she's got a lot of this stuff going on.
+
+00:59:33.200 --> 00:59:36.140
+And she did the assignment expression implementation.
+
+00:59:36.140 --> 00:59:38.060
+And all sorts of stuff.
+
+00:59:38.300 --> 00:59:42.480
+But during that time when she was helping out with this stuff, it was a really big help.
+
+00:59:42.480 --> 00:59:43.660
+So lots of help.
+
+00:59:43.660 --> 00:59:48.040
+I had help from a number of folks out in enterprise.
+
+00:59:48.040 --> 00:59:53.700
+Talked to folks at Facebook and Instagram and some other companies.
+
+00:59:53.700 --> 00:59:56.960
+I've had offers to help from other individuals.
+
+00:59:56.960 --> 00:59:59.920
+Help from small companies.
+
+00:59:59.920 --> 01:00:04.000
+People coming up and saying, hey, I want to get my whole team working on this.
+
+01:00:04.000 --> 01:00:05.360
+It hasn't really gone anywhere.
+
+01:00:05.360 --> 01:00:07.580
+I don't get my hopes up too high.
+
+01:00:07.580 --> 01:00:09.320
+Yeah, it's such a big problem, right?
+
+01:00:09.320 --> 01:00:10.840
+It's like so wide spanning.
+
+01:00:10.840 --> 01:00:13.280
+It sounds like with all the globals and whatnot.
+
+01:00:13.280 --> 01:00:14.420
+You got to really...
+
+01:00:14.420 --> 01:00:15.120
+It's not very focused.
+
+01:00:15.120 --> 01:00:16.740
+So it's hard to work on, I suspect.
+
+01:00:16.740 --> 01:00:20.940
+One thing I made sure to do was break this problem down into zillion tasks.
+
+01:00:20.940 --> 01:00:22.760
+As granular as I could.
+
+01:00:22.760 --> 01:00:27.940
+So I think I gave you the link there to the multi-core Python project that I have.
+
+01:00:27.940 --> 01:00:31.080
+If you look me up on GitHub, you'll find that repo.
+
+01:00:31.080 --> 01:00:40.320
+And that repo is basically just a wiki and GitHub projects breaking down all this work into discrete chunks.
+
+01:00:40.320 --> 01:00:42.280
+I'll certainly link to all those things in the show notes.
+
+01:00:42.280 --> 01:00:43.700
+So we'll just click on it.
+
+01:00:43.700 --> 01:00:44.540
+But yeah, that's great.
+
+01:00:44.540 --> 01:00:45.600
+Link to your...
+
+01:00:45.600 --> 01:00:47.520
+You gave a talk at PyCon 2019.
+
+01:00:47.520 --> 01:00:49.040
+I don't think we mentioned that yet.
+
+01:00:49.040 --> 01:00:49.320
+Yeah.
+
+01:00:49.320 --> 01:00:50.560
+So it was a talk.
+
+01:00:50.560 --> 01:00:52.160
+I actually proposed two talks.
+
+01:00:52.160 --> 01:01:02.140
+One of them was specifically about subinterpreters and both PEPF5-4 and the whole effort to move GIL to per interpreter.
+
+01:01:02.140 --> 01:01:03.720
+That got rejected.
+
+01:01:03.720 --> 01:01:05.840
+That was the one I wanted to give.
+
+01:01:05.840 --> 01:01:08.200
+I gave another one that's broader.
+
+01:01:08.200 --> 01:01:10.360
+It was kind of a superset.
+
+01:01:10.360 --> 01:01:16.300
+It included the stuff from the other talk, but it also talked about all about the GIL in general.
+
+01:01:16.300 --> 01:01:27.600
+The history of the GIL, what really, you know, the technical ideas behind the GIL, really race conditions and parallelism, concurrency and all that stuff.
+
+01:01:28.120 --> 01:01:46.480
+And then also talked about what we need to do to kind of solve that problem, including talked about some of the past efforts and also current efforts to make fixes in the CPI, changes in CPI so that we can move past the GIL.
+
+01:01:46.480 --> 01:01:51.100
+And then I focus a lot of the talk on the stuff with subinterpreters.
+
+01:01:51.100 --> 01:01:51.400
+Cool.
+
+01:01:51.400 --> 01:01:52.600
+Yeah, that sounds really interesting.
+
+01:01:52.600 --> 01:01:53.540
+We'll definitely link to that.
+
+01:01:53.540 --> 01:01:57.120
+All right, Eric, I think we're just about out of time.
+
+01:01:57.120 --> 01:01:58.400
+We'll definitely cover this.
+
+01:01:58.400 --> 01:02:00.380
+And I'm really excited for this project.
+
+01:02:00.380 --> 01:02:10.620
+So if you need any more positive vibes and feedback, I think this definitely has a chance to, like, really unlock this multi-core stuff in a general way.
+
+01:02:10.620 --> 01:02:17.040
+I think there's interesting APIs you can put on top of it to even make it, like, almost transparent to folks.
+
+01:02:17.040 --> 01:02:24.620
+You know, I'm a big fan of the unsync library, which has a cool unifying view on top of threading, multiprocessing, and async.
+
+01:02:24.980 --> 01:02:29.400
+And this would dovetail, like, right into that, like, just a little decorative value.
+
+01:02:29.400 --> 01:02:29.700
+Oh, yeah.
+
+01:02:29.700 --> 01:02:32.620
+And boom, it's subinterpreter execution and all sorts of stuff.
+
+01:02:32.620 --> 01:02:33.160
+That would be great.
+
+01:02:33.160 --> 01:02:34.520
+Yeah, it's really awesome.
+
+01:02:34.520 --> 01:02:35.240
+Excellent work.
+
+01:02:35.240 --> 01:02:38.480
+I'm looking forward to using it in 3.9 beta 1.
+
+01:02:38.480 --> 01:02:41.980
+Now, before you get out of here, though, I do have two final questions for you.
+
+01:02:41.980 --> 01:02:44.340
+I think we may have spoiled the first response.
+
+01:02:44.680 --> 01:02:47.680
+If you're going to write some Python code, what editor are you going to use?
+
+01:02:47.680 --> 01:02:50.600
+I think people may be able to guess what you're going to say here.
+
+01:02:50.600 --> 01:02:51.420
+You know, it's funny.
+
+01:02:51.420 --> 01:02:59.000
+First, I'll say that the Python extension for VS Code is written not in Python, but in TypeScript.
+
+01:02:59.000 --> 01:03:01.120
+Because it's an Electron JS app, yeah.
+
+01:03:01.120 --> 01:03:02.420
+That's a whole other topic.
+
+01:03:02.420 --> 01:03:03.840
+An interesting one.
+
+01:03:04.320 --> 01:03:08.140
+So, for the most part, I've been using Vim forever.
+
+01:03:08.140 --> 01:03:13.040
+As long as I've used an editor that wasn't on Windows, I've been using Vim.
+
+01:03:13.040 --> 01:03:23.660
+And so, you know, naturally, after years, you kind of build up muscle memory, and you build up a whole set of configurations and all that stuff.
+
+01:03:23.660 --> 01:03:25.700
+And so, changing editors is hard.
+
+01:03:25.700 --> 01:03:34.540
+But given that I work on an extension for VS Code, it's pretty meaningful to actually use VS Code, right?
+
+01:03:34.540 --> 01:03:34.880
+Right.
+
+01:03:34.880 --> 01:03:36.680
+Just to experience the thing, right?
+
+01:03:36.680 --> 01:03:38.000
+It just makes it all that better.
+
+01:03:38.000 --> 01:03:39.480
+I really appreciate VS Code.
+
+01:03:39.480 --> 01:03:43.820
+I'm not really a big use my mouse while I'm working sort of guy.
+
+01:03:43.820 --> 01:03:49.160
+So, VS Code is definitely out of the box oriented towards use your mouse.
+
+01:03:49.160 --> 01:03:50.680
+I mean, Windows is.
+
+01:03:50.680 --> 01:03:53.480
+So, kind of there's that mentality.
+
+01:03:53.480 --> 01:03:54.120
+And that's fine.
+
+01:03:54.120 --> 01:03:56.680
+It's definitely, that's a target.
+
+01:03:56.680 --> 01:03:59.320
+So, it's not really how I operate all that much.
+
+01:03:59.320 --> 01:04:06.420
+There are ways, however, there's like a Vim extension, which basically makes VS Code work like Vim.
+
+01:04:06.420 --> 01:04:07.520
+So, I tried it.
+
+01:04:07.520 --> 01:04:09.240
+And it was nice.
+
+01:04:09.240 --> 01:04:11.340
+There were only a couple problems.
+
+01:04:11.340 --> 01:04:13.320
+And they're kind of blockers for me.
+
+01:04:13.320 --> 01:04:13.640
+Okay.
+
+01:04:13.640 --> 01:04:18.960
+I use VS Code for Python stuff sometimes, but most of the time not.
+
+01:04:18.960 --> 01:04:21.080
+Once you know and love an editor, it's tough.
+
+01:04:21.080 --> 01:04:23.080
+I think that they're solvable problems.
+
+01:04:23.300 --> 01:04:25.220
+And I've kind of pushed the feedback upstream.
+
+01:04:25.220 --> 01:04:26.540
+So, who knows?
+
+01:04:26.540 --> 01:04:29.440
+I mean, maybe I'll move away from Vim at some point.
+
+01:04:29.440 --> 01:04:32.600
+Makes it hard when I'm in a terminal and I need to edit stuff.
+
+01:04:32.600 --> 01:04:34.440
+I can't really pop up VS Code.
+
+01:04:34.440 --> 01:04:35.040
+Yeah, yeah.
+
+01:04:35.040 --> 01:04:39.340
+But you do have that cool of like remote editing stuff that's coming in VS Code, which is pretty cool.
+
+01:04:39.500 --> 01:04:40.560
+That was one of the blockers.
+
+01:04:40.560 --> 01:04:43.900
+And now that there's that, it's less of an issue for me.
+
+01:04:43.900 --> 01:04:49.560
+So, there are only really a couple things left that are kind of blocking me from using VS Code.
+
+01:04:49.560 --> 01:04:50.920
+Otherwise, I like it.
+
+01:04:50.920 --> 01:04:57.140
+There are a lot of things that I just don't, haven't bothered with them, but you just get out of the box with VS Code.
+
+01:04:57.140 --> 01:04:57.980
+And it's nice.
+
+01:04:57.980 --> 01:04:58.260
+Cool.
+
+01:04:58.740 --> 01:04:59.040
+All right.
+
+01:04:59.040 --> 01:05:01.380
+And then notable PyPI package.
+
+01:05:01.380 --> 01:05:06.620
+Maybe not the most popular, but something you're like, wow, people should really know about this and maybe they haven't heard of it.
+
+01:05:06.620 --> 01:05:07.600
+That's a great question.
+
+01:05:07.600 --> 01:05:09.240
+There's a few out there.
+
+01:05:09.240 --> 01:05:14.200
+I'm a big fan of projects that really have been able to stay on top of their growth.
+
+01:05:14.200 --> 01:05:18.260
+That's a really hard problem when you're working on a project and it gets popular.
+
+01:05:18.260 --> 01:05:19.580
+Trying to keep up.
+
+01:05:19.580 --> 01:05:22.300
+Most of the time it's just volunteers, spare time.
+
+01:05:22.300 --> 01:05:24.260
+Things often grow pretty organically.
+
+01:05:24.260 --> 01:05:28.060
+I think for the most part, most programmers are pretty pragmatic.
+
+01:05:28.060 --> 01:05:30.820
+So, they aim for immediate fixes.
+
+01:05:30.820 --> 01:05:36.140
+So, it's really hard over time to keep a project under control, especially when it gets big.
+
+01:05:36.140 --> 01:05:41.760
+So, I'm a big fan of projects that kind of keep that under control.
+
+01:05:41.760 --> 01:05:47.720
+There's some projects I think that have aimed for simplicity and really focused on that.
+
+01:05:47.720 --> 01:05:52.980
+See, I'm setting myself up for failure here though, because I want to give a good example of this.
+
+01:05:52.980 --> 01:06:00.440
+And not having looked at any projects too closely in a while, I may be kind of invalidating my whole point.
+
+01:06:00.440 --> 01:06:02.620
+There's some neat ones out there that people find useful.
+
+01:06:02.720 --> 01:06:11.100
+Of course, adders, but adders is kind of, with data classes now, adders is, it still has a place, I suppose, but not quite as much as it did.
+
+01:06:11.100 --> 01:06:12.420
+Yeah, it definitely seemed to have.
+
+01:06:12.420 --> 01:06:14.620
+Did it directly inspire data classes?
+
+01:06:14.620 --> 01:06:15.040
+Yeah.
+
+01:06:15.040 --> 01:06:17.760
+It's kind of achieved its goal like in a meta way.
+
+01:06:17.760 --> 01:06:18.320
+Anyway, yeah.
+
+01:06:18.320 --> 01:06:23.560
+I have one on there, ImportLib2, which is a backport of Python 3's ImportLib to Python 2.
+
+01:06:24.120 --> 01:06:29.560
+But I haven't really kept up with it, so it probably doesn't work anymore.
+
+01:06:29.560 --> 01:06:30.060
+Those are good.
+
+01:06:30.060 --> 01:06:31.920
+Yeah, adders is definitely a good one.
+
+01:06:31.920 --> 01:06:34.620
+Backport ones are kind of useful sometimes.
+
+01:06:34.620 --> 01:06:41.740
+But there's also, there's some that make it easier to use some of the trickier functionality of Python.
+
+01:06:41.740 --> 01:06:44.720
+So, things that deal with descriptors, for instance.
+
+01:06:44.720 --> 01:06:47.500
+There's some decorator packages out there.
+
+01:06:47.580 --> 01:06:49.480
+I think Graham Dumbledore has wrapped.
+
+01:06:49.480 --> 01:06:50.840
+That's an interesting one.
+
+01:06:50.840 --> 01:07:03.820
+One that I think people don't think about a whole lot is PSUtil, which actually is really neat because it has some good abstractions cross-platform for a lot of the things that you do system-side.
+
+01:07:04.380 --> 01:07:10.520
+Like monitoring processes, getting system information, killing processes, or whatever.
+
+01:07:10.520 --> 01:07:12.040
+But it also stays pretty focused.
+
+01:07:12.040 --> 01:07:13.040
+I think that's a good one.
+
+01:07:13.040 --> 01:07:14.840
+Yeah, PSUtil, that's definitely a good one, yeah.
+
+01:07:14.840 --> 01:07:19.060
+PyC parser is one I've looked at recently that does some neat things.
+
+01:07:19.060 --> 01:07:20.880
+It allows you to parse C code.
+
+01:07:20.880 --> 01:07:21.900
+Pure Python, though.
+
+01:07:21.900 --> 01:07:22.600
+Oh, interesting.
+
+01:07:22.600 --> 01:07:23.100
+Okay.
+
+01:07:23.100 --> 01:07:27.780
+There's some limitations to it, but otherwise, I think it's actually pretty cool.
+
+01:07:27.780 --> 01:07:28.100
+Awesome.
+
+01:07:28.100 --> 01:07:28.860
+Very cool.
+
+01:07:28.860 --> 01:07:30.020
+Those are definitely some good ones.
+
+01:07:30.020 --> 01:07:30.400
+All right.
+
+01:07:30.400 --> 01:07:31.300
+Final call to action.
+
+01:07:31.300 --> 01:07:32.700
+People are excited about this.
+
+01:07:32.700 --> 01:07:33.920
+Maybe they want to help out.
+
+01:07:34.060 --> 01:07:36.540
+Maybe they want to try or see some of the changes.
+
+01:07:36.540 --> 01:07:38.520
+Is there something they can do?
+
+01:07:38.520 --> 01:07:40.360
+Is there like this list you talked about?
+
+01:07:40.360 --> 01:07:43.840
+Can they find this list to see if they can take one of them for you?
+
+01:07:43.840 --> 01:07:47.860
+First of all, if anybody's interested, they can just get in touch with me immediately.
+
+01:07:47.860 --> 01:07:49.820
+I'll get right back to you.
+
+01:07:49.820 --> 01:07:55.000
+We'll talk about all about the project, how they can help, what their interests are, how that lines up.
+
+01:07:55.380 --> 01:07:56.000
+That project I talked about.
+
+01:07:56.000 --> 01:08:05.200
+That project I talked about, the link that you'll have, has a lot of the tasks broken down as issues organized on the project board.
+
+01:08:05.200 --> 01:08:07.520
+So you can take a look at those.
+
+01:08:07.940 --> 01:08:12.960
+Also, the wiki is basically where I've dumped pretty much all of my notes on this stuff.
+
+01:08:12.960 --> 01:08:13.960
+Read through there.
+
+01:08:13.960 --> 01:08:15.080
+There's lots of stuff.
+
+01:08:15.080 --> 01:08:16.380
+You can see how it applies.
+
+01:08:16.380 --> 01:08:19.020
+Give feedback on the pep.
+
+01:08:19.480 --> 01:08:27.360
+And there may be other ways that it could work that you've thought of that nobody else did that are worth talking about.
+
+01:08:27.360 --> 01:08:29.200
+But again, just get in touch with me.
+
+01:08:29.200 --> 01:08:30.620
+It wouldn't take a lot of effort.
+
+01:08:30.960 --> 01:08:38.760
+And I can get you working on something right away, something that will interest you and will make a real difference here.
+
+01:08:38.760 --> 01:08:45.080
+I think this is a feature that people, until they think about it, don't realize how important it is.
+
+01:08:45.080 --> 01:08:47.660
+I really do think that it's going to make a big difference for people.
+
+01:08:47.660 --> 01:08:48.220
+That's awesome.
+
+01:08:48.220 --> 01:08:49.900
+Great bunch of ways for people to get involved.
+
+01:08:49.900 --> 01:08:50.940
+I totally agree with you.
+
+01:08:50.940 --> 01:08:55.120
+I've certainly put this in my top five most important projects for Python.
+
+01:08:55.120 --> 01:08:56.260
+So very good work.
+
+01:08:56.260 --> 01:08:57.120
+I love this deep dive.
+
+01:08:57.120 --> 01:08:58.580
+Thanks for taking the time, Eric.
+
+01:08:58.580 --> 01:08:59.560
+Yeah, thank you.
+
+01:08:59.560 --> 01:09:00.340
+Thanks for having me, Michael.
+
+01:09:00.340 --> 01:09:01.120
+Yeah, you bet.
+
+01:09:01.120 --> 01:09:01.340
+Bye.
+
+01:09:01.340 --> 01:09:05.320
+This has been another episode of Talk Python to Me.
+
+01:09:05.320 --> 01:09:07.640
+Our guest on this episode was Eric Snow.
+
+01:09:07.640 --> 01:09:09.960
+It's been brought to you by Linode and TopTal.
+
+01:09:09.960 --> 01:09:14.380
+Linode is your go-to hosting for whatever you're building with Python.
+
+01:09:14.380 --> 01:09:17.920
+Get four months free at talkpython.fm/Linode.
+
+01:09:17.920 --> 01:09:19.820
+That's L-I-N-O-D-E.
+
+01:09:19.820 --> 01:09:24.580
+With TopTal, you get quality talent without the whole hiring process.
+
+01:09:24.580 --> 01:09:28.240
+Start 80% closer to success by working with TopTal.
+
+01:09:28.240 --> 01:09:32.080
+Just visit talkpython.fm/TopTal to get started.
+
+01:09:32.080 --> 01:09:34.100
+That's T-O-P-T-A-L.
+
+01:09:34.700 --> 01:09:36.220
+Want to level up your Python?
+
+01:09:36.480 --> 01:09:41.080
+If you're just getting started, try my Python Jumpstart by Building 10 Apps course.
+
+01:09:41.080 --> 01:09:49.240
+Or if you're looking for something more advanced, check out our new async course that digs into all the different types of async programming you can do in Python.
+
+01:09:49.460 --> 01:09:53.900
+And of course, if you're interested in more than one of these, be sure to check out our Everything Bundle.
+
+01:09:53.900 --> 01:09:55.780
+It's like a subscription that never expires.
+
+01:09:55.780 --> 01:09:58.080
+Be sure to subscribe to the show.
+
+01:09:58.080 --> 01:10:00.500
+Open your favorite podcatcher and search for Python.
+
+01:10:00.500 --> 01:10:01.720
+We should be right at the top.
+
+01:10:01.720 --> 01:10:10.700
+You can also find the iTunes feed at /itunes, the Google Play feed at /play, and the direct RSS feed at /rss on talkpython.fm.
+
+01:10:11.220 --> 01:10:12.800
+This is your host, Michael Kennedy.
+
+01:10:12.800 --> 01:10:14.300
+Thanks so much for listening.
+
+01:10:14.300 --> 01:10:15.380
+I really appreciate it.
+
+01:10:15.380 --> 01:10:17.120
+Now get out there and write some Python code.
+
+01:10:17.120 --> 01:10:37.640
+I'll see you next time.
+

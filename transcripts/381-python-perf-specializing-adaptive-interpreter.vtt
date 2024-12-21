@@ -1,0 +1,3914 @@
+WEBVTT
+
+00:00:00.001 --> 00:00:03.260
+We're on the edge of a major jump in Python performance.
+
+00:00:03.260 --> 00:00:08.660
+With the work done by the FasterCpython team and Python 3.11 due out in around a month,
+
+00:00:08.660 --> 00:00:15.440
+your existing Python code might see an increase of well over 25% in speed with no changes to your code.
+
+00:00:15.440 --> 00:00:19.600
+One of the main reasons is its new specializing adaptive interpreter.
+
+00:00:19.600 --> 00:00:23.960
+This episode is about that new feature and a great tool called Specialist,
+
+00:00:23.960 --> 00:00:29.140
+which lets you visualize how Python is speeding up your code and where it can't unless you make minor changes.
+
+00:00:29.140 --> 00:00:32.380
+Its creator, Brant Booker, is here to tell us all about it.
+
+00:00:32.380 --> 00:00:37.320
+This is Talk Python to Me, episode 381, recorded September 15th, 2022.
+
+00:00:37.320 --> 00:00:53.160
+Welcome to Talk Python to Me, a weekly podcast on Python.
+
+00:00:53.160 --> 00:00:54.880
+This is your host, Michael Kennedy.
+
+00:00:54.880 --> 00:00:58.280
+Follow me on Twitter where I'm @mkennedy and keep up with the show
+
+00:00:58.280 --> 00:01:01.080
+and listen to past episodes at talkpython.fm.
+
+00:01:01.080 --> 00:01:04.040
+And follow the show on Twitter via at Talk Python.
+
+00:01:04.040 --> 00:01:07.460
+We've started streaming most of our episodes live on YouTube.
+
+00:01:07.460 --> 00:01:11.140
+Subscribe to our YouTube channel over at talkpython.fm/youtube
+
+00:01:11.140 --> 00:01:14.940
+to get notified about upcoming shows and be part of that episode.
+
+00:01:14.940 --> 00:01:18.540
+This episode is sponsored by Microsoft for Startups Founders Hub.
+
+00:01:18.540 --> 00:01:24.160
+Check them out at talkpython.fm/founders hub to get early support for your startup.
+
+00:01:24.420 --> 00:01:27.460
+And it's brought to you by compiler from Red Hat.
+
+00:01:27.460 --> 00:01:35.120
+Listen to an episode of their podcast as they demystify the tech industry over at talkpython.fm/compiler.
+
+00:01:35.120 --> 00:01:37.080
+Brant, welcome to Talk Python to Me.
+
+00:01:37.080 --> 00:01:38.200
+Thank you for having me.
+
+00:01:38.200 --> 00:01:39.760
+I'm excited to talk about some of this stuff.
+
+00:01:39.760 --> 00:01:42.200
+I am absolutely excited about it as well.
+
+00:01:42.200 --> 00:01:46.020
+I feel there's a huge renaissance coming, happening right now,
+
+00:01:46.020 --> 00:01:49.380
+or has been happening for a little while now around Python performance.
+
+00:01:49.380 --> 00:01:52.600
+It's exciting to see, especially in just the last couple of years,
+
+00:01:53.020 --> 00:01:55.180
+that you definitely see these different focuses,
+
+00:01:55.180 --> 00:01:59.020
+whether it's, you know, improving single-threaded Python performance,
+
+00:01:59.020 --> 00:02:02.180
+multi-threaded Python performance, you know, Python in the browser.
+
+00:02:02.180 --> 00:02:04.320
+There's a lot of really cool stuff happening, right?
+
+00:02:04.320 --> 00:02:04.680
+Yeah.
+
+00:02:04.680 --> 00:02:08.040
+Oh, if we could talk WebAssembly and PyScript and all that,
+
+00:02:08.040 --> 00:02:09.220
+that is a very exciting thing.
+
+00:02:09.220 --> 00:02:11.460
+There's probably some performance side around it,
+
+00:02:11.460 --> 00:02:13.040
+maybe something we could touch on,
+
+00:02:13.040 --> 00:02:14.760
+but that's not the main topic for today.
+
+00:02:14.760 --> 00:02:16.980
+We're going to talk about just the core CPython
+
+00:02:16.980 --> 00:02:19.280
+and how it works, which is going to be awesome.
+
+00:02:19.280 --> 00:02:21.580
+Some work you've done with the team there at Microsoft
+
+00:02:21.580 --> 00:02:23.020
+and your contributions there.
+
+00:02:23.020 --> 00:02:24.900
+Before we get into all that stuff, though,
+
+00:02:24.900 --> 00:02:26.180
+let's start with your story.
+
+00:02:26.180 --> 00:02:27.500
+How did you get into programming in Python?
+
+00:02:27.500 --> 00:02:27.960
+Yeah.
+
+00:02:27.960 --> 00:02:31.140
+So I originally studied computer engineering,
+
+00:02:31.140 --> 00:02:33.880
+so like hardware stuff at UC Irvine.
+
+00:02:34.160 --> 00:02:37.540
+Around my, like, third or fourth year, so like 2017,
+
+00:02:37.540 --> 00:02:41.160
+I encountered Python really for the first time
+
+00:02:41.160 --> 00:02:42.520
+in like a project setting.
+
+00:02:42.520 --> 00:02:44.440
+Basically, it was a senior design project.
+
+00:02:44.440 --> 00:02:46.160
+We get to kind of make whatever we want.
+
+00:02:46.160 --> 00:02:50.280
+So we made this cool system that basically it's point cameras
+
+00:02:50.280 --> 00:02:52.420
+at a blackjack table and it's X card counters.
+
+00:02:52.420 --> 00:02:54.920
+And if you want to do something like that in, you know,
+
+00:02:54.920 --> 00:02:57.480
+four months or whatever, Python is kind of the way to go.
+
+00:02:57.480 --> 00:02:59.680
+Yeah, the CV stuff there is really good, right?
+
+00:02:59.680 --> 00:03:00.160
+Yeah.
+
+00:03:00.160 --> 00:03:01.500
+So it was NumPy and OpenCV,
+
+00:03:01.500 --> 00:03:03.600
+and that was kind of my first exposure to this stuff.
+
+00:03:03.600 --> 00:03:07.040
+And so I learned that I like developing software
+
+00:03:07.040 --> 00:03:08.880
+a lot more than developing hardware.
+
+00:03:08.880 --> 00:03:13.040
+So I kind of never looked back and just went full in.
+
+00:03:13.040 --> 00:03:15.300
+About a year later, so like 2018,
+
+00:03:15.300 --> 00:03:19.200
+I opened my first PR to the CPython Red Belt,
+
+00:03:19.200 --> 00:03:20.480
+and it was merged.
+
+00:03:20.480 --> 00:03:21.920
+And you're up to that.
+
+00:03:21.920 --> 00:03:22.500
+What was that PR?
+
+00:03:22.500 --> 00:03:26.780
+Oh, there's this standard library module
+
+00:03:26.780 --> 00:03:27.980
+called Module Finder.
+
+00:03:27.980 --> 00:03:30.100
+Basically, it's one of those ones
+
+00:03:30.100 --> 00:03:32.060
+that's kind of just a historical oddity,
+
+00:03:32.220 --> 00:03:33.300
+and it's still in there.
+
+00:03:33.300 --> 00:03:36.360
+Basically, you can run it over any Python script.
+
+00:03:36.360 --> 00:03:37.500
+It detects all the imports,
+
+00:03:37.500 --> 00:03:39.300
+and so you can use it to build an import graph.
+
+00:03:39.300 --> 00:03:41.380
+And I forget exactly what I was using it for.
+
+00:03:41.380 --> 00:03:42.240
+I think it was for work.
+
+00:03:42.240 --> 00:03:46.460
+And I ran into some bugs that had been just kind of lingering there for years.
+
+00:03:46.460 --> 00:03:48.240
+And so I, you know,
+
+00:03:48.240 --> 00:03:49.740
+submitted patches for a bunch of them.
+
+00:03:50.080 --> 00:03:54.700
+And so that was kind of my first experience contributing to open source in general.
+
+00:03:54.700 --> 00:03:57.240
+That PR was actually open for a while.
+
+00:03:57.240 --> 00:04:02.040
+It was open for like, I think it was like a month or two or something like that.
+
+00:04:02.040 --> 00:04:06.660
+So in the meantime, I contributed other things to like my Pi type shed,
+
+00:04:06.660 --> 00:04:09.080
+but that's still my first open source contribution.
+
+00:04:09.080 --> 00:04:10.300
+It counts the day it was open.
+
+00:04:10.760 --> 00:04:14.700
+Yeah, it counts as a beginning or the end of the PR, right?
+
+00:04:14.700 --> 00:04:15.600
+Yeah, exactly.
+
+00:04:15.600 --> 00:04:17.540
+Because those can be very different things sometimes.
+
+00:04:17.540 --> 00:04:18.560
+They can be very different.
+
+00:04:18.560 --> 00:04:20.340
+You know, we have now in CPython,
+
+00:04:20.340 --> 00:04:22.320
+we have the, just in Python, I guess,
+
+00:04:22.320 --> 00:04:25.800
+we have the developer in residence with Lucas Schlinger.
+
+00:04:25.800 --> 00:04:28.660
+He's there to sort of facilitate making that a lot faster.
+
+00:04:28.660 --> 00:04:32.020
+And I feel like people's experience there might be picking up speed and improving.
+
+00:04:32.020 --> 00:04:34.640
+Yeah, no, I think that's a great thing.
+
+00:04:34.640 --> 00:04:38.760
+And in general, just seeing this kind of shift towards full-time Python core development,
+
+00:04:38.760 --> 00:04:43.080
+you know, being funded by these big companies is really exciting to see.
+
+00:04:43.080 --> 00:04:47.200
+I think it improves the end contributor experience, the user experience,
+
+00:04:47.200 --> 00:04:49.440
+and just gets things done, which is nice.
+
+00:04:49.440 --> 00:04:53.980
+I don't have any numbers, but I imagine there are fewer of those kind of lingering,
+
+00:04:53.980 --> 00:04:57.560
+you know, months old PRs than there were back when I first started.
+
+00:04:57.560 --> 00:04:58.000
+Yeah.
+
+00:04:58.000 --> 00:05:00.100
+Way, way long ago, four years ago.
+
+00:05:00.940 --> 00:05:02.800
+So far back in the past.
+
+00:05:02.800 --> 00:05:04.120
+So long, so long, yeah.
+
+00:05:04.120 --> 00:05:07.380
+So yeah, so that was like 2018, 2019,
+
+00:05:07.380 --> 00:05:10.860
+I became a member of the triage team,
+
+00:05:10.860 --> 00:05:16.280
+which is basically a team for people who are kind of more involved in Python
+
+00:05:16.280 --> 00:05:18.380
+than just your average drive-by contributor.
+
+00:05:18.380 --> 00:05:20.880
+So while they're not full core developers,
+
+00:05:20.880 --> 00:05:24.180
+they basically can do anything a core developer can,
+
+00:05:24.180 --> 00:05:26.960
+except vote and actually, you know, press the merge button.
+
+00:05:26.960 --> 00:05:30.880
+So that was really nice because it made doing things like reviewing PRs easier.
+
+00:05:30.880 --> 00:05:34.000
+Tagging issues, closing issues, that sort of thing.
+
+00:05:34.000 --> 00:05:36.000
+A year later, I became a core developer.
+
+00:05:36.000 --> 00:05:37.240
+How did you get the experience for that?
+
+00:05:37.240 --> 00:05:39.080
+Like, how do you, you know, it's one thing to say,
+
+00:05:39.080 --> 00:05:41.780
+well, I've focused on this module and here's this fix.
+
+00:05:41.780 --> 00:05:45.280
+And it's another to say, you know, give me anything from CPython and I'll assess it.
+
+00:05:45.280 --> 00:05:47.300
+Well, it wasn't give me anything from CPython.
+
+00:05:47.300 --> 00:05:51.820
+And it was, you know, made it part of my morning routine to, you know, wake up,
+
+00:05:51.820 --> 00:05:57.200
+go to a coffee shop, order a coffee, and just for a half hour, look at newly opened issues.
+
+00:05:57.200 --> 00:05:59.640
+And for newly opened PRs.
+
+00:05:59.640 --> 00:05:59.860
+Yeah.
+
+00:05:59.860 --> 00:06:00.340
+Yeah.
+
+00:06:00.340 --> 00:06:03.460
+Well, I focus mostly on PR review for new contributors.
+
+00:06:03.720 --> 00:06:09.680
+Basically, I had filters set up that said, you know, show me all the PRs open the last 48 hours from a new contributor.
+
+00:06:09.680 --> 00:06:12.440
+I thought, okay, my first contribution experience wasn't that great.
+
+00:06:12.440 --> 00:06:18.220
+It'd be great if these people who have never opened a PR to CPython before can get a response within 48 hours.
+
+00:06:18.340 --> 00:06:24.680
+Whether that's telling them to sign the contributor license agreement or formatting fixes or pinging the relevant core dev or whatever.
+
+00:06:24.680 --> 00:06:27.500
+So that was kind of how I dove into that.
+
+00:06:27.500 --> 00:06:30.880
+All this terminology that you're using, PRs and stuff.
+
+00:06:30.880 --> 00:06:31.480
+No, this is great.
+
+00:06:31.480 --> 00:06:35.980
+What I was going to say is that this is new to Python, right?
+
+00:06:35.980 --> 00:06:40.660
+It wasn't that long ago that Python was on Mercurial or before then Subversion.
+
+00:06:40.660 --> 00:06:43.940
+It's, you know, it's coming over to GitHub is kind of a big deal.
+
+00:06:43.940 --> 00:06:47.780
+And I feel like it's really opened the door for more people to be willing to contribute.
+
+00:06:47.780 --> 00:06:48.320
+What do you think?
+
+00:06:48.320 --> 00:06:51.540
+Oh, it absolutely lowered the barrier to entry for people like me.
+
+00:06:51.540 --> 00:07:01.460
+Like using the old bugstoppython.org was tough at first, but I eventually kind of got used to it just in time for it to be replaced with GitHub issues, which I much prefer.
+
+00:07:01.460 --> 00:07:10.680
+But I have a hard time seeing myself emailing patches around or, you know, I have a lot of respect for people where that was the development flow a number of years ago.
+
+00:07:10.680 --> 00:07:13.960
+So I became a core developer in 2020.
+
+00:07:14.560 --> 00:07:21.520
+And I guess it was about exactly a year ago, almost exactly a year ago, I joined the Python performance team here at Microsoft.
+
+00:07:21.520 --> 00:07:23.260
+Were you at Microsoft before then?
+
+00:07:23.260 --> 00:07:24.200
+No, I was not.
+
+00:07:24.200 --> 00:07:28.280
+I worked for a company called Research Affiliates in Newport Beach.
+
+00:07:28.840 --> 00:07:33.040
+And I think you actually had my old manager, Chris Ariza, on the show a couple years ago.
+
+00:07:33.040 --> 00:07:34.220
+I have had Chris on the show.
+
+00:07:34.220 --> 00:07:34.880
+That's fantastic.
+
+00:07:34.880 --> 00:07:36.460
+Small world, huh?
+
+00:07:36.460 --> 00:07:36.960
+Yep.
+
+00:07:36.960 --> 00:07:37.860
+Small Python world.
+
+00:07:37.860 --> 00:07:39.060
+Yeah, small Python world.
+
+00:07:39.060 --> 00:07:40.780
+Just a couple million of us.
+
+00:07:40.780 --> 00:07:41.960
+No, that's great.
+
+00:07:42.300 --> 00:07:45.080
+So this brings us to our main topic.
+
+00:07:45.080 --> 00:07:49.060
+And, you know, let's start at the top, I guess.
+
+00:07:49.060 --> 00:07:52.660
+You know, there's the faster Python team, I guess.
+
+00:07:52.660 --> 00:07:53.780
+I don't know.
+
+00:07:53.780 --> 00:07:55.160
+How do you all refer to yourself?
+
+00:07:55.160 --> 00:07:58.380
+Yeah, we refer to ourselves as the faster CPython team.
+
+00:07:58.640 --> 00:08:06.800
+I think internally our distribution list is the CPython performance engineering team, which sounds a little gnarlier, but it's a lot wordier.
+
+00:08:06.800 --> 00:08:09.900
+That's a cool title to have on a resume, isn't it?
+
+00:08:09.900 --> 00:08:11.400
+Yeah, I think I'll use that one.
+
+00:08:11.400 --> 00:08:12.720
+There you go.
+
+00:08:12.720 --> 00:08:14.520
+There's been a ton of progress.
+
+00:08:14.520 --> 00:08:17.400
+And some of this work was done in 3.10.
+
+00:08:17.400 --> 00:08:21.200
+But, you know, there's this article here that I got pulled up on the screen.
+
+00:08:21.200 --> 00:08:25.760
+It says, Python 3.11 performance benchmarks are looking fantastic.
+
+00:08:25.760 --> 00:08:27.220
+That's got to make you feel good, huh?
+
+00:08:27.460 --> 00:08:29.860
+I mean, they were looking fantastic back in, what, June?
+
+00:08:29.860 --> 00:08:30.660
+Yeah.
+
+00:08:30.660 --> 00:08:33.020
+They're a small bit more fantastic now.
+
+00:08:33.020 --> 00:08:33.720
+So, yeah.
+
+00:08:33.720 --> 00:08:34.060
+Yeah, exactly.
+
+00:08:34.060 --> 00:08:35.360
+This article's from June.
+
+00:08:35.360 --> 00:08:38.700
+So this is a, it's only better from here, you know, from there, right?
+
+00:08:38.700 --> 00:08:40.000
+It's really exciting.
+
+00:08:40.000 --> 00:08:47.480
+And like I said, it's, this is a performance jump that at least since I've been involved in Python, we haven't seen this in a point release.
+
+00:08:47.680 --> 00:08:58.580
+You know, where we're seeing 25, 30%, sometimes more improvements for pure Python code rather than kind of the 5, 10, 15% range that might be more typical.
+
+00:08:58.580 --> 00:09:06.660
+And again, I think that's kind of a product of this very conscious effort, whether it's my team or that a lot of people that we interact with.
+
+00:09:07.080 --> 00:09:14.040
+So, for example, Pablo, release manager, strength council member at Bloomberg has been working a lot on this stuff with us.
+
+00:09:14.040 --> 00:09:18.300
+Outside contributors, do they come to mind or Dennis Sweeney, Ken Jin.
+
+00:09:19.240 --> 00:09:24.520
+There's definitely been a focus on this and it's paying off, which is really exciting, like I said.
+
+00:09:24.520 --> 00:09:24.940
+Yeah.
+
+00:09:24.940 --> 00:09:32.140
+And maybe a little bit more in parallel instead of a cooperative effort, but there's also the Cinder folks over at Meta Facebook.
+
+00:09:32.140 --> 00:09:34.340
+That's absolutely a cooperative effort.
+
+00:09:34.340 --> 00:09:44.520
+You know, even though Cinder isn't necessarily, we're not merging all of Cinder back into CPython, several of the changes are being upstreamed into CPython.
+
+00:09:44.520 --> 00:09:52.980
+And in fact, just earlier this week on Tuesday, we had, I think, like a two-hour meeting where the Cinder team walked our team through how their JIT works.
+
+00:09:52.980 --> 00:09:53.320
+Yeah.
+
+00:09:53.320 --> 00:09:57.380
+So it's, even though, yeah, it can be seen as a parallel effort, I think it's very collaborative.
+
+00:09:57.380 --> 00:10:04.540
+I think also, I, like you, am very much blown away at the step size of the performance improvements.
+
+00:10:04.540 --> 00:10:12.380
+It's just super surprising to me that a 30-year-old language and a 30-year-old runtime can get that much better in that short of a time.
+
+00:10:12.380 --> 00:10:12.780
+Yeah.
+
+00:10:12.780 --> 00:10:24.780
+And I think, again, I feel like I'm going to keep coming back to this, but having, you know, full-time people dedicated to this, having teams of people dedicated to this, I think that's a big part of sort of unlocking this.
+
+00:10:24.780 --> 00:10:41.580
+Because some of the things that are required for those big jumps are kind of larger architectural changes that, you know, a single volunteer who's, you know, doing this on their free time probably wouldn't have been able to do without coordinating with others and without throwing, you know, a significant amount of effort at it.
+
+00:10:41.580 --> 00:10:41.940
+Yeah.
+
+00:10:41.940 --> 00:10:44.880
+I mean, there are people out there, core devs, who have done amazing stuff.
+
+00:10:44.880 --> 00:10:46.540
+Shout out to Victor Stinner.
+
+00:10:46.540 --> 00:10:53.720
+I feel like a lot of the performance stuff that I've seen in the last couple of years, he is somehow associated with, you know, some major change.
+
+00:10:53.720 --> 00:10:59.940
+But the changes that are being undertaken here, they're much more holistic and far-reaching.
+
+00:10:59.940 --> 00:11:03.400
+And it really does take a team, I think, to make it reasonable, right?
+
+00:11:03.560 --> 00:11:07.820
+What's cool about the 3.11 effort is it's a combination of kind of both sorts of changes.
+
+00:11:07.820 --> 00:11:15.300
+So we have, you know, a bunch of kind of one-off, very targeted changes, probably five or six or ten of those.
+
+00:11:15.300 --> 00:11:21.520
+And then we have, you know, one or two of these kind of larger changes that, you know, we can build upon in the future.
+
+00:11:21.520 --> 00:11:28.220
+And they're never really done, which, you know, that's exciting because it means we get to keep making Python faster.
+
+00:11:28.220 --> 00:11:28.640
+Yeah.
+
+00:11:28.640 --> 00:11:29.360
+It is exciting.
+
+00:11:29.360 --> 00:11:40.880
+I think another area to just highlight real quick before we get into too much detail is, correct me if I'm wrong, but none of this is particularly focused on multi-core parallelism, right?
+
+00:11:41.120 --> 00:11:41.440
+No.
+
+00:11:41.440 --> 00:11:46.260
+So one member of our team, Eric Snow, he's basically the sub-interpreter guy.
+
+00:11:46.260 --> 00:11:46.940
+Exactly.
+
+00:11:46.940 --> 00:11:47.940
+Yeah.
+
+00:11:47.940 --> 00:11:55.820
+So he is focusing most of his time on, you know, a per-interpreter kill and, you know, all that sort of stuff.
+
+00:11:55.820 --> 00:12:02.420
+But, I mean, all the numbers that you're looking at here and all of our benchmarks, it's all single-threaded, single process.
+
+00:12:02.420 --> 00:12:07.340
+If you're running Python code, it will get faster without you changing your code, which is awesome.
+
+00:12:07.340 --> 00:12:08.840
+Yeah, it's super awesome.
+
+00:12:09.120 --> 00:12:23.580
+I want to highlight that because if Eric manages to unlock multi-core performance without much contention or trade-offs or, you know, if you've got an eight-core machine and you get 7x performance by using all the cores, like, that would be amazing.
+
+00:12:23.580 --> 00:12:28.900
+But all of this work you're doing applies to everyone, even if they're trying to do that stuff, right?
+
+00:12:28.900 --> 00:12:38.560
+So even if somehow we get this multi-core stuff, the computational multi-core stuff working super well, the work that you're doing and the team is doing is going to make it faster on every one of those cores, right?
+
+00:12:38.580 --> 00:12:41.740
+So they're kind of multiplicative initiatives, right?
+
+00:12:41.740 --> 00:12:49.840
+So if we could get a big improvement in the parallel stuff, it's only going to just multiply how much better this aspect of it's going to be for people who use that, right?
+
+00:12:49.840 --> 00:12:54.680
+It's great to be kind of pursuing all these different avenues because they pay off in different timeframes, right?
+
+00:12:54.680 --> 00:12:56.520
+Some of these are longer efforts.
+
+00:12:56.520 --> 00:12:59.540
+And in Eric's case, the 7x program for very long effort.
+
+00:12:59.720 --> 00:13:03.180
+I think he's done a great job sticking with it and seeing it through.
+
+00:13:03.180 --> 00:13:05.940
+And some of these we're seeing in point releases.
+
+00:13:05.940 --> 00:13:09.160
+And so they absolutely build on each other.
+
+00:13:09.160 --> 00:13:13.000
+Like you said, you can get a 7x increase from sub-interpreter just to throw out a number.
+
+00:13:13.000 --> 00:13:18.940
+But Python as a whole got 25% or 30% faster than you're seeing much more than a 7x increase.
+
+00:13:18.940 --> 00:13:19.420
+Right.
+
+00:13:19.420 --> 00:13:19.860
+Absolutely.
+
+00:13:19.860 --> 00:13:21.900
+So very, very exciting times.
+
+00:13:21.900 --> 00:13:26.420
+Two things before we get into the details of a particular interpreter and stuff.
+
+00:13:26.620 --> 00:13:27.700
+Tell me a bit about this team.
+
+00:13:27.700 --> 00:13:35.080
+You know, I interviewed Guido and Mark Shannon a while ago, about a year ago, I suppose, about this plan when they were kicking it off.
+
+00:13:35.080 --> 00:13:39.240
+And we didn't have these numbers or anything, but we did talk about what we were doing.
+
+00:13:39.240 --> 00:13:41.700
+And he talked about the team that he's working with there.
+
+00:13:41.700 --> 00:13:44.340
+So he said, certainly it's just more than the two of us.
+
+00:13:44.340 --> 00:13:45.700
+You know, tell us about the team.
+
+00:13:45.700 --> 00:13:46.100
+Yeah.
+
+00:13:46.100 --> 00:13:49.000
+So I think there are seven people.
+
+00:13:49.000 --> 00:13:52.500
+So there's Guido and Mark, Eric and me, as we mentioned.
+
+00:13:52.500 --> 00:13:54.480
+Another core developer, Urit.
+
+00:13:54.480 --> 00:13:56.520
+One other engineer, El.
+
+00:13:56.520 --> 00:14:04.620
+And a manager for the team who also does some engineering effort as well and is a member of the triage team, Mike Dronfum.
+
+00:14:04.620 --> 00:14:04.980
+Yeah.
+
+00:14:04.980 --> 00:14:05.240
+Nice.
+
+00:14:05.240 --> 00:14:05.660
+Yeah.
+
+00:14:05.660 --> 00:14:05.860
+Yeah.
+
+00:14:05.860 --> 00:14:08.440
+He worked on Pyoxidizer.
+
+00:14:08.440 --> 00:14:09.560
+Pyodide.
+
+00:14:09.560 --> 00:14:09.980
+That's right.
+
+00:14:09.980 --> 00:14:10.520
+Pyodide.
+
+00:14:10.520 --> 00:14:10.680
+Yeah.
+
+00:14:10.680 --> 00:14:11.220
+I don't know why.
+
+00:14:11.220 --> 00:14:13.140
+It's a pie.
+
+00:14:13.140 --> 00:14:16.100
+There's some kind of like a molecule on the end.
+
+00:14:16.100 --> 00:14:16.580
+Exactly.
+
+00:14:16.580 --> 00:14:17.220
+Exactly.
+
+00:14:17.220 --> 00:14:18.300
+Pyoxidizer.
+
+00:14:18.300 --> 00:14:18.720
+That's right.
+
+00:14:18.720 --> 00:14:22.880
+That's the foundation for PyScript, actually, which is quite cool.
+
+00:14:22.880 --> 00:14:23.820
+Py3 is cool too.
+
+00:14:23.820 --> 00:14:24.180
+The other question.
+
+00:14:24.180 --> 00:14:24.660
+Yeah.
+
+00:14:24.660 --> 00:14:25.160
+Yeah.
+
+00:14:25.160 --> 00:14:25.480
+Yeah.
+
+00:14:25.480 --> 00:14:25.600
+Yeah.
+
+00:14:25.600 --> 00:14:25.720
+Yeah.
+
+00:14:25.720 --> 00:14:35.180
+The other thing that I want to ask you about is, so we have these numbers and visibility into Python 3.11 that's got a lot of conversations going.
+
+00:14:35.180 --> 00:14:39.020
+And people are saying they're looking amazing and fantastic and other nice adjectives.
+
+00:14:39.020 --> 00:14:42.520
+But this is in beta, maybe soon to BRC.
+
+00:14:42.520 --> 00:14:43.240
+I'm not sure.
+
+00:14:43.240 --> 00:14:46.380
+What is Python 3.11 status these days?
+
+00:14:46.380 --> 00:14:51.560
+3.11, we just released our last release candidate, I think this week.
+
+00:14:52.140 --> 00:14:52.600
+Right.
+
+00:14:52.600 --> 00:15:01.940
+So this, if basically the idea is this, the final release candidate and the actual 3.11 release should be the exact same thing.
+
+00:15:01.940 --> 00:15:10.160
+Unless we find any serious bugs that we're fixing before 3.11 won, the release candidate is going to be 3.11.
+
+00:15:10.160 --> 00:15:10.660
+Awesome.
+
+00:15:10.660 --> 00:15:13.780
+This is as close to stable as any of the releases.
+
+00:15:13.780 --> 00:15:14.260
+Almost there, right?
+
+00:15:14.500 --> 00:15:14.720
+Okay.
+
+00:15:14.720 --> 00:15:15.080
+Yeah.
+
+00:15:15.080 --> 00:15:15.460
+Cool.
+
+00:15:15.460 --> 00:15:20.300
+So the reason I ask that is a lot of the work you've been doing recently is probably on 3.12, right?
+
+00:15:20.300 --> 00:15:20.780
+Yes.
+
+00:15:20.780 --> 00:15:21.100
+Yeah.
+
+00:15:21.100 --> 00:15:29.740
+So beta freeze, which is basically when we go from alphas into betas, and there's no more basically new features allowed at that point.
+
+00:15:29.740 --> 00:15:30.760
+That happens every May.
+
+00:15:30.760 --> 00:15:35.020
+And so everything that we've been working on since May goes into 3.12.
+
+00:15:35.020 --> 00:15:36.780
+Are you excited about the progress you've made?
+
+00:15:36.780 --> 00:15:37.140
+Yeah.
+
+00:15:37.140 --> 00:15:37.500
+Yeah.
+
+00:15:37.500 --> 00:15:38.000
+Very excited.
+
+00:15:38.000 --> 00:15:39.400
+It seems to be still coming along well.
+
+00:15:39.400 --> 00:15:39.860
+Yes.
+
+00:15:39.860 --> 00:15:40.360
+Yeah.
+
+00:15:40.360 --> 00:15:41.200
+And it's nice.
+
+00:15:41.200 --> 00:15:43.240
+We still have a lot of time before the next beta.
+
+00:15:43.240 --> 00:15:48.680
+Let's talk really quickly about the faster-cpython thing put together by Mark Shannon.
+
+00:15:48.680 --> 00:15:50.880
+Guido called it the Shannon plan.
+
+00:15:50.880 --> 00:15:54.220
+And the idea is, how can we make Python five times faster?
+
+00:15:54.220 --> 00:15:57.860
+If we could take Python and make it five times faster, that would be a really huge deal.
+
+00:15:57.860 --> 00:16:00.000
+And again, none of that is multi-core.
+
+00:16:00.000 --> 00:16:06.760
+If you could somehow unlock all the cores and you've got eight, that's 35 or 40 or something like that.
+
+00:16:07.620 --> 00:16:09.080
+This is an ambitious plan.
+
+00:16:09.080 --> 00:16:12.820
+It started out with a little bit of work with 3.10.
+
+00:16:12.820 --> 00:16:18.860
+Is that when the adaptive specializing interpreter first appeared, or did it actually wait until 3.11 to show up?
+
+00:16:18.860 --> 00:16:20.340
+No, I don't believe we.
+
+00:16:20.340 --> 00:16:21.680
+We don't have it at 3.10.
+
+00:16:21.680 --> 00:16:22.840
+Yeah, I didn't think so either.
+
+00:16:22.840 --> 00:16:23.420
+Missing something.
+
+00:16:23.420 --> 00:16:23.720
+Yeah.
+
+00:16:23.720 --> 00:16:24.060
+Yeah.
+
+00:16:24.060 --> 00:16:25.480
+So that's in 3.11.
+
+00:16:25.480 --> 00:16:26.860
+The rest of it looks accurate, though.
+
+00:16:26.860 --> 00:16:27.820
+Yeah.
+
+00:16:27.820 --> 00:16:29.580
+So then basically that was stage one.
+
+00:16:29.580 --> 00:16:34.940
+Stage two is 3.11, where there's a bunch of things, including kicking over the interpreter.
+
+00:16:34.940 --> 00:16:37.080
+We're going to talk about the specializing interpreter.
+
+00:16:37.240 --> 00:16:38.860
+A bunch of small changes here.
+
+00:16:38.860 --> 00:16:42.780
+And then stage three for 3.12 is JIT.
+
+00:16:42.780 --> 00:16:45.220
+Have you guys done any work on any of the JIT stuff?
+
+00:16:45.220 --> 00:16:49.600
+Right now, it's not looking like 3.12 will ship with a JIT.
+
+00:16:49.600 --> 00:16:55.940
+We think there are other changes that we can make that don't require a JIT that will still pay off.
+
+00:16:56.440 --> 00:17:01.000
+We're probably planning on at least experimenting with what a JIT would look like.
+
+00:17:01.000 --> 00:17:04.360
+Like I said, we already have gotten kind of a guide towards Cinder's JIT.
+
+00:17:04.360 --> 00:17:08.780
+And so we're talking kind of high-level architecture and prototyping and that sort of thing.
+
+00:17:08.780 --> 00:17:12.640
+But I would be surprised if 3.12 shipped with JIT.
+
+00:17:13.060 --> 00:17:16.020
+But it's a long effort.
+
+00:17:16.020 --> 00:17:17.380
+So starting now is a big part of that.
+
+00:17:17.380 --> 00:17:18.480
+Research is being done, huh?
+
+00:17:18.480 --> 00:17:19.000
+Yes.
+
+00:17:19.000 --> 00:17:19.680
+Actively.
+
+00:17:19.680 --> 00:17:19.900
+Yeah.
+
+00:17:19.900 --> 00:17:20.320
+Yeah.
+
+00:17:20.320 --> 00:17:20.620
+Cool.
+
+00:17:20.620 --> 00:17:21.120
+All right.
+
+00:17:21.120 --> 00:17:26.120
+Well, this was put together quite a while ago, back in 2020, as here's our plan.
+
+00:17:26.120 --> 00:17:28.820
+And of course, plans are meant to evolve, right?
+
+00:17:28.860 --> 00:17:35.720
+But still, looks like this plan is working out quite well because of the changes in performance that we saw already in 3.11 beta.
+
+00:17:35.720 --> 00:17:37.280
+And pretty fantastic.
+
+00:17:37.280 --> 00:17:43.060
+There are a bunch of changes here about things like zero overhead exception handling.
+
+00:17:43.060 --> 00:17:47.740
+I believe there was an overhead for entering the try block.
+
+00:17:47.740 --> 00:17:51.060
+Every time you went in or out of a try accept block.
+
+00:17:51.060 --> 00:17:56.260
+So even if I did try pass, accept pass, there was overhead associated with that.
+
+00:17:56.260 --> 00:17:56.980
+Right.
+
+00:17:57.340 --> 00:18:03.460
+So basically, we would push a block that says, oh, if an exception happens, jump to this location.
+
+00:18:03.460 --> 00:18:10.140
+Now what we do is we realize, oh, we actually have that information ahead of time when we're actually compiling the bytecode.
+
+00:18:10.140 --> 00:18:24.920
+So since the common case is that an exception is raised, then we can store that data in a separate table and say, oh, if an exception is raised at this instruction, then jump here without actually having to do any of that management at runtime.
+
+00:18:24.920 --> 00:18:26.760
+So it's a little more expensive.
+
+00:18:27.160 --> 00:18:28.860
+I believe if an exception is raised.
+
+00:18:28.860 --> 00:18:30.800
+But in the case of an exception, it's not raised.
+
+00:18:30.800 --> 00:18:35.860
+I think it is basically as close to truly zero cost as possible.
+
+00:18:36.740 --> 00:18:38.440
+This portion of talk, I think it's a little bit more.
+
+00:18:38.440 --> 00:18:41.380
+This portion of talk, Python to me is brought to you by Microsoft for startups, founders hub.
+
+00:18:41.380 --> 00:18:43.100
+Starting a business is hard.
+
+00:18:43.100 --> 00:18:48.020
+By some estimates, over 90% of startups will go out of business in just their first year.
+
+00:18:48.020 --> 00:18:57.100
+With that in mind, Microsoft for startups set out to understand what startups need to be successful and to create a digital platform to help them overcome those challenges.
+
+00:18:57.500 --> 00:18:59.200
+Microsoft for startups founders hub was born.
+
+00:18:59.200 --> 00:19:05.900
+Founders hub provides all founders at any stage with free resources to solve their startup challenges.
+
+00:19:05.900 --> 00:19:14.600
+The platform provides technology benefits, access to expert guidance and skilled resources, mentorship and networking connections, and much more.
+
+00:19:14.600 --> 00:19:23.680
+Unlike others in the industry, Microsoft for startups founders hub doesn't require startups to be investor backed or third party validated to participate.
+
+00:19:23.680 --> 00:19:26.080
+Founders hub is truly open to all.
+
+00:19:26.080 --> 00:19:27.520
+So what do you get if you join them?
+
+00:19:27.520 --> 00:19:35.520
+You speed up your development with free access to GitHub and Microsoft cloud computing resources and the ability to unlock more credits over time.
+
+00:19:35.520 --> 00:19:45.100
+To help your startup innovate, founders hub is partnering with innovative companies like open AI, a global leader in AI research and development to provide exclusive benefits and discounts.
+
+00:19:45.100 --> 00:19:50.100
+Through Microsoft for startups founders hub, becoming a founder is no longer about who you know.
+
+00:19:50.400 --> 00:20:03.600
+You'll have access to their mentorship network, giving you a pool of hundreds of mentors across a range of disciplines and areas like idea validation, fundraising, management and coaching sales and marketing, as well as specific technical stress points.
+
+00:20:03.600 --> 00:20:08.620
+You'll be able to book a one-on-one meeting with the mentors, many of whom are former founders themselves.
+
+00:20:08.620 --> 00:20:14.480
+Make your idea a reality today with a critical support you'll get from founders hub to join the program.
+
+00:20:14.480 --> 00:20:19.120
+Just visit talkpython.fm/founders hub, all one word, no links in your show notes.
+
+00:20:19.440 --> 00:20:21.020
+Thank you to Microsoft for supporting the show.
+
+00:20:21.020 --> 00:20:23.660
+I think that's the way it should be.
+
+00:20:23.660 --> 00:20:28.240
+You know, exceptions, as the word implies, is not the main thing that happens.
+
+00:20:28.240 --> 00:20:31.280
+It's some unusual case that has happened, right?
+
+00:20:31.280 --> 00:20:34.860
+So not always, but often means something has gone wrong.
+
+00:20:34.860 --> 00:20:39.040
+So if something goes wrong, well, you kind of put performance to the side anyway, right?
+
+00:20:39.040 --> 00:20:39.380
+Yeah.
+
+00:20:39.380 --> 00:20:49.320
+Well, and, you know, a lot of the sort of optimizations that you want to see, especially in, for example, JIT code or whatever, exceptions are the sort of thing that mess that up.
+
+00:20:49.360 --> 00:20:57.200
+Where, you know, if an exception is raised, okay, get out of the TUDIC code, go back to slow land where we know what's going on and have better control of context and everything.
+
+00:20:57.200 --> 00:20:59.500
+But yeah, no, it's really exciting to see.
+
+00:20:59.500 --> 00:21:01.200
+It's really cool design.
+
+00:21:01.200 --> 00:21:03.600
+Yeah, it was Mark Shannon who did this.
+
+00:21:03.600 --> 00:21:04.840
+Mark Shannon did a lot of this.
+
+00:21:05.900 --> 00:21:15.500
+There's a bunch of improvements coming along, but what I want to really focus on here is the PEP 659, the specializing adaptive interpreter.
+
+00:21:15.500 --> 00:21:26.400
+And in addition to being on the team, you've created a really cool project, which we're going to talk about as soon as we cover this one, about how you actually visualize this and maybe even change your code to make it faster.
+
+00:21:27.120 --> 00:21:32.860
+Understanding how maybe opportunities might be missed for your code to be specialized or adapted.
+
+00:21:32.860 --> 00:21:34.720
+No, PEP 659.
+
+00:21:34.720 --> 00:21:39.500
+I mean, the concepts are not too difficult, but the implementation is really hairy.
+
+00:21:39.500 --> 00:21:43.180
+So I think it definitely deserves to be gone over 70.
+
+00:21:43.180 --> 00:21:47.120
+Because it's really cool when you get down to how it actually works and what it's doing.
+
+00:21:47.360 --> 00:21:51.060
+Is this the biggest reason for performance boosts in 3.11?
+
+00:21:51.060 --> 00:21:54.580
+I think it's the most important reason for performance boosts.
+
+00:21:54.580 --> 00:21:57.720
+I mean, any performance boost kind of depends on what you're doing, right?
+
+00:21:57.720 --> 00:22:04.600
+Like we did, for example, Pablo and Mark worked together on making Python to Python calls way faster and way more efficient.
+
+00:22:04.600 --> 00:22:07.740
+So if you're doing lots of recursive stuff, that's going to be the game changer.
+
+00:22:07.740 --> 00:22:12.880
+If you spend all your time writing loops that just do try, accept, try, accept.
+
+00:22:12.880 --> 00:22:13.860
+Yeah.
+
+00:22:13.860 --> 00:22:14.900
+That one's better.
+
+00:22:14.900 --> 00:22:15.360
+Yeah.
+
+00:22:15.360 --> 00:22:17.200
+If you're, yeah, got it.
+
+00:22:17.440 --> 00:22:21.120
+Try accept in tight lubes or, you know, if you're, you do lots of regular expressions,
+
+00:22:21.120 --> 00:22:24.320
+then our improvements in that area will probably matter more than this.
+
+00:22:24.320 --> 00:22:32.640
+But this is cool because we can build upon it to kind of unlock additional performance improvements.
+
+00:22:32.640 --> 00:22:33.080
+Sure.
+
+00:22:33.080 --> 00:22:35.920
+We can kind of get to that once we have a better idea of how exactly.
+
+00:22:35.920 --> 00:22:42.580
+When I look at PEPs, usually it'll say what its status is and what version of Python it applies to.
+
+00:22:42.580 --> 00:22:46.880
+And I see this PEP, it doesn't say which version it applies to and its status is draft.
+
+00:22:46.880 --> 00:22:48.080
+What's the story here?
+
+00:22:48.080 --> 00:22:52.080
+I'm actually not sure what the story is behind the PEP itself.
+
+00:22:52.080 --> 00:22:58.380
+I think it's a good informational document that explains, you know, the changes that we did get into Python 3.11.
+
+00:22:58.960 --> 00:23:02.560
+But I don't think the PEP was ever formally accepted.
+
+00:23:02.560 --> 00:23:05.200
+As you can see, it's just an informational PEP.
+
+00:23:05.200 --> 00:23:09.860
+So it's kind of more the design of what exactly we're doing and how we plan to do it.
+
+00:23:09.860 --> 00:23:10.340
+Right.
+
+00:23:10.340 --> 00:23:17.620
+Because it's not really talking about the implementation so much as like, here's the roadmap and here's what we plan to do and stuff.
+
+00:23:17.620 --> 00:23:17.820
+Right?
+
+00:23:18.080 --> 00:23:18.240
+Yeah.
+
+00:23:18.240 --> 00:23:20.760
+There's a lot of pros in there that says, here's how we might do it.
+
+00:23:20.760 --> 00:23:22.660
+But, you know, no promises.
+
+00:23:22.660 --> 00:23:24.560
+We could change this literally anytime.
+
+00:23:24.560 --> 00:23:25.280
+And we have.
+
+00:23:25.280 --> 00:23:25.460
+Yeah.
+
+00:23:25.460 --> 00:23:30.600
+The design has changed fairly significantly since this PEP was first published.
+
+00:23:30.600 --> 00:23:32.800
+But we've updated that so it can remain.
+
+00:23:32.800 --> 00:23:33.340
+Yeah.
+
+00:23:33.340 --> 00:23:33.640
+Cool.
+
+00:23:33.640 --> 00:23:34.160
+Okay.
+
+00:23:34.160 --> 00:23:41.040
+So the background is when we're running code, it's not compiled and it's not static types.
+
+00:23:41.040 --> 00:23:41.460
+Right?
+
+00:23:41.460 --> 00:23:43.080
+It's because it's Python.
+
+00:23:43.080 --> 00:23:43.920
+It's dynamic.
+
+00:23:43.920 --> 00:23:45.340
+And the types could change.
+
+00:23:45.340 --> 00:23:50.820
+They could change because it just uses duck typing and we might just happen to pass different things over.
+
+00:23:50.820 --> 00:23:52.220
+I mean, we do have type hints.
+
+00:23:52.220 --> 00:23:58.100
+But as the word there is, it applies as a hint, not a requirement like C++ or C# or something.
+
+00:23:58.800 --> 00:24:05.720
+You have to have the CPython runtime be as general as possible for many of its operations.
+
+00:24:05.720 --> 00:24:06.020
+Right?
+
+00:24:06.020 --> 00:24:06.940
+Yeah, absolutely.
+
+00:24:06.940 --> 00:24:11.120
+And beyond just types, things like I could create a global variable at any time.
+
+00:24:11.120 --> 00:24:13.180
+I could delete a global variable at any time.
+
+00:24:13.180 --> 00:24:16.500
+I could add or remove arbitrary attributes.
+
+00:24:16.500 --> 00:24:22.440
+All these sort of very Pythonic things about Python or un-Pythonic, depending on how you're looking at it.
+
+00:24:22.440 --> 00:24:25.160
+These are all things that would never fly in pilot length.
+
+00:24:25.400 --> 00:24:31.060
+Yeah, and they mean you can't be overly specific about how you work with operations.
+
+00:24:31.060 --> 00:24:36.840
+So, for example, if you say, I want to work with call this function and pass it the value of X.
+
+00:24:36.840 --> 00:24:38.640
+Well, where did X come from?
+
+00:24:38.640 --> 00:24:39.840
+Is X a built-in?
+
+00:24:39.840 --> 00:24:41.640
+Is it a global variable?
+
+00:24:41.640 --> 00:24:43.520
+Is it at the module level?
+
+00:24:43.520 --> 00:24:45.620
+Is it a parameter?
+
+00:24:45.620 --> 00:24:46.740
+Is it a local variable?
+
+00:24:46.740 --> 00:24:49.440
+All these things have to be discovered at runtime, right?
+
+00:24:49.440 --> 00:24:50.560
+For the most part, yeah.
+
+00:24:50.560 --> 00:24:51.600
+Yeah, for the most part.
+
+00:24:51.780 --> 00:25:04.120
+Part of this adapting interpreter is it will run the code and it says, look, every single time they said load this variable called X, it came out of the built-ins, not out of a module.
+
+00:25:04.120 --> 00:25:08.500
+And so we're going to replace that code, specialize it, or quicken it.
+
+00:25:08.500 --> 00:25:11.820
+I've heard of quickening, so I'll have to work on the nomenclature a little bit there.
+
+00:25:11.820 --> 00:25:14.200
+We can clear up the terms a bit, yeah.
+
+00:25:14.200 --> 00:25:22.480
+Yeah, yeah, but you're going to take this code and you're going to replace it and don't say just load an attribute or load a value from somewhere and go look in all the places.
+
+00:25:22.480 --> 00:25:25.380
+You're like, no, no, no, go look in the built-ins and just get it from there.
+
+00:25:25.380 --> 00:25:27.420
+And that skips a lot of steps, right?
+
+00:25:27.420 --> 00:25:28.120
+Yep, yeah.
+
+00:25:28.160 --> 00:25:31.760
+Or maybe I'm doing math here and every single time it's been an integer.
+
+00:25:31.760 --> 00:25:35.720
+So let's just do integer math and not arbitrary addition operator.
+
+00:25:35.720 --> 00:25:49.560
+With the huge asterisk that if it does become a global variable or if it does start throwing floats at your addition operation, that we don't say false or even produce an incorrect result.
+
+00:25:49.560 --> 00:25:51.820
+Right, because you could say, use x.
+
+00:25:51.820 --> 00:25:55.920
+But before that, you might say, if some value is true, x equals this thing.
+
+00:25:55.920 --> 00:26:00.220
+And it goes from being a built-in to a local variable or some weird thing like that, right?
+
+00:26:00.220 --> 00:26:05.080
+And if it overly specialized and couldn't fall back, well, bad things happen, right?
+
+00:26:05.080 --> 00:26:10.620
+Yeah, it would be surprising if you were getting len, the len function from the built-ins over and over and over.
+
+00:26:10.620 --> 00:26:14.120
+And then you, for some reason, define len as a global.
+
+00:26:14.120 --> 00:26:18.520
+Python, you know, the language specification says it's going to start loading the global now,
+
+00:26:18.740 --> 00:26:21.180
+regardless of, you know, where it made it be able to pull.
+
+00:26:21.180 --> 00:26:24.660
+And that's the same for, you know, like attribute accesses.
+
+00:26:24.660 --> 00:26:28.240
+If you used to be getting an attribute off the class and then you shadow it on the instance,
+
+00:26:28.240 --> 00:26:30.180
+you need to start getting it from the instance now.
+
+00:26:30.180 --> 00:26:31.640
+You can't keep getting it from the class.
+
+00:26:31.640 --> 00:26:32.200
+Is it correct?
+
+00:26:32.200 --> 00:26:32.760
+Right.
+
+00:26:32.760 --> 00:26:39.740
+And this is one of those problems that arises from this being a static dynamic language that can be changed as the code runs.
+
+00:26:39.740 --> 00:26:44.940
+Because if this was compiled, wherever those things came from and what they were, they can't change.
+
+00:26:44.940 --> 00:26:45.900
+Their type was set.
+
+00:26:45.900 --> 00:26:47.260
+Their location was set.
+
+00:26:47.520 --> 00:26:51.580
+And so then the compiler can say, well, it's better if we inline this.
+
+00:26:51.580 --> 00:26:59.220
+Or it's better if we do this machine operation that works on integers better or some special thing like that.
+
+00:26:59.220 --> 00:26:59.440
+Right.
+
+00:26:59.440 --> 00:27:01.260
+It doesn't have to worry about it falling back.
+
+00:27:01.260 --> 00:27:07.360
+And I feel like that ability to adapt and change and just be super dynamic is what's kind of held it back a lot.
+
+00:27:07.360 --> 00:27:07.600
+Right.
+
+00:27:07.600 --> 00:27:08.000
+Yep.
+
+00:27:08.000 --> 00:27:12.360
+And I like that word they used, adapt, because that's kind of a big part of how the new interpreter works.
+
+00:27:12.360 --> 00:27:15.980
+You can change your code and the interpreter adapts with it.
+
+00:27:15.980 --> 00:27:24.920
+If X starts being an attribute on the instance rather than from the class, well, soon the interpreter will learn that sometime later after running your program.
+
+00:27:24.920 --> 00:27:29.300
+And then, OK, start doing the fast path for instance access rather than class access.
+
+00:27:29.300 --> 00:27:30.240
+Let's start there.
+
+00:27:30.240 --> 00:27:31.420
+How does it know?
+
+00:27:31.420 --> 00:27:31.740
+Right.
+
+00:27:31.740 --> 00:27:32.660
+It doesn't compile.
+
+00:27:32.660 --> 00:27:36.200
+So it has to figure this stuff out.
+
+00:27:36.200 --> 00:27:36.440
+Right.
+
+00:27:36.440 --> 00:27:37.280
+I run my code.
+
+00:27:37.280 --> 00:27:42.260
+Why does it know that I can now treat these things X and Y's integers versus strings?
+
+00:27:42.260 --> 00:27:42.740
+Yeah.
+
+00:27:42.740 --> 00:27:46.560
+So stepping back a little bit, like how does this new interpreter work?
+
+00:27:46.560 --> 00:27:54.800
+So the big change, kind of the headline is that the bytecode instructions can change themselves while they're running.
+
+00:27:54.800 --> 00:28:07.560
+Something that used to be a generic ad operation can become something that is specialized, which is kind of the specialized instruction is the terminology we use for adding two integers or adding two floats.
+
+00:28:07.560 --> 00:28:10.540
+And so this happens sort of in a couple of different phases.
+
+00:28:10.840 --> 00:28:18.560
+After you've run your code for some amount of time, basically after we've determined it's worth optimizing because optimization is free.
+
+00:28:18.560 --> 00:28:22.720
+So if something's only run once, you know, it's module level code or a class body.
+
+00:28:22.720 --> 00:28:26.500
+There's no, no reason to optimize that at all for like leader runs.
+
+00:28:26.500 --> 00:28:26.620
+Yeah.
+
+00:28:26.620 --> 00:28:27.180
+Yeah.
+
+00:28:27.180 --> 00:28:30.380
+We have heuristics for, okay, this, this code is warm.
+
+00:28:30.380 --> 00:28:35.400
+And that's, you know, a term that you hear in JITs often because it's a higher order for specializing.
+
+00:28:35.620 --> 00:28:42.760
+Basically after we've determined that a block of code is warm, we quicken it, which is that term that you used earlier.
+
+00:28:43.340 --> 00:28:50.680
+And this basically means walking over the bytecode instructions and replacing many of them with what we call adaptive variant.
+
+00:28:51.060 --> 00:28:55.900
+And, you know, you can, you can see an example in the pet, but you have to kind of walk through that example.
+
+00:28:55.900 --> 00:29:01.580
+If you have an attribute load, once the code is quickened after we've determined it's warm, we walk over all the instructions.
+
+00:29:01.580 --> 00:29:06.360
+All of the load attributes by code instructions become load adder adaptive.
+
+00:29:06.360 --> 00:29:18.020
+And what those adaptive instructions do is when we hit them, when we're actually doing the attribute load, in addition to actually loading the attribute, they will kind of do some fact finding.
+
+00:29:18.180 --> 00:29:26.100
+They'll gather some information and say, okay, I loaded the attribute, did it come from the class, did it come from the instance, did it come from the plot, did it come from a dict, did it come from a module?
+
+00:29:26.100 --> 00:29:28.600
+You know, there's, there's a bunch of different possibilities.
+
+00:29:28.600 --> 00:29:29.200
+Oh.
+
+00:29:29.200 --> 00:29:36.340
+And so using that information, the adaptive instruction can turn itself into one of the specialized instructions.
+
+00:29:36.340 --> 00:29:41.540
+So the example you have here on the screen can either be load adder instance value or module or slot.
+
+00:29:41.780 --> 00:29:44.220
+And what the specialized instructions do is really cool.
+
+00:29:44.220 --> 00:29:49.760
+Basically, they start with a couple of checks just to make sure if the assumptions are holding true.
+
+00:29:49.760 --> 00:29:58.260
+So for a load adder instance value, we, you know, check and make sure that, for example, the class of the object is as we expect.
+
+00:29:58.260 --> 00:30:05.980
+Then our attribute isn't shadowed by a descriptor or something weird like that, or that we're not now getting it off of a class object or whatever.
+
+00:30:06.640 --> 00:30:11.100
+And then it has a very optimized form of getting the actual attribute.
+
+00:30:11.100 --> 00:30:19.260
+There's a lot of expensive work that you can skip if you know that, you know, you have an attribute that is coming directly off the instance.
+
+00:30:19.260 --> 00:30:22.220
+Or another one is load adder slot.
+
+00:30:22.220 --> 00:30:25.400
+Slots are really interesting for Python performance.
+
+00:30:25.400 --> 00:30:31.340
+And, you know, they kind of capture more than a lot of the stuff, the difference of the possible and the common.
+
+00:30:31.800 --> 00:30:41.940
+And by that, I mean, it's possible that every time you access a field off of a class, that it was dynamically added and it came from somewhere else and it's totally new and it could be any type.
+
+00:30:41.940 --> 00:30:46.980
+What's more likely, though, is it's, you know, the customer always has a name and the name is always a string.
+
+00:30:46.980 --> 00:30:47.500
+Right.
+
+00:30:47.500 --> 00:30:52.380
+And with slots, you can sort of say, I don't want this particular class to be dynamic.
+
+00:30:52.540 --> 00:31:01.220
+And because of that, you can say, well, it doesn't need to have a dictionary that can evolve dynamically, which improves the access speed and the storage and all of that.
+
+00:31:01.220 --> 00:31:09.660
+And here you all are pointing out that, well, we could actually have a special opcode that knows whenever I access X, X is a slot thing.
+
+00:31:09.660 --> 00:31:12.880
+Skip all the other checks you might have to do before you get there.
+
+00:31:12.880 --> 00:31:13.420
+Well, yeah.
+
+00:31:13.420 --> 00:31:16.580
+And even accessing the slot is going to be faster.
+
+00:31:16.920 --> 00:31:23.220
+So I'm not 100% brushed up on how load adder slot works, but the slots are implemented using descriptors.
+
+00:31:23.220 --> 00:31:35.100
+So to get the slot from your class, you still, or from your instance, you still need to go to the class, look up the attribute in the class dict, find the descriptor, verify it's a descriptor, call the descriptor.
+
+00:31:35.100 --> 00:31:36.020
+Into that list.
+
+00:31:36.020 --> 00:31:36.260
+Yeah.
+
+00:31:36.260 --> 00:31:37.160
+Exactly.
+
+00:31:37.380 --> 00:31:39.000
+We can do it even faster than that.
+
+00:31:39.000 --> 00:31:44.480
+So even if you do have slots, this happens really fast without even any dictionary lookups.
+
+00:31:44.480 --> 00:31:46.360
+We say, has the class changed?
+
+00:31:46.360 --> 00:31:46.840
+No.
+
+00:31:46.840 --> 00:31:47.840
+Okay, cool.
+
+00:31:47.840 --> 00:31:55.200
+We'll get to this later, but we remember what offset the slot was at last time and we just reach directly to the object.
+
+00:31:55.200 --> 00:31:55.740
+Grab it.
+
+00:31:55.740 --> 00:31:57.180
+There's no dictionary lookups.
+
+00:31:57.180 --> 00:32:00.200
+We're not calling any descriptors, doing anything like that.
+
+00:32:00.460 --> 00:32:04.900
+It's about as close to, you know, a compiled language as a dynamic language would be.
+
+00:32:04.900 --> 00:32:05.400
+Yeah.
+
+00:32:05.400 --> 00:32:06.240
+Just verify it.
+
+00:32:06.240 --> 00:32:06.900
+Class has a change.
+
+00:32:06.900 --> 00:32:07.580
+Okay, reach in.
+
+00:32:07.580 --> 00:32:08.500
+I remember where it was.
+
+00:32:08.500 --> 00:32:11.980
+You know, I tried to kind of align this up saying the possible and the common.
+
+00:32:11.980 --> 00:32:14.140
+Most likely your code is not changing.
+
+00:32:14.140 --> 00:32:17.560
+And when it's well written, it's probably using the same type.
+
+00:32:17.560 --> 00:32:22.120
+You know, it's not like, well, sometimes it's a string and sometimes like that is the quote seven.
+
+00:32:22.120 --> 00:32:24.060
+And sometimes it's the actual integer seven.
+
+00:32:24.060 --> 00:32:26.400
+Like it should probably always be one.
+
+00:32:26.640 --> 00:32:30.560
+You just don't express that in code unless you're using type hints, right?
+
+00:32:30.560 --> 00:32:31.400
+And they're not enforced.
+
+00:32:31.400 --> 00:32:31.640
+Yeah.
+
+00:32:31.640 --> 00:32:32.040
+Yeah.
+
+00:32:32.040 --> 00:32:36.420
+And getting back to the adaptive nature and making sure that we are correct.
+
+00:32:36.420 --> 00:32:45.460
+You know, if we had something that was a slotted instance coming through a bunch of times and that suddenly you throw a module in or something with an instance dictionary or something else,
+
+00:32:45.460 --> 00:32:55.000
+or maybe the attribute doesn't exist or those quick checks that I mentioned that happen before we actually do the fast implementation of loading a slot.
+
+00:32:55.000 --> 00:33:00.320
+If any of those checks fail, then we basically fall back on the generic implementation.
+
+00:33:00.320 --> 00:33:03.080
+We say, oh, our assumptions don't hold.
+
+00:33:03.080 --> 00:33:03.500
+Go back.
+
+00:33:03.500 --> 00:33:06.980
+And if that happens enough time, then we go back to the adaptive form and the whole cycle.
+
+00:33:07.200 --> 00:33:15.660
+So if I'm throwing a bunch of integers into an add instruction and then later I stop and I start throwing a bunch of strings into an add instruction,
+
+00:33:15.660 --> 00:33:19.160
+we'll do the generic version of add for a little bit while we're kind of switching over.
+
+00:33:19.160 --> 00:33:25.340
+But then the interpreter will kind of get the hint and start, you know, specializing for string edition later.
+
+00:33:25.340 --> 00:33:27.100
+And it's really cool to see that happen.
+
+00:33:28.040 --> 00:33:32.940
+This portion of Talk Python to Me is brought to you by the Compiler Podcast from Red Hat.
+
+00:33:32.940 --> 00:33:35.920
+Just like you, I'm a big fan of podcasts.
+
+00:33:35.920 --> 00:33:40.280
+And I'm happy to share a new one from a highly respected and open source company.
+
+00:33:40.280 --> 00:33:43.440
+Compiler, an original podcast from Red Hat.
+
+00:33:43.440 --> 00:33:48.260
+With more and more of us working from home, it's important to keep our human connection with technology.
+
+00:33:48.260 --> 00:33:50.280
+With Compiler, you'll do just that.
+
+00:33:50.280 --> 00:33:57.880
+The Compiler Podcast unravels industry topics, trends, and things you've always wanted to know about tech through interviews with people who know it best.
+
+00:33:58.140 --> 00:34:01.820
+These conversations include answering big questions like, what is technical debt?
+
+00:34:01.820 --> 00:34:04.380
+What are hiring managers actually looking for?
+
+00:34:04.380 --> 00:34:07.680
+And do you have to know how to code to get started in open source?
+
+00:34:07.680 --> 00:34:11.240
+I was a guest on Red Hat's previous podcast, Command Line Heroes,
+
+00:34:11.240 --> 00:34:16.520
+and Compiler follows along in that excellent and polished style we came to expect from that show.
+
+00:34:16.520 --> 00:34:20.200
+I just listened to episode 12 of Compiler, How Should We Handle Failure?
+
+00:34:20.200 --> 00:34:24.080
+I really valued their conversation about making space for developers to fail
+
+00:34:24.080 --> 00:34:29.760
+so that they can learn and grow without fear of making mistakes or taking down the production website.
+
+00:34:29.760 --> 00:34:32.220
+It's a conversation we can all relate to, I'm sure.
+
+00:34:32.220 --> 00:34:36.620
+Listen to an episode of Compiler by visiting talkpython.fm/compiler.
+
+00:34:36.620 --> 00:34:38.720
+The link is in your podcast player's show notes.
+
+00:34:38.720 --> 00:34:44.960
+You can listen to Compiler on Apple Podcasts, Overcast, Spotify, Pocket Cast, or anywhere you listen to your podcasts.
+
+00:34:44.960 --> 00:34:49.220
+And yes, of course, you could subscribe by just searching for it in your podcast player,
+
+00:34:49.220 --> 00:34:55.360
+but do so by following talkpython.fm/compiler so that they know that you came from Talk Python to me.
+
+00:34:55.360 --> 00:35:00.320
+My thanks to the Compiler Podcast for keeping this podcast going strong.
+
+00:35:01.220 --> 00:35:09.520
+Right, so we shouldn't, we being Python developers that write code that just executes without thinking too very much about what that means,
+
+00:35:09.520 --> 00:35:14.280
+we should not have to worry or maybe even know that this is happening, right?
+
+00:35:14.280 --> 00:35:18.580
+If everything goes as it's supposed to, it should be completely transparent to us.
+
+00:35:18.580 --> 00:35:19.020
+Yes.
+
+00:35:19.100 --> 00:35:25.300
+The only way that you should know that anything is different about 3.11 is your CPU cycles.
+
+00:35:25.300 --> 00:35:28.540
+The cloud hosting bill is the end of the month.
+
+00:35:28.540 --> 00:35:32.220
+You should be able to upgrade and if behavior changes, that's a buck.
+
+00:35:32.220 --> 00:35:33.140
+Tell us about that.
+
+00:35:33.140 --> 00:35:39.420
+Going from this adaptive version, the adaptive instance sounds slightly more expensive than the,
+
+00:35:39.420 --> 00:35:42.160
+just the old school load adder, for example,
+
+00:35:42.160 --> 00:35:46.420
+because it has to keep track and it does a little bit of inspecting to see what's going on.
+
+00:35:46.420 --> 00:35:50.300
+But then the new ones, once it gets adapted and quickened, it should be much faster.
+
+00:35:50.300 --> 00:35:58.160
+Is there a chance that it gets into some like weird loop where just about the time the adaptive one has decided to specialize it,
+
+00:35:58.160 --> 00:36:03.260
+it hits a case where it falls back and it like it ends up being slower rather than faster before?
+
+00:36:03.260 --> 00:36:10.420
+Well, yeah, the worst case scenario would be, you know, you send the same type through n number of times
+
+00:36:10.420 --> 00:36:13.600
+and then right when it's going to try to specialize you, set it through a different type.
+
+00:36:13.600 --> 00:36:14.260
+Exactly.
+
+00:36:14.260 --> 00:36:18.860
+Whatever, if n is the limit, like if it goes to n plus one times and then trips it back.
+
+00:36:18.860 --> 00:36:19.460
+Yeah.
+
+00:36:19.460 --> 00:36:19.660
+Yeah.
+
+00:36:19.660 --> 00:36:20.080
+Yeah.
+
+00:36:20.080 --> 00:36:22.240
+So that would be sort of the worst case scenario.
+
+00:36:22.240 --> 00:36:26.880
+But we have kind of ways of trying to avoid that if at all possible.
+
+00:36:26.880 --> 00:36:27.100
+Okay.
+
+00:36:27.100 --> 00:36:33.100
+So, for example, if we fail one of those checks, we don't immediately turn into the adaptive form.
+
+00:36:33.100 --> 00:36:37.860
+We will do it after, you know, that check has failed a certain number of times.
+
+00:36:38.300 --> 00:36:43.000
+And as just a concrete example, that number of times that we have hard coded is a prime number.
+
+00:36:43.500 --> 00:36:49.500
+So it's less likely that you'll fall into these sort of patterns where it's like, oh, I send three ins through that string.
+
+00:36:49.500 --> 00:36:50.000
+Three ins.
+
+00:36:50.000 --> 00:36:54.980
+It'd be hard to, you know, get that worst case behavior without being intentionally malicious.
+
+00:36:54.980 --> 00:37:01.320
+By the way, we got to keep in mind, like these are extremely small steps in our code, right?
+
+00:37:01.380 --> 00:37:07.200
+We might have multiple ones of these happening on a single line of what looks like, oh, there's one line of code.
+
+00:37:07.200 --> 00:37:12.880
+Like, well, there's five or however many instructions, bytecode instructions happening.
+
+00:37:12.880 --> 00:37:15.760
+And some of them may be specialized and some of them not, right?
+
+00:37:15.760 --> 00:37:16.580
+Yeah, exactly.
+
+00:37:16.580 --> 00:37:24.440
+And so the overall effect definitely smooths out where, sure, you may have a worst case behavior at one or two or three individual bytecode instructions.
+
+00:37:24.760 --> 00:37:32.180
+But your typical function is going to have much more than that, even a smallish function is going to have, you know, 20 or 30 instructions doing it, you know, real.
+
+00:37:32.180 --> 00:37:32.600
+Yeah.
+
+00:37:32.600 --> 00:37:33.040
+Yeah.
+
+00:37:33.040 --> 00:37:35.620
+If you care about its performance, it'll be doing a lot there.
+
+00:37:35.620 --> 00:37:36.180
+Exactly.
+
+00:37:36.180 --> 00:37:38.800
+And so some will specialize successfully, some won't.
+
+00:37:38.800 --> 00:37:42.240
+But in general, your code will get 25-ish percent faster.
+
+00:37:42.240 --> 00:37:44.120
+Is there a way you could know?
+
+00:37:44.120 --> 00:37:46.940
+I mean, is there a way that you might be able to know if it specializes or not?
+
+00:37:46.940 --> 00:37:47.780
+We'll get to that.
+
+00:37:47.780 --> 00:37:57.040
+But it looks like if I go and use the disk module, D-I-S, not for disrespect, but for disassembly.
+
+00:37:57.040 --> 00:37:57.780
+Disassembly, yeah.
+
+00:37:57.780 --> 00:38:02.480
+So you can say, you know, import disk and then maybe from disk, import disk.
+
+00:38:02.480 --> 00:38:04.520
+You can say disk and give it a function or something.
+
+00:38:04.520 --> 00:38:07.140
+It'll write out the bytecode of what's happening.
+
+00:38:07.140 --> 00:38:14.180
+Does all of this mean that if I do this in 3.11, I might see additional bytecodes than before?
+
+00:38:14.180 --> 00:38:17.680
+You know, instead of load adder, would I maybe see the load adder instance value?
+
+00:38:17.680 --> 00:38:20.340
+Will I actually be able to observe these specializations?
+
+00:38:20.340 --> 00:38:26.060
+If you pass a keyword argument to your disk utilities, then yes, you will be able to see.
+
+00:38:26.060 --> 00:38:26.840
+Okay.
+
+00:38:26.840 --> 00:38:32.500
+But if I don't, for compatibility reasons like load adder adaptive and load adder instance,
+
+00:38:32.500 --> 00:38:34.640
+those are just going to return as load adder?
+
+00:38:34.640 --> 00:38:35.400
+Load adder.
+
+00:38:35.400 --> 00:38:35.700
+Exactly.
+
+00:38:35.700 --> 00:38:36.020
+Okay.
+
+00:38:36.020 --> 00:38:36.260
+Yeah.
+
+00:38:36.260 --> 00:38:39.280
+So the idea is anyone that's currently consuming the bytecode,
+
+00:38:39.280 --> 00:38:43.640
+they shouldn't have to worry about specialization because the idea is they're totally transparent.
+
+00:38:43.920 --> 00:38:47.580
+You know, so they should only see what the original bytecode was.
+
+00:38:47.580 --> 00:38:51.700
+But if you want to get at it, then yeah, if you get any of the disk utilities,
+
+00:38:51.700 --> 00:38:56.400
+you could pass it adaptive through and that will show you the adaptive.
+
+00:38:56.400 --> 00:39:00.920
+And again, you'll only see them if it's actually gets quick at meaning if you run it,
+
+00:39:00.920 --> 00:39:02.460
+you know, a dozen times or something.
+
+00:39:02.460 --> 00:39:02.820
+Okay.
+
+00:39:02.820 --> 00:39:06.320
+So if I wrote, say a function and so often what you're doing,
+
+00:39:06.320 --> 00:39:10.740
+if you're playing with disk is like you write the function and then you immediately write,
+
+00:39:10.740 --> 00:39:12.240
+print out the disk output.
+
+00:39:12.540 --> 00:39:13.780
+Maybe you've never called it.
+
+00:39:13.780 --> 00:39:14.140
+Right.
+
+00:39:14.140 --> 00:39:16.700
+And so that might actually give you a different,
+
+00:39:16.700 --> 00:39:19.880
+even if you said yes to the specialization output,
+
+00:39:19.880 --> 00:39:22.280
+that still might not give you anything interesting.
+
+00:39:22.280 --> 00:39:23.280
+It won't give you it.
+
+00:39:23.280 --> 00:39:23.460
+Yeah.
+
+00:39:23.460 --> 00:39:25.800
+It'll just give you as if you hadn't passed the keyboard argument.
+
+00:39:25.800 --> 00:39:27.380
+Because again, this all happens at runtime.
+
+00:39:27.380 --> 00:39:29.540
+So if the code isn't being run, nothing happens.
+
+00:39:29.540 --> 00:39:33.380
+You know, we don't specialize code that is ever run.
+
+00:39:33.880 --> 00:39:35.300
+What counts as warm, Mike?
+
+00:39:35.300 --> 00:39:36.920
+How many times do I got to call it?
+
+00:39:36.920 --> 00:39:41.320
+The official answer is that's an implementation detail of the interpreter subject to change at any time.
+
+00:39:41.320 --> 00:39:46.900
+The actual answer is either eight calls or eight times through a loop in a function.
+
+00:39:46.900 --> 00:39:50.300
+So if your function has a loop that executes more than eight times,
+
+00:39:50.300 --> 00:39:51.900
+or if you call it more than eight times.
+
+00:39:52.040 --> 00:39:55.920
+So just calling your function eight times should be enough to quicken it.
+
+00:39:55.920 --> 00:39:56.620
+Right.
+
+00:39:56.620 --> 00:40:02.880
+Well, maybe that number changes in the future, but just having a sense, like, is it 10 or is it 10,000?
+
+00:40:02.880 --> 00:40:03.400
+You know what I mean?
+
+00:40:03.400 --> 00:40:06.900
+Like, where's the scale up before I see something?
+
+00:40:07.160 --> 00:40:09.820
+Yeah, if you want to make sure it's quickened, but you don't want to take up too much time,
+
+00:40:09.820 --> 00:40:11.720
+I'd say just run it a couple less at a time.
+
+00:40:11.720 --> 00:40:15.360
+As short man, when we're writing tests and stuff, we do like 100 or 1,000.
+
+00:40:15.360 --> 00:40:19.860
+Because that also gives it time to actually adapt to the actual data that you're sending.
+
+00:40:19.860 --> 00:40:23.220
+Because it's not enough to just quicken it, then you'll just have a bunch of adaptive instruction.
+
+00:40:23.220 --> 00:40:24.400
+They actually have to see something.
+
+00:40:24.400 --> 00:40:25.820
+Yeah, well, now we're paying attention.
+
+00:40:25.820 --> 00:40:26.380
+Like, great.
+
+00:40:26.380 --> 00:40:29.080
+You need to have something to pay attention to, right?
+
+00:40:29.080 --> 00:40:30.280
+Yeah, and you'll see that too.
+
+00:40:30.280 --> 00:40:34.460
+Because if you have any sort of logic flow inside of your function,
+
+00:40:34.780 --> 00:40:38.120
+when you're looking at the bytecode, any paths that are hit will be specialized,
+
+00:40:38.120 --> 00:40:42.920
+but any paths that aren't obviously won't because we don't specialize dead code.
+
+00:40:42.920 --> 00:40:46.440
+So it has a bit of a code coverage aspect, right?
+
+00:40:46.440 --> 00:40:47.480
+You can think about it like that.
+
+00:40:47.480 --> 00:40:50.280
+If you look at it, you might see part of your code and it's just,
+
+00:40:50.280 --> 00:40:55.360
+it's unmodified because whatever you're doing to it didn't hit this else case ever.
+
+00:40:55.360 --> 00:40:58.520
+Yeah, well, and that's what's really exciting about this too,
+
+00:40:58.520 --> 00:41:03.000
+is when you're, if you run your code a bunch of times and then you call this on it,
+
+00:41:03.220 --> 00:41:07.640
+you see a lot of information that would potentially be useful if you were,
+
+00:41:07.640 --> 00:41:09.560
+for example, JIT compiling that function.
+
+00:41:09.560 --> 00:41:14.360
+You see at every addition site, you're adding floats or ints.
+
+00:41:14.360 --> 00:41:17.340
+You see at every attribute load site, whether it's a slot or not,
+
+00:41:17.340 --> 00:41:19.560
+you see where the dent code is, you see where the hot code.
+
+00:41:19.560 --> 00:41:22.800
+All that stuff is sort of getting back to what I said,
+
+00:41:22.800 --> 00:41:25.660
+how this sort of enables us to build upon in the future.
+
+00:41:25.660 --> 00:41:29.820
+Not only can we add more specializations or specialize more op codes or,
+
+00:41:29.820 --> 00:41:35.880
+you know, do that more efficiently, we can also use that information to kind of infer additional
+
+00:41:35.880 --> 00:41:40.420
+properties about the code that are useful for, you know, other faster, lower representation.
+
+00:41:40.420 --> 00:41:42.760
+Yeah, I can certainly see how that might be.
+
+00:41:42.760 --> 00:41:45.540
+Might inform some kind of JIT engine in the future.
+
+00:41:45.540 --> 00:41:45.960
+Yeah.
+
+00:41:46.840 --> 00:41:48.380
+I think the PEP is interesting.
+
+00:41:48.380 --> 00:41:50.740
+The PEP 659, people can check that out.
+
+00:41:50.740 --> 00:41:52.000
+But like you said, it's informational.
+
+00:41:52.000 --> 00:41:54.620
+So it's not really the implementation exactly.
+
+00:41:54.620 --> 00:41:55.160
+Yeah.
+
+00:41:55.360 --> 00:41:59.240
+So let's talk a bit about your project that you did.
+
+00:41:59.240 --> 00:42:03.540
+In addition to just being on the team, the personal project that you did,
+
+00:42:03.540 --> 00:42:08.200
+that basically takes all of these ideas we've been talking about and says, well, two things.
+
+00:42:08.200 --> 00:42:12.180
+One, can I take code and look at that and get that answer?
+
+00:42:12.180 --> 00:42:16.400
+Again, kind of back to my code coverage example, like coloring code lines to mean stuff.
+
+00:42:16.400 --> 00:42:20.520
+And then what's interesting about this, and we'll talk to this example that you put up,
+
+00:42:20.720 --> 00:42:25.500
+is there's actionable stuff you could do to make your code faster if you were in a super
+
+00:42:25.500 --> 00:42:26.660
+tight loop section.
+
+00:42:26.660 --> 00:42:32.780
+Like I feel like applying this visualization could help you allow Python to specialize more
+
+00:42:32.780 --> 00:42:33.740
+rather than less.
+
+00:42:33.740 --> 00:42:34.180
+Yeah.
+
+00:42:34.180 --> 00:42:40.100
+I mean, in general, this tool is really useful for us as maintainers of the specialization
+
+00:42:40.100 --> 00:42:44.420
+stuff because we get to see, you know, where we're failing to specialize.
+
+00:42:44.420 --> 00:42:48.140
+Because ideally, you know, if we've done our job well, you should get past your Python
+
+00:42:48.140 --> 00:42:49.420
+without changing your code at all.
+
+00:42:49.420 --> 00:42:54.500
+First and foremost, this is a tool for, you know, us in our work so that we can see, okay,
+
+00:42:54.500 --> 00:42:56.040
+what can we still work on here?
+
+00:42:56.040 --> 00:43:01.240
+But that is sort of a cool knockout effect is that if you do run on your code, you also
+
+00:43:01.240 --> 00:43:02.580
+know where it's not specializing.
+
+00:43:02.580 --> 00:43:06.800
+And if you know enough about how specialization works, you may be able to fix that.
+
+00:43:06.800 --> 00:43:12.160
+But I would say a word of caution against, you know, like getting two in the weeds and
+
+00:43:12.160 --> 00:43:16.320
+trying to get every single bytecode to do what you want, because that's, there are much
+
+00:43:16.320 --> 00:43:18.120
+better ways of making it faster, right?
+
+00:43:18.120 --> 00:43:22.720
+There are places where you're like, these two functions, I know we got 20,000 lines
+
+00:43:22.720 --> 00:43:27.260
+of Python, but these two, which are like 20 lines, they are so important.
+
+00:43:27.260 --> 00:43:28.560
+And they happen so frequently.
+
+00:43:28.560 --> 00:43:31.280
+Anything you can do to make them faster matters.
+
+00:43:31.280 --> 00:43:34.800
+You know, people rewrite that kind of stuff in Rust or in Cython.
+
+00:43:34.800 --> 00:43:40.680
+Before you go that far, maybe adding a dot zero on the end of a number is all it takes.
+
+00:43:40.680 --> 00:43:41.660
+You know, something like that, right?
+
+00:43:41.660 --> 00:43:42.600
+That's kind of what I'm getting at.
+
+00:43:42.600 --> 00:43:45.640
+Not to go crazy or try to think you should mess with the whole program.
+
+00:43:45.640 --> 00:43:49.580
+But there are these times where like five lines matter a lot.
+
+00:43:49.580 --> 00:43:50.000
+Yeah.
+
+00:43:50.000 --> 00:43:50.640
+Okay.
+
+00:43:50.640 --> 00:43:53.160
+Well, tell us about your project specialist.
+
+00:43:53.160 --> 00:43:59.360
+One really cool thing that our specializing adaptive interpreter does is we've worked really
+
+00:43:59.360 --> 00:44:03.960
+hard to basically make it easy for us to get information about how well specializations
+
+00:44:03.960 --> 00:44:04.440
+are working.
+
+00:44:04.740 --> 00:44:06.980
+So you can actually compile Python.
+
+00:44:06.980 --> 00:44:11.820
+It'll run a lot slower, but you can compile Python with this option with PyStats.
+
+00:44:11.820 --> 00:44:14.720
+And that basically dumps all of the specialization stats.
+
+00:44:14.720 --> 00:44:15.320
+Yeah.
+
+00:44:15.320 --> 00:44:21.280
+And you actually pointed out that you can, in the faster CPython idea section, it like lists
+
+00:44:21.280 --> 00:44:22.860
+out like a...
+
+00:44:22.860 --> 00:44:22.860
+Yeah.
+
+00:44:22.860 --> 00:44:23.720
+So there's tons of counters.
+
+00:44:23.800 --> 00:44:28.540
+So you can see that when we run our benchmarks, you know, load adder instance value is run
+
+00:44:28.540 --> 00:44:30.820
+what, 2 billion times, almost 3 billion times.
+
+00:44:30.820 --> 00:44:34.520
+And it misses its assumptions, 1% of those.
+
+00:44:34.520 --> 00:44:35.160
+And yeah.
+
+00:44:35.160 --> 00:44:37.240
+And so there's tons of these counters that you can dump.
+
+00:44:37.240 --> 00:44:41.220
+And that's really cool because we can run our performance benchmarks and see how those numbers
+
+00:44:41.220 --> 00:44:41.700
+have changed.
+
+00:44:41.700 --> 00:44:47.460
+And even cooler than that, it allows us kind of separately to, for example, there's been
+
+00:44:47.460 --> 00:44:51.740
+at least one case where we've worked with a large company that has a big private internal
+
+00:44:51.740 --> 00:44:56.400
+app and they can run it using Python 3.11 and we can get these stats without actually looking
+
+00:44:56.400 --> 00:44:57.940
+at the source code, which is really cool.
+
+00:44:57.940 --> 00:45:03.180
+And so we want to help you be faster and we're working on the runtime, but we don't want you
+
+00:45:03.180 --> 00:45:04.240
+don't want to show us your code.
+
+00:45:04.240 --> 00:45:05.780
+And so we're not going to look at it.
+
+00:45:05.780 --> 00:45:10.900
+And so those stats are really useful for kind of knowing, okay, 90% of my attribute access
+
+00:45:10.900 --> 00:45:11.960
+were able to be specialized.
+
+00:45:11.960 --> 00:45:13.500
+What about the remaining 10%?
+
+00:45:13.500 --> 00:45:14.100
+Where are they?
+
+00:45:14.340 --> 00:45:17.720
+So, you know, an additional question, like why couldn't they be specialized?
+
+00:45:17.720 --> 00:45:21.240
+And that's something that's a lot easier to tell when you're looking at the code.
+
+00:45:21.240 --> 00:45:28.080
+And so this tool was basically my original intention for writing it is, you know, once we get beyond,
+
+00:45:28.080 --> 00:45:32.460
+you know, seeing the stats for benchmark and we run something on it, that makes it easy to
+
+00:45:32.460 --> 00:45:36.100
+tell at a glance where we're failing and how.
+
+00:45:36.100 --> 00:45:36.540
+Right.
+
+00:45:36.540 --> 00:45:41.680
+It's like saying you have 96% code coverage versus these two lines are the ones that are not
+
+00:45:41.680 --> 00:45:42.260
+getting covered.
+
+00:45:42.260 --> 00:45:43.060
+Exactly.
+
+00:45:43.240 --> 00:45:47.780
+You get a lot more information from actually getting those line numbers than from the 97%.
+
+00:45:47.780 --> 00:45:54.720
+And so basically the way it works, we already talked about how in the disk module, you can
+
+00:45:54.720 --> 00:45:57.560
+see which instructions are adaptive or specialized.
+
+00:45:57.560 --> 00:46:00.800
+And all that this tool does, it visualizes.
+
+00:46:00.800 --> 00:46:08.300
+Literally the implementation of this tool is just a for loop over this, where we just kind
+
+00:46:08.300 --> 00:46:12.120
+of categorize the different instructions and then map those to colors and all sorts of crazy
+
+00:46:12.120 --> 00:46:12.420
+concepts.
+
+00:46:12.420 --> 00:46:12.900
+Yeah.
+
+00:46:12.900 --> 00:46:12.900
+Yeah.
+
+00:46:12.900 --> 00:46:18.240
+And for people listening, you know, imagine some code and here you've got a for loop with
+
+00:46:18.240 --> 00:46:20.300
+the tuple decomposition.
+
+00:46:20.300 --> 00:46:24.220
+So you got for I comma T in enumerative text that are going to do some stuff.
+
+00:46:24.220 --> 00:46:30.360
+And it has the I and the T turned green, but then some dictionary access turned yellow.
+
+00:46:30.360 --> 00:46:33.180
+And it talks about, is it not at all specialized?
+
+00:46:33.180 --> 00:46:36.860
+Is it, did it try but fail to get specialized?
+
+00:46:37.180 --> 00:46:38.340
+And things like that, right?
+
+00:46:38.340 --> 00:46:38.740
+Yep.
+
+00:46:38.740 --> 00:46:39.100
+Yeah.
+
+00:46:39.100 --> 00:46:42.100
+So green indicates successful specializations.
+
+00:46:42.100 --> 00:46:47.880
+Red are those adaptive instructions that are slightly slower and represent missed specializations.
+
+00:46:47.880 --> 00:46:50.240
+Yellow and orange are kind of a gradient.
+
+00:46:50.240 --> 00:46:55.940
+As we talked about, you know, one line of Python code easily be 10 or 20 byte code instruction.
+
+00:46:56.360 --> 00:46:56.800
+Right.
+
+00:46:56.800 --> 00:46:57.120
+Yeah.
+
+00:46:57.120 --> 00:46:57.200
+Yeah.
+
+00:46:57.200 --> 00:46:59.640
+It's kind of a way of compressing that information.
+
+00:46:59.640 --> 00:47:00.260
+It's really.
+
+00:47:00.260 --> 00:47:06.220
+And one thing I want to point out about this too is, you know, you'll notice it's actually,
+
+00:47:06.220 --> 00:47:08.020
+you see characters within a line.
+
+00:47:08.180 --> 00:47:12.640
+And this is something that's really cool because this is piggybacking on a feature that's completely
+
+00:47:12.640 --> 00:47:13.920
+unrelated to specialization.
+
+00:47:13.920 --> 00:47:18.260
+Originally, when I was writing this, it highlighted each line.
+
+00:47:18.260 --> 00:47:21.720
+So you could see this line was kind of green or this line was kind of yellow.
+
+00:47:21.720 --> 00:47:29.320
+But then I remembered, maybe you're familiar, in Python 3.11, we have really, really formative
+
+00:47:29.320 --> 00:47:34.360
+tracebacks where it will actually underline the part of the code that has a syntax error that
+
+00:47:34.360 --> 00:47:36.580
+has an exception that was raised or something.
+
+00:47:37.360 --> 00:47:41.140
+And so that's the PEP that's linked first in the description there.
+
+00:47:41.140 --> 00:47:46.560
+It's, you know, called fine-grained error locate or fine-grained locations tracebacks.
+
+00:47:46.560 --> 00:47:51.100
+And so what that means is that previously we just had line number information in the bytecode,
+
+00:47:51.100 --> 00:47:56.120
+but now we have line number and end line number and start column and end column information,
+
+00:47:56.120 --> 00:48:01.520
+which means that due to this completely unrelated feature, we can now also map it directly to which
+
+00:48:01.520 --> 00:48:04.440
+characters in source file correspond to individual bytecode.
+
+00:48:04.440 --> 00:48:05.560
+That's super cool.
+
+00:48:05.560 --> 00:48:05.780
+Yeah.
+
+00:48:05.840 --> 00:48:12.820
+So for example, here we've got a string and you're accessing it by element, by passing an index,
+
+00:48:12.820 --> 00:48:19.180
+and you were able to highlight the square brackets as a separate classification on that array indexing
+
+00:48:19.180 --> 00:48:20.620
+or that string indexing.
+
+00:48:20.620 --> 00:48:21.140
+Exactly.
+
+00:48:21.140 --> 00:48:25.360
+So it wouldn't have been as helpful to just see that that line was kind of yellow-orange-ish.
+
+00:48:25.360 --> 00:48:29.680
+You know, we see that the fast variable store was really, really quick.
+
+00:48:29.680 --> 00:48:36.860
+We see that, you know, the modulo operation and the indexing of string by int wasn't that fast.
+
+00:48:37.060 --> 00:48:46.000
+We weren't able to specialize it, but, you know, we were able to specialize, you know, the lookup of the name TILEN.
+
+00:48:46.000 --> 00:48:47.780
+We weren't able to specialize the function column.
+
+00:48:47.780 --> 00:48:51.580
+So that sort of information, that granularity is really, really cool.
+
+00:48:51.580 --> 00:48:52.640
+Yeah, it is super cool.
+
+00:48:52.640 --> 00:48:56.640
+And I think a good way to go through this, you know, you've got some more background that you write about here,
+
+00:48:56.700 --> 00:48:58.340
+but we've already talked a lot about specializing.
+
+00:48:58.340 --> 00:48:59.740
+Yeah, this is just summarizing the pet piece.
+
+00:48:59.740 --> 00:49:00.200
+Yeah, exactly.
+
+00:49:00.200 --> 00:49:04.080
+People can check it out there if they want the TILEN, the too-long-didn't-read version.
+
+00:49:04.080 --> 00:49:11.760
+But you've got this really nice example of, you know, what may be in the first few weeks of some kind of Python programming class.
+
+00:49:11.760 --> 00:49:16.880
+Write a program that converts Fahrenheit to Celsius and Celsius to Fahrenheit,
+
+00:49:16.880 --> 00:49:24.380
+and then just tests that, you know, round-tripping numbers gives you basically the same answer back within floating-point variations, right?
+
+00:49:24.660 --> 00:49:31.300
+Yeah, I really like this example because it, you know, as we'll show, it's kind of presented through the lens of performance optimization,
+
+00:49:31.300 --> 00:49:37.360
+but it also does a good job of showing you kind of how the interpreter works and how those little tweaks kind of cascade.
+
+00:49:37.360 --> 00:49:38.740
+Mm-hmm, absolutely.
+
+00:49:38.740 --> 00:49:44.220
+And it highlights certain things you can take advantage of that, you know, if you just slightly change the order,
+
+00:49:44.220 --> 00:49:48.160
+it actually has a different runtime behavior, which we don't often think about in Python.
+
+00:49:48.160 --> 00:49:49.240
+We're doing C++.
+
+00:49:49.240 --> 00:49:53.360
+We would maybe debate, do you dereference that pointer first, or can you do it in the loop?
+
+00:49:53.760 --> 00:49:54.200
+Yeah.
+
+00:49:54.200 --> 00:49:56.020
+But not so much here.
+
+00:49:56.020 --> 00:50:03.960
+So let's go through, I mean, I guess just to remind people, Fahrenheit to Celsius, you would say X equals F minus 32,
+
+00:50:03.960 --> 00:50:08.980
+and then you multiply the result once you've shifted the zero by five divided by nine,
+
+00:50:08.980 --> 00:50:15.660
+and the reverse is you multiply the Celsius by nine divided by five, and then you add the 32 to shift the zero again.
+
+00:50:15.660 --> 00:50:17.480
+And basically that's all there is to it.
+
+00:50:17.640 --> 00:50:21.820
+And then you go through and say, well, let's run the specialist on it to get its output.
+
+00:50:21.820 --> 00:50:24.580
+And maybe talk about this first variation that we get here.
+
+00:50:24.580 --> 00:50:24.940
+Yeah.
+
+00:50:24.940 --> 00:50:32.280
+So as we were talking about, you know, the red indicates is adaptive instructions, and the green indicates the specialized instruction.
+
+00:50:32.660 --> 00:50:35.240
+So we can see here that some things were specialized very well.
+
+00:50:35.240 --> 00:50:37.580
+For instance, look at a cert roundtrip.
+
+00:50:37.580 --> 00:50:38.840
+You know, that's great green.
+
+00:50:38.840 --> 00:50:46.980
+Because it's in that hot loop, we got enough information about it to say, okay, a cert roundtrip is being loaded from the global namespace.
+
+00:50:47.100 --> 00:50:48.660
+And it's a Python function.
+
+00:50:48.660 --> 00:50:53.180
+So we can do that cool Python to Python call optimization.
+
+00:50:53.180 --> 00:50:58.760
+And, you know, that's basically as fast as any function call in Python is going to be.
+
+00:50:58.760 --> 00:51:01.260
+But some things aren't specialized.
+
+00:51:01.260 --> 00:51:08.860
+So the things that jump out, you know, the things that we may want to actually take a closer look at would be the map, which is, you know, yellow and red.
+
+00:51:08.860 --> 00:51:23.140
+So, for instance, we can, the loads of the local variable f in that first function and the load of the constant 32, those are yellow because the map that they're involved in, the subtraction operation, wasn't specialized.
+
+00:51:23.140 --> 00:51:26.040
+But the individual loads of those instructions were specialized.
+
+00:51:26.040 --> 00:51:26.780
+I see.
+
+00:51:26.780 --> 00:51:29.080
+So half yes, half no for what they were involved in.
+
+00:51:29.080 --> 00:51:29.520
+Yeah, yeah.
+
+00:51:29.520 --> 00:51:31.580
+Green plus red equals yellow.
+
+00:51:31.580 --> 00:51:33.500
+So, yeah.
+
+00:51:33.500 --> 00:51:35.520
+So that subtraction wasn't specialized.
+
+00:51:35.520 --> 00:51:48.200
+And the reason is, is in 3.11, just based on heuristics that we gathered, we determined it was worth it, at least for the time being, to optimize int plus int, float plus float, but not int plus float, float plus int.
+
+00:51:48.200 --> 00:51:52.600
+And so what we're doing here is we're subtracting a float and an int.
+
+00:51:52.600 --> 00:51:55.860
+And so we're able to see that that isn't specializable.
+
+00:51:55.860 --> 00:52:01.380
+But if we were to somehow change that so that it was two floats, two ints, then it would be specializable.
+
+00:52:01.380 --> 00:52:01.860
+Right.
+
+00:52:01.860 --> 00:52:04.600
+Because when I look at it, it looks like it absolutely should have been specialized.
+
+00:52:04.860 --> 00:52:07.160
+I have a float minus an int.
+
+00:52:07.160 --> 00:52:08.940
+The int is even a constant.
+
+00:52:08.940 --> 00:52:13.180
+Like you're, okay, well, this is standard math.
+
+00:52:13.180 --> 00:52:16.600
+And it's always a float and it's always an int and it's always subtraction.
+
+00:52:16.600 --> 00:52:16.940
+Right.
+
+00:52:16.940 --> 00:52:20.580
+It seems like that should just, well, the math should be obvious and fast.
+
+00:52:20.580 --> 00:52:26.240
+But because, as you pointed out, there's this peculiarity or maybe an implementation detail for the moment.
+
+00:52:26.240 --> 00:52:27.700
+Absolutely an implementation detail.
+
+00:52:27.700 --> 00:52:28.540
+Yeah, yeah, yeah.
+
+00:52:28.540 --> 00:52:28.640
+Yeah.
+
+00:52:28.640 --> 00:52:33.040
+If it's an int and a float, well, right now that problem is not solved.
+
+00:52:33.040 --> 00:52:34.400
+Maybe it will be in the future, right?
+
+00:52:34.440 --> 00:52:37.920
+It seems like pretty low hanging fruit, but you've got all the variations, right?
+
+00:52:37.920 --> 00:52:38.440
+Yeah.
+
+00:52:38.440 --> 00:52:39.660
+Specializations aren't free.
+
+00:52:39.660 --> 00:52:46.520
+So for instance, like when we're running those adaptive instructions, we need to check for all of the different possible specializations.
+
+00:52:46.820 --> 00:52:50.360
+So every time we add a new specialization that has some cost.
+
+00:52:50.360 --> 00:52:57.000
+And basically we determined, at least for the time being, like I said, that we've tried to do int plus float and float plus int.
+
+00:52:57.000 --> 00:53:02.600
+At least based on the benchmarks that we have and the code that we've seen, it just isn't worth it.
+
+00:53:02.600 --> 00:53:02.720
+Sure.
+
+00:53:02.720 --> 00:53:03.060
+Okay.
+
+00:53:03.520 --> 00:53:03.960
+Yeah.
+
+00:53:03.960 --> 00:53:04.000
+Yeah.
+
+00:53:04.000 --> 00:53:08.560
+And it's something like int plus int is very easy to do quickly.
+
+00:53:08.560 --> 00:53:10.240
+Float plus float is very easy to do quickly.
+
+00:53:10.240 --> 00:53:13.520
+Int plus float, there's some coercion that needs to happen there.
+
+00:53:13.520 --> 00:53:14.240
+Right.
+
+00:53:14.240 --> 00:53:15.880
+So it's already constant anyway.
+
+00:53:15.880 --> 00:53:16.100
+Yeah.
+
+00:53:16.440 --> 00:53:16.700
+Yeah.
+
+00:53:16.700 --> 00:53:23.560
+So it's not something that, it's something that caught some time to check, but we don't have a significantly faster wave.
+
+00:53:23.560 --> 00:53:26.480
+It doesn't happen on a register on the CPU or something.
+
+00:53:26.480 --> 00:53:27.300
+Yeah, exactly.
+
+00:53:27.660 --> 00:53:28.060
+Okay.
+
+00:53:28.060 --> 00:53:31.120
+So then you say, well, look what the problem is.
+
+00:53:31.120 --> 00:53:36.660
+It's float in int where we have f minus 32, which seems again, completely straightforward.
+
+00:53:36.660 --> 00:53:38.160
+What if they're both floats?
+
+00:53:38.160 --> 00:53:41.860
+Well, what if like, you know, it's going to end up a float in the end anyway.
+
+00:53:41.860 --> 00:53:44.460
+How about make it 32.0 instead of 32?
+
+00:53:44.460 --> 00:53:44.940
+Yep.
+
+00:53:44.940 --> 00:53:47.040
+And then bam, that whole line turns green, right?
+
+00:53:47.040 --> 00:53:47.440
+Yep.
+
+00:53:47.440 --> 00:53:47.760
+Yeah.
+
+00:53:47.760 --> 00:53:55.760
+So now you're basically doing that entire line using fast local variables and look like native floating point operation.
+
+00:53:55.960 --> 00:53:59.120
+You're just adding literally two C doubles together, which is.
+
+00:53:59.120 --> 00:53:59.600
+Yeah.
+
+00:53:59.600 --> 00:54:07.500
+And this is what I was talking about where you could look at that line and go, oh, well, I just wrote the integer 32, but I'm doing floating point math.
+
+00:54:07.500 --> 00:54:08.920
+It's not like I'm doing integer math.
+
+00:54:08.920 --> 00:54:15.560
+So if you just put, you know, write it as a constant with a zero, you know, dot zero on it, that's a pretty low effort change.
+
+00:54:15.560 --> 00:54:16.620
+And here you go.
+
+00:54:16.620 --> 00:54:18.940
+Python can help you more and go faster, right?
+
+00:54:18.940 --> 00:54:19.300
+Yeah.
+
+00:54:19.300 --> 00:54:21.740
+And that's not a transformation that we can do for you.
+
+00:54:21.800 --> 00:54:30.840
+Because if F is an instance of some user class that defines dunder, so that would be a visible change if it started receiving a float as a right hand argument.
+
+00:54:30.840 --> 00:54:34.920
+So those are things that we can't do while making the language still.
+
+00:54:34.920 --> 00:54:35.640
+Right.
+
+00:54:35.640 --> 00:54:38.000
+But your specialist tool can show you.
+
+00:54:38.000 --> 00:54:44.620
+And again, figure out where your code is slow and then consider whether they're just like, well, we only got 100,000 lines.
+
+00:54:44.620 --> 00:54:47.100
+Let's who's assigned to specializing today.
+
+00:54:47.100 --> 00:54:47.580
+Yeah.
+
+00:54:47.580 --> 00:54:55.620
+And it also requires, this is a simpler example, but it does require, you know, a somewhat deep knowledge of how the specialization work.
+
+00:54:55.620 --> 00:55:01.100
+Because for things other than binary operation, it's not going to become clear what the fix is.
+
+00:55:01.100 --> 00:55:08.160
+You just see kind of where the, I hesitate to even call it a problem, but you see where there's the potential for improvement, but not necessarily how to improve.
+
+00:55:08.160 --> 00:55:08.560
+Yeah.
+
+00:55:08.560 --> 00:55:19.380
+And then you have another one in here that's, I think, really interesting because it, so often when we're talking about math and at least commutative operations, it doesn't matter which order you do them in.
+
+00:55:19.380 --> 00:55:21.220
+Like five times seven times three.
+
+00:55:21.220 --> 00:55:25.000
+If it's the first two and then the result or multiply the last two.
+
+00:55:25.000 --> 00:55:30.900
+And, you know, unless there's some weird floating point edge case that, you know, the IEEE representation goes haywire.
+
+00:55:31.060 --> 00:55:31.780
+It doesn't matter.
+
+00:55:31.780 --> 00:55:32.260
+Right.
+
+00:55:32.260 --> 00:55:40.420
+And so, for example, here you've got, you know, to finish off the Fahrenheit to Celsius conversion, it's the X times five divided by nine.
+
+00:55:40.420 --> 00:55:43.160
+And that one is busted too for the same reason, right?
+
+00:55:43.160 --> 00:55:43.800
+Because it's a five.
+
+00:55:43.800 --> 00:55:44.160
+Yeah.
+
+00:55:44.160 --> 00:55:47.140
+Because, so this is kind of for two reasons.
+
+00:55:47.140 --> 00:55:50.680
+This line isn't as good as it could be under ideal conditions.
+
+00:55:50.680 --> 00:55:54.020
+So, you know, X is a floating point number, five is an integer.
+
+00:55:54.020 --> 00:55:55.120
+So we have the same problem.
+
+00:55:55.380 --> 00:56:00.520
+We specialize multiplication for int and int and float flows, but not for int and float.
+
+00:56:00.520 --> 00:56:03.180
+And the division is a different problem.
+
+00:56:03.180 --> 00:56:08.820
+We don't try to specialize division at all for the reason that it's kind of problematic because the right hand side could be zero.
+
+00:56:08.820 --> 00:56:14.540
+And then you have to check for that and all sorts of things that you need to check for that make it not as much of a payoff.
+
+00:56:14.540 --> 00:56:21.180
+So, you know, we have both an operation that we can't specialize, but it isn't being specialized.
+
+00:56:21.180 --> 00:56:24.420
+And then another one that we're not even trying to specialize at all.
+
+00:56:24.900 --> 00:56:29.680
+But then back to the commutative thing, you're like, well, what if we did the division, right?
+
+00:56:29.680 --> 00:56:33.100
+What if we did the division, like, parenthesis five divided by nine?
+
+00:56:33.100 --> 00:56:35.420
+And then X times that, right?
+
+00:56:35.420 --> 00:56:35.860
+Yep.
+
+00:56:35.860 --> 00:56:42.660
+And so wading through more of these implementation details, Python's compiler, you know, we have a bytecode compiler.
+
+00:56:42.660 --> 00:56:46.440
+It's not a compiling to machine code, but it can perform simple optimization.
+
+00:56:46.840 --> 00:56:52.900
+So by changing the order of operations, the bytecode compiler sees, oh, five divided by nine.
+
+00:56:52.900 --> 00:56:57.080
+I can do that at compile time once rather than at runtime literally every time.
+
+00:56:57.080 --> 00:56:58.620
+That's never going to change.
+
+00:56:58.620 --> 00:57:00.180
+And so by changing that order of a problem.
+
+00:57:00.180 --> 00:57:01.160
+Yeah.
+
+00:57:01.160 --> 00:57:01.460
+Sorry.
+
+00:57:01.460 --> 00:57:04.200
+Regardless of specialization, that's better anyway.
+
+00:57:04.200 --> 00:57:04.560
+Right.
+
+00:57:04.560 --> 00:57:09.760
+Because that happens when the PYC file is generated or when the equivalent thing in memory is generated.
+
+00:57:09.900 --> 00:57:13.040
+And then it's just known as a constant, right?
+
+00:57:13.040 --> 00:57:13.420
+Yeah.
+
+00:57:13.420 --> 00:57:15.260
+And you're doing no division of runtime anymore.
+
+00:57:15.260 --> 00:57:20.200
+So you turn this from two operations, one of which is pretty expensive, to just one operation.
+
+00:57:20.900 --> 00:57:22.980
+All you're doing is a multiply by a constant.
+
+00:57:22.980 --> 00:57:23.520
+Oh.
+
+00:57:23.520 --> 00:57:23.880
+Yep.
+
+00:57:23.880 --> 00:57:29.400
+And so you can see that, you know, once we apply that transformation to our code, everything's all break green.
+
+00:57:29.400 --> 00:57:32.000
+This is as specialized as it is.
+
+00:57:32.000 --> 00:57:32.340
+Right.
+
+00:57:32.340 --> 00:57:36.600
+Because in Python 3, five divided by nine is a floating point, right?
+
+00:57:36.600 --> 00:57:36.980
+Yes.
+
+00:57:36.980 --> 00:57:38.140
+Doesn't module it out or whatever.
+
+00:57:38.140 --> 00:57:39.060
+Yeah.
+
+00:57:39.060 --> 00:57:43.160
+So then it becomes float times float, which then can be specialized.
+
+00:57:43.160 --> 00:57:50.280
+And that first division part is something that is done at runtime when it first runs, but only once, which is fantastic.
+
+00:57:50.440 --> 00:57:51.540
+Like parse time, basically.
+
+00:57:51.540 --> 00:57:52.020
+Yeah.
+
+00:57:52.020 --> 00:57:58.260
+So, yeah, this function or these functions, this code is much better as a result of just understanding.
+
+00:57:58.260 --> 00:57:58.740
+Yeah.
+
+00:57:58.740 --> 00:58:03.080
+And this transformation isn't something that Python can do for you because it changes the semantics of the language.
+
+00:58:03.080 --> 00:58:07.920
+Again, if X is some user object, then it can serve the types that are being passed to it.
+
+00:58:07.920 --> 00:58:08.420
+Yeah.
+
+00:58:08.420 --> 00:58:11.360
+If it implements multiply, it expected to receive the five.
+
+00:58:11.360 --> 00:58:16.700
+It didn't expect to receive 1.2715 or whatever the heck that is, right?
+
+00:58:16.700 --> 00:58:17.060
+Yep.
+
+00:58:17.060 --> 00:58:17.540
+Yeah.
+
+00:58:17.540 --> 00:58:17.900
+Cool.
+
+00:58:17.900 --> 00:58:18.420
+All right.
+
+00:58:18.420 --> 00:58:19.680
+Well, this is a really cool tool.
+
+00:58:19.940 --> 00:58:26.260
+I definitely encourage people if they're listening, just, you know, come over and just there's pictures of code and color.
+
+00:58:26.260 --> 00:58:29.120
+Just scroll quickly through it to see what we're talking about.
+
+00:58:29.120 --> 00:58:34.920
+And I find it super valuable because it highlights with color right on the code that you wrote.
+
+00:58:34.920 --> 00:58:45.000
+It doesn't spit out the byte code and say, here's the byte code improvements, but it highlights your code and says the code you wrote is being improved by Python or not being improved by Python here.
+
+00:58:45.300 --> 00:58:45.480
+Right.
+
+00:58:45.480 --> 00:58:47.740
+And just understanding that it might not matter.
+
+00:58:47.740 --> 00:58:49.000
+And it might matter a lot to you.
+
+00:58:49.000 --> 00:58:49.360
+It depends.
+
+00:58:49.360 --> 00:58:49.780
+Yeah.
+
+00:58:49.780 --> 00:58:58.280
+And another thing to highlight, too, that's kind of different about this tool from maybe most tools that you would use is, you know, this isn't this isn't static analysis.
+
+00:58:58.280 --> 00:59:02.660
+It's not like my pie or pilot where it's running over your code just in its file.
+
+00:59:02.660 --> 00:59:06.660
+You actually need to run your code under this tool for it to be able to do it.
+
+00:59:06.660 --> 00:59:08.420
+Because, again, all this happens at runtime.
+
+00:59:08.740 --> 00:59:14.040
+So it's only after running the code that specialists walk over and see where you're running the code out.
+
+00:59:14.040 --> 00:59:15.160
+Enough, right?
+
+00:59:15.160 --> 00:59:15.920
+Yes.
+
+00:59:15.920 --> 00:59:16.360
+Yeah.
+
+00:59:16.360 --> 00:59:26.940
+So, for example, if I just had this function and I didn't actually call test convergence at the bottom there, the dunder name equals paint, everything would just be white because nothing actually ran.
+
+00:59:26.940 --> 00:59:27.420
+Right.
+
+00:59:27.420 --> 00:59:27.780
+Right.
+
+00:59:27.780 --> 00:59:32.140
+So in this example here, you've got, let's see, two, four, six, eight, nine.
+
+00:59:32.140 --> 00:59:33.120
+Surprising that number.
+
+00:59:33.480 --> 00:59:38.240
+You have nine test values that you're passing in and you're looping over all those values and testing it.
+
+00:59:38.240 --> 00:59:44.000
+You need to, if you're going to apply this to your code, it's super important that you come up with a scenario of representative data.
+
+00:59:44.000 --> 00:59:46.400
+And for now, n greater than eight.
+
+00:59:46.400 --> 00:59:47.260
+Who knows?
+
+00:59:47.260 --> 00:59:50.080
+Or something that's loopy.
+
+00:59:50.080 --> 00:59:53.200
+It's, you know, it runs loops eight times or something.
+
+00:59:53.200 --> 00:59:58.640
+Basically, if the same bytecode instructions are being executed a bunch of times, that's how we tell that it's hot.
+
+00:59:58.640 --> 01:00:00.860
+Whether that's in a loop or for repeated calls.
+
+01:00:00.860 --> 01:00:03.260
+I can see it's pretty easy to forget that.
+
+01:00:03.260 --> 01:00:05.140
+And people might run it and go, it didn't do anything.
+
+01:00:05.140 --> 01:00:05.880
+It did nothing.
+
+01:00:05.880 --> 01:00:06.600
+It's just all white.
+
+01:00:06.600 --> 01:00:07.000
+Yeah.
+
+01:00:07.000 --> 01:00:07.400
+Yeah.
+
+01:00:07.400 --> 01:00:14.740
+Maybe you should add, I mean, I'm not, I'm not trying to issue a, an audio PR or anything, but maybe it should have some kind of warning.
+
+01:00:14.740 --> 01:00:19.020
+Like if there's zero color at all, like a warning, like, are you sure you ran it?
+
+01:00:19.020 --> 01:00:20.560
+Because we don't think you did anything.
+
+01:00:20.560 --> 01:00:22.260
+I actually really liked that request.
+
+01:00:22.260 --> 01:00:22.880
+Do that.
+
+01:00:22.880 --> 01:00:24.740
+Yeah.
+
+01:00:24.740 --> 01:00:25.660
+Cause you would know, right?
+
+01:00:25.660 --> 01:00:28.900
+Like, you'd know if like I've colored nothing in any color whatsoever.
+
+01:00:28.900 --> 01:00:29.640
+Yeah.
+
+01:00:29.640 --> 01:00:31.780
+And I look at him like, oh, I did something wrong.
+
+01:00:31.860 --> 01:00:33.700
+But someone else is going to be like, Fran did something wrong.
+
+01:00:33.700 --> 01:00:34.640
+Yes, exactly.
+
+01:00:34.640 --> 01:00:36.680
+Got to protect, got to protect my reputation.
+
+01:00:36.680 --> 01:00:40.680
+Well, and just like limit the issues being raised.
+
+01:00:40.680 --> 01:00:44.900
+Like how many times you want to say, did you remember to call, call it enough times?
+
+01:00:44.900 --> 01:00:45.400
+Yeah.
+
+01:00:45.400 --> 01:00:46.000
+Yeah.
+
+01:00:46.000 --> 01:00:46.440
+Cool.
+
+01:00:46.440 --> 01:00:56.100
+I definitely think people should check this out if they're interested in seeing how the adaptive specializing, specializing adaptive interpreter from Python 3.11 is applied to their code.
+
+01:00:56.100 --> 01:00:59.440
+I guess also other caveat, like really not super handy.
+
+01:00:59.440 --> 01:01:01.700
+If you try to do this with 3.10, you got to have 3.11.
+
+01:01:01.700 --> 01:01:03.960
+It refuses to run under 3.10.
+
+01:01:03.960 --> 01:01:04.340
+Yeah.
+
+01:01:04.340 --> 01:01:10.520
+Cause I accidentally made that mistake enough times where I just had the Python environment I had acted with 3.10.
+
+01:01:10.520 --> 01:01:11.580
+I'm like, not working.
+
+01:01:11.580 --> 01:01:11.800
+Darn.
+
+01:01:11.800 --> 01:01:12.700
+Yeah.
+
+01:01:12.700 --> 01:01:13.560
+It's all like again.
+
+01:01:13.560 --> 01:01:14.320
+It doesn't exist.
+
+01:01:14.320 --> 01:01:14.640
+Yeah.
+
+01:01:14.640 --> 01:01:15.360
+All that stuff.
+
+01:01:15.360 --> 01:01:15.820
+Yeah.
+
+01:01:15.820 --> 01:01:16.100
+Yeah.
+
+01:01:16.100 --> 01:01:16.280
+Yeah.
+
+01:01:16.280 --> 01:01:21.920
+So, so yeah, no, you need to be running at 3.12, but, or sorry, 3.11 or 4.3.12.
+
+01:01:22.460 --> 01:01:26.100
+But, you know, as you showed earlier, you can download it from Python.org.
+
+01:01:26.100 --> 01:01:34.140
+My favorite way of installing Python versions, PyN, has had 3.11 dev for a while now.
+
+01:01:34.140 --> 01:01:37.080
+They also have 3.12 dev for crazy and you want to try it out.
+
+01:01:37.080 --> 01:01:40.040
+But, but yeah, you do need, you do need a 3.11.
+
+01:01:40.040 --> 01:01:41.340
+Fantastic.
+
+01:01:41.340 --> 01:01:42.420
+Well, really great work.
+
+01:01:42.420 --> 01:01:44.000
+I think it's quite a contribution.
+
+01:01:44.000 --> 01:01:46.800
+It really highlights all the work that's being done in 3.11.
+
+01:01:46.800 --> 01:01:47.780
+So well done.
+
+01:01:47.780 --> 01:01:48.180
+All right.
+
+01:01:48.180 --> 01:01:51.620
+Now, before you get out of here, I got to ask you the final two questions.
+
+01:01:51.620 --> 01:01:55.380
+If you're going to write some Python code, if you're going to work on specialist, what
+
+01:01:55.380 --> 01:01:56.360
+editor do you use?
+
+01:01:56.360 --> 01:01:57.440
+I use VS Code.
+
+01:01:57.440 --> 01:01:57.980
+Okay.
+
+01:01:57.980 --> 01:01:58.400
+Right on.
+
+01:01:58.400 --> 01:02:02.980
+And then notable PyPI package, something you came across, like, oh, this thing is cool.
+
+01:02:02.980 --> 01:02:05.900
+Maybe not the most popular, but something that you want to give a shot at.
+
+01:02:05.900 --> 01:02:06.020
+Yeah.
+
+01:02:06.020 --> 01:02:06.860
+I thought about this.
+
+01:02:06.860 --> 01:02:08.040
+Can I say two?
+
+01:02:08.040 --> 01:02:09.120
+Is it only limited?
+
+01:02:09.120 --> 01:02:09.600
+Two is fine.
+
+01:02:09.600 --> 01:02:09.860
+Okay.
+
+01:02:09.860 --> 01:02:10.020
+Cool.
+
+01:02:10.020 --> 01:02:11.040
+So there's two.
+
+01:02:11.040 --> 01:02:15.900
+I really like creative packages that kind of blur the line between like, what is Python
+
+01:02:15.900 --> 01:02:16.800
+and what isn't.
+
+01:02:16.800 --> 01:02:17.160
+Okay.
+
+01:02:17.160 --> 01:02:20.540
+So the first one is called PyMetal 3, PyMTL 3.
+
+01:02:20.540 --> 01:02:21.620
+This is so cool.
+
+01:02:21.620 --> 01:02:23.860
+It allows you to design hardware using Python.
+
+01:02:23.860 --> 01:02:24.920
+Interesting.
+
+01:02:24.920 --> 01:02:25.240
+Okay.
+
+01:02:25.240 --> 01:02:30.760
+And you can basically design everything from just a small, you know, set of logic gates
+
+01:02:30.760 --> 01:02:33.860
+to a full chip, then export it to Verilog.
+
+01:02:33.860 --> 01:02:34.980
+You run it on an FPGA.
+
+01:02:34.980 --> 01:02:37.920
+And, you know, this is kind of my hardware background coming through.
+
+01:02:37.920 --> 01:02:39.060
+Right, right, right.
+
+01:02:39.280 --> 01:02:39.500
+Yeah.
+
+01:02:39.500 --> 01:02:43.480
+My brother is actually studying at Cal Poly San Luis Obispo right now.
+
+01:02:43.480 --> 01:02:48.240
+And he is on a research team that's designing an entire processor in Python.
+
+01:02:48.240 --> 01:02:53.840
+And so basically the processor itself is designed in Python and you can test it with Python.
+
+01:02:53.840 --> 01:02:55.220
+So they're testing with hypothesis.
+
+01:02:55.660 --> 01:03:01.020
+And it's a really cool, creative way of kind of doing this sort of stuff.
+
+01:03:01.020 --> 01:03:01.340
+Yeah.
+
+01:03:01.340 --> 01:03:04.300
+You don't need any special hardware to make it happen either, right?
+
+01:03:04.300 --> 01:03:05.220
+Yeah, exactly.
+
+01:03:05.220 --> 01:03:09.380
+You can just run it on your local machine and now you've got a RISC-V chip running.
+
+01:03:09.380 --> 01:03:10.560
+Nice.
+
+01:03:10.560 --> 01:03:10.980
+Yeah.
+
+01:03:10.980 --> 01:03:16.040
+So the other one is another kind of cool, weird, low-level hardware package.
+
+01:03:16.040 --> 01:03:17.880
+I don't know if I count this pip installable.
+
+01:03:17.880 --> 01:03:18.780
+It's called PeachPy.
+
+01:03:18.780 --> 01:03:23.580
+I don't know how well maintained it is, but you have to do that thing where you tell pip
+
+01:03:23.580 --> 01:03:25.380
+to install from like a GitHub link.
+
+01:03:25.380 --> 01:03:26.160
+All right.
+
+01:03:26.160 --> 01:03:28.280
+Well, you can pip install from a GitHub link.
+
+01:03:28.280 --> 01:03:29.280
+Yeah, yeah, yeah.
+
+01:03:29.280 --> 01:03:32.280
+You got to give it a really weird URL instead of just the name.
+
+01:03:32.280 --> 01:03:32.820
+Yeah, yeah.
+
+01:03:32.820 --> 01:03:33.040
+Okay.
+
+01:03:33.040 --> 01:03:33.440
+Got it.
+
+01:03:33.440 --> 01:03:33.640
+Sure.
+
+01:03:33.640 --> 01:03:35.160
+And so this is super cool.
+
+01:03:35.160 --> 01:03:39.020
+It's an x86-64 assembler in Python.
+
+01:03:39.020 --> 01:03:39.500
+Okay.
+
+01:03:39.500 --> 01:03:46.280
+So with this, you can basically implement a compiler or if you like it, a just-in-time
+
+01:03:46.280 --> 01:03:49.900
+compiler for basically x86 hardware.
+
+01:03:49.900 --> 01:03:55.100
+So what this allows you to do is in your Python code, it takes care of doing things like allocating
+
+01:03:55.100 --> 01:04:01.300
+hardware registers and labeling jumps and all that sort of stuff, calling conventions.
+
+01:04:01.300 --> 01:04:06.520
+And so you can specify exactly what assembly instructions you want to execute, assemble them,
+
+01:04:06.520 --> 01:04:11.620
+and then it will package them up in a Python function object and you can call your assembly
+
+01:04:11.620 --> 01:04:13.600
+code from Python, which I think is so cool.
+
+01:04:13.600 --> 01:04:13.920
+Wow.
+
+01:04:13.920 --> 01:04:16.880
+And it actually executes as assembly instructions?
+
+01:04:16.880 --> 01:04:17.600
+Yes.
+
+01:04:17.600 --> 01:04:17.940
+Yeah.
+
+01:04:17.940 --> 01:04:19.240
+So it's like faults and everything.
+
+01:04:19.240 --> 01:04:19.620
+Yeah.
+
+01:04:20.040 --> 01:04:20.860
+Yeah, of course.
+
+01:04:20.860 --> 01:04:22.500
+It's the most common thing it does.
+
+01:04:22.500 --> 01:04:22.940
+Yeah.
+
+01:04:22.940 --> 01:04:28.000
+But I mean, like a simple example, you can pass in a Pyaltic pointer and then add, you know,
+
+01:04:28.000 --> 01:04:32.600
+eight or 16 or whatever to get the type of it and then return that and it will return.
+
+01:04:32.600 --> 01:04:33.420
+Yeah.
+
+01:04:33.420 --> 01:04:33.800
+Very cool.
+
+01:04:33.800 --> 01:04:37.740
+So you can see the code example on here for PeachBuy.
+
+01:04:37.820 --> 01:04:38.680
+I'll put the link in the show notes.
+
+01:04:38.680 --> 01:04:43.000
+But you do things like create an argument and then you create a general purpose register
+
+01:04:43.000 --> 01:04:49.100
+and you load the argument onto the register and you might call the ISA SSE4 operation or
+
+01:04:49.100 --> 01:04:49.320
+whatever.
+
+01:04:49.320 --> 01:04:49.840
+Pretty cool.
+
+01:04:49.840 --> 01:04:50.240
+Yeah.
+
+01:04:50.240 --> 01:04:51.160
+Two really good ones.
+
+01:04:51.160 --> 01:04:51.640
+All right.
+
+01:04:51.640 --> 01:04:52.440
+Final call to action.
+
+01:04:52.440 --> 01:04:57.320
+People are interested in specialist and exploring the specializing adaptive interpreter.
+
+01:04:57.320 --> 01:04:58.080
+What do you tell them?
+
+01:04:58.080 --> 01:05:02.180
+I think the most important thing you can do is download or if you're feeling like it,
+
+01:05:02.180 --> 01:05:05.500
+build Python 3.11 and try running it for yourself.
+
+01:05:05.500 --> 01:05:06.720
+See if your code gets faster.
+
+01:05:06.720 --> 01:05:08.480
+It probably will.
+
+01:05:08.480 --> 01:05:12.120
+If it doesn't, then specialists could help show you where it's not.
+
+01:05:12.120 --> 01:05:16.240
+And if that is surprising to you, then you could report it to us.
+
+01:05:16.240 --> 01:05:22.040
+You know, if like, oh, my code got slower for some reason, you know, and it looks like
+
+01:05:22.040 --> 01:05:24.060
+this specific pattern, what's causing it.
+
+01:05:24.060 --> 01:05:25.360
+That's something that we care about.
+
+01:05:25.360 --> 01:05:28.640
+Yeah, I suspect this interpreter is something that's never done.
+
+01:05:28.640 --> 01:05:31.300
+It's clear you could always add more cases.
+
+01:05:31.300 --> 01:05:37.580
+You could make it decide sooner or easier or more accurately when and how to specialize and
+
+01:05:37.580 --> 01:05:38.300
+add more by.
+
+01:05:38.300 --> 01:05:40.020
+There's like a lot of stuff you could do, right?
+
+01:05:40.020 --> 01:05:42.900
+As opposed to, well, yeah, now you read CSV files.
+
+01:05:42.900 --> 01:05:44.080
+That part is done.
+
+01:05:44.080 --> 01:05:44.660
+Yeah.
+
+01:05:44.660 --> 01:05:48.700
+And again, if you're feeling up to it and you've got a huge pure Python app, you can
+
+01:05:48.700 --> 01:05:52.020
+even compile with stats and dump that out and take a peek at it.
+
+01:05:52.020 --> 01:05:56.000
+I think you showed our repository earlier where we have our issue tracker, where we kind
+
+01:05:56.000 --> 01:05:59.020
+of just spitball ideas and keep track of work in progress.
+
+01:05:59.020 --> 01:05:59.780
+Yeah, this one.
+
+01:05:59.780 --> 01:06:01.080
+If you go to the issue tracker here.
+
+01:06:01.080 --> 01:06:02.200
+Sorry, I was wrong.
+
+01:06:02.200 --> 01:06:03.200
+And the ideas one.
+
+01:06:03.200 --> 01:06:03.400
+Yeah.
+
+01:06:03.400 --> 01:06:07.700
+So you've got it's faster dash CPython slash ideas on GitHub.
+
+01:06:07.700 --> 01:06:07.940
+Yeah.
+
+01:06:07.940 --> 01:06:10.280
+So if you go to issues there, that's all our work in progress.
+
+01:06:10.280 --> 01:06:15.420
+And if you have experience optimizing dynamic languages or if you see a cool research paper
+
+01:06:15.420 --> 01:06:20.900
+something that you want us to know about opening issue here and where things get done.
+
+01:06:20.900 --> 01:06:21.280
+Yeah.
+
+01:06:21.280 --> 01:06:21.880
+Fantastic.
+
+01:06:21.880 --> 01:06:24.580
+Well, thank you for making Python faster.
+
+01:06:24.580 --> 01:06:26.720
+I think it's really, really important.
+
+01:06:26.720 --> 01:06:31.740
+I mean, I'm always a little bit conflicted because I have some pretty complicated web apps
+
+01:06:31.740 --> 01:06:35.360
+that get a decent amount of traffic and they've been fine, like really, really fine.
+
+01:06:35.360 --> 01:06:37.740
+You know, handful of milliseconds response time.
+
+01:06:37.740 --> 01:06:42.520
+I mean, they're doing all sorts of madness with databases and HTML and all kinds of stuff.
+
+01:06:42.520 --> 01:06:46.860
+So on one hand, I don't know if I need Python to be faster, but on the other, people are
+
+01:06:46.860 --> 01:06:50.080
+deciding which language they're going to choose and where they can do their work.
+
+01:06:50.080 --> 01:06:56.300
+And sometimes either perceived or real reasons, people think Python is not fast enough.
+
+01:06:56.300 --> 01:06:56.700
+Right.
+
+01:06:56.700 --> 01:07:01.320
+And so this is important work that will really help some people and will help the community
+
+01:07:01.320 --> 01:07:01.840
+to be stronger.
+
+01:07:01.840 --> 01:07:02.560
+So thank you.
+
+01:07:02.560 --> 01:07:04.060
+We love Python program.
+
+01:07:04.060 --> 01:07:05.220
+Right on.
+
+01:07:05.220 --> 01:07:05.720
+Right on.
+
+01:07:05.720 --> 01:07:05.940
+Cool.
+
+01:07:05.940 --> 01:07:07.860
+Well, thank you so much for being here.
+
+01:07:07.860 --> 01:07:08.840
+It's great to chat with you.
+
+01:07:08.840 --> 01:07:10.020
+Thanks again for having me.
+
+01:07:10.020 --> 01:07:10.620
+Yeah, you bet.
+
+01:07:10.620 --> 01:07:10.900
+Bye.
+
+01:07:10.900 --> 01:07:14.780
+This has been another episode of Talk Python to Me.
+
+01:07:14.780 --> 01:07:16.120
+Thank you to our sponsors.
+
+01:07:16.120 --> 01:07:17.720
+Be sure to check out what they're offering.
+
+01:07:17.720 --> 01:07:19.140
+It really helps support the show.
+
+01:07:19.140 --> 01:07:20.720
+Starting a business is hard.
+
+01:07:20.720 --> 01:07:26.620
+Microsoft for Startups, Founders Hub provides all founders at any stage with free resources
+
+01:07:26.620 --> 01:07:29.140
+and connections to solve startup challenges.
+
+01:07:29.140 --> 01:07:33.380
+Apply for free today at talkpython.fm/foundershub.
+
+01:07:33.380 --> 01:07:37.400
+Listen to an episode of Compiler, an original podcast from Red Hat.
+
+01:07:37.400 --> 01:07:41.980
+Compiler unravels industry topics, trends, and things you've always wanted to know about
+
+01:07:41.980 --> 01:07:44.520
+tech through interviews with the people who know it best.
+
+01:07:44.520 --> 01:07:48.500
+Subscribe today by following talkpython.fm/compiler.
+
+01:07:48.500 --> 01:07:49.720
+Want to level up your Python?
+
+01:07:50.120 --> 01:07:53.760
+We have one of the largest catalogs of Python video courses over at Talk Python.
+
+01:07:53.760 --> 01:07:58.800
+Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+01:07:58.800 --> 01:08:01.380
+And best of all, there's not a subscription in sight.
+
+01:08:01.380 --> 01:08:04.260
+Check it out for yourself at training.talkpython.fm.
+
+01:08:04.260 --> 01:08:05.900
+Be sure to subscribe to the show.
+
+01:08:05.900 --> 01:08:08.660
+Open your favorite podcast app and search for Python.
+
+01:08:08.660 --> 01:08:09.860
+We should be right at the top.
+
+01:08:09.860 --> 01:08:14.740
+You can also find the iTunes feed at /itunes, the Google Play feed at /play,
+
+01:08:14.740 --> 01:08:18.860
+and the direct RSS feed at /rss on talkpython.fm.
+
+01:08:18.860 --> 01:08:21.440
+We're live streaming most of our recordings these days.
+
+01:08:21.440 --> 01:08:24.860
+If you want to be part of the show and have your comments featured on the air,
+
+01:08:24.860 --> 01:08:29.200
+be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+01:08:29.200 --> 01:08:30.680
+This is your host, Michael Kennedy.
+
+01:08:30.680 --> 01:08:31.960
+Thanks so much for listening.
+
+01:08:31.960 --> 01:08:33.120
+I really appreciate it.
+
+01:08:33.120 --> 01:08:34.980
+Now get out there and write some Python code.
+
+01:08:34.980 --> 01:08:52.760
+I really appreciate it.
+

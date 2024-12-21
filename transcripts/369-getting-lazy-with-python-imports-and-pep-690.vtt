@@ -1,0 +1,2765 @@
+WEBVTT
+
+00:00:00.160 --> 00:00:02.680
+Python is undergoing a performance renaissance.
+
+00:00:02.680 --> 00:00:07.880
+We already have Python 3.11 20-40% faster than even Python 3.10.
+
+00:00:07.880 --> 00:00:13.120
+On this episode, we'll dive into a new proposal to make Python even more efficient using lazy
+
+00:00:13.120 --> 00:00:15.720
+imports laid out in PEP 690.
+
+00:00:15.720 --> 00:00:20.680
+We have all three folks involved on the episode, Carl Meyer, Hermann Bravo, and Barry Warsaw.
+
+00:00:20.680 --> 00:00:23.460
+Are you ready to get into making Python faster still?
+
+00:00:23.460 --> 00:00:24.480
+Let's dive in.
+
+00:00:24.480 --> 00:00:42.020
+Welcome to Talk Python to Me, a weekly podcast on Python.
+
+00:00:42.020 --> 00:00:43.740
+This is your host, Michael Kennedy.
+
+00:00:43.740 --> 00:00:47.960
+Follow me on Twitter where I'm @mkennedy and keep up with the show and listen to past
+
+00:00:47.960 --> 00:00:53.060
+episodes at talkpython.fm and follow the show on Twitter via at Talk Python.
+
+00:00:53.200 --> 00:00:56.660
+We've started streaming most of our episodes live on YouTube.
+
+00:00:56.660 --> 00:01:02.340
+Subscribe to our YouTube channel over at talkpython.fm/youtube to get notified about upcoming
+
+00:01:02.340 --> 00:01:04.180
+shows and be part of that episode.
+
+00:01:04.180 --> 00:01:08.840
+This episode is brought to you by Sentry and us over at Talk Python Training.
+
+00:01:08.840 --> 00:01:11.580
+Please check out what we're both offering during our segments.
+
+00:01:11.580 --> 00:01:13.480
+It really helps support the show.
+
+00:01:13.480 --> 00:01:17.420
+Transcripts for this and all of our episodes are brought to you by Assembly AI.
+
+00:01:17.420 --> 00:01:20.100
+Do you need a great automatic speech-to-text API?
+
+00:01:20.100 --> 00:01:22.640
+Get human-level accuracy in just a few lines of code.
+
+00:01:22.860 --> 00:01:25.480
+Visit talkpython.fm/assembly AI.
+
+00:01:25.480 --> 00:01:27.380
+Hello, Barry, Erman, Carl.
+
+00:01:27.380 --> 00:01:28.460
+Welcome to the show.
+
+00:01:28.460 --> 00:01:29.240
+Hey, hello.
+
+00:01:29.240 --> 00:01:30.720
+It's wonderful to have you all here.
+
+00:01:30.720 --> 00:01:37.120
+I'm very excited about the work that you're all doing around Python performance.
+
+00:01:37.120 --> 00:01:43.180
+We're going to focus on imports and this PEP that you three proposed today, but it's really
+
+00:01:43.180 --> 00:01:46.900
+just the tip of the iceberg in terms of a bunch of cool stuff that's going on.
+
+00:01:47.000 --> 00:01:49.580
+So I'm very excited to dive into that with the three of you.
+
+00:01:49.580 --> 00:01:53.600
+Now, before we get to it, though, let's just do a quick round of introductions.
+
+00:01:53.600 --> 00:02:00.240
+Barry, you've been on the show before talking about 1994 Python stuff and other things.
+
+00:02:00.240 --> 00:02:02.900
+So maybe just a quick introduction for yourself.
+
+00:02:02.900 --> 00:02:03.320
+Yeah.
+
+00:02:03.320 --> 00:02:03.980
+Barry Warsaw.
+
+00:02:04.260 --> 00:02:07.220
+So I'm still here hanging around, I guess.
+
+00:02:07.220 --> 00:02:12.540
+You know, I should mention, you know, as we get into this PEP, though, I'm really just
+
+00:02:12.540 --> 00:02:13.100
+the sponsor.
+
+00:02:13.100 --> 00:02:18.580
+You know, I got to hand a lot of thanks to Jeff Hermann and Carl for doing all the work
+
+00:02:18.580 --> 00:02:18.920
+on it.
+
+00:02:19.220 --> 00:02:24.080
+You know, most PEPs these days, you know, require a core developer to sponsor.
+
+00:02:24.080 --> 00:02:26.580
+I'm just super interested in the topic.
+
+00:02:26.580 --> 00:02:28.760
+I think it's a super clever approach.
+
+00:02:28.760 --> 00:02:33.100
+And so I think it'll help specific needs that I have at work.
+
+00:02:33.100 --> 00:02:37.100
+And so I was really eager to sponsor it.
+
+00:02:37.100 --> 00:02:38.920
+Yeah.
+
+00:02:38.920 --> 00:02:39.540
+Fantastic.
+
+00:02:39.540 --> 00:02:39.840
+Yeah.
+
+00:02:39.840 --> 00:02:40.440
+All right.
+
+00:02:40.440 --> 00:02:41.160
+Very cool.
+
+00:02:41.160 --> 00:02:42.400
+Hermann, how about you?
+
+00:02:42.620 --> 00:02:48.300
+I'm just working at Mana with Carl and I wrote the initial approach for Licey eports.
+
+00:02:48.300 --> 00:02:49.600
+And well, here I am.
+
+00:02:49.600 --> 00:02:50.060
+Right on.
+
+00:02:50.060 --> 00:02:51.840
+Carl, quick introduction.
+
+00:02:51.840 --> 00:02:55.400
+I've been around the Python community for a while.
+
+00:02:55.400 --> 00:03:01.060
+I think the first maybe semi-notable thing that I did was write the first version of PIP
+
+00:03:01.060 --> 00:03:02.940
+uninstalled back in 2009.
+
+00:03:02.940 --> 00:03:07.160
+And that led to being a maintainer of pip and virtualen for a while.
+
+00:03:07.160 --> 00:03:10.300
+And I worked on the Django core team for a while.
+
+00:03:10.860 --> 00:03:13.840
+And so, yeah, I've been doing Python things for a long time.
+
+00:03:13.840 --> 00:03:14.980
+And I've been working at Meta.
+
+00:03:14.980 --> 00:03:16.640
+Those are a lot of big projects there.
+
+00:03:16.640 --> 00:03:17.240
+Yeah.
+
+00:03:17.240 --> 00:03:18.620
+They're projects that I was using.
+
+00:03:18.620 --> 00:03:20.620
+And so I was interested in working on them.
+
+00:03:20.620 --> 00:03:22.160
+And same goes for Python itself.
+
+00:03:22.160 --> 00:03:23.020
+Yeah, absolutely.
+
+00:03:23.020 --> 00:03:24.400
+And sorry, I kind of cut you off there.
+
+00:03:24.400 --> 00:03:26.280
+You said working at Meta since 2016.
+
+00:03:26.280 --> 00:03:26.960
+Is that what you said?
+
+00:03:26.960 --> 00:03:27.340
+Yeah.
+
+00:03:27.340 --> 00:03:29.600
+I've been working at Meta since 2016.
+
+00:03:29.600 --> 00:03:34.220
+Working mostly on how Meta uses Python, how Instagram uses Python.
+
+00:03:34.220 --> 00:03:34.520
+Yeah.
+
+00:03:34.520 --> 00:03:38.520
+There have been some really cool looks inside what's going on, especially at Instagram.
+
+00:03:39.140 --> 00:03:45.700
+there with some of the typing talks that Lucas gave, as well as sort of suspending the garbage
+
+00:03:45.700 --> 00:03:47.580
+collector for other various things.
+
+00:03:47.580 --> 00:03:47.920
+And a lot.
+
+00:03:47.920 --> 00:03:48.840
+Was that you guys?
+
+00:03:48.840 --> 00:03:49.520
+I think it was, right?
+
+00:03:49.520 --> 00:03:49.840
+Yeah.
+
+00:03:49.840 --> 00:03:50.680
+We had a whole.
+
+00:03:50.680 --> 00:03:51.640
+A lot of neat stuff.
+
+00:03:51.640 --> 00:03:52.140
+A whole saga.
+
+00:03:52.140 --> 00:03:55.000
+We turned off the garbage collector, turned back on the garbage collector.
+
+00:03:55.000 --> 00:03:59.700
+There's been multiple blog posts along the way explaining why we've done each of those
+
+00:03:59.700 --> 00:04:00.860
+silly sounding things.
+
+00:04:00.860 --> 00:04:02.080
+Sure.
+
+00:04:02.220 --> 00:04:03.060
+I mean, they seem insane.
+
+00:04:03.060 --> 00:04:07.480
+Well, a lot of the projects that a lot of the stuff that's coming out of here has to
+
+00:04:07.480 --> 00:04:08.620
+do with the Cinder project.
+
+00:04:08.620 --> 00:04:08.980
+Right.
+
+00:04:08.980 --> 00:04:09.300
+Yeah.
+
+00:04:09.360 --> 00:04:14.760
+And maybe, I don't know who's best to give the introduction for Cinder, but Cinder's a really
+
+00:04:14.760 --> 00:04:20.480
+cool project about, you know, taking a whole bunch of optimizations and specializations you
+
+00:04:20.480 --> 00:04:23.900
+all have done and sharing that back with the community a little bit, right?
+
+00:04:23.900 --> 00:04:24.260
+Yeah.
+
+00:04:24.260 --> 00:04:27.740
+So we started Cinder in, I think, 2017 or 2018.
+
+00:04:27.920 --> 00:04:31.280
+There was actually two projects kind of started simultaneously.
+
+00:04:31.280 --> 00:04:37.520
+We realized around that time that the trajectory for Instagram's kind of server footprint was
+
+00:04:37.520 --> 00:04:41.640
+not really sustainable just in terms of how much server CPU time we were spending running
+
+00:04:41.640 --> 00:04:42.340
+Python code.
+
+00:04:42.340 --> 00:04:44.460
+And so we kicked off two projects.
+
+00:04:44.460 --> 00:04:47.080
+One was called, it's now called Sky Bison.
+
+00:04:47.080 --> 00:04:53.520
+It was like a ground up rewritten Python interpreter, you know, using all the modern dynamic language
+
+00:04:53.520 --> 00:04:57.540
+VM ideas, like a moving garbage collector and all these different things.
+
+00:04:57.540 --> 00:04:59.220
+We weren't the first people to try that.
+
+00:04:59.220 --> 00:05:02.660
+And we also weren't the first people to fail.
+
+00:05:02.660 --> 00:05:07.760
+And that project was wound down last year, just weren't able to get the performance, particularly
+
+00:05:07.760 --> 00:05:12.560
+trying to emulate compatibility with the C API and all the C extensions, which is the same
+
+00:05:12.560 --> 00:05:16.320
+reason many prior rewrite efforts didn't go very far.
+
+00:05:16.320 --> 00:05:21.060
+So at the same time as we kicked off Sky Bison, we had sort of kicked off what we thought was
+
+00:05:21.060 --> 00:05:24.880
+a short-term project of just like, what can we squeeze out of CPython?
+
+00:05:24.880 --> 00:05:26.860
+Where can we get a little more performance out of it?
+
+00:05:27.160 --> 00:05:31.280
+And that turned into Cinder and then ended up kind of becoming our primary approach to
+
+00:05:31.280 --> 00:05:32.160
+Python performance.
+
+00:05:32.160 --> 00:05:38.360
+Isn't it always the story that the C interop stuff is the big sticking point here?
+
+00:05:38.360 --> 00:05:43.420
+I mean, Barry, you must have seen a whole bunch of examples from a core-to-of perspective on
+
+00:05:43.420 --> 00:05:43.840
+that, right?
+
+00:05:43.840 --> 00:05:49.160
+If we could just change the gill, but the C API defense, but if we could just, but, you
+
+00:05:49.160 --> 00:05:49.320
+know.
+
+00:05:49.380 --> 00:05:49.620
+Yeah.
+
+00:05:49.620 --> 00:05:49.780
+Yeah.
+
+00:05:49.780 --> 00:05:50.020
+Yeah.
+
+00:05:50.020 --> 00:05:50.100
+Yeah.
+
+00:05:50.100 --> 00:05:50.380
+Yeah.
+
+00:05:50.380 --> 00:05:54.380
+I mean, it's both, you know, Python's, you know, advantage, you know, pros and cons,
+
+00:05:54.380 --> 00:05:54.660
+right?
+
+00:05:54.660 --> 00:06:02.220
+Like the approachability and the usability of the C API has led directly to the incredible
+
+00:06:02.220 --> 00:06:04.700
+ecosystem of extension modules.
+
+00:06:04.700 --> 00:06:05.060
+Right.
+
+00:06:05.060 --> 00:06:10.860
+But those also are also the hindrance for moving, you know, ahead in a revolutionary way
+
+00:06:10.860 --> 00:06:12.780
+with the interpreter, I think.
+
+00:06:13.000 --> 00:06:13.120
+Right.
+
+00:06:13.120 --> 00:06:17.440
+You kind of got to live within the box with the walls that are put up by those constraints.
+
+00:06:17.440 --> 00:06:19.300
+But I do think it's super important.
+
+00:06:19.300 --> 00:06:21.840
+You know, a lot of people would maybe just think, well, let's just get rid of it.
+
+00:06:21.840 --> 00:06:23.360
+Like, let's just try to move beyond it.
+
+00:06:23.420 --> 00:06:28.420
+But when you hear people say that Python is slow or it has these other problems, so often
+
+00:06:28.420 --> 00:06:33.120
+what you'll see is, well, and what I did was I did a for loop in Python and did some math
+
+00:06:33.120 --> 00:06:34.400
+and that was slow.
+
+00:06:34.400 --> 00:06:38.900
+It's like, well, but if a thing is slow, so often that gets rewritten in C and then all
+
+00:06:38.900 --> 00:06:42.800
+of a sudden it's faster than, I don't know, what Java or whatever else it is they're trying,
+
+00:06:42.800 --> 00:06:44.880
+you know, node, but they're trying to compare it to.
+
+00:06:44.880 --> 00:06:49.420
+And so there's this kind of crazy switch that gets flipped for like really high performance
+
+00:06:49.420 --> 00:06:53.540
+and then, you know, maybe acceptable most of the time performance.
+
+00:06:53.540 --> 00:06:58.040
+And it's this interop with C that is the thing that's the escape hatch.
+
+00:06:58.040 --> 00:07:02.300
+At LinkedIn, we don't, you know, we don't have the same kind of workloads that they have at
+
+00:07:02.300 --> 00:07:06.340
+Meta, but, you know, we've done analysis.
+
+00:07:06.340 --> 00:07:10.760
+One of the reasons why I was particularly interested in this project is because we write a lot of
+
+00:07:10.760 --> 00:07:12.080
+our CLIs in Python.
+
+00:07:12.080 --> 00:07:17.820
+And so, you know, we've had proponents of other languages say, you know, complain, hey, Python's
+
+00:07:17.820 --> 00:07:18.280
+really slow.
+
+00:07:18.280 --> 00:07:22.140
+So I write a CLI in Python and then it takes a long time to start up.
+
+00:07:22.140 --> 00:07:28.040
+But if you actually do the analysis, what you find is that people are not writing a lot of
+
+00:07:28.040 --> 00:07:32.920
+the internal libraries that those CLIs import do things like they go hit the network and they
+
+00:07:32.920 --> 00:07:37.860
+go try to do the service and create really expensive resources at module scope time.
+
+00:07:37.860 --> 00:07:38.100
+Right.
+
+00:07:38.100 --> 00:07:42.560
+So like those are the types of analysis that you really need to do to say, is it really Python
+
+00:07:42.560 --> 00:07:44.320
+or is it the way we use Python?
+
+00:07:44.320 --> 00:07:49.680
+You know, for us, it's a little of both for sure, but often it's sort of the way Python is being used
+
+00:07:49.680 --> 00:07:53.040
+in a non-idiomatic or not in the highest performance way.
+
+00:07:53.040 --> 00:07:53.580
+Right.
+
+00:07:53.580 --> 00:07:57.140
+It's a little bit of rewrite of some internal code can get you a long way.
+
+00:07:57.140 --> 00:07:57.900
+It sure can.
+
+00:07:57.900 --> 00:08:01.620
+Also, I want to just give a quick shout out back on episode 347.
+
+00:08:01.760 --> 00:08:04.400
+I talked with Dino VLAN like all about the Cinder project.
+
+00:08:04.400 --> 00:08:06.980
+So if you want to check that out, they can definitely go find that.
+
+00:08:06.980 --> 00:08:11.920
+But there's a lot of cool things that were taken out of Cinder and are being proposed.
+
+00:08:12.480 --> 00:08:19.500
+And I guess that sort of brings us to our main topic for today is imports and this PEP 690
+
+00:08:19.500 --> 00:08:22.600
+that you all have proposed, which I am also excited for.
+
+00:08:22.600 --> 00:08:28.120
+I think imports are one of those things that are a little bit mysterious to people because
+
+00:08:28.120 --> 00:08:32.880
+they have conceptions coming from other languages, especially compiled languages that are very
+
+00:08:32.880 --> 00:08:34.640
+different than what the reality is.
+
+00:08:35.040 --> 00:08:39.620
+So I do want to talk a whole bunch about what you're offering here, what you're proposing
+
+00:08:39.620 --> 00:08:42.680
+here in this lazy imports PEP.
+
+00:08:42.680 --> 00:08:49.560
+But before we do, let's maybe just set the stage with what happens when I write import requests
+
+00:08:49.560 --> 00:08:55.120
+or I write import FastAPI or even something built in like import collections.
+
+00:08:55.120 --> 00:08:57.100
+Who wants to take this one?
+
+00:08:57.100 --> 00:09:00.960
+Tell people what really happens when the import statement runs or is there.
+
+00:09:00.960 --> 00:09:04.860
+There was a time where the import system for Python was written in C.
+
+00:09:05.280 --> 00:09:07.540
+And it was even more mysterious, I think, at that point.
+
+00:09:07.540 --> 00:09:13.840
+And I don't remember when it was, but Brett Cannon rewrote the import system into Python.
+
+00:09:13.840 --> 00:09:20.400
+And then about that time, I sort of went through sort of line by line and tried to understand.
+
+00:09:20.400 --> 00:09:25.640
+I mean, because right, like imports are probably one of the oldest features of Python, right?
+
+00:09:25.640 --> 00:09:29.380
+They've been around so long and there's so many corner cases, right?
+
+00:09:29.380 --> 00:09:34.600
+It's a very complex system and has lots of features, lots of hooks, lots of places where
+
+00:09:34.600 --> 00:09:39.940
+you can hook in your own behavior and really understanding how all of that fits together.
+
+00:09:39.940 --> 00:09:45.380
+I think I probably took a couple of months to sort of walk through the entire system line
+
+00:09:45.380 --> 00:09:46.180
+by line and document.
+
+00:09:46.180 --> 00:09:51.920
+Unfortunately, now, if you go to the language reference guide, I think it goes into all the
+
+00:09:51.920 --> 00:09:54.340
+gory detail about how imports work.
+
+00:09:54.340 --> 00:09:59.860
+Everything from namespace packages to, you know, concrete packages and all the file system
+
+00:09:59.860 --> 00:10:04.060
+hooks and meta path hooks and, you know, blah, blah, blah, blah, blah, right?
+
+00:10:04.060 --> 00:10:06.520
+Yeah, definitely a lot going on.
+
+00:10:06.520 --> 00:10:12.320
+I think the key thing, though, that you are hinting at there is this is a runtime type of behavior,
+
+00:10:12.320 --> 00:10:13.020
+right?
+
+00:10:13.020 --> 00:10:14.900
+This is a runtime experience.
+
+00:10:14.900 --> 00:10:16.220
+Carl, you're shaking your head.
+
+00:10:16.220 --> 00:10:17.820
+What do you want to add to this?
+
+00:10:17.820 --> 00:10:19.240
+What Barry was saying here?
+
+00:10:19.340 --> 00:10:23.300
+Well, yeah, I mean, I think what a lot of people don't consciously realize initially
+
+00:10:23.300 --> 00:10:26.800
+about imports is that it's just executing some more code, right?
+
+00:10:26.800 --> 00:10:31.700
+So it's like, you can almost think of imports in Python as like syntax sugar for a function
+
+00:10:31.700 --> 00:10:36.560
+call where the body of the function is the module level code of some module and the return
+
+00:10:36.560 --> 00:10:40.100
+value is the module object that you end up getting back from the import.
+
+00:10:40.100 --> 00:10:45.400
+But what it really is, is just causing some more code to be executed where the result is
+
+00:10:45.400 --> 00:10:48.060
+a module object that has stuff on it that you can use.
+
+00:10:48.060 --> 00:10:54.340
+So, and one of the consequences of that is that literally anything can happen when you
+
+00:10:54.340 --> 00:10:55.240
+import a module.
+
+00:10:55.240 --> 00:10:59.160
+I mean, like Barry was saying, you know, it could go off and talk to the internet.
+
+00:10:59.160 --> 00:11:03.240
+I think people have even written stuff that like automatically goes and finds modules on
+
+00:11:03.240 --> 00:11:06.200
+the internet and downloads them just in time to import them.
+
+00:11:06.200 --> 00:11:09.540
+But like, but yeah, that's the key point is that you don't have install.
+
+00:11:09.540 --> 00:11:10.720
+Let's fix that for you.
+
+00:11:13.020 --> 00:11:13.460
+Yeah.
+
+00:11:13.460 --> 00:11:15.080
+It could be arbitrarily slow.
+
+00:11:15.080 --> 00:11:15.860
+It could fail.
+
+00:11:15.860 --> 00:11:16.720
+It could do anything.
+
+00:11:16.720 --> 00:11:17.100
+Yeah.
+
+00:11:17.100 --> 00:11:17.720
+Yeah.
+
+00:11:17.720 --> 00:11:22.900
+You know, if people have a conception of an import statement being like a using statement
+
+00:11:22.900 --> 00:11:30.680
+in C# or an include statement in C++, that's not, that's kind of effectively the same intent,
+
+00:11:30.680 --> 00:11:33.200
+but the behavior is massively different, right?
+
+00:11:33.200 --> 00:11:37.880
+In C++, it says, here's some symbols that should also be used for compilation.
+
+00:11:37.880 --> 00:11:42.260
+In Python, it's literally saying, let's just execute this file top to bottom.
+
+00:11:42.260 --> 00:11:46.120
+And usually execution means define a function, define a function, define a local variable,
+
+00:11:46.120 --> 00:11:46.960
+define a class.
+
+00:11:46.960 --> 00:11:52.880
+But it could mean run some random thing, search the file system, all sorts of stuff.
+
+00:11:52.980 --> 00:11:59.420
+And it leads to things like this, the if dunder name equal dunder main, right?
+
+00:11:59.420 --> 00:11:59.760
+Yeah.
+
+00:11:59.760 --> 00:12:03.700
+This is a big confusion that people run into.
+
+00:12:03.700 --> 00:12:05.940
+Why is this weird thing in Python?
+
+00:12:05.940 --> 00:12:07.700
+Why do they recommend it, right?
+
+00:12:07.700 --> 00:12:11.020
+And it's just because like when you do an import statement, it just runs top to bottom.
+
+00:12:11.020 --> 00:12:14.660
+And if you put behavior in there, well, that behavior happens, right?
+
+00:12:14.660 --> 00:12:16.140
+So here's your way to sort of skip that.
+
+00:12:16.140 --> 00:12:19.580
+Just as a sidebar, you all have been involved for a long time.
+
+00:12:19.580 --> 00:12:26.120
+Like, should Python have had a deaf main sort of entry point thing like so many languages have?
+
+00:12:26.120 --> 00:12:28.700
+I'm not saying it should or shouldn't.
+
+00:12:28.700 --> 00:12:30.160
+I just want to hear your thoughts on this.
+
+00:12:30.160 --> 00:12:33.420
+I think this is just one of those, you know, quirky things about the,
+
+00:12:33.420 --> 00:12:35.360
+not even really even about the language.
+
+00:12:35.360 --> 00:12:39.260
+It's just a quirky thing about the Python, you know, the way you use Python.
+
+00:12:39.260 --> 00:12:44.160
+And to me, it's like one of those things, you learn it and then you just use it.
+
+00:12:44.160 --> 00:12:48.500
+But actually, I think I tend to use this much, much less now,
+
+00:12:48.500 --> 00:12:52.180
+now that we have things like packages and entry points and things like that.
+
+00:12:52.180 --> 00:12:55.680
+To me, you know, I almost am defining a main function.
+
+00:12:55.680 --> 00:12:59.540
+And then in my package metadata, I say, well, there's my entry point.
+
+00:12:59.540 --> 00:13:02.660
+And the packaging system just does it magically.
+
+00:13:02.660 --> 00:13:04.740
+So this is kind of a convenience.
+
+00:13:04.740 --> 00:13:10.340
+And I don't think you really actually run into it as often nowadays as you probably did,
+
+00:13:10.340 --> 00:13:11.540
+you know, years ago.
+
+00:13:11.540 --> 00:13:11.860
+Sure.
+
+00:13:11.980 --> 00:13:16.580
+All my apps that are supposed to be run directly like that, they all have a def main somewhere.
+
+00:13:16.580 --> 00:13:19.700
+And then this just calls the main with this symbol here.
+
+00:13:19.700 --> 00:13:20.160
+Right.
+
+00:13:20.160 --> 00:13:20.380
+Right.
+
+00:13:20.380 --> 00:13:20.640
+Yeah.
+
+00:13:20.640 --> 00:13:21.460
+Herman, what do you think?
+
+00:13:21.460 --> 00:13:21.960
+Yeah.
+
+00:13:21.960 --> 00:13:22.880
+I totally agree.
+
+00:13:22.880 --> 00:13:27.140
+And it's probably not something that we should be using as much right now.
+
+00:13:27.140 --> 00:13:27.640
+Yeah.
+
+00:13:27.640 --> 00:13:27.880
+Sure.
+
+00:13:27.880 --> 00:13:29.560
+Of course, the really interesting thing here, right?
+
+00:13:29.560 --> 00:13:31.120
+Is that it's Dunderne.
+
+00:13:31.120 --> 00:13:31.920
+Right.
+
+00:13:32.320 --> 00:13:38.360
+Like that's a deeper concept about Python that you should really understand is that modules
+
+00:13:38.360 --> 00:13:42.260
+are objects and they have this attribute called Dunder name.
+
+00:13:42.260 --> 00:13:46.260
+And that Dunder name, that attribute is set to some string.
+
+00:13:46.260 --> 00:13:53.660
+And when you call a, when you not import a file, but call a file using the Python executable,
+
+00:13:54.180 --> 00:13:59.540
+that file gets done, you know, this string Dunder main assigned to that attribute.
+
+00:13:59.540 --> 00:14:00.140
+Right.
+
+00:14:00.140 --> 00:14:00.480
+So.
+
+00:14:00.480 --> 00:14:00.720
+Yeah.
+
+00:14:00.720 --> 00:14:01.300
+Yeah.
+
+00:14:01.300 --> 00:14:06.000
+Kind of like understanding a little deeper about how Python works is really important,
+
+00:14:06.000 --> 00:14:08.080
+I think, to get, to be able to use it effectively.
+
+00:14:08.080 --> 00:14:08.580
+It is.
+
+00:14:08.580 --> 00:14:12.000
+And you hinted on being more idiomatic to get better performance.
+
+00:14:12.000 --> 00:14:13.400
+And I totally agree with you.
+
+00:14:13.400 --> 00:14:14.200
+All right.
+
+00:14:14.280 --> 00:14:19.000
+So now knowing kind of what it means to do an import, let's talk about your pep.
+
+00:14:19.000 --> 00:14:20.940
+Who wants to introduce the PEP here?
+
+00:14:20.940 --> 00:14:23.060
+Herman, you're number one author here.
+
+00:14:23.060 --> 00:14:24.060
+So how about you go for it?
+
+00:14:24.060 --> 00:14:25.380
+Yeah, sure.
+
+00:14:25.380 --> 00:14:28.580
+Well, we all started long before the pep.
+
+00:14:28.580 --> 00:14:32.980
+In 2020 is when I joined Meta.
+
+00:14:32.980 --> 00:14:35.920
+It was just one month before the pandemic hit.
+
+00:14:35.920 --> 00:14:39.580
+And so I started working in Instagram code base at the time.
+
+00:14:40.180 --> 00:14:46.900
+But there have been a lot of problems cause a problem is there with the reload speeds in the development server and Instagram.
+
+00:14:46.900 --> 00:14:51.000
+And also another, a ton of other common like too, as well.
+
+00:14:51.000 --> 00:15:01.640
+So what I did is I worked in Instagram code base for a couple of years, trying to fight and touch the startup performance problems that we were in the country all the time.
+
+00:15:01.640 --> 00:15:09.460
+And when you get into code bases, the size of Instagram is, they had a whole bunch of problems that become apparent.
+
+00:15:09.720 --> 00:15:11.000
+One of those is...
+
+00:15:11.000 --> 00:15:16.520
+Yeah, most people don't work at the scale in terms of lines of code or number of servers or anything like that.
+
+00:15:16.520 --> 00:15:18.440
+You're definitely pushing the outer envelope there.
+
+00:15:18.440 --> 00:15:22.460
+Yeah, there are thousands and thousands of modules working here.
+
+00:15:22.460 --> 00:15:28.060
+So one of the problems that start to become a parent is startup speed.
+
+00:15:28.060 --> 00:15:33.320
+The other problem is that refactoring modules becomes really, really hard.
+
+00:15:33.320 --> 00:15:42.020
+So if you try to modify something to get it working better, it suddenly starts getting, you suddenly start getting an import cycles.
+
+00:15:42.020 --> 00:15:46.680
+And all that means when you just live around imports or try to split modules.
+
+00:15:46.880 --> 00:15:49.100
+So it gets really tricky and hard.
+
+00:15:49.100 --> 00:15:50.220
+It's complicated.
+
+00:15:50.220 --> 00:16:00.360
+So the start speed, when you run a module that imports other modules, and these modules start to run, then those in turn import more than modules.
+
+00:16:00.360 --> 00:16:02.200
+And this goes on and on.
+
+00:16:02.580 --> 00:16:04.900
+So all transitive dependencies are involved.
+
+00:16:04.900 --> 00:16:05.900
+Right, right.
+
+00:16:05.900 --> 00:16:08.820
+If you just import one thing, it seems minor.
+
+00:16:08.820 --> 00:16:10.500
+But then that could import two things.
+
+00:16:10.500 --> 00:16:12.380
+And those two things could import four things.
+
+00:16:12.380 --> 00:16:16.080
+And then it just, if you're talking thousands of modules, it can explode.
+
+00:16:16.080 --> 00:16:19.140
+And PEP8 says, import goes at the top.
+
+00:16:19.140 --> 00:16:20.400
+First thing, right?
+
+00:16:20.400 --> 00:16:24.460
+It's like, just to get started before you can even figure out what your code is going to do.
+
+00:16:24.460 --> 00:16:28.660
+You wouldn't do all the imports, which is the transitive closure of every import, basically, right?
+
+00:16:28.660 --> 00:16:29.140
+Exactly.
+
+00:16:29.140 --> 00:16:32.800
+So it just ends up loading every single module.
+
+00:16:32.800 --> 00:16:37.500
+Nobody is going to be used immediately or it's never going to be used at all.
+
+00:16:37.900 --> 00:16:42.440
+So this was an ever ending battle with the Instagram server.
+
+00:16:42.440 --> 00:16:51.760
+And as soon as I realized that I was doing repetitive work, that was very complex and produced a little, very fragile changes.
+
+00:16:51.760 --> 00:16:53.920
+And that was really hard to maintain.
+
+00:16:53.920 --> 00:16:57.680
+And at the end, it didn't really yield the improvements that we needed.
+
+00:16:57.680 --> 00:17:04.140
+So I thought, unless I set sail to write less imports, that's when we started implementing that.
+
+00:17:04.560 --> 00:17:12.400
+Well, the PEP is when we tried to show to the world what we did and the results that we were having.
+
+00:17:12.400 --> 00:17:16.520
+When we get to the U.S. Python 2020 in Salt Lake City.
+
+00:17:16.520 --> 00:17:19.760
+I was planning to discuss this at the Language Summit.
+
+00:17:19.760 --> 00:17:25.940
+But at the end, Carl ended up giving a really good overview there, explaining what it was.
+
+00:17:25.940 --> 00:17:26.660
+I don't know.
+
+00:17:26.660 --> 00:17:27.500
+Carl, can you add?
+
+00:17:27.700 --> 00:17:35.520
+Yeah, we were, I think, Herman proposed a talk for the Language Summit at this last PyCon 2022 in Salt Lake City for the Language Summit.
+
+00:17:35.520 --> 00:17:37.460
+And there just wasn't space in the schedule.
+
+00:17:37.460 --> 00:17:40.900
+So the Language Summit organizers had to pick some things to leave out.
+
+00:17:40.900 --> 00:17:43.860
+And so they didn't squeeze in lazy imports.
+
+00:17:44.240 --> 00:17:51.020
+But then at the Language Summit, a couple of different people brought up lazy imports that they had heard that we had done this and wanted to know more about it.
+
+00:17:51.020 --> 00:17:54.320
+And there was a lightning talks slot at the end of the Language Summit.
+
+00:17:54.320 --> 00:18:01.320
+So in the middle of the afternoon, sitting there at the Language Summit, I just put together about 10 slides on what lazy imports is and how it works.
+
+00:18:01.840 --> 00:18:03.740
+And I gave a quick lightning talk.
+
+00:18:03.740 --> 00:18:10.380
+And on the way back to my seat from giving the lightning talk, Guido leaned over and said, just write the PEP already.
+
+00:18:10.380 --> 00:18:15.100
+So a little bit of positive encouragement and a nudge.
+
+00:18:15.100 --> 00:18:16.020
+Yeah, that's encouragement.
+
+00:18:16.020 --> 00:18:18.040
+So then Herman was at the sprints.
+
+00:18:18.040 --> 00:18:21.720
+And so the two of us sat down together at the sprints on the first day and said, all right, let's write a PEP.
+
+00:18:21.720 --> 00:18:23.480
+So we put together PEP 690.
+
+00:18:23.480 --> 00:18:25.360
+And he said, hey, oh, Barry's walking by.
+
+00:18:25.360 --> 00:18:25.860
+Grab him.
+
+00:18:27.280 --> 00:18:35.320
+Well, yeah, this is something that's been on my radar at LinkedIn for quite a while, like I said, because we have tons of CLIs right from Python.
+
+00:18:35.320 --> 00:18:39.280
+And I think the thing that, like, this is not the first attempt at lazy imports.
+
+00:18:39.280 --> 00:18:42.200
+Like, you know, there's been lots of different approaches.
+
+00:18:42.200 --> 00:18:52.540
+But I think what really kind of struck, certainly what struck me, and I suspect what struck Guido was the really clever implementation of this particular approach to it.
+
+00:18:52.540 --> 00:18:56.640
+I don't know who came up with that, but whoever did it was like really a stroke of genius.
+
+00:18:56.640 --> 00:19:02.480
+Because it really gives you the transparency that I think you need to make this a success.
+
+00:19:05.400 --> 00:19:07.820
+This is a portion of Talk Python To Me is brought to you by Sentry.
+
+00:19:07.820 --> 00:19:10.700
+How would you like to remove a little stress from your life?
+
+00:19:10.700 --> 00:19:16.680
+Do you worry that users may be encountering errors, slowdowns, or crashes with your app right now?
+
+00:19:16.680 --> 00:19:19.720
+Would you even know it until they sent you that support email?
+
+00:19:19.720 --> 00:19:30.140
+How much better would it be to have the error or performance details immediately sent to you, including the call stack and values of local variables and the active user recorded in the report?
+
+00:19:30.600 --> 00:19:33.560
+With Sentry, this is not only possible, it's simple.
+
+00:19:33.560 --> 00:19:37.120
+In fact, we use Sentry on all the Talk Python web properties.
+
+00:19:37.120 --> 00:19:43.660
+We've actually fixed a bug triggered by a user and had the upgrade ready to roll out as we got the support email.
+
+00:19:43.660 --> 00:19:45.660
+That was a great email to write back.
+
+00:19:45.660 --> 00:19:49.040
+Hey, we already saw your error and have already rolled out the fix.
+
+00:19:49.040 --> 00:19:50.460
+Imagine their surprise.
+
+00:19:50.460 --> 00:19:52.680
+Surprise and delight your users.
+
+00:19:53.260 --> 00:19:56.720
+Create your Sentry account at talkpython.fm/sentry.
+
+00:19:56.720 --> 00:20:08.400
+And if you sign up with the code Talk Python, all one word, it's good for two free months of Sentry's business plan, which will give you up to 20 times as many monthly events as well as other features.
+
+00:20:08.400 --> 00:20:12.820
+Create better software, delight your users, and support the podcast.
+
+00:20:12.820 --> 00:20:17.780
+Visit talkpython.fm/sentry and use the coupon code Talk Python.
+
+00:20:20.580 --> 00:20:23.580
+Maybe Carl or Hermann can talk about that a little bit.
+
+00:20:23.580 --> 00:20:26.580
+Yeah, well, let's first define just like what is the PEP proposing?
+
+00:20:26.580 --> 00:20:31.440
+So we've described traditionally what it means when you say import thing.
+
+00:20:31.440 --> 00:20:33.200
+It executes all the Python.
+
+00:20:33.200 --> 00:20:36.080
+And if there's some inline behaviors, that runs those behaviors.
+
+00:20:36.080 --> 00:20:37.760
+And that all happens at the top.
+
+00:20:37.760 --> 00:20:38.740
+Like, how is this different?
+
+00:20:38.740 --> 00:20:41.940
+What change is this proposing to the CPython runtime?
+
+00:20:42.240 --> 00:20:47.800
+Yeah, I mean, the basic idea is just that when you hit an import statement, they say import foo.
+
+00:20:47.920 --> 00:20:56.360
+Instead of immediately at that point going off and finding the foo module, the source code and executing the entire module top to bottom and doing all that work.
+
+00:20:56.360 --> 00:20:59.700
+And then, of course, all the transitive imports from that and et cetera, et cetera.
+
+00:20:59.700 --> 00:21:06.640
+That all we do when we hit import foo is we basically remember, all right, we have this name foo.
+
+00:21:06.740 --> 00:21:08.640
+It refers to a module somewhere.
+
+00:21:08.640 --> 00:21:13.440
+We're going to put off the work of figuring out what that module is and actually executing it.
+
+00:21:13.440 --> 00:21:19.680
+And we're just going to remember that whenever foo is used, that means we need to go find out what it is and actually execute it.
+
+00:21:19.680 --> 00:21:24.760
+So then that name foo will just kind of sit there in the global namespace of whichever module imported it.
+
+00:21:25.240 --> 00:21:31.740
+And oftentimes foo won't even be used or referenced anywhere in the module body of the module that imported it.
+
+00:21:31.740 --> 00:21:38.440
+So we can go through the whole way importing that module and foo just continues to sit there as kind of this deferred pending import.
+
+00:21:38.440 --> 00:21:42.720
+And then later at runtime, maybe somebody calls a function from our module.
+
+00:21:42.720 --> 00:21:49.460
+And within that function, we have like we have a call to foo.bar or something like that, a reference to some attribute of the module.
+
+00:21:49.460 --> 00:21:59.320
+And at that moment, the first time we actually at runtime run into a reference to the name foo, that's the moment when we'll suddenly say, OK, hold everything.
+
+00:21:59.320 --> 00:22:01.660
+We need to go off, figure out what foo is, import it.
+
+00:22:01.660 --> 00:22:04.180
+And now we actually have the proper foo module.
+
+00:22:04.180 --> 00:22:07.440
+And now we can go ahead and figure out what foo.bar is and move on.
+
+00:22:07.440 --> 00:22:10.580
+So that's kind of the essence of PEP690 is to try to do that.
+
+00:22:10.580 --> 00:22:15.540
+Defer imports until the moment when they're first referenced, but try to do it transparently.
+
+00:22:15.740 --> 00:22:25.300
+So that is as much as possible, apart from side effects of the import itself, you really can't tell the difference in your code that the import was delayed.
+
+00:22:25.300 --> 00:22:31.840
+Right. The runtime behavior might be a little bit different, ideally faster and using less memory, which would be great.
+
+00:22:31.840 --> 00:22:38.340
+But other than that, your code shouldn't, but maybe italics shouldn't know the difference.
+
+00:22:38.680 --> 00:22:47.460
+Right. If you're doing coding styles and good patterns, basically not creating side effects during imports, you shouldn't be able to tell the difference.
+
+00:22:47.460 --> 00:22:55.340
+Right. And so if you've got, say, a function that uses JSON parsing, but that only periodically gets called and under some pass.
+
+00:22:55.340 --> 00:23:00.840
+Right. Like you could avoid import JSON effectively unless you need that bit of functionality.
+
+00:23:00.840 --> 00:23:03.700
+And for larger projects that can really cascade. Right.
+
+00:23:03.700 --> 00:23:10.040
+Right. That's the whole idea. So if you think of like a command line program that maybe has like 10 subcommands. Right.
+
+00:23:10.040 --> 00:23:15.860
+And each of those subcommands might do something fairly different and they might have very different dependencies.
+
+00:23:16.240 --> 00:23:24.700
+So on any given time that you run that command line program, if you're only using one subcommand, you don't actually need any of the dependencies of the other nine subcommands.
+
+00:23:24.700 --> 00:23:31.380
+So with lazy imports, you can avoid, you can basically pay for what you use every time you run a program and only pay for what you use.
+
+00:23:31.380 --> 00:23:40.920
+Yeah. I really like the idea. And the transparent aspect of it is, and what Barry was fond of, is that we write code the way we traditionally wrote.
+
+00:23:40.920 --> 00:23:51.840
+We write import requests or import JSON or whatever at the top. And it's up to a special dictionary that replaces a standard dictionary that holds the globals.
+
+00:23:51.840 --> 00:23:57.980
+It says when you access one of these things, if it's not yet materialized and really imported, go do that and then hand it off.
+
+00:23:57.980 --> 00:24:01.180
+Otherwise, just hand off the module. Right. Something like that.
+
+00:24:01.180 --> 00:24:02.900
+Yeah. I think you put it really well.
+
+00:24:02.900 --> 00:24:03.180
+Thanks.
+
+00:24:03.180 --> 00:24:09.000
+It's actually a standard dictionary for the module, but it's just a specialized lookup function, essentially.
+
+00:24:09.000 --> 00:24:09.440
+Got it.
+
+00:24:09.500 --> 00:24:24.420
+Right. So when that deferred object gets installed into the module's dictionary, and this is, I think it's really key because at the point at which that the dictionary lookup function finds this deferred object, that's when the object is resolved.
+
+00:24:24.420 --> 00:24:35.700
+And what that means is that at the Python level, and even if you're an extension writer accessing the module's dictionary, you never see those deferred objects.
+
+00:24:35.700 --> 00:24:41.400
+So they're completely hidden both from the C extension author and Python developer.
+
+00:24:41.400 --> 00:24:45.360
+It's just completely bad. And that's where the transparency really shines.
+
+00:24:45.420 --> 00:24:51.640
+That's where, yeah, because if you're going to force a new programming model onto people, all of a sudden they're going to not like it.
+
+00:24:51.640 --> 00:24:58.180
+And we saw how easy that was to go from two to three. Right. So let's not try that again.
+
+00:24:58.180 --> 00:25:04.760
+Oh, it was so easy. I got this before we get further into this. It's worth pointing out that this is in draft status, right?
+
+00:25:04.760 --> 00:25:17.660
+It was created out a month and a week ago. So it's not super old. It's in draft. If it appears, it'll be in 312, probably. What's the status of the PEP? It's basically proposed and under discussion?
+
+00:25:17.840 --> 00:25:19.800
+Yeah. It's currently discussed. Yeah.
+
+00:25:19.800 --> 00:25:30.400
+I think I went and looked recently and saw that in the, in discuss.python.org in the PEPs category. I think the PEP 690 thread has more posts than any other thread there.
+
+00:25:30.400 --> 00:25:31.740
+So it's been.
+
+00:25:31.740 --> 00:25:32.300
+Okay. That's exciting.
+
+00:25:32.300 --> 00:25:42.180
+It's been thoroughly discussed. But at this point, I think to some extent, the discussion is on hold while we work on getting an implementation against the Python main branch.
+
+00:25:42.180 --> 00:25:56.680
+Cause our implementation in Cinder, Cinder is unfortunately still based on Python 3.8. We're currently working on upgrading it to 3.10, but there's some changes in the underlying dictionary and other things between 3.8 and now 3.12 alpha.
+
+00:25:56.680 --> 00:26:05.080
+So the implementation needs some, some reworking and we need to get that available for people to look at and play with to really move to the next stage in discussion.
+
+00:26:05.080 --> 00:26:11.460
+Yeah. Just a side note. So with projects like Cinder and stuff, it's based on 3.8, which is great. There's a lot of good features.
+
+00:26:11.620 --> 00:26:21.580
+I mean, basically three, six and beyond you get f-strings, you get async and away, you get a lot of amazing stuff there, but the shift from 10 to 11, there's a big performance boost.
+
+00:26:21.580 --> 00:26:30.920
+It's sort of coming along there. Are you guys looking to sort of bring all of this stuff into 11 as sort of a stable point or what's the story there?
+
+00:26:30.920 --> 00:26:31.840
+For Cinder in general?
+
+00:26:31.840 --> 00:26:32.160
+Yeah.
+
+00:26:32.160 --> 00:26:32.300
+Yeah.
+
+00:26:32.500 --> 00:26:42.120
+Yeah. So I mean, we're currently upgrading to 3.10 just to go two versions at a time instead of kind of leap three versions in one bound.
+
+00:26:42.460 --> 00:26:52.080
+And also because as you said, there's a lot of changes between 3.10 and 3.11. So we want to kind of isolate those and get 3.10 stable first and get it in production for Instagram and everything.
+
+00:26:52.420 --> 00:26:57.520
+So that's our current target. And then once that's done, we'll probably look at 3.12 next.
+
+00:26:57.520 --> 00:26:57.940
+Sure.
+
+00:26:57.940 --> 00:27:07.060
+We do want to bring Cinder up to date. And also we're really looking at trying to upstream a lot of the things that are in Cinder so that more people can benefit from them.
+
+00:27:07.060 --> 00:27:12.180
+And to reduce the amount of work we have to do to be constantly rebasing all of our stuff on newer versions of Python.
+
+00:27:12.180 --> 00:27:14.840
+So our goal, hopefully, is that lazy imports.
+
+00:27:14.840 --> 00:27:20.960
+Sure. Everything that you get accepted is just one fewer thing you have to maintain. You can kick it to Barry. Let Barry do it.
+
+00:27:20.960 --> 00:27:21.720
+That's right.
+
+00:27:21.720 --> 00:27:26.380
+Well, I mean, we hope to continue to help maintain these things upstream too.
+
+00:27:26.380 --> 00:27:33.900
+Yes, of course. Yeah, of course. But if you can make it part of the broader community thing, it's no longer your team. It's the community's benefit.
+
+00:27:33.900 --> 00:27:39.080
+Okay. Let's talk a little bit about some of the different forms of imports and how they affect this.
+
+00:27:39.080 --> 00:27:46.320
+Because out in the audience, Hybrid Robotics asks, when you do from library import function, does this really save memory?
+
+00:27:46.320 --> 00:27:52.200
+I think that maybe sets the stage for talking about when there's different styles of imports we can do.
+
+00:27:52.200 --> 00:27:59.280
+Obviously, we can just do import library. We can do from library import function or import star, all these different things.
+
+00:27:59.280 --> 00:28:04.020
+And there's rules in the PEP about how that controls the laziness or the alternative.
+
+00:28:04.020 --> 00:28:08.040
+I guess the current default way is called eager loading or eager imports, right?
+
+00:28:08.040 --> 00:28:18.160
+I think it's really good that Hybrid Robotics brought up this question of from library import function, because that's actually a key way that PEP 690 is different from the existing ways of doing lazy imports.
+
+00:28:18.560 --> 00:28:23.300
+So there are existing things out there. There's a lazy import loader in the standard library.
+
+00:28:23.300 --> 00:28:27.480
+And there's something called demand import on the package index that came out of Mercurial.
+
+00:28:27.480 --> 00:28:31.560
+And all of these things take the approach of having a custom module object.
+
+00:28:31.560 --> 00:28:32.040
+Right.
+
+00:28:32.040 --> 00:28:41.920
+That when you do a get attribute on it, it has a dunder get adder or dunder get attribute implementation that waits for an attribute access and then goes out and does the import.
+
+00:28:41.920 --> 00:28:53.540
+And that works for import foo, but it doesn't make from foo import bar lazy because from foo import bar gets the foo module and then you immediately access the bar attribute on it.
+
+00:28:53.540 --> 00:29:01.820
+And so if you're using this lazy module object style, then effectively it's just eager because you get the attribute off it right away and that makes the import happen.
+
+00:29:01.820 --> 00:29:13.140
+And the difference with PEP 690 is that with from foo import bar, we just stick a lazy object into the namespace of the importing module under the name bar instead of under the name foo.
+
+00:29:13.140 --> 00:29:20.640
+But it's still a lazy object and the import still won't happen until something later actually uses the name bar.
+
+00:29:20.920 --> 00:29:30.380
+So even in the case of from foo import bar, we're still able to make it lazy and it still will save memory at least until or unless you actually use the imported thing.
+
+00:29:30.380 --> 00:29:31.600
+Yeah, that's a great summary.
+
+00:29:31.600 --> 00:29:36.180
+I would like to point out maybe just not entirely sure where they're coming from here.
+
+00:29:36.180 --> 00:29:44.020
+So today, if you write from library import function versus just import library or from library import star, you're not really saving any memory.
+
+00:29:44.020 --> 00:29:45.580
+It basically is doing the same thing, right?
+
+00:29:45.580 --> 00:29:46.880
+The module object is created.
+
+00:29:46.880 --> 00:29:47.840
+It's imported.
+
+00:29:47.840 --> 00:29:48.780
+All the stuff is done.
+
+00:29:48.780 --> 00:29:52.100
+It's just what symbols are defined for you, right?
+
+00:29:52.100 --> 00:29:55.460
+It's more of a syntax thing than it is a memory thing right now.
+
+00:29:55.460 --> 00:29:56.880
+Yeah, that's correct.
+
+00:29:56.880 --> 00:29:57.160
+Yeah.
+
+00:29:57.160 --> 00:30:01.780
+But in the thing you're proposing, this will still be the lazy version, which is great.
+
+00:30:01.780 --> 00:30:02.140
+Yes.
+
+00:30:02.140 --> 00:30:02.960
+Yeah.
+
+00:30:02.960 --> 00:30:06.320
+So there's different ways in which we do import.
+
+00:30:06.320 --> 00:30:10.000
+Sometimes people even do imports inside of try blocks.
+
+00:30:10.120 --> 00:30:11.860
+So like try to import this thing.
+
+00:30:11.860 --> 00:30:18.580
+And if it's not there, maybe try to shim it in or report that this module is a dependency or other things.
+
+00:30:18.580 --> 00:30:25.320
+And it's literally the import statement that is supposed to succeed or fail that communicates back whether or not that was okay.
+
+00:30:25.320 --> 00:30:25.640
+Right.
+
+00:30:25.980 --> 00:30:28.460
+And with this lazy version, you're going to change.
+
+00:30:28.460 --> 00:30:35.080
+It's not going to fail within that try block because within the try block, it's going to create a deferred lazy thing.
+
+00:30:35.080 --> 00:30:36.340
+And that'll always work, right?
+
+00:30:36.340 --> 00:30:39.640
+It actually could also fail in certain circumstances.
+
+00:30:39.640 --> 00:30:42.480
+But for the most part, it should just work.
+
+00:30:42.620 --> 00:30:49.640
+If you have an import inside a try block or inside a class or inside a function, all those imports are eager imports.
+
+00:30:49.640 --> 00:30:49.940
+Right.
+
+00:30:49.940 --> 00:30:50.240
+Exactly.
+
+00:30:50.240 --> 00:31:00.040
+So what I was getting at is that you were actually specifying that if there's an import within a try except or within a width block, you're actually not letting that be lazy.
+
+00:31:00.040 --> 00:31:01.600
+You're making them be eager, right?
+
+00:31:01.600 --> 00:31:02.040
+That's right.
+
+00:31:02.040 --> 00:31:02.700
+Yeah, exactly.
+
+00:31:02.700 --> 00:31:07.240
+Although imports inside this important thing are also lazy.
+
+00:31:07.660 --> 00:31:16.340
+So if any of those fail and you are expecting those to fail, it could not throw an exception there in that reason, in that case.
+
+00:31:16.340 --> 00:31:16.660
+Okay.
+
+00:31:16.660 --> 00:31:21.380
+And then also from thing import star has to be eager.
+
+00:31:21.380 --> 00:31:22.480
+Why does that one have to be eager?
+
+00:31:22.480 --> 00:31:26.920
+Yeah, because we don't have the clean names that are being imported.
+
+00:31:26.920 --> 00:31:32.700
+So there's no way to add these lazy objects to these names.
+
+00:31:32.700 --> 00:31:37.120
+So we need to just import everything and see what are the names that are being imported.
+
+00:31:37.540 --> 00:31:38.760
+That's the main reason for it.
+
+00:31:38.760 --> 00:31:39.020
+Yeah.
+
+00:31:39.020 --> 00:31:39.540
+Right.
+
+00:31:39.540 --> 00:31:44.820
+Because when you say star, you don't know what to put into the module's symbol table, right?
+
+00:31:44.820 --> 00:31:49.220
+So you've got to actually do the import to figure out the star.
+
+00:31:49.220 --> 00:31:50.460
+That's pretty interesting.
+
+00:31:50.460 --> 00:31:50.780
+All right.
+
+00:31:50.780 --> 00:31:54.680
+So there's some interesting examples you have in the PEP that people can check out about.
+
+00:31:54.680 --> 00:32:03.200
+Here's sort of a fake slow module that just does time.sleep, but it effectively shows that it could be slow.
+
+00:32:03.200 --> 00:32:12.920
+And you can run it like do an import and it'll run instantly basically because it's not actually, if you're not accessing that module really at that point, it's pretty much instant.
+
+00:32:12.920 --> 00:32:19.780
+I guess one thing to point out here, and this is, I don't know how I feel about this, but maybe we could talk about it a bit.
+
+00:32:19.860 --> 00:32:32.960
+The proposal is that this is not the default behavior for Python indefinitely into the future, that you have to pass a dash L flag to the interpreter or set an environment variable or something along those lines.
+
+00:32:33.080 --> 00:32:37.640
+You want to talk about why make it opt in instead of maybe opt out?
+
+00:32:37.640 --> 00:32:38.740
+I wish it was a default.
+
+00:32:38.740 --> 00:32:40.440
+That's what I wish to.
+
+00:32:40.440 --> 00:32:49.120
+But the thing, the reality is that there are a lot of applications and modules that are using or relying on import side effects.
+
+00:32:49.120 --> 00:32:55.240
+So we can just expect those to be lazy or compatible anytime soon.
+
+00:32:55.240 --> 00:32:56.880
+So you're saying there's a lot of bad code out there.
+
+00:32:56.880 --> 00:32:57.480
+Is that what you're saying?
+
+00:32:57.480 --> 00:32:58.060
+No.
+
+00:32:58.060 --> 00:32:58.820
+No, I'm just teasing.
+
+00:32:59.680 --> 00:33:05.200
+But if it has side effects, right, if it's like, oh, because you imported this, we've initialized the database connection.
+
+00:33:05.200 --> 00:33:09.640
+There's actually some really good discussion on the discourse thread.
+
+00:33:09.640 --> 00:33:23.620
+I feel like this is actually an important aspect of the PEP because one of the things that was sort of pointed out in this discussion is that I both author libraries and I author applications, right?
+
+00:33:23.800 --> 00:33:45.460
+As a library author, I can't really reason about whether I can sort of say, yeah, maybe my library is unsafe for lazy, but I can never really say, you know, assert that my module is safe for laziness and be certain that in all the way that all my downstream consumers are going to use my library, right?
+
+00:33:45.500 --> 00:34:15.480
+That it's always going to be safe for lazy imports.
+
+00:34:15.480 --> 00:34:24.640
+So by using it, I'm a little uncertain about the environment variable, but I feel pretty strongly like the flag, the dash, capital flag.
+
+00:34:24.640 --> 00:34:24.940
+Yeah.
+
+00:34:24.940 --> 00:34:27.580
+It's the responsibility of the person running it, sort of.
+
+00:34:27.580 --> 00:34:28.480
+It's the leap.
+
+00:34:28.480 --> 00:34:28.820
+Yeah.
+
+00:34:28.820 --> 00:34:32.320
+It's the top of the tree.
+
+00:34:32.320 --> 00:34:33.220
+Yeah.
+
+00:34:33.220 --> 00:34:33.480
+Yeah.
+
+00:34:33.480 --> 00:34:41.620
+To give an example of what Barry's talking about is like, I mean, for better or worse, some level of import side effects are just kind of built into Python.
+
+00:34:41.620 --> 00:34:55.900
+Like if you have a module that subclasses a class from another module, you may think that you have a module with no import side effects, but actually importing your module adds something to the Dunder subclasses of the module you inherited from.
+
+00:34:55.900 --> 00:35:04.940
+And so even code that apparently looks very clean and clear of import side effects does technically have some side effects on import.
+
+00:35:05.260 --> 00:35:09.880
+And the real question is, is anybody actually looking at Dunder subclasses on the parent module?
+
+00:35:09.880 --> 00:35:20.100
+And, you know, there's a lot of common library patterns like decorators that when you decorate a function, they register that function to that class and some registry and some other module.
+
+00:35:20.300 --> 00:35:22.440
+So then suddenly again, you have an import side effect.
+
+00:35:22.440 --> 00:35:22.920
+Like Flask or something.
+
+00:35:22.920 --> 00:35:23.260
+Yeah.
+
+00:35:23.260 --> 00:35:23.680
+Right.
+
+00:35:23.680 --> 00:35:23.920
+Yep.
+
+00:35:23.920 --> 00:35:24.320
+Exactly.
+
+00:35:24.320 --> 00:35:29.840
+So you really have to, it really has to be the person writing the application and testing the application.
+
+00:35:29.840 --> 00:35:32.160
+You says, I'm going to try lazy imports.
+
+00:35:32.160 --> 00:35:33.300
+I'm going to see if things work.
+
+00:35:33.300 --> 00:35:35.920
+I know how my dependencies are used.
+
+00:35:35.920 --> 00:35:40.600
+If it works well and all my tests pass, then I can consider just turning this on at that level.
+
+00:35:40.600 --> 00:35:40.940
+Sure.
+
+00:35:41.440 --> 00:35:41.680
+Okay.
+
+00:35:41.680 --> 00:35:42.180
+Interesting.
+
+00:35:42.180 --> 00:35:48.020
+Taking Barry's idea that it's the application owner who should sort of make this decision.
+
+00:35:48.020 --> 00:35:53.520
+What about having some code artifact that allows you to signal that as well?
+
+00:35:53.520 --> 00:35:53.920
+Right.
+
+00:35:53.920 --> 00:35:57.080
+So as I run it, I can control whether or not this happens.
+
+00:35:57.080 --> 00:36:05.420
+But what if I just the very first line of my app.py or whatever it is, I just say import lazy or something like that.
+
+00:36:05.420 --> 00:36:08.940
+And then every subsequent thing from there on behaves that way.
+
+00:36:08.980 --> 00:36:15.020
+That way, if I distribute my app to someone else, I don't have to convince them or teach them about dash L.
+
+00:36:15.020 --> 00:36:18.520
+I can just say, no, just double click this thing or run this.
+
+00:36:18.520 --> 00:36:21.260
+And it'll just, it'll go in a consistent way.
+
+00:36:21.260 --> 00:36:27.280
+As long as you don't have like PTH files that are getting in the way, you know, before your main gets called.
+
+00:36:27.280 --> 00:36:29.580
+Go ahead, Carl.
+
+00:36:29.580 --> 00:36:29.920
+Sorry.
+
+00:36:29.920 --> 00:36:33.120
+Yeah, no, I was just going to say there was a lot of discussion about that in the thread.
+
+00:36:33.120 --> 00:36:37.700
+And there actually is a draft of a heavily revised version of the PEP.
+
+00:36:38.060 --> 00:36:39.220
+For Barry's review, actually.
+
+00:36:39.220 --> 00:36:40.200
+So Barry, you can.
+
+00:36:40.200 --> 00:36:42.920
+Barry, let me throw that up for you.
+
+00:36:42.920 --> 00:36:43.380
+We can go through it.
+
+00:36:43.380 --> 00:36:43.540
+Yeah.
+
+00:36:45.840 --> 00:37:00.420
+One of the changes that is made in that draft is both removing the environment variable because people were concerned about the risk that if somebody just got the idea that, oh, lazy imports makes everything faster, they might try to just set the environment variable in their shell.
+
+00:37:00.420 --> 00:37:05.580
+And then all of the Python programs they run will try to run with lazy imports and might break.
+
+00:37:05.580 --> 00:37:06.620
+And then they're reporting bugs.
+
+00:37:06.620 --> 00:37:08.240
+And that's not a great experience.
+
+00:37:08.240 --> 00:37:11.680
+So we want it to be really limited to an application that's tested with lazy imports.
+
+00:37:11.880 --> 00:37:21.900
+So the latest draft of the PEP removes the environment variable and actually adds exactly what you're talking about, a programmatic way to enable lazy imports for your application in code.
+
+00:37:21.900 --> 00:37:23.400
+What is the code way?
+
+00:37:23.400 --> 00:37:27.780
+Well, I mean, it's just a proposal in my draft PR to the PEP text right now.
+
+00:37:27.860 --> 00:37:29.160
+So we'll see what Barry says about it.
+
+00:37:29.160 --> 00:37:29.400
+Sure.
+
+00:37:29.400 --> 00:37:31.340
+It could well change.
+
+00:37:31.340 --> 00:37:33.240
+I just rubber stamped it.
+
+00:37:33.240 --> 00:37:44.340
+So the reason I ask is there's sometimes certain things you've got to do to, like, tweak the path or something to get imports to work right if you're running from some weird location or something.
+
+00:37:44.340 --> 00:37:47.880
+Think of, like, alembic migrations and stuff like that.
+
+00:37:48.360 --> 00:37:58.200
+But in a lot of the editors and the linter's, they'll whine at you and say, no, no, no, these imports that go below that modification to the path statement, they go above it.
+
+00:37:58.200 --> 00:38:01.820
+Like, no, the whole point of the thing above it is so the things below it don't fail.
+
+00:38:01.820 --> 00:38:02.460
+Right.
+
+00:38:02.460 --> 00:38:06.600
+Is there, like, whatever it is, I just want to put in a little hint.
+
+00:38:06.600 --> 00:38:14.200
+Like, if you could make the editors not complain that the stuff below it should go above it because the stuff below it is controlled by the stuff above it.
+
+00:38:14.200 --> 00:38:14.720
+You know what I mean?
+
+00:38:14.720 --> 00:38:21.600
+Yeah, the current proposal, I don't think, I mean, I suppose if it becomes merged, the linters and such could special case it.
+
+00:38:21.600 --> 00:38:29.880
+I think hopefully that's not too huge of an issue because the idea is, I mean, you potentially have a large application and this would occur, like, in one main module, right?
+
+00:38:29.880 --> 00:38:30.800
+You would just put like that.
+
+00:38:30.800 --> 00:38:31.520
+Call this function.
+
+00:38:31.520 --> 00:38:31.800
+Right.
+
+00:38:31.800 --> 00:38:33.800
+You put the hash, ignore, and then you're good to go.
+
+00:38:33.800 --> 00:38:34.080
+Right.
+
+00:38:34.080 --> 00:38:34.400
+Got it.
+
+00:38:34.400 --> 00:38:35.440
+Okay, cool.
+
+00:38:35.440 --> 00:38:37.800
+Let's go talk about some benefits here.
+
+00:38:37.800 --> 00:38:50.360
+So, in terms of performance, so it says it's already been demonstrated for startup time improvements of 70% and memory reduction of real-world CLIs by 40%.
+
+00:38:50.360 --> 00:38:51.860
+Those are not joking around.
+
+00:38:51.860 --> 00:38:54.260
+This is not, like, playing at the edges of performance changes.
+
+00:38:54.260 --> 00:38:55.580
+This is significant.
+
+00:38:55.580 --> 00:39:02.260
+So, are those numbers from what you're doing with Instagram or other tools that you tested it on or something like that?
+
+00:39:02.260 --> 00:39:09.440
+These are numbers from Instagram, Instagram server, and also I love command line tools that we use inside Meta.
+
+00:39:09.440 --> 00:39:11.840
+So, yeah, these are real numbers.
+
+00:39:11.840 --> 00:39:14.020
+It's about 70%.
+
+00:39:14.020 --> 00:39:17.840
+Sometimes we've seen 50% improvement in startup speed.
+
+00:39:17.840 --> 00:39:20.960
+Memory is also up to 40%.
+
+00:39:20.960 --> 00:39:21.840
+We've seen 20%.
+
+00:39:21.840 --> 00:39:22.680
+Right.
+
+00:39:22.680 --> 00:39:23.800
+These are upper bounds, of course.
+
+00:39:23.800 --> 00:39:24.040
+Sure.
+
+00:39:24.040 --> 00:39:29.960
+But what I think is good about that is it's not, you know, sometimes people say, well, let's see how fast Python is.
+
+00:39:29.960 --> 00:39:39.280
+I'm going to do a wild true loop and see how many times I can increment a number and compare that to doing that and see, like, okay, nobody does this and they don't really care about how fast.
+
+00:39:39.280 --> 00:39:40.980
+Like, how do real apps behave?
+
+00:39:40.980 --> 00:39:41.400
+How do real?
+
+00:39:41.400 --> 00:39:48.360
+And so, this is you taking the stuff that you all work with day to day and trying to make it faster and getting significant benefits from it.
+
+00:39:48.360 --> 00:39:50.160
+Not weird little edge case benchmarks.
+
+00:39:50.160 --> 00:39:54.880
+Yeah, I think an important thing to note there that Hermann mentioned is that this isn't just one code base.
+
+00:39:54.880 --> 00:40:00.900
+So, you know, we've seen this as repeatable scale of improvement across a variety of different tools.
+
+00:40:00.900 --> 00:40:08.240
+In fact, recently, we've started to see we have a lot of data science people and researchers who use a lot of Jupyter notebooks.
+
+00:40:08.240 --> 00:40:20.240
+And they've started to really quickly pick up Jupyter notebooks kernels based on Cinder with lazy imports enabled because they're seeing similar startup time and memory use numbers for their Jupyter notebooks.
+
+00:40:20.240 --> 00:40:27.720
+So, like, across a fairly wide range of use cases and types of programs, we are seeing these kinds of numbers as consistently repeatable.
+
+00:40:27.720 --> 00:40:29.620
+Yeah, that's interesting to the data science side.
+
+00:40:29.620 --> 00:40:31.180
+A lot of those libraries are pretty large.
+
+00:40:31.180 --> 00:40:34.580
+And so, I suspect that that's probably pretty valuable.
+
+00:40:34.580 --> 00:40:42.940
+So, one of the things you all talk about is that this proposal also will eliminate, what would you call it, like, false import cycles?
+
+00:40:42.940 --> 00:40:43.480
+I don't know.
+
+00:40:43.480 --> 00:40:47.340
+Do you want to talk about this cycle benefit that we might get here?
+
+00:40:47.340 --> 00:40:47.600
+Yeah.
+
+00:40:47.600 --> 00:40:48.320
+Throw it out to all of you.
+
+00:40:48.320 --> 00:40:49.160
+Whoever wants to grab it.
+
+00:40:49.160 --> 00:40:49.500
+I didn't.
+
+00:40:49.600 --> 00:40:51.980
+Can try to say something about the import cycles.
+
+00:40:51.980 --> 00:41:02.780
+When you have imports at the top of the module, and you're not using these imports, and some of the imports that you are declaring there are importing something on the end to us.
+
+00:41:02.780 --> 00:41:06.040
+At some point, it's importing the first module.
+
+00:41:06.040 --> 00:41:07.880
+Then you have a cycle, right?
+
+00:41:07.880 --> 00:41:18.960
+So, if one of these imports is not actually being used, and it's being deferred to a use case where it's only resolved inside a function,
+
+00:41:18.960 --> 00:41:24.180
+further down, which is not being immediately called, then we won't have these cycles.
+
+00:41:24.180 --> 00:41:32.140
+And then a lot of times when we have this kind of imports that are declared on the top of the modules, because
+
+00:41:32.140 --> 00:41:37.500
+But it hates this that is recommended to have all imports in the top of the module.
+
+00:41:37.500 --> 00:41:43.600
+And so people just start putting imports there because it's cleaner and looks better, but
+
+00:41:43.600 --> 00:41:48.880
+it needs to stop provoking these, causing these import cycles.
+
+00:41:48.880 --> 00:41:49.260
+Nice.
+
+00:41:49.260 --> 00:41:52.880
+So hopefully this will solve some of those issues.
+
+00:41:52.880 --> 00:41:57.780
+I know when I first got into Python, I didn't understand why there wasn't a better way out
+
+00:41:57.780 --> 00:42:01.580
+of like sharing code in a bi-directional way.
+
+00:42:01.680 --> 00:42:06.440
+It was really, it took a lot of thinking like, okay, how can I structure my code into different
+
+00:42:06.440 --> 00:42:12.340
+files that don't feel like it's all just went in one file and yet allow me to reference it?
+
+00:42:12.340 --> 00:42:17.040
+Like, for example, if I've got one class and it works with another and it has a function
+
+00:42:17.040 --> 00:42:20.640
+that returns one type of it, but the other one might have a field, which is one of those.
+
+00:42:20.640 --> 00:42:24.700
+And you want to do a type declaration of saying which one is which, or you need to create the
+
+00:42:24.700 --> 00:42:26.880
+call initializer of one or something.
+
+00:42:26.880 --> 00:42:30.400
+Those kinds of bi-directional relationships are hard to model.
+
+00:42:30.500 --> 00:42:34.780
+And it sounds like this doesn't really address or fix or change those in any significant
+
+00:42:34.780 --> 00:42:35.060
+way.
+
+00:42:35.060 --> 00:42:38.520
+But the other ones just about the timing can go away, right?
+
+00:42:38.520 --> 00:42:44.860
+The only import cycles that lazy imports don't fix are the ones where basically it would be
+
+00:42:44.860 --> 00:42:50.460
+a cycle, even if you had it in the same module, like where you're literally using names in a
+
+00:42:50.460 --> 00:42:52.900
+bi-directional way at module level.
+
+00:42:53.040 --> 00:42:57.020
+And so there's no way you could order them even within one module and have it work.
+
+00:42:57.020 --> 00:43:00.960
+And so essentially forward references, those kinds of cycles, the lazy imports doesn't fix.
+
+00:43:00.960 --> 00:43:06.740
+But really any other kind of cycle or anywhere in the cycle, one of the uses is inside a function.
+
+00:43:06.960 --> 00:43:08.960
+All of those are taken care of.
+
+00:43:08.960 --> 00:43:15.040
+And so even for the type annotation ones, if you use from future import annotations, PEP 563,
+
+00:43:15.040 --> 00:43:21.820
+or another proposal, PEP 649, anything that makes the type annotations also lazily evaluated,
+
+00:43:21.820 --> 00:43:26.700
+so they aren't eagerly evaluated at import time, then all of a sudden your cycles went with that
+
+00:43:26.700 --> 00:43:27.740
+plus lazy imports.
+
+00:43:27.920 --> 00:43:31.140
+Then all the cycle problems with type annotations also just disappear.
+
+00:43:31.140 --> 00:43:34.700
+I was just going to say, I think one of the interesting things that I think it was Carl
+
+00:43:34.700 --> 00:43:38.840
+pointed out when we were talking about this is that if you've got the converse is right,
+
+00:43:38.840 --> 00:43:43.240
+if you've got an application or something that's using these lazy imports, and then you turn
+
+00:43:43.240 --> 00:43:50.220
+them off, you might be hit with a bunch of cycles that were sort of, you know, hidden from
+
+00:43:50.220 --> 00:43:51.940
+you because of the lazy feature, right?
+
+00:43:51.940 --> 00:43:57.520
+So you have to be a little bit careful about engaging with lazy imports and then turning them
+
+00:43:57.520 --> 00:43:57.860
+off.
+
+00:43:57.860 --> 00:43:58.160
+Right.
+
+00:43:58.160 --> 00:43:59.140
+Getting everything eager.
+
+00:43:59.140 --> 00:44:01.180
+So it's just one of those things to watch out for.
+
+00:44:01.180 --> 00:44:01.860
+Oh, interesting.
+
+00:44:01.860 --> 00:44:02.180
+Yeah.
+
+00:44:02.180 --> 00:44:07.720
+If you're doing it by running it with the run flag, you could be effectively hiding a runtime
+
+00:44:07.720 --> 00:44:10.160
+error that someone else would hit if they ran it without.
+
+00:44:10.160 --> 00:44:10.460
+Yeah.
+
+00:44:10.460 --> 00:44:10.780
+Right.
+
+00:44:10.780 --> 00:44:14.540
+Kind of back to my like, could the code define this instead of a runtime flag?
+
+00:44:14.540 --> 00:44:16.440
+So it's like absolutely consistent.
+
+00:44:16.440 --> 00:44:16.720
+Yeah.
+
+00:44:16.720 --> 00:44:19.120
+Let's talk about debuggability a little bit.
+
+00:44:19.120 --> 00:44:24.340
+So normally when you have an exception, if I import thing and there's a problem importing that
+
+00:44:24.340 --> 00:44:26.840
+thing, I'll get an exception on the line that the import did.
+
+00:44:27.240 --> 00:44:33.840
+But with this lazy thing, it'll be the import error will occur where the first attempt to
+
+00:44:33.840 --> 00:44:35.300
+touch it happens.
+
+00:44:35.300 --> 00:44:36.060
+Right.
+
+00:44:36.060 --> 00:44:39.620
+But you all do some work to figure out and sort of report back.
+
+00:44:39.840 --> 00:44:42.840
+the error came from where the original import statement was, right?
+
+00:44:42.840 --> 00:44:43.200
+Yes.
+
+00:44:43.200 --> 00:44:47.940
+The error should be reported where the import is being declared so that it's easier to do
+
+00:44:47.940 --> 00:44:51.540
+But this can also produce import error and send anywhere.
+
+00:44:51.540 --> 00:45:02.600
+So the other thing that we are thinking about adding to this implementation is to have an error wrapper around the real error that is being thrown.
+
+00:45:02.600 --> 00:45:07.840
+So we can easily know that it's just an import error coming from a lazy import.
+
+00:45:08.140 --> 00:45:08.880
+Yeah.
+
+00:45:08.880 --> 00:45:14.660
+It could theoretically, I guess, get caught in a situation where people would have not expected it.
+
+00:45:14.660 --> 00:45:14.900
+Right.
+
+00:45:14.900 --> 00:45:18.620
+It could have a overly aggressive try accept block.
+
+00:45:18.760 --> 00:45:22.440
+There's like, well, there's only two types of exceptions that come out of here possibly ever.
+
+00:45:22.440 --> 00:45:25.340
+And either of them, I'm going to handle it in this case.
+
+00:45:25.420 --> 00:45:26.300
+Well, now here's a third.
+
+00:45:26.300 --> 00:45:27.040
+Surprise.
+
+00:45:27.040 --> 00:45:27.960
+Yeah.
+
+00:45:27.960 --> 00:45:28.280
+Okay.
+
+00:45:28.280 --> 00:45:33.540
+But at least from sort of figuring out where the error came from, I guess you guys, what do you call it?
+
+00:45:33.540 --> 00:45:36.420
+Deferred exceptions is what you actually called that, right?
+
+00:45:36.420 --> 00:45:36.760
+Right.
+
+00:45:36.760 --> 00:45:39.780
+So there's a couple of code examples in here.
+
+00:45:39.780 --> 00:45:42.500
+And I'm going to kind of flip through here and check it out.
+
+00:45:42.500 --> 00:45:43.980
+You also have some code APIs.
+
+00:45:43.980 --> 00:45:48.740
+I talked about my wish for some code thing to declare laziness, I guess, is the way to put it.
+
+00:45:48.740 --> 00:45:50.280
+But different things happen.
+
+00:45:50.280 --> 00:45:54.000
+Like if you do the import within a try block, that forces them to be eager.
+
+00:45:54.080 --> 00:45:59.380
+But you also have defined this eager imports context manager, sort of.
+
+00:45:59.380 --> 00:46:02.500
+That will force the imports to be eager, right?
+
+00:46:02.500 --> 00:46:05.920
+And I say sort of because it's not actually the eager imports thing.
+
+00:46:05.920 --> 00:46:06.860
+It's the width block.
+
+00:46:06.860 --> 00:46:10.120
+Whatever you put in there, if you do an import in it, is what's going to trigger it, right?
+
+00:46:10.120 --> 00:46:10.420
+Yeah.
+
+00:46:10.420 --> 00:46:11.040
+It doesn't matter.
+
+00:46:11.040 --> 00:46:11.400
+Yeah.
+
+00:46:11.400 --> 00:46:19.180
+And then the third way is you can import set eager imports and actually pass like namespace names in there.
+
+00:46:19.740 --> 00:46:25.820
+Because one of the problems is I'm going to import a thing that's a package whose code I don't control.
+
+00:46:25.820 --> 00:46:29.700
+And I need it to, for one particular thing, eagerly import that, right?
+
+00:46:29.700 --> 00:46:33.560
+So you kind of have to force it down the line where it's out of the chain of control there.
+
+00:46:33.560 --> 00:46:40.640
+So you can sort of set like, I want to do FastAPI dot whatever, like exceptions or whatever's in there.
+
+00:46:40.780 --> 00:46:45.200
+I want to make sure that that eager loads, even though I don't control FastAPI, right?
+
+00:46:45.200 --> 00:46:48.320
+So you want to talk about some of these code tricks that you have here?
+
+00:46:48.320 --> 00:46:48.740
+Yeah.
+
+00:46:48.740 --> 00:46:50.200
+Or tools, I guess is a better word.
+
+00:46:50.200 --> 00:46:50.600
+Yeah.
+
+00:46:50.600 --> 00:46:54.280
+Let's say the eager imports is just for opting out certain modules.
+
+00:46:54.840 --> 00:47:04.260
+Application owners should be the ones adding the incompatible libraries here if they find or figure out that they aren't playing well with lazy imports.
+
+00:47:04.260 --> 00:47:04.680
+Yeah.
+
+00:47:04.680 --> 00:47:17.260
+So if I write a library and I see that my sub module cannot deal with being lazy, I could put this in my code to avoid, no matter what people set for the runtime flag, I could avoid that problem for my library, right?
+
+00:47:17.360 --> 00:47:18.240
+Yeah, exactly.
+
+00:47:18.240 --> 00:47:28.580
+So you can always try first and if you're the application owner and you know exactly what you need to do this application for, to work, you can try it in modules.
+
+00:47:28.580 --> 00:47:31.860
+And a lot of the libraries just work out of the box.
+
+00:47:31.860 --> 00:47:33.560
+So you don't need to do anything.
+
+00:47:33.560 --> 00:47:36.740
+There are some, some libraries that don't work.
+
+00:47:36.740 --> 00:47:42.200
+And if you can make those work in some other way, you can then add these as eager imports.
+
+00:47:42.200 --> 00:47:46.240
+What's the, I don't know if it's a lazy imports in those libraries.
+
+00:47:46.240 --> 00:47:46.560
+Yeah.
+
+00:47:46.680 --> 00:47:47.280
+Yeah.
+
+00:47:47.280 --> 00:47:49.080
+These are really interesting to see here.
+
+00:47:49.080 --> 00:47:55.300
+Like you can even pass a callback that will be handed a module name and it can, it can decide.
+
+00:47:55.300 --> 00:48:01.620
+You could say, I don't want to just say all the names that are of the sub module, but just anything that matches this pattern.
+
+00:48:01.620 --> 00:48:03.380
+Let's just tell it.
+
+00:48:03.380 --> 00:48:05.080
+We want to eagerly import that.
+
+00:48:05.080 --> 00:48:05.340
+Yeah.
+
+00:48:05.340 --> 00:48:05.600
+Yeah.
+
+00:48:05.600 --> 00:48:05.900
+Yeah.
+
+00:48:05.900 --> 00:48:06.120
+Yeah.
+
+00:48:06.120 --> 00:48:06.900
+It looks nice.
+
+00:48:06.900 --> 00:48:07.380
+I like it.
+
+00:48:07.380 --> 00:48:15.140
+There's a, another question from audience back to a code question and explicit opt-in is a hybrid robotics.
+
+00:48:15.140 --> 00:48:15.560
+Also asked.
+
+00:48:15.640 --> 00:48:21.480
+I really liked the idea of import lazy or lazy import library or something like that to be explicit about it.
+
+00:48:21.480 --> 00:48:29.920
+And you all actually specifically addressed whether or not there should be some syntax code that makes this happen instead of changing the default one.
+
+00:48:29.920 --> 00:48:30.100
+Right.
+
+00:48:30.100 --> 00:48:31.260
+What's the thoughts there?
+
+00:48:31.260 --> 00:48:37.700
+I think generally we're not opposed to the idea of syntax for lazy imports.
+
+00:48:37.700 --> 00:48:49.280
+The kinds of like memory and startup time wins that we've seen really depend on very broad application of lazy imports with just very narrowly targeted opt-outs.
+
+00:48:49.640 --> 00:48:59.560
+That's what you need in order to really get to a situation where you're actually paying for what you use in a robust way where you're not in a situation where you just accidentally add one import in one place.
+
+00:48:59.560 --> 00:49:01.860
+And all of a sudden all your gains just disappear like that.
+
+00:49:02.120 --> 00:49:08.260
+If it's really across the code base, then it's very robust startup time and memory wins where you add one import.
+
+00:49:08.260 --> 00:49:13.200
+And while you might pay for a little more, but you're not going to suddenly start paying 100% of the cost again.
+
+00:49:13.460 --> 00:49:22.480
+It feels like adding new syntax is a much bigger hurdle in terms of the steering council and having to change the Python grammar and all of that.
+
+00:49:22.480 --> 00:49:36.000
+And when the syntax, the per import syntax isn't really even useful in gaining the wins that are the primary motivation for the PEP, then it doesn't feel like a good trade-off to add that to the PEP.
+
+00:49:36.000 --> 00:49:36.240
+Sure.
+
+00:49:36.240 --> 00:49:36.580
+Yeah.
+
+00:49:36.580 --> 00:49:37.580
+I think I agree with that.
+
+00:49:37.580 --> 00:49:38.780
+That seems pretty reasonable to me.
+
+00:49:38.780 --> 00:49:39.760
+What about the reverse?
+
+00:49:40.240 --> 00:49:48.480
+What about if you, instead of doing something like this, where you say, I'm going to force these to be, I'm going to run some code to make these modules eager.
+
+00:49:48.480 --> 00:49:55.200
+What if as a library author, I could write eager import my thing or something along those lines.
+
+00:49:55.200 --> 00:49:57.760
+Now, I really don't want to see more syntax in Python.
+
+00:49:57.760 --> 00:50:01.860
+There was a huge battle over whether a colon goes by an equal sign.
+
+00:50:01.860 --> 00:50:04.880
+So I'm not necessarily suggesting that we should do this.
+
+00:50:04.880 --> 00:50:07.340
+I would say there's nothing necessarily wrong with that.
+
+00:50:07.340 --> 00:50:11.760
+It's more just that adding new syntax is a higher bar and maybe we should get some experience.
+
+00:50:11.760 --> 00:50:21.500
+When the same thing is easily possible with existing syntax, like a context manager, we may as well get some experience with the future in a less invasive way before we go adding syntax.
+
+00:50:21.500 --> 00:50:21.800
+Right.
+
+00:50:21.800 --> 00:50:26.120
+If you see so many people using it and benefiting from it, then you could consider it.
+
+00:50:26.500 --> 00:50:34.280
+I mean, one example of that is like 3.4 to 3.5 when there was asyncio introduced and then there was async and await introduced on top of that.
+
+00:50:34.280 --> 00:50:34.560
+Right.
+
+00:50:34.560 --> 00:50:36.480
+Even things like property, right?
+
+00:50:36.480 --> 00:50:43.740
+Like the property decorator was, you know, a feature that was available for the decorator syntax was added.
+
+00:50:43.740 --> 00:50:46.920
+So it's a tried and true strategy for Python.
+
+00:50:47.100 --> 00:50:53.900
+Let's get experience with the feature and then we can make adjustments and syntax to make it prettier, you know, down the road.
+
+00:50:53.900 --> 00:50:56.100
+Yeah, that's a good path.
+
+00:50:56.100 --> 00:50:56.920
+Awesome.
+
+00:50:56.920 --> 00:50:57.480
+All right.
+
+00:50:57.480 --> 00:51:00.640
+Well, really, really good work on this, you guys.
+
+00:51:00.640 --> 00:51:02.120
+This is exciting.
+
+00:51:02.120 --> 00:51:06.740
+I would like to see the status change from draft to something further.
+
+00:51:06.740 --> 00:51:11.080
+I guess I have to go do something after this chat.
+
+00:51:11.080 --> 00:51:12.140
+Perhaps so.
+
+00:51:12.140 --> 00:51:12.560
+Perhaps.
+
+00:51:12.560 --> 00:51:13.260
+Awesome.
+
+00:51:13.260 --> 00:51:21.460
+But now people know about the conversation much more broadly and maybe we'll get some more, even more comments on the discourse thread there.
+
+00:51:21.460 --> 00:51:24.780
+Let's maybe wrap that up because I think we're about out of time.
+
+00:51:24.780 --> 00:51:29.620
+But before I let you all out of here, you've got the two questions to quickly answer since there's three of you.
+
+00:51:29.620 --> 00:51:32.580
+Barry, if you're going to write some code, what editor are you using these days?
+
+00:51:32.580 --> 00:51:34.880
+It's always going to be Emacs for me.
+
+00:51:34.880 --> 00:51:35.240
+I know.
+
+00:51:35.340 --> 00:51:38.180
+You know, it's funny because Brett works at Microsoft.
+
+00:51:38.180 --> 00:51:40.400
+And so, you know, LinkedIn and Microsoft, we share.
+
+00:51:40.400 --> 00:51:41.760
+He has something to do with some editor.
+
+00:51:41.760 --> 00:51:43.940
+I think people, a few people may have heard of him or something.
+
+00:51:43.940 --> 00:51:45.280
+Yeah.
+
+00:51:45.280 --> 00:51:53.640
+And I keep telling Brett, I want to, I want to, you know, if I was starting today, I would probably, yes, Emacs is just kind of deeply in my bones.
+
+00:51:53.640 --> 00:51:54.740
+Got it.
+
+00:51:54.740 --> 00:51:55.700
+German, how about you?
+
+00:51:55.700 --> 00:52:00.920
+I used to use Sublime Text, even though it didn't have AutoComplete.
+
+00:52:01.480 --> 00:52:10.360
+So I added some AutoComplete from porting, Komodo IDE Editor, AutoComplete to Sublime Text.
+
+00:52:10.360 --> 00:52:12.960
+But now that it's in meta, I'm using VS Code.
+
+00:52:12.960 --> 00:52:15.580
+And also being when I'm in the terminal.
+
+00:52:15.580 --> 00:52:16.080
+Right on.
+
+00:52:16.080 --> 00:52:16.460
+Carl?
+
+00:52:16.640 --> 00:52:18.040
+Yeah, I used to be an Emacs user.
+
+00:52:18.040 --> 00:52:22.960
+I mentioned that's how Barry and I very first connected back at PyCon 2008.
+
+00:52:22.960 --> 00:52:25.460
+But I have switched to VS Code.
+
+00:52:25.460 --> 00:52:34.780
+There's a lot of integrations with VS Code in terms of meta infrastructure and maintaining all that stuff myself for Emacs just became more of a hassle than I wanted to pay.
+
+00:52:35.040 --> 00:52:36.520
+So I've switched to two jobs.
+
+00:52:36.520 --> 00:52:37.220
+One was enough.
+
+00:52:37.220 --> 00:52:38.540
+Right.
+
+00:52:38.540 --> 00:52:40.520
+All right.
+
+00:52:40.520 --> 00:52:46.600
+And then notable PyPI package, something that you think is pretty cool you just want to give a shout out to, popular or not.
+
+00:52:46.600 --> 00:52:47.420
+Go in reverse order.
+
+00:52:47.420 --> 00:52:48.040
+Carl, how about you?
+
+00:52:48.040 --> 00:52:55.060
+Well, I guess I'll give a shout out to something that I use in all of my projects, which is, I guess, depending on the project, either Pyre or mypy.
+
+00:52:55.060 --> 00:52:58.080
+I'm a big fan of type checking my Python codes.
+
+00:52:58.080 --> 00:52:58.860
+Yeah, fantastic.
+
+00:52:58.860 --> 00:52:59.420
+German?
+
+00:52:59.420 --> 00:53:01.620
+Yeah, well, Pyre is pretty good.
+
+00:53:01.620 --> 00:53:02.500
+Oh, I don't know.
+
+00:53:02.500 --> 00:53:07.740
+And microsort, which sorts your imports at the top of the file.
+
+00:53:07.740 --> 00:53:09.020
+So it's really useful.
+
+00:53:09.020 --> 00:53:16.040
+If there's an import syntax that makes all the other ones lazy, all these tools are going to have to learn about, well, this one doesn't go before the other.
+
+00:53:16.040 --> 00:53:19.920
+Or you could give it something like A, A, A, A, A, A, A, lazy.
+
+00:53:19.920 --> 00:53:23.660
+I guess.
+
+00:53:23.660 --> 00:53:27.920
+All right, Barry, how about you?
+
+00:53:27.920 --> 00:53:28.540
+Notable package?
+
+00:53:28.540 --> 00:53:33.840
+For me, it's a PDM, which is a package manager and sort of a build backend.
+
+00:53:33.840 --> 00:53:45.180
+I went through an exercise a couple of months ago where I just was finally wanting to get rid of all my setup.pies and setup.cfgs and just fully embrace pyproject.toml and see how far it could go.
+
+00:53:45.180 --> 00:53:52.240
+And I was actually pretty happy with being able to get rid of both of those legacy packaging files.
+
+00:53:52.480 --> 00:53:56.160
+So I tried a bunch of the different package managers and I really liked PDM.
+
+00:53:56.160 --> 00:53:59.700
+So I kind of, you know, settled on that one for my personal stuff.
+
+00:53:59.700 --> 00:54:00.540
+Yeah, fantastic.
+
+00:54:00.540 --> 00:54:01.000
+All right.
+
+00:54:01.000 --> 00:54:02.420
+Well, final call to action.
+
+00:54:02.420 --> 00:54:05.340
+People want to maybe have their thoughts heard on this.
+
+00:54:05.340 --> 00:54:05.960
+What do they do?
+
+00:54:05.960 --> 00:54:07.580
+I guess the discourse thread.
+
+00:54:07.580 --> 00:54:07.940
+Yeah.
+
+00:54:07.940 --> 00:54:08.620
+Discussed up.
+
+00:54:08.620 --> 00:54:09.380
+Python.org.
+
+00:54:09.380 --> 00:54:12.000
+Look for the PEPS category and look for PEPS 690.
+
+00:54:12.160 --> 00:54:12.420
+Yeah.
+
+00:54:12.420 --> 00:54:12.840
+Cool.
+
+00:54:12.840 --> 00:54:15.460
+You can love it or not love it or stuff like that.
+
+00:54:15.460 --> 00:54:19.420
+There's sort of ways to give just a heart feedback as well.
+
+00:54:19.420 --> 00:54:20.220
+So cool.
+
+00:54:20.220 --> 00:54:24.500
+The other thing you can do is pressure the sponsor of the PEPS to stop being so lazy.
+
+00:54:24.500 --> 00:54:25.620
+And that's something.
+
+00:54:26.400 --> 00:54:30.720
+I would find it incorrect if you were not lazy on this particular one.
+
+00:54:30.720 --> 00:54:38.000
+I mean, you got to just swim in that waterfall and see how it feels before you can really make a decision.
+
+00:54:38.000 --> 00:54:39.900
+Right, right, right, right, right, right, right.
+
+00:54:39.900 --> 00:54:41.220
+Awesome.
+
+00:54:41.220 --> 00:54:41.740
+All right.
+
+00:54:41.740 --> 00:54:43.680
+Well, gentlemen, thank you for being here.
+
+00:54:43.680 --> 00:54:45.160
+It's been great having you all on the show.
+
+00:54:45.160 --> 00:54:45.600
+Thanks.
+
+00:54:45.600 --> 00:54:45.840
+You're welcome.
+
+00:54:45.840 --> 00:54:46.760
+Thanks so much, Michael.
+
+00:54:46.760 --> 00:54:48.000
+Thanks for inviting us.
+
+00:54:48.000 --> 00:54:48.560
+Appreciate it.
+
+00:54:48.560 --> 00:54:49.040
+Yeah, you bet.
+
+00:54:49.040 --> 00:54:49.380
+Bye.
+
+00:54:49.380 --> 00:54:49.620
+Bye.
+
+00:54:49.620 --> 00:54:49.760
+Bye.
+
+00:54:49.760 --> 00:54:53.640
+This has been another episode of Talk Python to Me.
+
+00:54:53.640 --> 00:54:55.460
+Thank you to our sponsors.
+
+00:54:55.820 --> 00:54:57.060
+Be sure to check out what they're offering.
+
+00:54:57.060 --> 00:54:58.480
+It really helps support the show.
+
+00:54:58.480 --> 00:55:00.900
+Take some stress out of your life.
+
+00:55:00.900 --> 00:55:06.680
+Get notified immediately about errors and performance issues in your web or mobile applications with Sentry.
+
+00:55:06.680 --> 00:55:11.680
+Just visit talkpython.fm/sentry and get started for free.
+
+00:55:11.680 --> 00:55:15.260
+And be sure to use the promo code TALKPYTHON, all one word.
+
+00:55:15.260 --> 00:55:17.060
+Want to level up your Python?
+
+00:55:17.060 --> 00:55:21.100
+We have one of the largest catalogs of Python video courses over at Talk Python.
+
+00:55:21.100 --> 00:55:26.280
+Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+00:55:26.280 --> 00:55:28.960
+And best of all, there's not a subscription in sight.
+
+00:55:28.960 --> 00:55:31.860
+Check it out for yourself at training.talkpython.fm.
+
+00:55:31.860 --> 00:55:33.760
+Be sure to subscribe to the show.
+
+00:55:33.760 --> 00:55:36.540
+Open your favorite podcast app and search for Python.
+
+00:55:36.540 --> 00:55:37.840
+We should be right at the top.
+
+00:55:38.280 --> 00:55:47.220
+You can also find the iTunes feed at /itunes, the Google Play feed at /play, and the direct RSS feed at /rss on talkpython.fm.
+
+00:55:48.160 --> 00:55:50.640
+We're live streaming most of our recordings these days.
+
+00:55:50.640 --> 00:55:58.460
+If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+00:55:58.460 --> 00:56:00.320
+This is your host, Michael Kennedy.
+
+00:56:00.320 --> 00:56:01.620
+Thanks so much for listening.
+
+00:56:01.620 --> 00:56:02.780
+I really appreciate it.
+
+00:56:02.780 --> 00:56:04.680
+Now get out there and write some Python code.
+
+00:56:04.680 --> 00:56:25.300
+I really appreciate it.
+

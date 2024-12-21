@@ -1,0 +1,2483 @@
+WEBVTT
+
+00:00:00.001 --> 00:00:04.960
+Where do you run your Python code? No, no, no, not Python 3, Python 2, or PyPy, or any other
+
+00:00:04.960 --> 00:00:10.500
+implementation. I'm thinking way lower than that. This week, we're talking about the actual chips
+
+00:00:10.500 --> 00:00:16.580
+that execute our code. We catch up with David Stewart and meet Suresh Srinivas and Sergey
+
+00:00:16.580 --> 00:00:21.320
+Midnav from Intel. We talk about how they're working at the silicon level to make even Python
+
+00:00:21.320 --> 00:00:27.340
+2 run faster and touch on dedicated AI chips that go beyond what's possible with GPU computation.
+
+00:00:27.940 --> 00:00:36.240
+This is episode 113 of Talk Python to Me, recorded live at PyCon 2017 in Portland, Oregon on
+
+00:00:36.240 --> 00:00:38.240
+May 19th, 2017.
+
+00:00:55.880 --> 00:01:07.640
+Welcome to Talk Python to Me, a weekly podcast on Python, the language, the libraries, the
+
+00:01:07.640 --> 00:01:12.260
+ecosystem, and the personalities. This is your host, Michael Kennedy. Follow me on Twitter,
+
+00:01:12.260 --> 00:01:17.160
+where I'm @mkennedy. Keep up with the show and listen to past episodes at talkpython.fm,
+
+00:01:17.160 --> 00:01:19.740
+and follow the show on Twitter via at Talk Python.
+
+00:01:20.180 --> 00:01:25.520
+This episode is brought to you by Talk Python Training and Hired. Be sure to check out what
+
+00:01:25.520 --> 00:01:28.360
+we both have to offer during our segments. It helps support the show.
+
+00:01:28.360 --> 00:01:31.940
+David, Suresh, Sergey, welcome to Talk Python.
+
+00:01:31.940 --> 00:01:35.140
+Thank you very much. Great to be here. Thank you very much.
+
+00:01:35.140 --> 00:01:39.340
+David, you were here. We talked in the early days of the Intel Python distribution,
+
+00:01:39.880 --> 00:01:46.280
+and you guys have a lot of new things to discuss that you've done in the whole Python space. In addition,
+
+00:01:46.280 --> 00:01:49.660
+you know, with the Intel Python distribution, but also with other things, right?
+
+00:01:49.660 --> 00:01:55.060
+Yes, that's right. Yeah. We have a lot of, I mean, yeah, about a year ago when we talked the first time,
+
+00:01:55.060 --> 00:02:01.320
+we had really put the plans in place for not only our upstream contribution to Python,
+
+00:02:01.760 --> 00:02:07.480
+Python. We were also doing a lot of work with PyPy, the JIT interpreter for Python, as well as the
+
+00:02:07.480 --> 00:02:13.660
+Intel Python distribution. Since then, we've released the Intel Python distribution, and we've had some
+
+00:02:13.660 --> 00:02:18.940
+very significant, you know, upstream contributions and some proof points with some customers that have
+
+00:02:18.940 --> 00:02:25.380
+been showing some very positive things. So yeah, you know, not to repeat maybe last time, but just to
+
+00:02:25.380 --> 00:02:30.420
+say, generally speaking, if you're doing scientific computing, the Intel Python distribution,
+
+00:02:30.420 --> 00:02:37.200
+particularly things like using pandas or scikit-learn or numpy, scipy, these are all things
+
+00:02:37.200 --> 00:02:41.780
+that really work together very well with this Intel Python distribution. And it's a sort of a one
+
+00:02:41.780 --> 00:02:46.860
+distribution, just download and install the whole thing as one, right? So not a lot of messing around
+
+00:02:46.860 --> 00:02:53.280
+with it. We also have significant proof points with PyPy. In particular, we were showing off a doubling
+
+00:02:53.280 --> 00:02:58.980
+of throughput of like OpenStack Swift with PyPy contributions we had made. And that's, you know,
+
+00:02:58.980 --> 00:03:04.240
+so that means faster throughput, less, more users being able to, you know, being maintained and
+
+00:03:04.240 --> 00:03:05.760
+things like that. So that was a year ago.
+
+00:03:05.760 --> 00:03:10.940
+Yeah, that was a year ago. And when you say you're doubling the speed with PyPy, does that mean the
+
+00:03:10.940 --> 00:03:16.180
+contributions you've made back to PyPy now result in going faster? Or is that somehow running the Intel
+
+00:03:16.180 --> 00:03:17.700
+Python distribution on PyPy?
+
+00:03:17.700 --> 00:03:26.600
+It's actually so the Intel Python distribution separate from PyPy, right? So we do we have two major efforts from a year ago that we're doing upstream open source contributions, and the Python distribution, which is a program product, right? Right, right, right. So what we had the doubling actually was just initially,
+
+00:03:26.600 --> 00:03:45.600
+initially out of the box, let's see what PyPy gives us. And we were stunned that we got, you know, twice the throughput and like 80% better response time on Swift, just out of the box. And that said, Oh, let's start doing some work, you know, to actually optimize this thing and make it better and try more sort of proof points with other real customers, right? And since then, as well, the Python distribution,
+
+00:03:45.600 --> 00:04:07.600
+has had a lot of proof points with customers. I think you've had financial organizations, right? Financial, oil and gas, government organizations, a lot of different usages.
+
+00:04:07.600 --> 00:04:37.580
+Yeah, it's great. So okay, so yeah, that's, that's a really cool that you guys are working on that. I know we're not just talking about the Intel Python distribution. But let's dig into that just for a minute, like, is that basically CPython forked with some changes in the middle? Or like, is it a from scratch implementation? Or how does this relate back to CPython in terms of the beauty of Python, right, is it's a language specification and sort of the the sort of standard implementation CPython, right? But it's very open
+
+00:04:37.580 --> 00:05:07.340
+to any number of any number of other right interpreters or implementations of the language, PyPy being one of them. And it's basically a JIT, which means a just in time compiler, which means that instead of just interpreting the byte code from Python, it actually generates native code, any opportunity it can for the hot parts of the program. And that's incredibly helpful strategic, because then we can make use of a lot more processor instructions, make use of more processor parallelism.
+
+00:05:07.560 --> 00:05:12.560
+Yeah, okay, that sounds, sounds great. Suresh, were you involved in this Intel Python distribution work?
+
+00:05:37.540 --> 00:05:49.540
+So we can deliver some workloads, and then optimize, start optimizing the CPython itself. So we have things like profile guided optimizations, and link time optimizations that have now become defaulted CPython.
+
+00:05:49.540 --> 00:05:58.540
+Tell us a little bit about the profile guided optimization. So what you do is you run in a profiler, and then you somehow feed that back to the compiler?
+
+00:05:58.540 --> 00:06:28.520
+So profile guided optimization is very critical since a lot of these runtime languages, they have like both large code footprint, and then they have a lot of branch mispredictions, right? And which essentially stall the front end of the CPU. And by profiling the code, then you're able to then relay out the code better, so that it's friendly to the CPU, and it's also more efficient. And that's a great idea.
+
+00:06:28.520 --> 00:06:30.520
+So PGO is now default with Python.
+
+00:06:30.520 --> 00:06:38.520
+With CPython. And the PyPy, the PyPerformance project, that is how they're measuring it now.
+
+00:06:38.520 --> 00:06:40.520
+Wow, that's really cool. And Sergey, how about your involvement?
+
+00:06:40.520 --> 00:07:06.520
+They have solved a really critical problem in making an interpreter or GTing really fast on Intel architecture. Intel distribution for Python, it also solves the problem of making numerical and machine learning running faster. And Python is known and loved for really nice numerical packages, NumPy, SciPy, Scikit-Learn.
+
+00:07:06.520 --> 00:07:08.520
+All the stuff that we saw in the keynote today.
+
+00:07:08.520 --> 00:07:08.520
+Yeah.
+
+00:07:08.520 --> 00:07:18.520
+It's just like, here's why people that do numerical analysis love and use Python. And for those people listening who didn't get a chance to watch the keynote, you deserve to go on YouTube and watch it, right?
+
+00:07:18.520 --> 00:07:24.520
+So yeah, absolutely. Those groups of people, the scientists, data scientists, it's great, right?
+
+00:07:24.520 --> 00:07:52.520
+That's why we focus on this area and we optimize these numerical packages, not interpreter itself, but rather the packages. And for that, we rely on high performance libraries, native libraries that Intel develops for decades, Intel mass kernel library, Intel MPI, Intel data analytics creation library. These all good high performance libraries are used underneath to accelerate NumPy, SciPy, Scikit-Learn.
+
+00:07:52.520 --> 00:08:04.520
+I see. So you take, let's say, NumPy. You take NumPy and you recompile it against these high performance Intel libraries. And that, because the foundation is faster, basically makes NumPy itself faster.
+
+00:08:04.520 --> 00:08:08.520
+It makes as fast as, almost as fast as native code.
+
+00:08:08.520 --> 00:08:20.520
+How much do you think the fact that you guys control the hardware and build these libraries that you can make them compile to exactly what they need to be or, or could anybody do this? Is it a big advantage that you guys control the chips and understand the chips?
+
+00:08:20.520 --> 00:08:42.520
+Absolutely. I can tell you the example. I was with Intel mass kernel library team for 15 years. And we started optimizing MKL for new processor three, five years in advance of its launch. That's really huge benefit. So by day one of processor launch, we had MKL optimized for that processor. Same with Intel Python distribution.
+
+00:08:42.520 --> 00:08:52.520
+We had Knight's landing Xeon 5 processor launch last summer. And by that time, Intel distribution for Python was already optimized for KNL.
+
+00:08:52.520 --> 00:09:02.520
+I see. Because you guys have a long lead time. Yeah. I think that's a good, the other side of this is not just being able to, you know, have these libraries for if you're using those for scientific computing,
+
+00:09:02.520 --> 00:09:16.520
+but there's a ton of usage of Python in the data center that is not scientific computing. You know, a great examples, the site Instagram, you know, any number of other sites that are out there that are using Python to open stack itself is implemented in Python.
+
+00:09:16.520 --> 00:09:28.520
+So one of the things that in terms of working with the chip architects is being able to actually help them design the chip so it runs all Python better. Not just this live tuned library code, but all Python as well.
+
+00:09:28.520 --> 00:09:40.520
+Right. And that's, you said there's some really interesting performance improvements that you got for running old Python. And we'll dig into that in a little bit. Because that's as fun as it is to look at the data science stuff and the machine learning performance and all that.
+
+00:09:40.520 --> 00:09:56.520
+Most people are running old Python, maybe Python 2 stuff that they don't even want to touch much, much less optimize away. Right. So if somehow you guys can just magically make it run faster, like that would be good for us to do. Wouldn't it? I mean, it would make sense. Yeah, it would. It would.
+
+00:09:56.520 --> 00:10:08.520
+So, I mean, we're talking about performance in terms of speed, but when you're optimizing like the data center, one of the major measures of efficiency in the data center is how much do I have to pay to run this in electricity and cool it?
+
+00:10:08.520 --> 00:10:13.520
+So just like pure efficiency in terms of energy, right? Like how much of a difference have you guys seen in that?
+
+00:10:13.520 --> 00:10:26.520
+That's really huge because part of the challenge in the data center is all the cooling costs and all the space costs and things like that. So Intel and Facebook work together to create a new server architecture, right?
+
+00:10:26.520 --> 00:10:36.520
+That many of the Python programs kind of run in the data center on that architecture and that runs at 65 watts compared to…
+
+00:10:36.520 --> 00:10:38.520
+Compared to… Yeah, give me an example. Like what is that relative to?
+
+00:10:38.520 --> 00:10:52.520
+Compared to a server that runs at 150 watts. And so it's really efficient and then it has a lot of technologies that we are adding to the silicon itself to make it perform well at the same time.
+
+00:10:52.520 --> 00:10:56.520
+Because people want both the power and the power.
+
+00:10:56.520 --> 00:11:08.520
+Obviously you want the speed, but you can get the double density in a data center. So if you're AWS or Azure or Google or Facebook, you can have twice as much computing power and same amount of energy in and cooling out.
+
+00:11:08.520 --> 00:11:18.520
+That's a real win. And not only that, that is something that we've observed, you know, an extra processor generation of performance improvement with, you know, some of these optimized software.
+
+00:11:18.520 --> 00:11:21.520
+So that's something that's an advantage going that route. Yeah.
+
+00:11:21.520 --> 00:11:29.520
+Yeah. And so what's really cool, I think, is some of this work that you guys are doing is being pushed upstream to CPython, is being pushed upstream to PyPy.
+
+00:11:29.520 --> 00:11:41.520
+It's one thing to say, well, we have our own distribution and that one's really fast. So please use ours instead. But you guys are also giving a lot back by making Python itself faster for everybody or more efficient in energy terms or whatever.
+
+00:11:41.520 --> 00:11:54.520
+It's really sort of not a one size fits all sort of philosophy. It's really doing data science. You're doing the using these libraries, Sergey was mentioning. That's the Intel Python distribution is a great one stop shop for all of that stuff.
+
+00:11:54.520 --> 00:12:04.520
+If you're not using necessarily the libraries, then, you know, we're working in the sort of the upstream areas to make sure that any use of Python that you would download will run faster.
+
+00:12:04.520 --> 00:12:11.520
+Yeah. Are there any notable specifics about what you've contributed to CPython or PyPy that you can think of off the top of your head?
+
+00:12:11.520 --> 00:12:18.520
+Yeah. One of the things that's been interesting for us is making sure we have really customer sort of relevant, you know, workloads.
+
+00:12:18.520 --> 00:12:25.520
+When we talk about workload, what this means is, you know, you have software just sort of sitting there, you install Python and well, that's not particularly interesting, right?
+
+00:12:25.520 --> 00:12:36.520
+What's more interesting is if you can run some code that represents what everyone else is doing, right? And, and hopefully not like a just a simple sort of, you know, micro, right?
+
+00:12:36.520 --> 00:12:51.520
+It's like something that's actually sort of realistic. And so one of the things we're really excited about is we just open sourced with Instagram, a new workload that will represents what not only Instagram is doing with Django, but also represents a lot of other Django usage out there.
+
+00:12:51.520 --> 00:13:04.520
+And so that one is really by open sourcing it by both companies contributing to it. I think it's going to help everybody sort of drive performance better, right? We also do a lot of monitoring of the sources.
+
+00:13:04.520 --> 00:13:15.520
+So for Python 2, Python 3 and PyPy, we actually do a nightly download of the sources, run a bunch of benchmarks and then report the results out to the community.
+
+00:13:15.520 --> 00:13:25.520
+So anybody can go to languagesperformance.intel.com and see a complete readout of a bunch of different workloads with the different versions of Python and PyPy.
+
+00:13:25.520 --> 00:13:36.520
+And so you can see exactly on a day to day basis how the performance changes. Now, the reason why this is important is someone can do a pull request that slows things down by 10 or 20%.
+
+00:13:36.520 --> 00:13:41.520
+We've seen this in some cases where a single pull request, you know, will really slow things down, right?
+
+00:13:41.520 --> 00:13:51.520
+And so we're not only monitoring this thing, we have engineers that are jumping on it and being able to see, hey, if we have a real regression in performance, we want to jump on it very quickly and get it back.
+
+00:13:51.520 --> 00:13:55.520
+So this is one of the earliest things that we did in these languages to try to help with this.
+
+00:13:55.520 --> 00:14:01.520
+That's a big deal because it's very hard to be intuitively accurate about performance, isn't it?
+
+00:14:01.520 --> 00:14:05.520
+Or it could be your intuition might say one thing, but it might be absolutely wrong.
+
+00:14:05.520 --> 00:14:07.520
+You go, well, this should run faster.
+
+00:14:07.520 --> 00:14:17.520
+And it's like, wow, it only, you know, improved like half a percent or maybe it degraded, you know, 5% because a lot of the things that might have gotten pulled in or just assumptions that were missing.
+
+00:14:17.520 --> 00:14:18.520
+Right, right.
+
+00:14:18.520 --> 00:14:21.520
+The code looks tighter, but it actually does something different with memory.
+
+00:14:21.520 --> 00:14:30.520
+Some example, I think that if you look at, say, a list comprehension versus a for loop that adds to a list, I think the list comprehension is faster, even though they're effectively doing the same type of thing.
+
+00:14:30.520 --> 00:14:31.520
+Right.
+
+00:14:31.520 --> 00:14:33.520
+These types of things are pretty interesting.
+
+00:14:33.520 --> 00:14:44.520
+And by the way, if you're a programmer, I think I made the comment last year on the podcast, the best runtime in the world, the best libraries in the world and poor Python code, right, will still run poorly.
+
+00:14:44.520 --> 00:14:45.520
+Right.
+
+00:14:45.520 --> 00:14:51.520
+And so one of the things I think I'm really also very excited about is that we have a great profiler called VTune.
+
+00:14:51.520 --> 00:14:52.520
+It's from Intel.
+
+00:14:52.520 --> 00:14:54.520
+The group Sergei is from.
+
+00:14:54.520 --> 00:14:58.520
+And there you're actually able to see where the hotspots are in your Python code.
+
+00:14:58.520 --> 00:15:09.520
+And I think this is really powerful because, you know, I think both the runtime and the user code are really important to optimize or else you may not get nearly what you think you're going to get in terms of performance.
+
+00:15:09.520 --> 00:15:10.520
+Right.
+
+00:15:10.520 --> 00:15:11.520
+Even if you adopt the fast libraries.
+
+00:15:11.520 --> 00:15:12.520
+Exactly.
+
+00:15:12.520 --> 00:15:18.520
+If you have an O, if you have some sort of exponential order of magnitude algorithm, you're still in trouble, right?
+
+00:15:18.520 --> 00:15:20.520
+Or an order log in or something like that, right?
+
+00:15:20.520 --> 00:15:21.520
+Yeah.
+
+00:15:21.520 --> 00:15:22.520
+Or order n squared or something like that.
+
+00:15:22.520 --> 00:15:26.520
+Then you want to make sure you actually can identify some of those things and correct them.
+
+00:15:26.520 --> 00:15:27.520
+Yeah.
+
+00:15:27.520 --> 00:15:31.520
+So Sergei, tell us a little bit like how would I take a, let's say we're talking about Django.
+
+00:15:31.520 --> 00:15:35.520
+Could I take a Django app and apply this VTune profiler to it and get some answers?
+
+00:15:35.520 --> 00:15:36.520
+Absolutely.
+
+00:15:36.520 --> 00:15:39.520
+This is what we suggest essentially as a first step.
+
+00:15:39.520 --> 00:15:42.520
+You run your application on your architecture.
+
+00:15:42.520 --> 00:15:48.520
+You want to understand what affects the performance and how I can improve this performance.
+
+00:15:48.520 --> 00:15:51.520
+The first step is to run it with a profiler like VTune.
+
+00:15:51.520 --> 00:15:54.520
+And VTune, this is, exists for many years.
+
+00:15:54.520 --> 00:15:57.520
+This is product known for profiling native codes.
+
+00:15:57.520 --> 00:16:00.520
+Yeah, I remember VTune from my C++ days.
+
+00:16:00.520 --> 00:16:01.520
+Yeah.
+
+00:16:01.520 --> 00:16:07.520
+The only challenge with that when you run VTune in old days with Python code, it didn't show
+
+00:16:07.520 --> 00:16:09.520
+your Python specific code.
+
+00:16:09.520 --> 00:16:11.520
+You saw these weird symbols.
+
+00:16:11.520 --> 00:16:14.520
+You're like, this C eval.c is really slow.
+
+00:16:14.520 --> 00:16:16.520
+It seems to be doing a lot of stuff in here.
+
+00:16:16.520 --> 00:16:17.520
+It tells nothing.
+
+00:16:17.520 --> 00:16:24.520
+So what we added to VTune, it now understands the Python code and you can show exactly the Python
+
+00:16:24.520 --> 00:16:30.520
+function or Python line of the code, the loop, which consumes the most cycles.
+
+00:16:30.520 --> 00:16:35.520
+So you can really focus on optimizing this piece of the code using a variety of technologies,
+
+00:16:35.520 --> 00:16:39.520
+either libraries or PyPy or other technologies.
+
+00:16:39.520 --> 00:16:40.520
+Or maybe just changing your code.
+
+00:16:40.520 --> 00:16:41.520
+Oh, yeah.
+
+00:16:41.520 --> 00:16:43.520
+As you were saying, Michael, a for loop versus a composition, right?
+
+00:16:43.520 --> 00:16:44.520
+Yeah, exactly.
+
+00:16:44.520 --> 00:16:45.520
+Exactly.
+
+00:16:45.520 --> 00:16:46.520
+Yeah, that's pretty interesting.
+
+00:16:46.520 --> 00:16:49.520
+Does it require some kind of GUI thing?
+
+00:16:49.520 --> 00:16:52.520
+Can I make this like a CLI, part of my automated build?
+
+00:16:52.520 --> 00:16:54.520
+You can write command line.
+
+00:16:54.520 --> 00:16:56.520
+If you like nice GUI, you can write GUI like, yeah.
+
+00:16:56.520 --> 00:16:58.520
+So either a CLI or a GUI.
+
+00:16:58.520 --> 00:16:59.520
+Yeah, yeah.
+
+00:16:59.520 --> 00:17:01.520
+So any of you guys can take this one.
+
+00:17:01.520 --> 00:17:05.520
+Suppose I'm sitting, you know, I got my MacBook Pro here and I've written my code and it runs
+
+00:17:05.520 --> 00:17:06.520
+a certain way.
+
+00:17:06.520 --> 00:17:13.520
+And then I want to like push it out to some hosted place, DigitalOcean, Azure, AWS, whatever.
+
+00:17:13.520 --> 00:17:20.520
+How much would I expect the performance to vary on say like one of those VMs versus say on like my native machine?
+
+00:17:20.520 --> 00:17:23.520
+And could I use something like VTune to like test it there?
+
+00:17:23.520 --> 00:17:25.520
+So I test it in its home environment.
+
+00:17:25.520 --> 00:17:26.520
+I think it's a great question.
+
+00:17:26.520 --> 00:17:29.520
+You know, so much code is being run in the public cloud now.
+
+00:17:29.520 --> 00:17:33.520
+My recommendation on that and, you know, performance, here's the other thing.
+
+00:17:33.520 --> 00:17:35.520
+There's nothing against any of the public cloud providers.
+
+00:17:35.520 --> 00:17:41.520
+But one of the things you if you're sharing compute resources, you're not necessarily getting the purest performance.
+
+00:17:41.520 --> 00:17:46.520
+There's some sort of performance trade off for the fact that you're doing a dedicated machine.
+
+00:17:46.520 --> 00:17:47.520
+And it varies, right?
+
+00:17:47.520 --> 00:17:48.520
+You don't know what you have.
+
+00:17:48.520 --> 00:17:49.520
+You have an SLA.
+
+00:17:49.520 --> 00:17:52.520
+Are they doing machine learning or do they have an unpopular website and they just have to pay for a VM?
+
+00:17:52.520 --> 00:17:56.520
+Or even, you know, in some instances, we have a noisy neighbor.
+
+00:17:56.520 --> 00:18:00.520
+You know, maybe you'll have some VM that's destroying the cache, right?
+
+00:18:00.520 --> 00:18:07.520
+By the way, we have a feature that we've added our processor to detect noisy neighbors and manage them, which is a separate thing we're doing for cloud service providers.
+
+00:18:07.520 --> 00:18:08.520
+But anyway, for Python.
+
+00:18:08.520 --> 00:18:13.520
+So, yeah, I would recommend running it native and doing most of your tuning there.
+
+00:18:13.520 --> 00:18:17.520
+By the way, I've noticed that not all cloud service providers would let you run VTune.
+
+00:18:17.520 --> 00:18:18.520
+Oh, really?
+
+00:18:18.520 --> 00:18:19.520
+Yeah.
+
+00:18:19.520 --> 00:18:20.520
+Well, it's not that it's not running VTune.
+
+00:18:20.520 --> 00:18:26.520
+And it's just they sort of sometimes mask some of the, you know, some of the registers that let you detect, you know, the performance.
+
+00:18:26.520 --> 00:18:32.520
+And so that's some of the things I think you've got either a private cloud setup or, you know, an on prem.
+
+00:18:32.520 --> 00:18:35.520
+It's much easier to really tune the performance and figure out what's going on.
+
+00:18:35.520 --> 00:18:38.520
+Maybe if you're doing open stack, you control the thing a little better.
+
+00:18:38.520 --> 00:18:39.520
+Exactly right.
+
+00:18:39.520 --> 00:18:45.520
+And, you know, hey, give people the ability to actually monitor the performance of what they're doing and figure out how to make it better.
+
+00:18:45.520 --> 00:18:46.520
+Right?
+
+00:18:46.520 --> 00:18:46.520
+Okay.
+
+00:18:46.520 --> 00:18:50.520
+And also, like our silicon has these advanced features called the performance monitoring unit.
+
+00:18:50.520 --> 00:18:51.520
+Okay.
+
+00:18:51.520 --> 00:18:56.520
+Which, like when you're profiling on your MacBook Pro, VTune can really take advantage of that.
+
+00:18:56.520 --> 00:19:01.520
+And it can tell you where your cache misses are coming from, where your problems are coming from.
+
+00:19:01.520 --> 00:19:06.520
+Whereas, sometimes, if you try to do it on a public cloud, it becomes harder for you to figure out.
+
+00:19:06.520 --> 00:19:07.520
+Right.
+
+00:19:07.520 --> 00:19:14.520
+So, we would definitely recommend like what Dave is saying to be able to profile and get your code optimized and then deploy.
+
+00:19:14.520 --> 00:19:15.520
+Yeah.
+
+00:19:15.520 --> 00:19:16.520
+I see.
+
+00:19:16.520 --> 00:19:17.520
+Yeah.
+
+00:19:17.520 --> 00:19:18.520
+So, maybe test both, right?
+
+00:19:18.520 --> 00:19:19.520
+Yeah.
+
+00:19:19.520 --> 00:19:21.520
+Because on one hand, you get the best, most accurate answers on the real hardware.
+
+00:19:21.520 --> 00:19:23.520
+But it actually has to live over there.
+
+00:19:23.520 --> 00:19:24.520
+So, you want to know also what it does.
+
+00:19:24.520 --> 00:19:25.520
+Yeah.
+
+00:19:25.520 --> 00:19:26.520
+Certainly see what the experience is.
+
+00:19:26.520 --> 00:19:30.520
+Particularly if you're expecting some throughput measurement, you know, set things up.
+
+00:19:30.520 --> 00:19:36.520
+By the way, for performance work, we sort of recommend that people have something that they can run their code against that's repeatable.
+
+00:19:36.520 --> 00:19:41.520
+You get repeatable results and then just change one thing at a time to kind of see what the change is.
+
+00:19:41.520 --> 00:19:43.520
+Use a very scientific approach, right?
+
+00:19:43.520 --> 00:19:48.520
+As opposed to changing a bunch of things and, gee, things, a lot of change, but I don't know what it was that affected.
+
+00:19:48.520 --> 00:19:48.520
+Right.
+
+00:19:48.520 --> 00:19:49.520
+Make a hypothesis.
+
+00:19:49.520 --> 00:19:50.520
+Make some measurements.
+
+00:19:50.520 --> 00:19:51.520
+Exactly right.
+
+00:19:51.520 --> 00:19:52.520
+It's the scientific method, right?
+
+00:19:52.520 --> 00:19:53.520
+It is.
+
+00:19:53.520 --> 00:19:54.520
+That we were taught in school.
+
+00:19:54.520 --> 00:19:55.520
+Yeah.
+
+00:19:55.520 --> 00:19:57.520
+I think Aristotle and those guys were on the subject.
+
+00:19:57.520 --> 00:19:58.520
+They were on the subject.
+
+00:19:58.520 --> 00:19:59.520
+That's right.
+
+00:19:59.520 --> 00:20:01.520
+My previous manager used to say, "Measure twice, cut once."
+
+00:20:01.520 --> 00:20:02.520
+Yeah.
+
+00:20:02.520 --> 00:20:03.520
+Yes.
+
+00:20:03.520 --> 00:20:04.520
+Exactly.
+
+00:20:04.520 --> 00:20:05.520
+Exactly.
+
+00:20:05.520 --> 00:20:06.520
+Yeah.
+
+00:20:06.520 --> 00:20:07.520
+Very much.
+
+00:20:07.520 --> 00:20:08.520
+Perfect.
+
+00:20:08.520 --> 00:20:13.520
+So, another area that you guys are working in that's, it seems to be like the last year or so this has become real, is AI and machine learning.
+
+00:20:13.520 --> 00:20:22.520
+I remember thinking for like 10 years, like, yes, AI, machine learning, this type of stuff, especially AI, was like one of those always 30 years in the future sort of technologies.
+
+00:20:22.520 --> 00:20:24.520
+People are working on it, but it doesn't ever seem to do a thing.
+
+00:20:24.520 --> 00:20:25.520
+Flying car and jetpack.
+
+00:20:25.520 --> 00:20:26.520
+Yes, exactly.
+
+00:20:26.520 --> 00:20:31.520
+Like, as soon as I have my, you know, teleporter, I'll be able to do machine learning and stuff.
+
+00:20:31.520 --> 00:20:36.520
+But over the last, I'd say two years, it has become super real, right?
+
+00:20:36.520 --> 00:20:37.520
+We have self-driving cars.
+
+00:20:37.520 --> 00:20:41.520
+We have all sorts of interesting things going on.
+
+00:20:41.520 --> 00:20:49.520
+Lots of application of AI just in recommendation engines, facial recognition, all these sort of things that are just practical, everyday things.
+
+00:20:49.520 --> 00:20:50.520
+Yeah.
+
+00:20:50.520 --> 00:20:52.520
+It's going to have some interesting societal effects.
+
+00:20:52.520 --> 00:20:53.520
+Absolutely.
+
+00:20:53.520 --> 00:20:54.520
+I think in some very powerful ways.
+
+00:20:54.520 --> 00:20:55.520
+Oh, social effects.
+
+00:20:55.520 --> 00:20:56.520
+Yep.
+
+00:20:56.520 --> 00:20:59.520
+We have a world need to think about what that means for us.
+
+00:20:59.520 --> 00:21:00.520
+I totally agree.
+
+00:21:00.520 --> 00:21:03.520
+I mean, I'm thinking of like breast cancer analysis.
+
+00:21:03.520 --> 00:21:09.520
+We used to think radiology was like a super high-end job that like you're safe if you are a doctor.
+
+00:21:09.520 --> 00:21:13.520
+And now it's like, well, or you feed it to this machine and it's actually a little more accurate.
+
+00:21:13.520 --> 00:21:19.520
+You could talk about other social impacts like are you going to use past performance to indicate which is the best candidate to hire?
+
+00:21:19.520 --> 00:21:25.520
+Well, if you did that, you might eliminate a lot of people of color or women because they haven't been as much in the workforce, right?
+
+00:21:25.520 --> 00:21:26.520
+Right.
+
+00:21:26.520 --> 00:21:29.520
+So you've got to be very careful at some of the social impact of these things.
+
+00:21:29.520 --> 00:21:30.520
+However, I will say this.
+
+00:21:30.520 --> 00:21:36.520
+One of the things we have been very, you know, there are a lot of systems on the internet, you know, that Intel's provided the chips for.
+
+00:21:36.520 --> 00:21:38.520
+And there's a ton of data that's out there.
+
+00:21:38.520 --> 00:21:53.520
+And so one of the things we did that's very interesting from a Python standpoint is since a lot of companies have this data accessible through Hadoop and Spark, what we've done, we recently just in March upstreamed our open sourced what we call Big DL.
+
+00:21:53.520 --> 00:21:54.520
+Okay.
+
+00:21:54.520 --> 00:21:55.520
+Big DL.
+
+00:21:55.520 --> 00:21:56.520
+It's sort of a big deal.
+
+00:21:56.520 --> 00:21:58.520
+Good.
+
+00:21:58.520 --> 00:21:59.520
+Thank you.
+
+00:21:59.520 --> 00:21:59.520
+I got to laugh.
+
+00:21:59.520 --> 00:22:01.520
+Anyway, so Big DL has a Python interface.
+
+00:22:01.520 --> 00:22:03.520
+So what it does is deep learning.
+
+00:22:03.520 --> 00:22:09.520
+So when you're doing a training of a deep learning algorithm and then inference analysis, right?
+
+00:22:09.520 --> 00:22:14.520
+What a lot of times that data that you're using to do the training on is accessible out of Hadoop and Spark.
+
+00:22:14.520 --> 00:22:21.520
+So a lot of people have said to us, hey, we would like to be able to do deep learning on our Spark data lakes or, you know, Hadoop, right?
+
+00:22:21.520 --> 00:22:22.520
+Big data.
+
+00:22:22.520 --> 00:22:24.520
+It's like, yeah, so that's what Big DL does.
+
+00:22:24.520 --> 00:22:28.520
+But it's like a lot of people said, we don't want to have to use Java to go into that stuff.
+
+00:22:28.520 --> 00:22:30.520
+We'd like to be able to use Python.
+
+00:22:30.520 --> 00:22:34.520
+So that's what one of the things that got released in March was our first Python interface to Big DL.
+
+00:22:34.520 --> 00:22:41.520
+So this is one of the ways where a lot of organizations, they already have a big data lake already that they can access through Hadoop and Spark.
+
+00:22:41.520 --> 00:22:47.520
+They can use Python and the Big DL project to do their deep learning experiments and then products.
+
+00:22:47.520 --> 00:22:49.520
+Yeah, that sounds really, really cool.
+
+00:22:49.520 --> 00:22:57.520
+And it sounds like you guys are doing a lot of almost reorganization of Intel around this AI research and work.
+
+00:22:57.520 --> 00:22:59.520
+That's a very good observation.
+
+00:22:59.520 --> 00:23:04.520
+In fact, we started up a new product group, the AI platform group.
+
+00:23:04.520 --> 00:23:05.520
+Product group?
+
+00:23:05.520 --> 00:23:06.520
+Platform group.
+
+00:23:06.520 --> 00:23:07.520
+Yeah, AI product group.
+
+00:23:07.520 --> 00:23:08.520
+Right.
+
+00:23:08.520 --> 00:23:19.520
+We're reporting directly to the CEO.
+
+00:23:19.520 --> 00:23:29.520
+So these are chips that they're making, that Nirvana is making, that actually does this deep learning inference, training and inference, much, much faster, order of magnitude better than anything else that's out there.
+
+00:23:29.520 --> 00:23:37.520
+Wow. Okay. So I know about deep learning on CPUs and training and machine learning. That's pretty good.
+
+00:23:37.520 --> 00:23:43.520
+You move it to a GPU and it gets kind of crazy. These chips, these are not just GPUs. These are something different?
+
+00:23:43.520 --> 00:23:48.520
+Correct. Yeah. They're specifically designed for the problem set that deep learning presents to the CPU.
+
+00:23:48.520 --> 00:23:58.520
+So it's not like, yeah, I mean, our main Xeon processors actually do deep learning pretty well compared to the GPUs that are out there.
+
+00:23:58.520 --> 00:24:07.520
+But something that actually like turbo charge it and really take it to the next level, a chip that's specifically designed for that, not for that plus graphics or that plus something else.
+
+00:24:07.520 --> 00:24:11.520
+Sure. Because traditionally graphics cards just coincidentally are good at machine learning.
+
+00:24:11.520 --> 00:24:18.520
+Well, with a ton of effort, I remember, you know, the first time looking at, well, how do you get a GPU to actually do general purpose computing?
+
+00:24:18.520 --> 00:24:24.520
+Let's see, if you do a matrix operation, right, it's a texture. And so let's see, we'll get a couple of textures as matrices.
+
+00:24:24.520 --> 00:24:29.520
+We'll feed them into the GPU and then you can do texture, you know, lighting transform on the textures.
+
+00:24:29.520 --> 00:24:32.520
+And it's like, well, that happens to be a matrix operation. Read out the resulting matrix.
+
+00:24:32.520 --> 00:24:38.520
+And it's like, from a programming standpoint, you know, that's why you need a lot of libraries and things to help you through that process.
+
+00:24:38.520 --> 00:24:42.520
+Can I express this general programming problem as a series of matrix multiplications?
+
+00:24:42.520 --> 00:24:43.520
+Exactly.
+
+00:24:43.520 --> 00:24:47.520
+That are essentially just texture, OpenGL texture processing and things like that.
+
+00:24:47.520 --> 00:24:54.520
+So this is one of the things I think is very exciting about moving this into the mainstream in terms of either, you know, at the x86 Xeon processors.
+
+00:24:54.520 --> 00:24:58.520
+And then as we bring Nirvana's chips, you know, we bring them into the Xeons.
+
+00:24:58.520 --> 00:25:01.520
+We have, you know, actually FPGAs as well.
+
+00:25:01.520 --> 00:25:03.520
+You know, these are special purpose.
+
+00:25:03.520 --> 00:25:08.520
+You know, you can program to do a bunch of accelerations and they have multiple acceleration units built in.
+
+00:25:08.520 --> 00:25:12.520
+And so we can actually accelerate a lot of things along with the CPU.
+
+00:25:12.520 --> 00:25:17.520
+So there are a ton of options that we're bringing to the table that will really accelerate a lot of specific workloads.
+
+00:25:17.520 --> 00:25:19.520
+Yeah, that sounds really interesting.
+
+00:25:19.520 --> 00:25:21.520
+I want to dig into that some more.
+
+00:25:21.520 --> 00:25:25.520
+This portion of Talk Python is brought to you by us.
+
+00:25:25.520 --> 00:25:30.520
+As many of you know, I have a growing set of courses to help you go from Python beginner to novice to Python expert.
+
+00:25:30.520 --> 00:25:32.520
+And there are many more courses in the works.
+
+00:25:32.520 --> 00:25:36.520
+So please consider Talk Python training for you and your team's training needs.
+
+00:25:36.520 --> 00:25:43.520
+If you're just getting started, I've built a course to teach you Python the way professional developers learn by building applications.
+
+00:25:43.520 --> 00:25:48.520
+Check out my Python jumpstart by building 10 apps at talkpython.fm/course.
+
+00:25:48.520 --> 00:25:51.520
+Are you looking to start adding services to your app?
+
+00:25:51.520 --> 00:25:54.520
+Try my brand new consuming HTTP services in Python.
+
+00:25:54.520 --> 00:25:59.520
+You'll learn to work with RESTful HTTP services as well as SOAP, JSON and XML data formats.
+
+00:25:59.520 --> 00:26:01.520
+Do you want to launch an online business?
+
+00:26:01.520 --> 00:26:06.520
+Well, Matt McKay and I built an entrepreneur's playbook with Python for Entrepreneurs.
+
+00:26:06.520 --> 00:26:11.520
+This 16 hour course will teach you everything you need to launch your web based business with Python.
+
+00:26:11.520 --> 00:26:14.520
+And finally, there's a couple of new course announcements coming really soon.
+
+00:26:14.520 --> 00:26:20.520
+So if you don't already have an account, be sure to create one at training.talkpython.fm to get notified.
+
+00:26:20.520 --> 00:26:24.520
+And for all of you who have bought my courses, thank you so much.
+
+00:26:24.520 --> 00:26:27.520
+And I think it really, really helps support the show.
+
+00:26:27.520 --> 00:26:32.520
+Just on the general machine learning stuff, Shuresh, you were working in the data center and optimizing that space, right?
+
+00:26:32.520 --> 00:26:36.520
+Over the next five years, how do you see machine learning contributing to that?
+
+00:26:36.520 --> 00:26:44.520
+Like, can you take a trained up machine learning system and say, "Here's my data center. Here's what we're doing. Can you make it better?"
+
+00:26:44.520 --> 00:26:47.520
+And just ask it these questions. Like, is that something that could happen?
+
+00:26:47.520 --> 00:26:52.520
+No, that's definitely happening because it's all about like, what are the inputs that you can take in?
+
+00:26:52.520 --> 00:26:59.520
+And the more inputs you can take and learn some specific things, then you're able to start optimizing the system.
+
+00:26:59.520 --> 00:27:06.520
+So we'll start seeing this kind of technology becoming more prevalent in a lot of things that we do.
+
+00:27:06.520 --> 00:27:10.520
+It's very exciting time to be in this field.
+
+00:27:10.520 --> 00:27:13.520
+It's every day I wake up going, "It's even more amazing than yesterday!"
+
+00:27:13.520 --> 00:27:16.520
+So, same question to you, Sergey.
+
+00:27:16.520 --> 00:27:21.520
+The big deal in this new area is cross-team productivity.
+
+00:27:21.520 --> 00:27:30.520
+You cannot solve the modern complex problems without involving domain specialists, programmers, data scientists.
+
+00:27:30.520 --> 00:27:34.520
+This is all new collaborative environments. So productivity is the key.
+
+00:27:34.520 --> 00:27:38.520
+This is what we are trying to offer through Intel distribution for Python.
+
+00:27:38.520 --> 00:27:43.520
+We provide out-of-the-box performance and productivity to our customers.
+
+00:27:43.520 --> 00:27:49.520
+So they can focus on solving their domain problem in deep learning, in machine learning in general.
+
+00:27:49.520 --> 00:27:54.520
+And then with Intel distribution for Python to scale this to real problem in data center.
+
+00:27:54.520 --> 00:27:59.520
+How about parallel distribution, multi-grid computing type stuff?
+
+00:27:59.520 --> 00:28:05.520
+What do you see out there and what do you see working for that in the Python space?
+
+00:28:05.520 --> 00:28:12.520
+Yeah, I mean, I think one of the things that is, like I said, we have an array of things, so to speak, that you can bring to bear on different problems.
+
+00:28:12.520 --> 00:28:17.520
+One of the ones that Sergey mentioned is something we call Xeon Phi, P-H-I, Xeon Phi.
+
+00:28:17.520 --> 00:28:25.520
+And it actually, as opposed to maybe 18 cores on a chip, it might have up to 80, 90 cores per chip, right?
+
+00:28:25.520 --> 00:28:26.520
+So think about that.
+
+00:28:26.520 --> 00:28:33.520
+I mean, think about these all x86 compatible CPUs, all available to do a variety of things in parallel.
+
+00:28:33.520 --> 00:28:36.520
+So that's an interesting model to think about.
+
+00:28:36.520 --> 00:28:40.520
+It's like, if you have parallelism, you can express it a number of different ways.
+
+00:28:40.520 --> 00:28:43.520
+You can express it in terms of the vector.
+
+00:28:43.520 --> 00:28:45.520
+We have vector processing within the CPUs.
+
+00:28:45.520 --> 00:28:46.520
+We have this parallel processing.
+
+00:28:46.520 --> 00:28:58.520
+And I think Python has a lot of, you know, certainly some of the things that Sergey was mentioning in terms of these libraries that can be, make use of the vector operations within the CPU and really turn up the performance, right?
+
+00:28:58.520 --> 00:29:03.520
+So, traditionally, Python has sometimes had a few challenges relative to, you know, parallel programming.
+
+00:29:03.520 --> 00:29:12.520
+And so, one of the things that's really cool about thinking about one of these libraries like MKL that Sergey mentioned is it can automatically take advantage of the parallelism that's available, right?
+
+00:29:12.520 --> 00:29:23.520
+And so, you know, if you have one of these, by the way, the Xeon Phi, if you go to the top 500 supercomputers, there's a significant number that you can look at and it says, oh, it uses the Xeon Phi as part of that, right?
+
+00:29:23.520 --> 00:29:29.520
+So, the top, you know, supercomputers in the world are using this chip basically achieve incredible results.
+
+00:29:29.520 --> 00:29:30.520
+It just keeps going.
+
+00:29:30.520 --> 00:29:33.520
+It's really, really amazing all the stuff that people are doing there.
+
+00:29:33.520 --> 00:29:36.520
+So, back to the AI chip.
+
+00:29:36.520 --> 00:29:45.520
+It sounds to me like what you're telling me is you have this custom chip, which makes a lot of sense because, like, GPUs, they were meant to do a video process.
+
+00:29:45.520 --> 00:29:49.520
+If you could make a special purpose chip for that, you're in a good place.
+
+00:29:49.520 --> 00:29:51.520
+What about other things?
+
+00:29:51.520 --> 00:29:54.520
+Do you guys have other specialized chips coming in addition to AI?
+
+00:29:54.520 --> 00:29:56.520
+Is this a trend, right?
+
+00:29:56.520 --> 00:29:57.520
+Yeah.
+
+00:29:57.520 --> 00:29:58.520
+Going to have more specialized chips.
+
+00:29:58.520 --> 00:30:00.520
+A couple of things I would talk about there.
+
+00:30:00.520 --> 00:30:05.520
+One of them is you may have heard of a new memory technology that we've actually, it's incredibly revolutionary.
+
+00:30:05.520 --> 00:30:14.520
+I say that, you know, as an Intel guy, but I got to tell you, it's just mind blowing is that it's memory that sits, you know, you think about DRAM, you know, your regular memory and your Mac or whatever.
+
+00:30:14.520 --> 00:30:16.520
+Versus flash memory, right?
+
+00:30:16.520 --> 00:30:19.520
+The flash memory is you can get a lot of it.
+
+00:30:19.520 --> 00:30:21.520
+It's lower cost, but it's slow.
+
+00:30:21.520 --> 00:30:25.520
+Main memory, the DRAM is like super fast, but it's expensive, right?
+
+00:30:25.520 --> 00:30:26.520
+And volatile.
+
+00:30:26.520 --> 00:30:27.520
+And volatile.
+
+00:30:27.520 --> 00:30:35.520
+What if you could have memory that was non-volatile, if you want it to be, and sit in between flash memory and DRAM, right?
+
+00:30:35.520 --> 00:30:36.520
+Okay.
+
+00:30:36.520 --> 00:30:39.520
+And so we've come up with this, we call it 3D cross point.
+
+00:30:39.520 --> 00:30:42.520
+It's a memory technology that's coming out in SSDs now.
+
+00:30:42.520 --> 00:30:50.520
+And think about it from a Python standpoint, being able to make use of memory that's, it's actually chips in the DIMMs in the computer itself.
+
+00:30:50.520 --> 00:30:56.520
+So when you power on the computer, it actually has, you know, this persistent memory already available without going to the SSDs, right?
+
+00:30:56.520 --> 00:30:58.520
+So it's instantaneously available.
+
+00:30:58.520 --> 00:30:59.520
+I see.
+
+00:30:59.520 --> 00:31:01.520
+The choice previously has been better with SSDs.
+
+00:31:01.520 --> 00:31:03.520
+I remember when it was not.
+
+00:31:03.520 --> 00:31:08.520
+So the choice is, we've got this regular DRAM, and then we've got swap.
+
+00:31:08.520 --> 00:31:11.520
+And that's like a hundred times worse, or something, to go to swap.
+
+00:31:11.520 --> 00:31:15.520
+And if it's a slow spinning laptop, cheap disk, maybe it's way worse than that still, right?
+
+00:31:15.520 --> 00:31:22.520
+But think about a data center where you have maybe a few terabyte of DRAM in a system, and then multiple terabytes of this.
+
+00:31:22.520 --> 00:31:27.520
+It's just right as more, you know, memory DIMMs in the computer, right?
+
+00:31:27.520 --> 00:31:28.520
+This is amazing, right?
+
+00:31:28.520 --> 00:31:35.520
+And not only is it super fast in terms of latency, access latency, but it also can be used persistent.
+
+00:31:35.520 --> 00:31:44.520
+So these are things which are, from a Python standpoint, we'll actually be able to make some of this stuff available to Python programmers when these products start rolling out.
+
+00:31:44.520 --> 00:31:46.520
+So this is a very interesting future.
+
+00:31:46.520 --> 00:31:53.520
+The other thing from a future chip standpoint that I think is very interesting is to look at, we're now, because we're partnering up with a chip designer.
+
+00:31:53.520 --> 00:31:55.520
+You're talking about Intel controlling the chips, right?
+
+00:31:55.520 --> 00:32:00.520
+One of the things we're able to do is, folks like Suresh, Sergey, are able to partner up with the chip designers and say,
+
+00:32:00.520 --> 00:32:03.520
+"Let's take a look at how Python runs on the chips."
+
+00:32:03.520 --> 00:32:04.520
+Okay?
+
+00:32:04.520 --> 00:32:13.520
+So you're running this stuff and you go, "Oh, hmm, looks like from the size of the code footprint, actually we're spending a lot of time just twiddling our thumbs in the processor,
+
+00:32:13.520 --> 00:32:16.520
+because it's waiting for instructions to get fetched."
+
+00:32:16.520 --> 00:32:20.520
+Is that because it's too big to fit in the smallest cache?
+
+00:32:20.520 --> 00:32:21.520
+Correct.
+
+00:32:21.520 --> 00:32:23.520
+And this is true of a lot of interpreted languages.
+
+00:32:23.520 --> 00:32:27.520
+If you look at PHP, Node.js, et cetera, they're all of these massive code footprints.
+
+00:32:27.520 --> 00:32:33.520
+If we've analyzed the internal pipelines within the CPU, we see this idling effect, right?
+
+00:32:33.520 --> 00:32:43.520
+And now with the next generation of chips that are coming along, they've actually taken a look at this and actually we're amazed at how much they've been able to improve on this instruction level parallelism.
+
+00:32:43.520 --> 00:32:51.520
+So in fact, even with a single instruction stream without parallel instruction streams, they're actually able to run old Python code faster.
+
+00:32:51.520 --> 00:32:57.520
+So if you think about it, if you've got a data center, I've got a bunch of Python running there, one of the best things you can do.
+
+00:32:57.520 --> 00:33:05.520
+Now, you know, we as software guys would say, "Oh, we want you to use all of this good software goodness."
+
+00:33:05.520 --> 00:33:06.520
+What are you running on this old version of Python?
+
+00:33:06.520 --> 00:33:07.520
+Right, right, right.
+
+00:33:07.520 --> 00:33:11.520
+Use the new upstream version or use the Python distribution, et cetera.
+
+00:33:11.520 --> 00:33:20.520
+But the good news is as an IT decision maker, you can now think about, well, upgrading to the latest Intel CPU actually runs Python.
+
+00:33:20.520 --> 00:33:23.520
+It's more than just like a, is it a different clock speed?
+
+00:33:23.520 --> 00:33:25.520
+It's not the frequency that matters.
+
+00:33:25.520 --> 00:33:27.520
+It's not even really the number of CPUs.
+
+00:33:27.520 --> 00:33:34.520
+The CPU itself actually at the same frequency can actually process Python much, much faster because it's making use of more of the CPU.
+
+00:33:34.520 --> 00:33:35.520
+Does that make sense?
+
+00:33:35.520 --> 00:33:36.520
+Yeah, yeah, that makes a lot of sense.
+
+00:33:36.520 --> 00:33:41.520
+Well, and you know, you make your comment about as a programmer, it's great to use all the new stuff.
+
+00:33:41.520 --> 00:33:49.520
+I personally as a programmer would like to work on new code that is adding new value and not go, "You know that crummy thing that's been there for 10 years?
+
+00:33:49.520 --> 00:33:52.520
+We need to rewrite that so we can save on computers."
+
+00:33:52.520 --> 00:33:54.520
+Like that is not where I want to spend my time.
+
+00:33:54.520 --> 00:33:55.520
+Like you guys don't, right?
+
+00:33:55.520 --> 00:33:56.520
+Right. Oh, yeah.
+
+00:33:56.520 --> 00:33:57.520
+Yeah.
+
+00:33:57.520 --> 00:34:05.520
+So if you can just make it run faster without me touching it, then I can go write stuff that I want to write, like that new REST framework.
+
+00:34:05.520 --> 00:34:15.520
+By the way, I would say one of the things that's cool about either PyPy or the Intel Python distribution or the other upstream work that we're doing is those typically don't require code changes either.
+
+00:34:15.520 --> 00:34:18.520
+So that's the other thing is that if you make, you know, that's sort of the goal.
+
+00:34:18.520 --> 00:34:26.520
+We sort of feel like Python's a powerful enough language and an attractive enough way for programmers to work, productive way for programmers to work.
+
+00:34:26.520 --> 00:34:29.520
+Why should they be hobbled by performance, right?
+
+00:34:29.520 --> 00:34:32.520
+Why not provide something that will immediately give a boost?
+
+00:34:32.520 --> 00:34:36.520
+Now, we'd sort of like to think you ought to get a new processor too.
+
+00:34:36.520 --> 00:34:38.520
+I think that's a good idea.
+
+00:34:38.520 --> 00:34:39.520
+I think all of us would appreciate that.
+
+00:34:39.520 --> 00:34:40.520
+Yeah.
+
+00:34:40.520 --> 00:34:41.520
+I think good.
+
+00:34:41.520 --> 00:34:47.520
+But then, you know, some of these other things, our goal really is to make it so you, by taking a few actions, you don't have to change the code.
+
+00:34:47.520 --> 00:34:53.520
+Now, there are some new things, by the way, if you want to get into your code to let me play with some new features, right?
+
+00:34:53.520 --> 00:35:03.520
+That's where we've got some of these things like some accelerators or big deal, which will let you use Python to do more deep learning sort of things or maybe accessing this 3D cross point memory.
+
+00:35:03.520 --> 00:35:07.520
+So there's a lot of stuff that's going to be very powerful to bring this stuff to bear.
+
+00:35:07.520 --> 00:35:08.520
+If you want to change the code.
+
+00:35:08.520 --> 00:35:11.520
+And if you don't, you know, we have these other things to help you out with.
+
+00:35:11.520 --> 00:35:12.520
+Sure.
+
+00:35:12.520 --> 00:35:13.520
+You know, if it's your core product, right?
+
+00:35:13.520 --> 00:35:18.520
+If your Instagram and these are your APIs or whatever, like you probably want to spend some time to make those faster.
+
+00:35:18.520 --> 00:35:19.520
+Yeah, absolutely.
+
+00:35:19.520 --> 00:35:20.520
+Right.
+
+00:35:20.520 --> 00:35:21.520
+Things like that.
+
+00:35:21.520 --> 00:35:22.520
+Interesting.
+
+00:35:22.520 --> 00:35:24.520
+So what about Cython?
+
+00:35:24.520 --> 00:35:27.520
+Have you guys thought about how Cython works on the chips?
+
+00:35:27.520 --> 00:35:30.520
+And for those people listening, maybe they don't know.
+
+00:35:30.520 --> 00:35:37.520
+Cython is like Python language with a few little tweaks that compiles basically down to C or the way C compiles, right?
+
+00:35:37.520 --> 00:35:47.520
+In fact, Intel Python distribution is making both Cython and Numba, which are a couple of these, you know, moving to C code, basically, right.
+
+00:35:47.520 --> 00:35:51.520
+And then their trade-offs, as engineers know, their trade-offs for everything.
+
+00:35:51.520 --> 00:35:57.520
+The nice thing about that is you can get optimized either Cython or Numba, you know, as part of that package, right?
+
+00:35:57.520 --> 00:36:03.520
+Some people will go, well, I don't want to have to give up on the quick turnaround of being able to change code and have it interpreted, right?
+
+00:36:03.520 --> 00:36:05.520
+So that's where some of those trade-offs go, right?
+
+00:36:05.520 --> 00:36:11.520
+Python 2, Python, CPython, PyPy would tend to say, hey, you can still have the same development methodology.
+
+00:36:11.520 --> 00:36:12.520
+Yeah.
+
+00:36:12.520 --> 00:36:13.520
+Numba, Cython or more.
+
+00:36:13.520 --> 00:36:15.520
+There's a build step, which is weird to all of us, right?
+
+00:36:15.520 --> 00:36:16.520
+Yeah.
+
+00:36:16.520 --> 00:36:17.520
+It's all about choice.
+
+00:36:17.520 --> 00:36:20.520
+If we don't have Cython or don't have Numba, what choice do we have?
+
+00:36:20.520 --> 00:36:23.520
+Going to native language or staying with Python?
+
+00:36:23.520 --> 00:36:25.520
+So we're just providing choices.
+
+00:36:25.520 --> 00:36:28.520
+People can make trade-offs to get what they need.
+
+00:36:28.520 --> 00:36:29.520
+That's a great point.
+
+00:36:29.520 --> 00:36:32.520
+If you choose any of these things, we want to make sure Intel is the best option to use for it.
+
+00:36:32.520 --> 00:36:33.520
+Yeah, that's cool.
+
+00:36:33.520 --> 00:36:36.520
+So let me ask you this, okay, about like maybe a workflow.
+
+00:36:36.520 --> 00:36:39.520
+So I write my code all in pure Python.
+
+00:36:39.520 --> 00:36:40.520
+Maybe run on CPython, right?
+
+00:36:40.520 --> 00:36:41.520
+See how it works.
+
+00:36:41.520 --> 00:36:43.520
+Maybe it's not quite as fast as I want.
+
+00:36:43.520 --> 00:36:47.520
+Or maybe you just want to optimize it because it's better to have it faster.
+
+00:36:47.520 --> 00:36:50.520
+Like you can scale it, put it more, you know, more density or whatever.
+
+00:36:50.520 --> 00:36:54.520
+Then I run Vtune against it, figure out where it's actually slow.
+
+00:36:54.520 --> 00:36:58.520
+That might be like 5% of my code or less, right under like a large application.
+
+00:36:58.520 --> 00:37:01.520
+Like it's actually these three parts that kind of kill it.
+
+00:37:01.520 --> 00:37:06.520
+Like if I look at my website right now, which is pure CPython talking to MongoDB,
+
+00:37:06.520 --> 00:37:14.520
+the slowest part of the site is the deserialization of the traffic back from the database into Python objects.
+
+00:37:14.520 --> 00:37:17.520
+Like that's literally 50% of workload on my website.
+
+00:37:17.520 --> 00:37:20.520
+And so I'm not going to change that because that's not my library.
+
+00:37:20.520 --> 00:37:21.520
+That's like a different ODM.
+
+00:37:21.520 --> 00:37:26.520
+But if I did control that, like would it make sense to go write that and say Cython,
+
+00:37:26.520 --> 00:37:29.520
+that little 5% and then somehow bring that in?
+
+00:37:29.520 --> 00:37:30.520
+What do you think?
+
+00:37:30.520 --> 00:37:35.520
+Optimizing last 5%, if you make it zero, even zero.
+
+00:37:35.520 --> 00:37:37.520
+Yeah, the 5% that's spending where almost all the work is.
+
+00:37:37.520 --> 00:37:41.520
+The 5% of my code base where I'm spending 80% of my time or 50% of my time.
+
+00:37:41.520 --> 00:37:43.520
+Yeah, totally it makes sense.
+
+00:37:43.520 --> 00:37:44.520
+Totally it makes sense.
+
+00:37:44.520 --> 00:37:45.520
+Okay.
+
+00:37:45.520 --> 00:37:51.520
+You really focus how do I optimize the biggest hotspot with minimum code changes.
+
+00:37:51.520 --> 00:37:52.520
+Right.
+
+00:37:52.520 --> 00:37:53.520
+5% is a nice, nice hotspot.
+
+00:37:53.520 --> 00:37:54.520
+Right, right.
+
+00:37:54.520 --> 00:37:57.520
+If I rewrote 5% of my code in Cython, but that's where it was mostly slow,
+
+00:37:57.520 --> 00:38:00.520
+you could probably get a big bang for the buck, right?
+
+00:38:00.520 --> 00:38:01.520
+Right.
+
+00:38:01.520 --> 00:38:05.520
+It's like I was one day just lunchtime, I got this call on my cell phone.
+
+00:38:05.520 --> 00:38:09.520
+It happens to be this Intel executive that I kind of know, an acquaintance, right?
+
+00:38:09.520 --> 00:38:12.520
+And she said, "Oh, my daughter is working on this project in school with Python.
+
+00:38:12.520 --> 00:38:13.520
+It's running really slow."
+
+00:38:13.520 --> 00:38:14.520
+This is hilarious.
+
+00:38:14.520 --> 00:38:18.520
+How did you know that I was, you know, I heard you had something to do with Python performance.
+
+00:38:18.520 --> 00:38:20.520
+And so, can you do anything?
+
+00:38:20.520 --> 00:38:21.520
+I've got an insight at Intel.
+
+00:38:21.520 --> 00:38:22.520
+I'm going to figure out why my code is slow.
+
+00:38:22.520 --> 00:38:23.520
+That's it.
+
+00:38:23.520 --> 00:38:24.520
+And, oh yeah.
+
+00:38:24.520 --> 00:38:25.520
+Well, trust me.
+
+00:38:25.520 --> 00:38:28.520
+You know, I've learned many things sitting down with people at lunches, like people who
+
+00:38:28.520 --> 00:38:32.520
+created all manner of things in our world is like, "Oh, that's why that works that way."
+
+00:38:32.520 --> 00:38:33.520
+Okay, interesting.
+
+00:38:33.520 --> 00:38:36.520
+Anyway, so I said, "Well, have her try PyPy."
+
+00:38:36.520 --> 00:38:41.520
+As an example, it's a very easy step to try and, you know, see if it speeds things up,
+
+00:38:41.520 --> 00:38:42.520
+right?
+
+00:38:42.520 --> 00:38:45.520
+And so, I didn't hear back from her, so I suspect that probably either worked for her or she got
+
+00:38:45.520 --> 00:38:46.520
+frustrated, who knows.
+
+00:38:46.520 --> 00:38:51.520
+But I've talked to, there are plenty of like architects, CPU architects, and people who,
+
+00:38:51.520 --> 00:38:54.520
+there are people who have this massive lake of instruction traces.
+
+00:38:54.520 --> 00:38:58.520
+So we're actually able to take millions of instructions and record them and figure out
+
+00:38:58.520 --> 00:38:59.520
+what's going on.
+
+00:38:59.520 --> 00:39:03.520
+That's how we analyze future chips and analyze performance on them and running these existing
+
+00:39:03.520 --> 00:39:04.520
+instruction traces.
+
+00:39:04.520 --> 00:39:10.520
+And so, they will maybe have billions of instructions floating around in Python scripts
+
+00:39:10.520 --> 00:39:13.520
+that will actually go figure out what's going on and categorize them and help, you know,
+
+00:39:13.520 --> 00:39:14.520
+develop what's going on.
+
+00:39:14.520 --> 00:39:18.520
+But if that stuff runs really slow, and it was actually one of those architects that mentioned
+
+00:39:18.520 --> 00:39:21.520
+PyPy to me the first time, and he was like, "I think he's actually here.
+
+00:39:21.520 --> 00:39:22.520
+He retired.
+
+00:39:22.520 --> 00:39:23.520
+Lucky dog."
+
+00:39:23.520 --> 00:39:26.520
+And so, you know, I got to find him and thank him again for, you know, having helped us,
+
+00:39:26.520 --> 00:39:27.520
+you know, get more insight into this stuff.
+
+00:39:27.520 --> 00:39:28.520
+Yeah.
+
+00:39:28.520 --> 00:39:29.520
+Yeah, that's really cool.
+
+00:39:29.520 --> 00:39:33.520
+So, coming back around to your AI focus, do you guys see AI?
+
+00:39:33.520 --> 00:39:34.520
+How can you design chips in the future?
+
+00:39:34.520 --> 00:39:36.520
+That's a very interesting question.
+
+00:39:36.520 --> 00:39:41.520
+I'm sure a lot of engineers that I've worked with might be considered artificial intelligence.
+
+00:39:41.520 --> 00:39:42.520
+No, I'm sorry.
+
+00:39:42.520 --> 00:39:46.520
+I am an engineer, so what can I complain about?
+
+00:39:46.520 --> 00:39:50.520
+I think there's already a lot of machine learning being employed in the design of the chips.
+
+00:39:50.520 --> 00:39:51.520
+We have a building.
+
+00:39:51.520 --> 00:39:52.520
+There's a particular building.
+
+00:39:52.520 --> 00:39:53.520
+I can't tell you where it is.
+
+00:39:53.520 --> 00:39:54.520
+Is that in Portland?
+
+00:39:54.520 --> 00:39:55.520
+It's an undisclosed location.
+
+00:39:55.520 --> 00:39:56.520
+Okay.
+
+00:39:56.520 --> 00:40:01.520
+I will say you, there is a building that's stuffed full of CPUs, and it's got the most amazing structure.
+
+00:40:01.520 --> 00:40:04.520
+It was built really interesting structure.
+
+00:40:04.520 --> 00:40:12.520
+But that thing is running, essentially using machine learning to analyze simulations of chips continuously, 24/7, 365.
+
+00:40:12.520 --> 00:40:13.520
+Wow.
+
+00:40:13.520 --> 00:40:18.520
+So, that place, it's really kind of fun to kind of think about all of that's going on, and I've actually taken a tour.
+
+00:40:18.520 --> 00:40:19.520
+It's super cool.
+
+00:40:19.520 --> 00:40:20.520
+It's super cool.
+
+00:40:20.520 --> 00:40:23.520
+This portion of Talk Python to Me is brought to you by Hired.
+
+00:40:23.520 --> 00:40:26.520
+Hired is the platform for top Python developer jobs.
+
+00:40:26.520 --> 00:40:31.520
+Create your profile and instantly get access to thousands of companies who will compete to work with you.
+
+00:40:31.520 --> 00:40:39.520
+Take it from one of Hired's users who recently got a job and said, "I had my first offer within four days, and I ended up getting eight offers in total.
+
+00:40:39.520 --> 00:40:42.520
+I've worked with recruiters in the past, but they were pretty hit and miss.
+
+00:40:42.520 --> 00:40:45.520
+I tried LinkedIn, but I found Hired to be the best.
+
+00:40:45.520 --> 00:40:49.520
+I really liked knowing the salary up front, and privacy was also a huge seller for me."
+
+00:40:49.520 --> 00:40:51.520
+Well, that sounds pretty awesome, doesn't it?
+
+00:40:51.520 --> 00:40:53.520
+But wait until you hear about the signing bonus.
+
+00:40:53.520 --> 00:40:57.520
+Everyone who accepts the job from Hired gets a $300 signing bonus.
+
+00:40:57.520 --> 00:41:00.520
+And, as Talk Python listeners, it gets even sweeter.
+
+00:41:00.520 --> 00:41:06.520
+Use the link talkpython.fm/hired, and Hired will double the signing bonus to $600.
+
+00:41:06.520 --> 00:41:07.520
+Opportunity is knocking.
+
+00:41:07.520 --> 00:41:12.520
+Visit talkpython.fm/hired and answer the door.
+
+00:41:12.520 --> 00:41:18.520
+"You know, we have been using machine learning essentially to design CPUs and validate them.
+
+00:41:18.520 --> 00:41:23.520
+A lot of what we're doing, by the way, is not waiting for the silicon to be baked before we figure out whether it works or not.
+
+00:41:23.520 --> 00:41:26.520
+We actually have a lot of simulation that we're doing.
+
+00:41:26.520 --> 00:41:28.520
+We have a little, we actually, you can actually buy it.
+
+00:41:28.520 --> 00:41:34.520
+It's something called Simix, which we actually are able to produce simulations of all of the things that are going on in the chips, right?
+
+00:41:34.520 --> 00:41:42.520
+And so we're actually able to run a ton of workloads and programs through this thing before the chip ever appears, right?
+
+00:41:42.520 --> 00:41:48.520
+And so we're able to run essentially, whether it's Python, Java, you know, any number of things through these simulators.
+
+00:41:48.520 --> 00:41:52.520
+So that by the time that the silicon comes out of the fab, it actually already runs all of this stuff.
+
+00:41:52.520 --> 00:41:56.520
+So there's a lot of stuff that we're doing to, you know, accelerate the design of the chips.
+
+00:41:56.520 --> 00:41:57.520
+Yeah.
+
+00:41:57.520 --> 00:42:02.520
+I think it's going to be 10 years from now, we're not even going to predict it, the majority of the stuff that's happening, right?
+
+00:42:02.520 --> 00:42:03.520
+Well, think about what happened 10 years ago.
+
+00:42:03.520 --> 00:42:07.520
+It wasn't, you know, I mean, you know, Facebook or any of these other things in the internet.
+
+00:42:07.520 --> 00:42:12.520
+Google, all these things are around, but it's like the concept of how they've affected our lives now.
+
+00:42:12.520 --> 00:42:17.520
+Yeah, it was just the dawn of internet as a usable thing for everyone.
+
+00:42:17.520 --> 00:42:17.520
+Yep.
+
+00:42:17.520 --> 00:42:18.520
+Right.
+
+00:42:18.520 --> 00:42:23.520
+And it's been fun to be a part of, you know, Intel to have really helped fuel this thing.
+
+00:42:23.520 --> 00:42:27.520
+And now I think from our standpoint, one of the things that's very exciting is to, you know, say,
+
+00:42:27.520 --> 00:42:30.520
+"Hey, how can we project the future better?"
+
+00:42:30.520 --> 00:42:33.520
+Because you talk about how to figure out how things run better in the future.
+
+00:42:33.520 --> 00:42:38.520
+One of the things we're doing is a tremendous amount of work in the whole area of benchmarking and performance, right?
+
+00:42:38.520 --> 00:42:45.520
+If you think about it, we talked about, you know, various things like this, this Instagram, you know, Django benchmark that we're working.
+
+00:42:45.520 --> 00:42:48.520
+There are other various, you know, codes that we're working on for the Python distribution.
+
+00:42:48.520 --> 00:42:55.520
+But one of the things that we're doing is kind of really looking at the whole area of AI as an area.
+
+00:42:55.520 --> 00:42:57.520
+And it's like, how do you benchmark that?
+
+00:42:57.520 --> 00:42:58.520
+Or think about big data.
+
+00:42:58.520 --> 00:43:06.520
+Think about if you maybe have, you're standing up Cassandra and Kafka and Node.js and all of these things in a system.
+
+00:43:06.520 --> 00:43:08.520
+How do I figure out what the performance is today?
+
+00:43:08.520 --> 00:43:11.520
+And then how do I project forward performance on some of these things, right?
+
+00:43:11.520 --> 00:43:13.520
+And so there's a whole area.
+
+00:43:13.520 --> 00:43:17.520
+I'm incredibly excited about this is that you're going to start seeing more and more of this from us.
+
+00:43:17.520 --> 00:43:19.520
+I think I'm working on a lot of it myself.
+
+00:43:19.520 --> 00:43:26.520
+Of seeing us really take a much stronger position out there to try and help contribute some of this stuff to the industry.
+
+00:43:26.520 --> 00:43:39.520
+And so you can take your, you know, Instagram, Python, Django benchmark, for example, and evaluate what is this going to work against, you know, this CPU versus that CPU or this vendor system versus that one, this public cloud versus that public cloud.
+
+00:43:39.520 --> 00:43:42.520
+These are all things that I think are incredibly powerful to think about.
+
+00:43:42.520 --> 00:43:46.520
+Well, the control now is with you as a user to figure out what kind of choices do I make?
+
+00:43:46.520 --> 00:43:52.520
+So we're doing a lot in that sort of space because we sort of believe that in the data center, you know, performance is king, right?
+
+00:43:52.520 --> 00:44:00.520
+It's like, and people have come to expect from us every CPU generation to have a good whatever it is, 30 to 40% boost at the, you know, right?
+
+00:44:00.520 --> 00:44:01.520
+Same price point.
+
+00:44:01.520 --> 00:44:04.520
+So performance is king as far as we're concerned in the data center.
+
+00:44:04.520 --> 00:44:10.520
+And we're doing a ton of stuff to try and drive the future and use this whole area of benchmarking and workload.
+
+00:44:10.520 --> 00:44:20.520
+So we would love, by the way, from the community standpoint, if they have representative sort of workloads that they'd like to work with us on, we would love to get involved with that because that's something we're incredibly excited about.
+
+00:44:20.520 --> 00:44:21.520
+Yeah.
+
+00:44:21.520 --> 00:44:24.520
+I think there's having realistic workloads makes a super big difference.
+
+00:44:24.520 --> 00:44:27.520
+Take your MySQL, your website, right?
+
+00:44:27.520 --> 00:44:28.520
+Yeah.
+
+00:44:28.520 --> 00:44:30.520
+The data marshalling issue that you're going.
+
+00:44:30.520 --> 00:44:40.520
+We'd love to be able to have that as kind of a standard piece of what we're looking at to make sure either the CPU runs it really fast, we can go in with the library providers and make sure that stuff gets accelerated, right?
+
+00:44:40.520 --> 00:44:43.520
+So those are the kinds of things we absolutely want to stand up.
+
+00:44:43.520 --> 00:44:53.520
+And we think there's a dearth of these things actually representative benchmarks that will help people visualize what's going to the data center today because it's not just like your old database.
+
+00:44:53.520 --> 00:45:00.520
+You know, you know, you know, your big, you know, SQL databases, you know, running relational database transaction processing, all this stuff exists.
+
+00:45:00.520 --> 00:45:03.520
+But there's a ton of new stuff in the data center today.
+
+00:45:03.520 --> 00:45:07.520
+And we sort of believe that Intel will be contributing strongly to this area.
+
+00:45:07.520 --> 00:45:20.520
+So you guys, I feel like over broadly across the industry, there's like a, a mind blowing opening into open and open source from where from all sorts of companies that you just wouldn't expect.
+
+00:45:20.520 --> 00:45:20.520
+Right.
+
+00:45:20.520 --> 00:45:21.520
+Right.
+
+00:45:21.520 --> 00:45:28.520
+I mean, the stuff that Microsoft are doing, like Facebook with their, some of the open HHVM and the open data center project.
+
+00:45:28.520 --> 00:45:29.520
+Yeah.
+
+00:45:29.520 --> 00:45:29.520
+Yeah.
+
+00:45:29.520 --> 00:45:38.520
+The data center stuff that people just, so you see Intel contributing more to these open source projects in order to make your story back at the data center better.
+
+00:45:38.520 --> 00:45:38.520
+Absolutely.
+
+00:45:38.520 --> 00:45:45.520
+I mean, Intel has been for the past few years, the top one or two contribute to each Linux kernel release.
+
+00:45:45.520 --> 00:45:48.520
+So you go back in time, who, who are the top contributors to the kernel?
+
+00:45:48.520 --> 00:45:51.520
+Intel has been like number one or number two for years now.
+
+00:45:51.520 --> 00:45:52.520
+Okay.
+
+00:45:52.520 --> 00:45:53.520
+For each kernel release.
+
+00:45:53.520 --> 00:45:57.520
+So that in and of itself represents a very strong commitment to open source, at least at the core.
+
+00:45:57.520 --> 00:45:58.520
+Right.
+
+00:45:58.520 --> 00:46:01.520
+So all of the work that we're doing is on open source code, right?
+
+00:46:01.520 --> 00:46:07.520
+So whether it's Python, whether it's open source databases, you know, this is a very strong commitment to open source.
+
+00:46:07.520 --> 00:46:08.520
+Absolutely.
+
+00:46:08.520 --> 00:46:09.520
+That's awesome.
+
+00:46:09.520 --> 00:46:10.520
+All right.
+
+00:46:10.520 --> 00:46:11.520
+So we're kind of getting near the end of the show.
+
+00:46:11.520 --> 00:46:12.520
+I have two questions.
+
+00:46:12.520 --> 00:46:13.520
+And I'm going to mix it up a little bit.
+
+00:46:13.520 --> 00:46:14.520
+Uh-oh.
+
+00:46:14.520 --> 00:46:15.520
+Because normally I have the same two questions.
+
+00:46:15.520 --> 00:46:17.520
+I kind of biffed the last time in your standard question.
+
+00:46:17.520 --> 00:46:18.520
+So, uh.
+
+00:46:18.520 --> 00:46:23.520
+So the two questions are, Sarah, I'll start with you, is if you're going to write some Python code, what editor do you open up?
+
+00:46:23.520 --> 00:46:25.520
+What do you usually write your code, your Python code in?
+
+00:46:25.520 --> 00:46:27.520
+I usually don't write Python code.
+
+00:46:27.520 --> 00:46:28.520
+I am.
+
+00:46:28.520 --> 00:46:29.520
+I am.
+
+00:46:29.520 --> 00:46:30.520
+You're analyzing how it runs.
+
+00:46:30.520 --> 00:46:31.520
+I'm an outlook guy.
+
+00:46:31.520 --> 00:46:32.520
+Okay.
+
+00:46:32.520 --> 00:46:33.520
+Gotcha.
+
+00:46:33.520 --> 00:46:35.520
+Speaking, I typically use Spider.
+
+00:46:35.520 --> 00:46:36.520
+Spider.
+
+00:46:36.520 --> 00:46:36.520
+Okay.
+
+00:46:36.520 --> 00:46:37.520
+Yeah, sure.
+
+00:46:37.520 --> 00:46:38.520
+Spider's good.
+
+00:46:38.520 --> 00:46:39.520
+The continuum guys.
+
+00:46:39.520 --> 00:46:40.520
+I don't know if they're here.
+
+00:46:40.520 --> 00:46:41.520
+Sure they are.
+
+00:46:41.520 --> 00:46:44.520
+I haven't been able to do the rounds yet, but that's a cool thing that comes with the Anaconda.
+
+00:46:44.520 --> 00:46:45.520
+David?
+
+00:46:45.520 --> 00:46:46.520
+Suresh.
+
+00:46:46.520 --> 00:46:48.520
+I recently took a class at Hack University.
+
+00:46:48.520 --> 00:46:49.520
+It's a local organization.
+
+00:46:49.520 --> 00:46:50.520
+Mm-hmm.
+
+00:46:50.520 --> 00:46:51.520
+I've been loving Jupyter.
+
+00:46:51.520 --> 00:46:52.520
+Oh, yeah.
+
+00:46:52.520 --> 00:46:53.520
+I've been working with Jupyter.
+
+00:46:53.520 --> 00:46:53.520
+I've been working with Jupyter.
+
+00:46:53.520 --> 00:46:54.520
+I've been working with Jupyter.
+
+00:46:54.520 --> 00:46:55.520
+I've been working with Jupyter.
+
+00:46:55.520 --> 00:46:56.520
+I've been working with Jupyter.
+
+00:46:56.520 --> 00:46:57.520
+I've been working with Jupyter.
+
+00:46:57.520 --> 00:46:58.520
+I've been working with Jupyter.
+
+00:46:58.520 --> 00:46:59.520
+I've been working with Jupyter.
+
+00:46:59.520 --> 00:47:00.520
+I've been working with Jupyter.
+
+00:47:00.520 --> 00:47:01.520
+I've been working with Jupyter.
+
+00:47:01.520 --> 00:47:02.520
+I've been working with Jupyter.
+
+00:47:02.520 --> 00:47:03.520
+I've been working with Jupyter.
+
+00:47:03.520 --> 00:47:04.520
+I've been working with Jupyter.
+
+00:47:04.520 --> 00:47:05.520
+Jupyter is amazing.
+
+00:47:05.520 --> 00:47:05.520
+Yeah, yeah.
+
+00:47:05.520 --> 00:47:06.520
+David?
+
+00:47:06.520 --> 00:47:07.520
+My fingers are programmed with VI.
+
+00:47:07.520 --> 00:47:08.520
+I'm sorry.
+
+00:47:08.520 --> 00:47:09.520
+I'm an old guy.
+
+00:47:09.520 --> 00:47:10.520
+My fingers are programmed with VI.
+
+00:47:10.520 --> 00:47:11.520
+It's the only way muscle memory works with me.
+
+00:47:11.520 --> 00:47:12.520
+So, yeah.
+
+00:47:12.520 --> 00:47:13.520
+There you go.
+
+00:47:13.520 --> 00:47:14.520
+Awesome.
+
+00:47:14.520 --> 00:47:16.520
+Then I guess I'll ask you the standard questions while I have one more.
+
+00:47:16.520 --> 00:47:22.520
+Suresh, there's a ton of packages on PyPI, over 100,000 now, which is partly why Python
+
+00:47:22.520 --> 00:47:24.520
+is such an amazing community.
+
+00:47:24.520 --> 00:47:26.520
+Like, all these different packages you can just install and use.
+
+00:47:26.520 --> 00:47:29.520
+Think of a notable one that maybe people don't know about that you've come across.
+
+00:47:29.520 --> 00:47:31.520
+I should have prepared you guys for this question.
+
+00:47:31.520 --> 00:47:32.520
+Yeah, yeah.
+
+00:47:32.520 --> 00:47:33.520
+You did a good question.
+
+00:47:33.520 --> 00:47:35.520
+I did a bad job, but it's good for you to be surprised at that.
+
+00:47:35.520 --> 00:47:36.520
+Yeah.
+
+00:47:36.520 --> 00:47:40.520
+I think some of these lightweight web development ones, like Flask.
+
+00:47:40.520 --> 00:47:41.520
+Yeah, Flask is amazing.
+
+00:47:41.520 --> 00:47:47.520
+Django is really popular, but people are using Flask for some lighter-weight things.
+
+00:47:47.520 --> 00:47:48.520
+Yep.
+
+00:47:48.520 --> 00:47:50.520
+A lot of APIs built with Flask.
+
+00:47:50.520 --> 00:47:53.520
+We also have the Django REST framework guys here.
+
+00:47:53.520 --> 00:47:54.520
+So, yeah.
+
+00:47:54.520 --> 00:47:55.520
+For sure.
+
+00:47:55.520 --> 00:47:56.520
+How about you, Dave?
+
+00:47:56.520 --> 00:47:59.520
+I'm going to suggest people check out, I don't know if it's in PyPI or not, but big
+
+00:47:59.520 --> 00:48:00.520
+big deal.
+
+00:48:00.520 --> 00:48:01.520
+Yeah.
+
+00:48:01.520 --> 00:48:02.520
+It's a great thing to check out.
+
+00:48:02.520 --> 00:48:03.520
+Big deal?
+
+00:48:03.520 --> 00:48:04.520
+Okay.
+
+00:48:04.520 --> 00:48:05.520
+It's a big deal.
+
+00:48:05.520 --> 00:48:06.520
+It's awesome.
+
+00:48:06.520 --> 00:48:07.520
+All right.
+
+00:48:07.520 --> 00:48:08.520
+So here, I want to throw one more in as a mix.
+
+00:48:08.520 --> 00:48:14.520
+Since you guys have a special vantage point towards the future, predict something interesting
+
+00:48:14.520 --> 00:48:18.520
+in the next, that will come out in five years that we would be maybe surprised by.
+
+00:48:18.520 --> 00:48:20.520
+Like, just in computing in general.
+
+00:48:20.520 --> 00:48:21.520
+Sresh, go left or right.
+
+00:48:21.520 --> 00:48:22.520
+Yeah.
+
+00:48:22.520 --> 00:48:25.520
+I think, I think AI is going to be like really, really pervasive.
+
+00:48:25.520 --> 00:48:26.520
+Yeah.
+
+00:48:26.520 --> 00:48:33.520
+Much more from your glasses to the clothes you wear to all kinds of things, the car you drive.
+
+00:48:33.520 --> 00:48:34.520
+Yeah.
+
+00:48:34.520 --> 00:48:38.520
+I can definitely see on automobile AI processing for sure.
+
+00:48:38.520 --> 00:48:39.520
+Yeah.
+
+00:48:39.520 --> 00:48:40.520
+This edge processing stuff.
+
+00:48:40.520 --> 00:48:41.520
+Yeah.
+
+00:48:41.520 --> 00:48:41.520
+David?
+
+00:48:41.520 --> 00:48:44.520
+I'd like to see a more organic approach to computing.
+
+00:48:44.520 --> 00:48:51.520
+You know, our artifacts are, you know, slick and carbonized or aluminized or what have
+
+00:48:51.520 --> 00:48:52.520
+you.
+
+00:48:52.520 --> 00:48:57.520
+I would actually like to see computers made out of natural wood cases with maybe some mother
+
+00:48:57.520 --> 00:49:00.520
+of pearl or, you know, something that would just actually be more human.
+
+00:49:00.520 --> 00:49:05.520
+I mean, almost a steampunk kind of approach or a more organic approach.
+
+00:49:05.520 --> 00:49:09.520
+I'd love to actually see it become a more organic part of our lives as opposed to dehumanizing.
+
+00:49:09.520 --> 00:49:10.520
+Sure.
+
+00:49:10.520 --> 00:49:17.520
+Well, as it goes into this IoT of everything, and we have these little chips that run Python,
+
+00:49:17.520 --> 00:49:21.520
+MicroPython and other things, it's much more likely that we'll have little computing things
+
+00:49:21.520 --> 00:49:25.520
+that are more adept rather than beige boxes or aluminum boxes.
+
+00:49:25.520 --> 00:49:26.520
+Sergei?
+
+00:49:26.520 --> 00:49:32.520
+I think whatever direction industry will go, Intel will become, will stay relevant
+
+00:49:32.520 --> 00:49:34.520
+and be at core of this transformation.
+
+00:49:34.520 --> 00:49:35.520
+Yeah.
+
+00:49:35.520 --> 00:49:36.520
+That's my tradition.
+
+00:49:36.520 --> 00:49:37.520
+Yeah.
+
+00:49:37.520 --> 00:49:38.520
+You guys will be there.
+
+00:49:38.520 --> 00:49:42.520
+So here at PyCon in Portland, Oregon, you guys have a big presence here.
+
+00:49:42.520 --> 00:49:46.520
+Just one quick fact that I think people might like to hear is how many Intel employees do
+
+00:49:46.520 --> 00:49:48.520
+you guys have in this general area?
+
+00:49:48.520 --> 00:49:53.520
+The exact number as of whenever your audience listens to this may be different, but it is
+
+00:49:53.520 --> 00:49:56.520
+true that as you know, Intel is the biggest chip maker in the world.
+
+00:49:56.520 --> 00:49:57.520
+Oregon is actually our largest site.
+
+00:49:57.520 --> 00:50:01.520
+So we have sites really all over the world, but it's kind of a, this Oregon from that sort
+
+00:50:01.520 --> 00:50:07.520
+of standpoint is, is we're growing not only the new fab processes, the new absolute micro things
+
+00:50:07.520 --> 00:50:14.520
+that are going on into design of the manufacturing, making millions and millions of things that are a few nanometers big.
+
+00:50:14.520 --> 00:50:15.520
+You know, it's amazing.
+
+00:50:15.520 --> 00:50:20.520
+We also have kind of the center of a lot of our software work going on here, as well as the circuit design itself is going on here.
+
+00:50:20.520 --> 00:50:27.520
+So there's a nothing against the other, you know, parts of the world where Intel does business, but it's a, we have, we have, we have a lot here in Oregon from that.
+
+00:50:27.520 --> 00:50:29.520
+Yeah. It's like over 10,000, right?
+
+00:50:29.520 --> 00:50:31.520
+I can't actually give a number.
+
+00:50:31.520 --> 00:50:34.520
+I would probably be, I would probably be shot if I did.
+
+00:50:34.520 --> 00:50:37.520
+So I don't know. No, no, no, no one would shoot me, but I couldn't tell you.
+
+00:50:37.520 --> 00:50:45.520
+So I guess the point is it's really surprising. Like what a presence you guys have here, right? This is definitely in Hillsborough, Oregon, to the west of the West Hills from Portland.
+
+00:50:45.520 --> 00:50:51.520
+You guys drive traffic jams. I'm sure with the, your workforce, we try and stay outside of the traffic jams if we can.
+
+00:50:51.520 --> 00:50:52.520
+So yeah.
+
+00:50:52.520 --> 00:50:58.520
+All right. Well, thank you so much for meeting up with me and sharing what you guys are up to with everyone on the podcast.
+
+00:50:58.520 --> 00:51:00.520
+Thank you, Michael. It's been great. You have a great listenership.
+
+00:51:00.520 --> 00:51:05.520
+I know of people who've come up to me amazingly. So, oh, you were on, you know, Michael shows.
+
+00:51:05.520 --> 00:51:09.520
+I was like, I, I, here's a shout out to all the great Python programmers out there.
+
+00:51:09.520 --> 00:51:11.520
+Really appreciate everything you're doing with Python.
+
+00:51:11.520 --> 00:51:15.520
+David, Suresh, Sergey. Thank you guys. It's a pleasure as always.
+
+00:51:15.520 --> 00:51:17.520
+Thank you for all your work that you're doing.
+
+00:51:17.520 --> 00:51:19.520
+Yeah. Thank you. Bye.
+
+00:51:19.520 --> 00:51:23.520
+This has been another episode of talk Python to me.
+
+00:51:23.520 --> 00:51:29.520
+This week's guests have been David Stewart, Suresh Srinivas, and Sergey Medinov.
+
+00:51:29.520 --> 00:51:34.520
+This episode has been brought to you by Talk Python Training and Hired.
+
+00:51:34.520 --> 00:51:37.520
+Hired wants to help you find your next big thing.
+
+00:51:37.520 --> 00:51:46.520
+Visit talkpython.fm/hired to get five or more offers with salary and equity presented right up front and a special listener signing bonus of $600.
+
+00:51:46.520 --> 00:51:52.520
+Are you or your colleagues trying to learn Python? Well, be sure to visit training.talkpython.fm.
+
+00:51:52.520 --> 00:51:58.520
+We now have year long course bundles and a couple of new classes released just this week.
+
+00:51:58.520 --> 00:52:00.520
+Have a look around. I'm sure you'll find a class you'll enjoy.
+
+00:52:00.520 --> 00:52:02.520
+Be sure to subscribe to the show.
+
+00:52:02.520 --> 00:52:04.520
+Open your favorite podcatcher and search for Python.
+
+00:52:04.520 --> 00:52:06.520
+We should be right at the top.
+
+00:52:06.520 --> 00:52:16.520
+You can also find the iTunes feed at /itunes, Google Play feed at /play and direct RSS feed at /rss on talkpython.fm.
+
+00:52:16.520 --> 00:52:20.520
+Our theme music is developers, developers, developers by Corey Smith, who goes by Smix.
+
+00:52:20.520 --> 00:52:24.520
+Corey just recently started selling his tracks on iTunes.
+
+00:52:24.520 --> 00:52:26.520
+And you check it out at talkpython.fm/music.
+
+00:52:26.520 --> 00:52:32.520
+You can browse his tracks he has for sale on iTunes and listen to the full length version of the theme song.
+
+00:52:32.520 --> 00:52:34.520
+This is your host, Michael Kennedy.
+
+00:52:34.520 --> 00:52:36.520
+Thanks so much for listening.
+
+00:52:36.520 --> 00:52:37.520
+I really appreciate it.
+
+00:52:37.520 --> 00:52:39.520
+Smix, let's get out of here.
+
+00:52:39.520 --> 00:52:40.520
+Smix, let's get out of here.
+
+00:52:40.520 --> 00:52:41.520
+I'm dating with my voice.
+
+00:52:41.520 --> 00:52:43.520
+There's no norm that I can feel within.
+
+00:52:43.520 --> 00:52:44.520
+Haven't been sleeping.
+
+00:52:44.520 --> 00:52:46.520
+I've been using lots of rest.
+
+00:52:46.520 --> 00:52:49.520
+I'll pass the mic back to who rocked his best.
+
+00:52:49.520 --> 00:52:50.520
+I'll pass the mic back to you.
+
+00:52:50.520 --> 00:52:51.520
+I'll pass the mic back to you.
+
+00:52:51.520 --> 00:52:52.520
+I'll pass the mic back to you.
+
+00:52:52.520 --> 00:52:53.520
+I'll pass the mic back to you.
+
+00:52:53.520 --> 00:52:54.520
+I'll pass the mic back to you.
+
+00:52:54.520 --> 00:52:55.520
+I'll pass the mic back to you.
+
+00:52:55.520 --> 00:52:56.520
+I'll pass the mic back to you.
+
+00:52:56.520 --> 00:52:57.520
+I'll pass the mic back to you.
+
+00:52:57.520 --> 00:52:58.520
+I'll pass the mic back to you.
+
+00:52:58.520 --> 00:52:59.520
+I'll pass the mic back to you.
+
+00:52:59.520 --> 00:53:00.520
+I'll pass the mic back to you.
+
+00:53:00.520 --> 00:53:01.480
+Oh, no.
+

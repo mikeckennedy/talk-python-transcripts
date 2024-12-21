@@ -1,0 +1,2723 @@
+WEBVTT
+
+00:00:00.001 --> 00:00:04.360
+Do you write data science code? Do you struggle loading large amounts of data or wonder what parts
+
+00:00:04.360 --> 00:00:08.880
+of your code use the maximum amount of memory? Maybe you just want to require smaller compute
+
+00:00:08.880 --> 00:00:15.160
+resources, servers, RAM, and so on. If so, this episode is for you. We have Itamar Turner-Trowing,
+
+00:00:15.160 --> 00:00:20.160
+creator of the Python data science memory profiler Phil, here to talk about memory usage
+
+00:00:20.160 --> 00:00:26.180
+and data science. This is Talk Python to Me, episode 274, recorded July 8th, 2020.
+
+00:00:26.180 --> 00:00:44.860
+Welcome to Talk Python to Me, a weekly podcast on Python, the language, the libraries, the ecosystem,
+
+00:00:44.860 --> 00:00:49.940
+and the personalities. This is your host, Michael Kennedy. Follow me on Twitter where I'm @mkennedy.
+
+00:00:49.940 --> 00:00:55.060
+Keep up with the show and listen to past episodes at talkpython.fm, and follow the show on Twitter
+
+00:00:55.060 --> 00:01:02.380
+via at Talk Python. This episode is brought to you by Linode and us. Do you want to learn Python,
+
+00:01:02.380 --> 00:01:08.080
+but you can't bear to subscribe to yet another service? At Talk Python Training, we hate subscriptions
+
+00:01:08.080 --> 00:01:12.460
+too. That's why our course bundle gives you full access to the entire library of courses
+
+00:01:12.460 --> 00:01:18.520
+for one fair price. That's right. With the course bundle, you save 70% off the full price of our
+
+00:01:18.520 --> 00:01:24.320
+courses, and you own them all forever. That includes courses published at the time of the purchase,
+
+00:01:24.320 --> 00:01:30.020
+as well as courses released within about a year of the bundle. So stop subscribing and start learning
+
+00:01:30.020 --> 00:01:32.760
+at talkpython.fm/everything.
+
+00:01:32.760 --> 00:01:34.940
+Hey, Tamar. Welcome to Talk Python to Me.
+
+00:01:34.940 --> 00:01:35.980
+Hi, great to be here.
+
+00:01:35.980 --> 00:01:39.380
+Yeah, it's great to have you here. I'm excited to talk about Python and memory.
+
+00:01:39.380 --> 00:01:40.140
+Yeah, me too.
+
+00:01:40.140 --> 00:01:46.680
+Yeah, and I think it's something that doesn't really get as much coverage as I think it deserves in the
+
+00:01:46.680 --> 00:01:53.360
+Python space. You know, if you're a Java developer or a .NET developer, people go on and on and on about
+
+00:01:53.360 --> 00:02:00.260
+optimizing the GC and tweaking this thing or that thing or your code or algorithms for memory management.
+
+00:02:00.260 --> 00:02:06.560
+If you're a C developer, you're constantly in fear of memory leaks and memory management. And in Python,
+
+00:02:07.340 --> 00:02:08.780
+we get it just kind of coast.
+
+00:02:08.780 --> 00:02:18.380
+Or not. And so my motivation for getting into this was doing some scientific computing with basically a giant pile of images,
+
+00:02:18.380 --> 00:02:23.880
+and we'd have to extract information from them. And I initially just focused on getting it working.
+
+00:02:24.260 --> 00:02:37.260
+And then one day, I said, Okay, we're running this on these cloud computers. And it's taking, you know, 18 hours to process the data. Like most of the CPUs are idle, because you're using so much memory. I wonder if this is a problem.
+
+00:02:37.260 --> 00:02:53.500
+And so I did some math, and I talked to management about our expected revenue. And it turns out we were going to spend like 70% of our expected revenue just on cloud computing, given my current implementation, which wouldn't have let any, there wouldn't be any left over for it.
+
+00:02:53.500 --> 00:02:55.480
+Were they excited about that? Or were they not so excited?
+
+00:02:55.480 --> 00:03:04.540
+I didn't mention this. I went and optimized it. And then I just, like, then I sent emails to my manager saying, Look, look, look, the great work I did.
+
+00:03:04.540 --> 00:03:05.480
+Exactly.
+
+00:03:05.480 --> 00:03:07.260
+But I hadn't done any optimization.
+
+00:03:07.260 --> 00:03:09.700
+Yeah, yeah, yeah, yeah. That's very, very cool.
+
+00:03:09.700 --> 00:03:22.740
+And so and reducing the memory, like meant that you could use a lot more CPUs, because that was the bottleneck initially. Like we had this cloud VM that was like mostly just sitting idle, because you just need so
+
+00:03:22.740 --> 00:03:24.720
+much RAM for each of the threads or processes.
+
+00:03:24.720 --> 00:03:41.140
+Right. You can get a high memory version of a cloud computer, but it still, there is that tradeoff, right? You want to take full advantage of the CPUs there. And obviously, less memory is better. And also just it might mean fewer cloud computers to manage.
+
+00:03:41.140 --> 00:03:58.880
+Yeah. And if you think about your computer, if you look at like the usage of your computer, much of the time, your computer usage is going to be like you're using 1% of the CPU is just sitting there. And your RAM, if you're like, a lot of people say like a gigabytes of RAM, their computer, your RAM is going to be like three quarters percent full, 75% full.
+
+00:03:59.120 --> 00:04:14.900
+And basically, it's just that proportionally RAM is much more expensive than computing. And so you don't have as much of a just look at all the CPU guy, like memory tends to be resource constrained, and then the failure modes are you run out of memory and like your computer's wedged or you lost your data.
+
+00:04:14.900 --> 00:04:17.420
+Right, right. You run out of CPU, it goes slower.
+
+00:04:17.940 --> 00:04:20.000
+Yeah. So the failure modes are much worse.
+
+00:04:20.000 --> 00:04:42.080
+Interesting. Yeah, well, it's going to be really fun to dig into it. And I think it's an interesting angle of just the Python ecosystem that people don't spend that much time obsessing about the memory, but it's important. And it's interesting. And we're going to spend some time obsessing about it for the next hour. So for sure. Before we do, let's get into your story, though. How'd you get into programming a Python?
+
+00:04:42.080 --> 00:05:09.200
+I got into programming back in the mid 90s, and my parents were this business creating multimedia CD-ROMs, which was exciting new technology in the mid 1990s. And so I ended up just doing coding for them. I got into Python a few years later, when I discovered SOAP, the Z-O-P framework, which at the time was like really huge in the Python world. Like, you go to Python conferences, there'd be like a whole track on SOAP.
+
+00:05:09.200 --> 00:05:20.360
+And then I just stuck around and ended up using Python for lots of things like distributed computing, worked on Twisted for many years, and scientific computing, and just a variety of different things.
+
+00:05:20.360 --> 00:05:22.460
+Yeah, very cool. And what do you do day to day?
+
+00:05:22.460 --> 00:05:35.520
+I've been doing training, stuff with Docker and packaging for Python. I'm hoping to eventually teach some stuff about Python memory, and then have some products, do a little consulting on the side and start thing.
+
+00:05:35.520 --> 00:05:38.880
+Yeah, very cool. Is this training in person? Is it online? What is it like?
+
+00:05:38.880 --> 00:05:53.940
+Originally, this was in person training. I was supposed to have like, open enrollment class right after Taicon in Pittsburgh, for example. And nowadays, it's over Zoom. Because what do you do?
+
+00:05:54.200 --> 00:06:06.160
+Yeah, because the world is crazy. It's absolutely crazy. Yeah. Okay. Well, cool. That's a lot of fun. I did that for like 10 years and really enjoyed my time doing in-person training. Luckily, there were no pandemics.
+
+00:06:06.820 --> 00:06:08.440
+Zoom actually works.
+
+00:06:08.440 --> 00:06:18.360
+It definitely got disrupted with other things, but not too much. Yeah, we did some stuff over, I think, GoToMeeting, GoToWebinar, which there was no Zoom. So that's what we were using. It was pretty good, actually. Yeah, it's not a bad story.
+
+00:06:18.500 --> 00:06:40.960
+All right. So speaking of obsessing with Python memory, let's just get started off with a little bit of an overview of how Python memory works. So I feel like Python memory lives a little bit in between the C++ world, where it's very explicit, and the Java.net GC world, where it's not even deterministic. What's the story?
+
+00:06:40.960 --> 00:06:53.840
+As a payload, this actually depends on which Python interpreter you're using. If you're using PyPy, P-Y-P-Y, it's actually basically like Java or .NET. If you're using CPython, which most people do, it's a little bit different.
+
+00:06:54.160 --> 00:07:14.780
+And the basic idea is that every Python object has a reference counter. And so when you get a reference to an object, it gets incremented by one. You remove a reference, it gets decremented. So when you append your object to a list, that's an extra reference. If you destroy the list, that reference goes down to...
+
+00:07:14.780 --> 00:07:22.040
+If the reference goes down to zero, the object is not being used by anyone. There's no references to it. So it can immediately be freed up and deallocated.
+
+00:07:22.040 --> 00:07:31.920
+The problem with reference counting is that it's not... It doesn't cover all cases. If you have a circular... Set of circular references, the objects will never hit reference count to zero.
+
+00:07:31.920 --> 00:07:41.800
+So if you take a list and then you append it to itself, it's going... Because it has a reference to itself, its reference count is never going to hit zero, even if you don't have any other references to it.
+
+00:07:42.200 --> 00:07:49.440
+So in addition to the reference counting, Python also has a garbage collection system, which every... I think it's based on how many bytecodes have run.
+
+00:07:49.440 --> 00:07:57.680
+It will go and look for objects that are in this little loop by themselves, but not being used in any actual code and get rid of them too.
+
+00:07:57.680 --> 00:08:04.940
+Right. And I think the GC is also generational, like the other main ones, say Java and .NET as well.
+
+00:08:04.940 --> 00:08:08.520
+Yeah. And I don't quite remember how this works.
+
+00:08:09.160 --> 00:08:27.780
+So, you know, a totally, maybe more maniacal example might be if you're studying some kind of graph theory type object, like a network of things or a network of relationships among people or something like that, where it doesn't even have to be one thing pointing back at itself.
+
+00:08:27.780 --> 00:08:34.220
+It could be thing A points at B, B points at C and D, D points back at F, but F points at A.
+
+00:08:34.220 --> 00:08:38.360
+If you can make a circle following that chain, reference counting breaks.
+
+00:08:38.360 --> 00:08:42.000
+Yeah. And so then you fall back to GC, the garbage collection and...
+
+00:08:42.000 --> 00:08:48.640
+Right. But I would say for the most part that just knowing the GC is there to kind of catch that edge case is really all most people need to know, right?
+
+00:08:48.640 --> 00:08:53.260
+Because the primary story is this reference counting story. What do you think?
+
+00:08:53.260 --> 00:08:58.280
+Unless you're using PyPy, because then there's no reference counting. It's only garbage collection.
+
+00:08:58.280 --> 00:09:06.040
+Yeah. But I'm thinking most people are running CPython. Maybe they're using some data science libraries, especially in the context of using your tool that we're going to talk about.
+
+00:09:06.040 --> 00:09:16.120
+It feels like it's definitely in the data science side of things. In that world, in the CPython world, then it's probably reference counting that you care the most about.
+
+00:09:16.120 --> 00:09:26.840
+Yeah. And I mean, just a fairly high level understanding that as long as something's referring to your object, it will exist. If the references go away, it will either immediately or eventually disappear and get deallocated.
+
+00:09:26.840 --> 00:09:30.540
+That's pretty much all you need to know the vast majority of the time.
+
+00:09:30.540 --> 00:09:30.820
+Yep.
+
+00:09:30.820 --> 00:09:33.260
+And the vast majority of time, that's enough, but not always.
+
+00:09:33.600 --> 00:09:48.380
+Not always. So we're going to talk about a project that you started called PhilFIL that is about profiling memory allocations for data pipeline type of scenarios in particular is optimized for that.
+
+00:09:48.380 --> 00:09:51.400
+Although I suspect you could use it for a lot of different things.
+
+00:09:51.400 --> 00:09:52.340
+I think so, yeah.
+
+00:09:52.340 --> 00:09:57.540
+But let's start the story by just talking about some memory challenges, I guess we could call them.
+
+00:09:57.780 --> 00:10:06.460
+So you wrote a cool blog post article called Clinging to Memory, How Python Function Calls Can Increase Your Memory Usage.
+
+00:10:06.460 --> 00:10:07.060
+Yeah.
+
+00:10:07.060 --> 00:10:09.720
+That's a pretty interesting one. Tell us the general idea here.
+
+00:10:09.720 --> 00:10:14.260
+And so this is something I encountered in the real world, so it can impact you.
+
+00:10:14.460 --> 00:10:20.420
+And this is more of an issue in the kind of applications where you're processing large amounts of data.
+
+00:10:20.420 --> 00:10:23.200
+So like one object might be like four gigabytes of RAM.
+
+00:10:23.200 --> 00:10:33.460
+Like if it's like, if objects live slightly longer and they're like, you know, a dictionary of three entries and there's only one dictionary, you don't really care how long it lives because it's not using.
+
+00:10:33.680 --> 00:10:39.260
+Are you using 2.7 or 2.701 megabytes for this working memory?
+
+00:10:39.260 --> 00:10:39.840
+Nobody cares.
+
+00:10:39.840 --> 00:10:40.060
+Yeah.
+
+00:10:40.060 --> 00:10:40.480
+Yeah.
+
+00:10:40.480 --> 00:10:46.120
+When you have like an array that's like four gigabytes or 20 gigabytes, like this can have very significant impacts.
+
+00:10:46.120 --> 00:10:49.660
+If an array lives even slightly longer than it needs to.
+
+00:10:49.660 --> 00:11:00.140
+And so the idea is if you have a function and you create something in it and then you pass that object to another function that you're calling, you have function f and you're creating this.
+
+00:11:00.140 --> 00:11:01.860
+You have this large array, you pass it to g.
+
+00:11:02.380 --> 00:11:08.660
+If you have a local variable inside of f that the parent function still refers to that array.
+
+00:11:08.660 --> 00:11:11.720
+Like the parameter that accepted the data, for example.
+
+00:11:11.720 --> 00:11:12.620
+Yeah.
+
+00:11:12.620 --> 00:11:18.660
+Then that reference within that function call is a reference.
+
+00:11:18.660 --> 00:11:20.440
+It means reference count's not going to hit zero.
+
+00:11:20.440 --> 00:11:24.980
+Even if g like uses that array and then throws it away and doesn't care about it anymore.
+
+00:11:24.980 --> 00:11:27.520
+The parent function still has reference to that array.
+
+00:11:28.200 --> 00:11:34.620
+And so you can end up with these situations where if you read the code, you know that you are never going to use this data again.
+
+00:11:34.620 --> 00:11:36.560
+There is no way you can use it.
+
+00:11:36.760 --> 00:11:47.480
+But from Python's perspective, because there's a local variable, then the function frame that's referring to it, that object is going to persist until that function returns or if there was an exception that exits.
+
+00:11:47.480 --> 00:11:47.840
+Right.
+
+00:11:47.840 --> 00:11:50.900
+Because everything that was loaded up in that function got defined.
+
+00:11:50.900 --> 00:11:52.580
+And so here's all the variables of the function.
+
+00:11:52.580 --> 00:11:58.200
+And reference counting, they're still pointing at things until those variables go away, right?
+
+00:11:58.540 --> 00:12:00.140
+And they go away when the function returns.
+
+00:12:00.140 --> 00:12:00.760
+Yeah.
+
+00:12:00.760 --> 00:12:09.140
+And you can imagine like if you go into PDB, like you can actually travel up and down the stack and like you can go up to like the parent function and see the local variables.
+
+00:12:09.140 --> 00:12:09.800
+They're still there.
+
+00:12:09.800 --> 00:12:17.360
+Like you can still go in the debugger prompt, just go up two frames to the parent caller and you'll still see the local variable pointing to your large object.
+
+00:12:17.920 --> 00:12:22.540
+And so you can restructure your code in various ways to deal with this.
+
+00:12:22.540 --> 00:12:32.360
+And the way I ended up actually doing it was basically copying this idiom from C++ where you have this object whose only job is to own another object.
+
+00:12:32.360 --> 00:12:33.580
+It has that.
+
+00:12:33.580 --> 00:12:38.500
+You end up with only one reference to the large area that you care about, which is from inside the owner object.
+
+00:12:38.500 --> 00:12:40.540
+Then you pass the owner object around.
+
+00:12:40.540 --> 00:12:45.600
+And when you know that you don't need that data anymore, you tell the owner object, clear your contents.
+
+00:12:46.340 --> 00:12:49.040
+And then that one reference goes away and memory is freed.
+
+00:12:49.040 --> 00:13:00.640
+So you sort of just interesting situation where every once in a while you actually have to fall back to the manual memory management techniques that you have to use all the time in languages like C or C++.
+
+00:13:00.640 --> 00:13:01.240
+Right.
+
+00:13:01.240 --> 00:13:05.120
+You know what's interesting is I see examples of code like this.
+
+00:13:05.120 --> 00:13:10.100
+And then you'll see other people lamenting the fact that code is written this way.
+
+00:13:10.100 --> 00:13:12.420
+And they'll say, you should never write code this way.
+
+00:13:12.420 --> 00:13:16.060
+It's not necessary in Python because it has automatic memory management.
+
+00:13:16.200 --> 00:13:22.480
+Or you should never do this like halfway through randomly set a variable to none and then keep going.
+
+00:13:22.480 --> 00:13:23.500
+Why would you ever do that?
+
+00:13:23.500 --> 00:13:25.280
+That's like you don't need to do that.
+
+00:13:25.280 --> 00:13:25.540
+Right.
+
+00:13:25.540 --> 00:13:26.760
+If you're not going to use it again.
+
+00:13:26.760 --> 00:13:32.060
+Oh, except when that was costing you an extra gig of memory.
+
+00:13:32.060 --> 00:13:37.100
+All of a sudden, this kind of nonstandard pattern, it turns out to be really valuable.
+
+00:13:37.100 --> 00:13:37.440
+Right.
+
+00:13:37.440 --> 00:13:43.080
+It's the difference between it works or it doesn't work or it's a thousand versus two hundred dollars a cloud compute or whatever.
+
+00:13:43.080 --> 00:13:43.360
+Right.
+
+00:13:45.820 --> 00:13:48.440
+This portion of Talk Python to Me is brought to you by Linode.
+
+00:13:48.440 --> 00:13:57.400
+Whether you're working on a personal project or managing your enterprise's infrastructure, Linode has the pricing, support, and scale that you need to take your project to the next level.
+
+00:13:57.400 --> 00:14:12.040
+With 11 data centers worldwide, including their newest data center in Sydney, Australia, enterprise-grade hardware, S3-compatible storage, and the next-generation network, Linode delivers the performance that you expect at a price that you don't.
+
+00:14:12.100 --> 00:14:28.100
+Get started on Linode today with a $20 credit and you get access to native SSD storage, a 40 gigabit network, industry-leading processors, their revamped cloud manager at cloud.linode.com, root access to your server, along with their newest API and a Python CLI.
+
+00:14:28.560 --> 00:14:36.120
+Just visit Talk Python.com.com when creating a new Linode account and you'll automatically get $20 credit for your next project.
+
+00:14:36.120 --> 00:14:37.420
+Oh, and one last thing.
+
+00:14:37.420 --> 00:14:38.200
+They're hiring.
+
+00:14:38.200 --> 00:14:41.300
+Go to linode.com slash careers to find out more.
+
+00:14:41.300 --> 00:14:42.620
+Let them know that we sent you.
+
+00:14:45.180 --> 00:14:45.360
+Yeah.
+
+00:14:45.360 --> 00:15:01.340
+Having never done scientific computing before this job I was at a couple years ago, it was an interesting experience learning a different – because the domain is different, like you have different constraints and different goals, and some of the ways you write software end up being different.
+
+00:15:01.340 --> 00:15:08.820
+Unless you're doing large-scale data processing most of the time in Python, you just don't think of any of these things.
+
+00:15:08.820 --> 00:15:25.100
+Like, you might have to worry about memory leaks, but that's a different sort of – much of the time, that's a different set of problems, where, like, you don't think about the fact that an object being alive for five more milliseconds might cost you, like, another $100,000 if you're scaling up.
+
+00:15:25.100 --> 00:15:26.860
+Yeah, for sure.
+
+00:15:26.860 --> 00:15:27.620
+It's interesting.
+
+00:15:27.620 --> 00:15:31.860
+Another solution that you proposed – well, you proposed three solutions.
+
+00:15:31.860 --> 00:15:33.800
+One is this ownership story.
+
+00:15:34.360 --> 00:15:44.580
+One was maybe only applicable for very limited small functions, but you could just have no local variables and just basically chain one function call into another.
+
+00:15:44.580 --> 00:15:44.900
+Yeah.
+
+00:15:44.900 --> 00:15:51.020
+The intermediate one, though, seems possible, possibly reasonable as well, which is to reuse the local variable.
+
+00:15:51.020 --> 00:15:55.980
+So you're going to load up some data, and then you're going to maybe make some changes, which will copy the data.
+
+00:15:55.980 --> 00:16:03.240
+Instead of having data one, data two, data three, you just say data equals load it, data equals modify the data, data equals modify the data again.
+
+00:16:03.760 --> 00:16:10.300
+And that way, at least as you go through these steps, after each one, it's, you know, released the memory from the prior, potentially.
+
+00:16:10.300 --> 00:16:10.620
+Yeah.
+
+00:16:10.620 --> 00:16:18.140
+And one of the things about sort of data processing applications, they often have these sort of idioms where you're, like, doing a series of steps.
+
+00:16:18.140 --> 00:16:26.720
+And this is where, like, keeping old copies of the data around tends to end up cumulatively being very expensive in terms of memory because it's a series of steps.
+
+00:16:26.720 --> 00:16:29.420
+Once you've done step one, you don't really care about the initial input.
+
+00:16:29.420 --> 00:16:31.800
+Once you've done step two, you don't care about that one.
+
+00:16:31.920 --> 00:16:36.740
+So just explicitly overriding the previous step is another way to do this.
+
+00:16:36.740 --> 00:16:40.040
+I can see somebody looking at this in a code review and going, why are you doing this?
+
+00:16:40.040 --> 00:16:41.880
+These data mean different things.
+
+00:16:41.880 --> 00:16:43.520
+One should be initial data.
+
+00:16:43.520 --> 00:16:46.820
+The other should be, you know, grouped by state.
+
+00:16:46.820 --> 00:16:48.660
+And the third should be some other thing.
+
+00:16:48.660 --> 00:16:49.960
+Like, you're naming these wrong.
+
+00:16:49.960 --> 00:16:50.360
+You know what I mean?
+
+00:16:50.360 --> 00:16:57.980
+That's what I was kind of hinting at is, like, sometimes you need to break the rules to break through to, like, a better outcome.
+
+00:16:57.980 --> 00:16:58.300
+Yeah.
+
+00:16:58.300 --> 00:17:03.460
+And in general, pretty much every best practice is very situation-specific.
+
+00:17:03.460 --> 00:17:05.340
+And sometimes it's the vast majority.
+
+00:17:05.340 --> 00:17:06.060
+But...
+
+00:17:06.060 --> 00:17:07.640
+Yeah, that's a really good point.
+
+00:17:08.100 --> 00:17:12.360
+A lot of times when you hear advice like that, it's spoken as if it was absolute.
+
+00:17:13.040 --> 00:17:15.680
+But there's an implicit context, right?
+
+00:17:15.680 --> 00:17:20.320
+Like you said, when you don't really care about memory and that kind of stuff, you just said you just go and write the code.
+
+00:17:20.320 --> 00:17:25.320
+But, you know, it probably means implicitly what I care about is readability.
+
+00:17:25.320 --> 00:17:27.500
+And what I care about is maintainability.
+
+00:17:27.880 --> 00:17:32.920
+And I just want to optimize it to be as clean and pure as possible, which is fine.
+
+00:17:32.920 --> 00:17:37.020
+But if pure doesn't work and not clean totally works, like, forget the clean.
+
+00:17:37.020 --> 00:17:37.760
+We don't care anymore.
+
+00:17:37.760 --> 00:17:38.460
+I want it to work.
+
+00:17:38.460 --> 00:17:39.300
+That's more important.
+
+00:17:39.300 --> 00:17:41.540
+Like, functioning is primary here.
+
+00:17:41.540 --> 00:17:41.860
+Yeah.
+
+00:17:41.860 --> 00:17:46.880
+And then there's, like, places like MicroPython where you're running on little embedded devices with very little RAM.
+
+00:17:46.880 --> 00:17:53.260
+And then some of the problems that you have in large data processing are translated down to very small programs.
+
+00:17:53.260 --> 00:18:01.660
+That's an interesting example for sure because, again, if you didn't care about that extra meg of RAM, but all of a sudden you only have half a meg, now you really care about it.
+
+00:18:01.660 --> 00:18:01.880
+Yeah.
+
+00:18:01.880 --> 00:18:06.480
+I do want to throw out something from Philip Guo over at pythontutor.com.
+
+00:18:06.480 --> 00:18:12.620
+So if you want to understand, like, a lot of these relationships and how objects refer back to each other, he's got a really cool visualization.
+
+00:18:12.620 --> 00:18:15.580
+I think when you're over there, you have to check.
+
+00:18:15.580 --> 00:18:18.540
+There's, like, a checkbox at the bottom.
+
+00:18:18.540 --> 00:18:19.340
+Let me pull it up.
+
+00:18:19.340 --> 00:18:23.060
+Under the way it renders objects, I think you have to flip it.
+
+00:18:23.160 --> 00:18:28.600
+From inline primitives to, say, render all objects on the heap like Java and Python do.
+
+00:18:28.600 --> 00:18:33.940
+Anyway, if you want to, like, show that off or visualize that, that's a really cool quick one.
+
+00:18:33.940 --> 00:18:39.960
+Also, if you want to observe reference counting without changing reference counting.
+
+00:18:39.960 --> 00:18:42.860
+Because, like, you might want to say, how do I know if there's a reference to this?
+
+00:18:42.860 --> 00:18:48.920
+You can't store a variable and point at it and say, now we're going to ask because you've now changed it, right?
+
+00:18:48.920 --> 00:18:51.100
+Have you done anything with weak references?
+
+00:18:51.100 --> 00:18:52.400
+Weak ref?
+
+00:18:52.400 --> 00:18:55.000
+I'm not sure I've ended up using them in scientific computing.
+
+00:18:55.000 --> 00:19:02.620
+I've definitely done them and used them in some places with, like, asynchronous programming servers.
+
+00:19:02.620 --> 00:19:03.460
+Yeah.
+
+00:19:03.460 --> 00:19:08.440
+Yeah, you could use them for, like, caches that can kind of, like, auto expire and stuff as well.
+
+00:19:08.440 --> 00:19:11.500
+But they're really good for, I could create a weak reference to an object.
+
+00:19:11.500 --> 00:19:13.800
+Then you can ask, how many things point at this?
+
+00:19:13.840 --> 00:19:20.240
+And even if you know something points at it, knowing whether that's one or two might help you get a different understanding, right?
+
+00:19:20.240 --> 00:19:21.720
+You're like, oh, I thought there was only one pointer.
+
+00:19:21.720 --> 00:19:23.380
+Why are there two pointers to this thing?
+
+00:19:23.380 --> 00:19:25.300
+Where did that second one come from?
+
+00:19:25.300 --> 00:19:30.400
+And so you can ask interesting questions without changing the reference counting with weak references.
+
+00:19:30.400 --> 00:19:31.040
+It's really easy.
+
+00:19:31.040 --> 00:19:31.220
+Yeah.
+
+00:19:31.220 --> 00:19:31.840
+Yeah.
+
+00:19:31.840 --> 00:19:33.980
+And there's an API, sys.get refers.
+
+00:19:33.980 --> 00:19:36.500
+It gives you the objects that refers to an object.
+
+00:19:36.500 --> 00:19:43.240
+But then, yeah, you inevitably add the current function frame as an additional reference, and you have to discount it.
+
+00:19:43.240 --> 00:19:43.880
+Right, right.
+
+00:19:43.880 --> 00:19:47.420
+You threw also get size of in here as well.
+
+00:19:47.860 --> 00:19:49.000
+What's the story of the get size of?
+
+00:19:49.000 --> 00:19:54.800
+The function call thing is sort of just an example of places where sort of automatic memory management gets in your way.
+
+00:19:54.800 --> 00:20:06.080
+But there are more fundamental limits or problems you end up with when using Python in memory intensive situations, which you need to understand.
+
+00:20:06.080 --> 00:20:13.580
+And one of them is just that Python objects use a surprising amount of memory for what information that they store.
+
+00:20:14.160 --> 00:20:22.380
+So pretty much every, if you look at the implementation of the CPython interpreter, every object has an addition to whatever data you need to actually store the object itself.
+
+00:20:22.380 --> 00:20:30.580
+It has, on a 64-bit machine, which is most of them these days, it has a pointer to the class or the C type for the class.
+
+00:20:30.580 --> 00:20:31.680
+So that's another eight bytes.
+
+00:20:31.680 --> 00:20:33.580
+And then it has the reference count.
+
+00:20:33.580 --> 00:20:35.380
+So that's another eight bytes.
+
+00:20:35.380 --> 00:20:39.080
+And I think if you have, if it's object sports garbage collection, it's even more.
+
+00:20:40.080 --> 00:20:48.640
+And so if you check the system get size of as a nice utility that lets you use, tell me, tell you how many bytes object uses.
+
+00:20:48.640 --> 00:20:53.420
+I don't think that actually traverses the object tree, right?
+
+00:20:53.420 --> 00:20:57.540
+Like if this thing, if it's a list and the list points at things and those points at those.
+
+00:20:57.540 --> 00:20:58.020
+Yeah.
+
+00:20:58.020 --> 00:21:04.460
+I think it's just how much is like that, the immediate thing that that variable value points at, right?
+
+00:21:04.640 --> 00:21:04.800
+Yeah.
+
+00:21:04.800 --> 00:21:05.320
+Yeah.
+
+00:21:05.320 --> 00:21:05.460
+Okay.
+
+00:21:05.460 --> 00:21:06.520
+That's what I thought.
+
+00:21:06.520 --> 00:21:07.340
+Yeah.
+
+00:21:07.340 --> 00:21:08.360
+I can check what you're talking.
+
+00:21:08.360 --> 00:21:16.240
+And if you check the, how much memory, like an integer uses, like the number one, it takes 28 bytes.
+
+00:21:16.240 --> 00:21:16.640
+Yeah.
+
+00:21:16.640 --> 00:21:27.500
+So if you think about like how you'd represent numbers in memory, like unless you have really large numbers where you obviously need more, 64 bits is sort of, will get you some really big numbers.
+
+00:21:27.500 --> 00:21:49.080
+So if you're using a list with a million integers, that's way like I did the math and I think it was 35, a list with a million integers in it is 35 megabytes of RAM.
+
+00:21:49.320 --> 00:21:52.560
+If you allocated that in a CRA, it would be eight megabytes of RAM.
+
+00:21:52.560 --> 00:21:57.300
+So you're using four and a half times as much memory just because you're using Python objects.
+
+00:21:57.300 --> 00:22:06.280
+In another example, while we're talking about it is the character A. So in C, the character A would be what, four bytes or something like that?
+
+00:22:06.280 --> 00:22:09.180
+If you're using UTF-8, you can probably get it down to one byte.
+
+00:22:09.180 --> 00:22:11.580
+Yeah. Yeah. You could definitely make it smaller if you do it right.
+
+00:22:11.580 --> 00:22:12.060
+Yeah.
+
+00:22:12.060 --> 00:22:12.980
+In Python, it's 50.
+
+00:22:12.980 --> 00:22:14.260
+Yeah.
+
+00:22:14.260 --> 00:22:25.600
+So also get size of, it does some interesting stuff. So if I give it a list of like a million items, it'll say the size is 800,000. It's not quite a million. Maybe it's 100,000. I think it's 100,000.
+
+00:22:25.600 --> 00:22:38.480
+But if I give it a list, which has the number one and also contains within that list, that list of 100,000 items, the size is 72. So yeah, you got to be real careful. It's, it's, it doesn't tell you the whole story, but it does.
+
+00:22:38.480 --> 00:22:50.220
+Yeah, exactly. But it gives you a sense of, oh, like the letter A is 50 and the number one is 28. The memory that we use per representation and data in Python is fairly expensive, I think is the takeaway, right?
+
+00:22:50.220 --> 00:23:05.120
+Yeah. So if you have like a common, one place where people hit this is like, you're reading in some data and then like you're creating like a list per thing for like a reading in some like rows of data from the CSV or something.
+
+00:23:05.120 --> 00:23:12.180
+And you're turning into like, here's a list and then like there's a dictionary with like a bunch of keys for each one or an object for each entry.
+
+00:23:12.180 --> 00:23:22.300
+And you end up with like a massive amount of, considering the information you're storing, you end up with a huge amount of just overhead from creating all those different Python objects.
+
+00:23:22.300 --> 00:23:31.080
+And so like one situation you end up in Python running out of memory is if you're doing like data processing and it's just like, you just have 10 gigabytes of data you loaded.
+
+00:23:31.080 --> 00:23:40.300
+It's going to be a lot of memory, but sometimes it's not actually that much data if you store it on disk or if you store it in the appropriate CXC object.
+
+00:23:40.300 --> 00:23:43.140
+And it's just a lot of data because you create a lot of Python objects.
+
+00:23:43.140 --> 00:23:47.040
+And so it's using like five times as much memory as the actual information.
+
+00:23:47.040 --> 00:23:55.420
+Right, right. So maybe load it into NumPy or Pandas or something like that instead of into a native Python dictionary or something.
+
+00:23:55.420 --> 00:23:59.800
+Yeah. So if you think about Python lists, which has a bunch of Python integers in it.
+
+00:24:00.220 --> 00:24:04.980
+And so each of those Python integers has like 28 bytes of RAM.
+
+00:24:04.980 --> 00:24:12.100
+A NumPy array, it's basically has the same Python overhead, but only once at the beginning where it says, I'm an array.
+
+00:24:12.100 --> 00:24:14.660
+And I store 64-bit integers.
+
+00:24:14.660 --> 00:24:19.400
+And then the storage is just, it's not a generic pointer to generic Python.
+
+00:24:19.400 --> 00:24:21.620
+Right, right. It's eight bytes per entry.
+
+00:24:21.620 --> 00:24:22.060
+Yeah.
+
+00:24:22.060 --> 00:24:27.640
+Yeah. And so the information that would take 35 megabytes in a Python list will be eight megabytes in a NumPy array.
+
+00:24:27.640 --> 00:24:34.420
+Yeah. Another one that, I mean, moving to some of these libraries that support it more efficiently, certainly in the data science world make a lot of sense.
+
+00:24:34.420 --> 00:24:43.600
+But also something that makes a lot of sense that I think people may be overlooking is using different algorithms or different ways of processing.
+
+00:24:43.600 --> 00:24:49.600
+Like one really simple way is like I need to load, compute a bunch of stuff and give it back as a collection.
+
+00:24:49.600 --> 00:24:52.700
+So I'm going to create a list, fill it up and return it. Right.
+
+00:24:52.700 --> 00:24:57.140
+That loads, you know, maybe a million items in a memory and all the cost and overhead of that.
+
+00:24:57.140 --> 00:24:59.960
+And then you give it over to be processed and off it goes.
+
+00:24:59.960 --> 00:25:06.520
+Alternatively, add a yield instead of a list and just do a generator and you process them one at a time.
+
+00:25:06.520 --> 00:25:10.540
+Because probably what you're going to do when you get that list back is go through the list one at a time. Right.
+
+00:25:10.540 --> 00:25:14.940
+And that uses one one millionth of the memory or something to that effect. Right.
+
+00:25:14.940 --> 00:25:18.200
+It doesn't, it only loads one in memory at a time and not all of them.
+
+00:25:18.460 --> 00:25:20.640
+There's things like that as well that you can do.
+
+00:25:20.640 --> 00:25:21.140
+Yeah.
+
+00:25:21.140 --> 00:25:23.720
+If processing them one at a time in order makes sense.
+
+00:25:23.720 --> 00:25:28.260
+If you need to seek around and say, well, what the third one compared to the first one is, then forget it.
+
+00:25:28.340 --> 00:25:28.460
+Yeah.
+
+00:25:28.460 --> 00:25:36.860
+Like the three basic techniques usually are batching and streaming with that generator is like a sort of batches of one.
+
+00:25:36.860 --> 00:25:37.440
+A size of one.
+
+00:25:37.440 --> 00:25:37.760
+Yeah.
+
+00:25:38.000 --> 00:25:38.200
+Yeah.
+
+00:25:38.760 --> 00:25:46.740
+And then there's compression where you have the same memory and same data semantically, but with less overhead.
+
+00:25:46.740 --> 00:25:50.040
+So like switching from Python lists to NumPy arrays in some sense compression.
+
+00:25:50.040 --> 00:25:56.720
+If you know your numbers are only going to go up to 100, you can use a 8-bit NumPy array.
+
+00:25:56.720 --> 00:26:02.960
+And then like you've cut your memory by like 80% at no cost because you have exact same information.
+
+00:26:02.960 --> 00:26:08.700
+And then the final technique is indexing where you need to load only some of the data.
+
+00:26:08.700 --> 00:26:10.460
+Then you can sort of arrange your data.
+
+00:26:10.460 --> 00:26:12.060
+So you can only, you only need to load that part.
+
+00:26:12.060 --> 00:26:20.700
+So like if you're doing accounting, like if you have one file for every month of the year, like you can just load July's file and then you don't have to worry about the data in the other months.
+
+00:26:20.700 --> 00:26:21.080
+Yeah.
+
+00:26:21.080 --> 00:26:21.440
+Yeah.
+
+00:26:21.440 --> 00:26:22.420
+Very cool summary.
+
+00:26:22.420 --> 00:26:24.360
+So that's the picture.
+
+00:26:24.360 --> 00:26:25.580
+That's the memory story.
+
+00:26:25.940 --> 00:26:31.480
+That's some of the challenges you might hit and some of the potential solutions that you might come up against.
+
+00:26:31.480 --> 00:26:38.220
+But at some point you might just need to know like, okay, this is about as good as it's going to get, but I still need to understand the memory better.
+
+00:26:38.220 --> 00:26:39.740
+Or I'm running out of memory.
+
+00:26:39.740 --> 00:26:40.880
+Why?
+
+00:26:40.880 --> 00:26:41.780
+Where?
+
+00:26:41.780 --> 00:26:44.020
+Or maybe you want to take the lazy approach.
+
+00:26:44.020 --> 00:26:48.780
+Maybe you want to start from, well, I know I have this problem of using too much memory.
+
+00:26:48.780 --> 00:26:55.740
+I know one of these things that these guys talked about will possibly solve it, but where should I focus my attention?
+
+00:26:55.880 --> 00:26:55.980
+Right.
+
+00:26:55.980 --> 00:26:57.280
+I've got a thousand lines of Python.
+
+00:26:57.280 --> 00:26:59.260
+Maybe only three need to be changed.
+
+00:26:59.260 --> 00:27:00.180
+Which are the three?
+
+00:27:00.180 --> 00:27:01.100
+Right.
+
+00:27:01.100 --> 00:27:03.720
+So you probably want to profile it somehow.
+
+00:27:03.720 --> 00:27:06.660
+Answer the question, like where is the memory coming from?
+
+00:27:06.660 --> 00:27:07.740
+What's the problem?
+
+00:27:07.740 --> 00:27:10.720
+It's very difficult to optimize something if you can't measure it.
+
+00:27:10.920 --> 00:27:15.720
+Like the example we gave with functions keeping local variables, keeping things alive.
+
+00:27:15.720 --> 00:27:21.300
+Like I would never, now that I know it's a problem I've encountered, I might be able to look for it.
+
+00:27:21.300 --> 00:27:27.580
+But at time, like it was, I believe it was something like extra 10 gigabytes of RAM or something.
+
+00:27:27.580 --> 00:27:31.300
+And I don't think I ever would have spotted it just by reading the code.
+
+00:27:31.300 --> 00:27:31.580
+Yeah.
+
+00:27:31.640 --> 00:27:32.760
+Because it looks perfect.
+
+00:27:32.760 --> 00:27:33.460
+It's clean.
+
+00:27:33.460 --> 00:27:34.140
+It's readable.
+
+00:27:34.140 --> 00:27:38.760
+It's optimized exactly for the scenario that you most of the time optimize it for.
+
+00:27:38.760 --> 00:27:39.860
+So it doesn't look broken.
+
+00:27:39.860 --> 00:27:40.160
+Yeah.
+
+00:27:40.160 --> 00:27:44.520
+If you want to understand why something is using too much resources, like you need to measure it.
+
+00:27:44.680 --> 00:27:55.340
+I built a profiler for a memory profiler called Phil, Phil, F-I-L, which is designed to solve this problem because I hadn't tried other tools available.
+
+00:27:55.340 --> 00:27:56.580
+I decided they weren't sufficient.
+
+00:27:56.580 --> 00:27:56.980
+Yeah.
+
+00:27:56.980 --> 00:27:59.960
+So Phil, I think is really interesting.
+
+00:27:59.960 --> 00:28:06.160
+And the thing that made it connect for me at first, I was like, well, we already have some pretty interesting ones.
+
+00:28:06.160 --> 00:28:07.880
+I mean, you've got built-in C profile.
+
+00:28:07.880 --> 00:28:10.560
+I think that only does CPU profiling, not memory.
+
+00:28:10.560 --> 00:28:14.880
+We have memory underscore profiler, which will do memory profiling.
+
+00:28:14.880 --> 00:28:15.500
+Yeah.
+
+00:28:15.500 --> 00:28:16.200
+We have Austin.
+
+00:28:16.200 --> 00:28:17.060
+Yeah.
+
+00:28:17.060 --> 00:28:17.360
+Yeah.
+
+00:28:17.360 --> 00:28:17.560
+Yeah.
+
+00:28:17.560 --> 00:28:18.240
+We have Austin.
+
+00:28:18.240 --> 00:28:19.160
+Are you familiar with Austin?
+
+00:28:19.160 --> 00:28:20.300
+I've not used it.
+
+00:28:20.300 --> 00:28:27.360
+I've used a Pi instrument and I know about Pi top, Pi spy, and they're all sampling profilers.
+
+00:28:27.360 --> 00:28:27.780
+Right.
+
+00:28:27.780 --> 00:28:28.040
+Right.
+
+00:28:28.040 --> 00:28:30.060
+And Austin's pretty interesting as well.
+
+00:28:30.060 --> 00:28:40.400
+But Phil, the way that you laid it out is really a lot of these profilers are either general purpose or they're built around the idea of working on servers.
+
+00:28:40.400 --> 00:28:45.480
+And long living processes that do short amounts of work many, many times.
+
+00:28:45.480 --> 00:28:45.820
+Right.
+
+00:28:45.820 --> 00:28:47.760
+Like a web server or something like that.
+
+00:28:47.760 --> 00:28:50.780
+And that's a pretty different scenario of I have a script.
+
+00:28:50.780 --> 00:28:56.920
+I need to run it once in order and then look at where the memory comes from.
+
+00:28:56.920 --> 00:28:57.120
+Right.
+
+00:28:57.120 --> 00:28:57.380
+Yeah.
+
+00:28:57.380 --> 00:29:02.080
+So memory profiler is the tool I ended up using when I was trying to use memory usage.
+
+00:29:02.840 --> 00:29:10.940
+And memory profiler will do this thing where it gives you, like you write on a function that says this function added 10K in memory or 100 megabytes in memory or whatever.
+
+00:29:11.600 --> 00:29:14.460
+And if you're trying to find a memory leak, this is actually pretty useful.
+
+00:29:14.460 --> 00:29:17.620
+Like you can say, like I call this function, now my memory usage higher.
+
+00:29:18.160 --> 00:29:19.960
+And so what happened?
+
+00:29:19.960 --> 00:29:23.500
+So you can just figure out this function is where your memory is leaking.
+
+00:29:24.120 --> 00:29:31.780
+But the thing that I was trying to do and what data processing applications, as you mentioned, are trying to do is reduce your peak memory.
+
+00:29:31.780 --> 00:29:35.140
+The idea is that you're running this process.
+
+00:29:35.140 --> 00:29:36.420
+It's going to load in some data.
+
+00:29:36.420 --> 00:29:37.460
+It's going to process it.
+
+00:29:37.460 --> 00:29:38.400
+And then it's going to write it out.
+
+00:29:38.400 --> 00:29:39.020
+And it's going to exit.
+
+00:29:39.760 --> 00:29:45.060
+And the peak memory usage is what determines how much hardware you need or virtual hardware.
+
+00:29:45.060 --> 00:29:53.020
+Like it doesn't matter if like 99% of the time it's only using 100 megabytes, if 1% of the time it needs 60 gigabytes of RAM.
+
+00:29:53.020 --> 00:29:56.720
+Like it's that peak moment in time that you need to.
+
+00:29:56.720 --> 00:29:58.080
+That's what you have to put it in for.
+
+00:29:58.080 --> 00:29:58.360
+Yeah.
+
+00:29:58.360 --> 00:29:58.740
+Yeah.
+
+00:29:58.740 --> 00:29:59.560
+The high watermark.
+
+00:29:59.560 --> 00:30:00.980
+It's like you're building a dam.
+
+00:30:00.980 --> 00:30:03.220
+Like you figure out what the highest flood you get is.
+
+00:30:04.480 --> 00:30:12.180
+And the thing about memory profiler, like you can run it on your function and it'll say this line of code added zero megabytes of RAM.
+
+00:30:12.180 --> 00:30:13.800
+Like it measured before, measured after.
+
+00:30:13.800 --> 00:30:14.540
+They're the same.
+
+00:30:14.540 --> 00:30:16.400
+So no memory was added.
+
+00:30:16.400 --> 00:30:18.440
+But that doesn't tell you.
+
+00:30:18.440 --> 00:30:19.820
+It's fine, right?
+
+00:30:19.820 --> 00:30:20.580
+Right.
+
+00:30:20.580 --> 00:30:25.620
+But it may be that it allocated 20 gigabytes of RAM, did something, and then deallocated.
+
+00:30:25.620 --> 00:30:38.780
+And so you have to, the memory profiler, like recursively go through your whole code base function by function until you find that one line of code that's spiking things.
+
+00:30:38.780 --> 00:30:45.400
+And so you can use it to figure out the peak memory, but it is a very manual, tedious process.
+
+00:30:45.400 --> 00:30:46.020
+Yeah.
+
+00:30:46.160 --> 00:30:51.420
+And once your code base is hard enough, it can become quite difficult.
+
+00:30:51.420 --> 00:30:56.960
+And another big distinction between servers and data pipelines is how much you care about memory leaks.
+
+00:30:56.960 --> 00:31:05.360
+As long as it's a small memory leak, like if you're doing like a process that runs for an hour and it leaked 100k, like after an hour, it'll just exit.
+
+00:31:05.360 --> 00:31:14.000
+If you have, if you're leaking 100k an hour, but your process, you have like 10 processes and they're running for a year, 100k may still not be a problem.
+
+00:31:14.000 --> 00:31:18.560
+But like there are some thresholds where for a server, like it accumulates and your server crashes.
+
+00:31:18.560 --> 00:31:22.640
+And for a batch process, so long it's not impacting the peak, you don't care.
+
+00:31:22.640 --> 00:31:22.840
+Right.
+
+00:31:22.840 --> 00:31:31.820
+Well, imagine you leak only one kilobyte of memory, but it's in the context of a web request and you're getting 100,000 web requests an hour.
+
+00:31:31.820 --> 00:31:34.120
+All of a sudden, your server is toast, right?
+
+00:31:34.440 --> 00:31:41.760
+Whereas if you call the function once and you leak a kilobyte and you're doing like a top to bottom run at once data pipeline, who cares?
+
+00:31:41.760 --> 00:31:43.160
+Doesn't matter, right?
+
+00:31:43.160 --> 00:31:45.700
+It's lost in the void there.
+
+00:31:45.700 --> 00:31:50.620
+So I think also just the focus of what you care about is really different.
+
+00:31:50.620 --> 00:31:54.640
+You don't generally have these huge spikes in server type applications.
+
+00:31:54.640 --> 00:32:00.740
+You can if you're doing like reporting or other weird stuff, but like standard data driven stuff, it's pretty flat line.
+
+00:32:00.740 --> 00:32:01.120
+Yeah.
+
+00:32:01.380 --> 00:32:08.600
+And it turns out that if you think about it, a memory leak, a tool that can find peak memory can also find memory leaks.
+
+00:32:08.700 --> 00:32:13.120
+Because if you have a memory leak, peak memory is always like right now.
+
+00:32:13.120 --> 00:32:14.040
+Yeah, exactly.
+
+00:32:14.040 --> 00:32:18.520
+If you just run for a while and peak memory, eventually like your memory is overwhelmed by the leak.
+
+00:32:18.520 --> 00:32:20.660
+And then you dump the memory then.
+
+00:32:20.660 --> 00:32:22.840
+And so that moment is peak memory.
+
+00:32:22.840 --> 00:32:28.660
+So a tool that can find peak memory can deal with leaks, but it deals with leaks can't necessarily help you with peak memory.
+
+00:32:29.220 --> 00:32:31.260
+So it's actually a more general concept.
+
+00:32:31.260 --> 00:32:36.120
+Talk Python to me is partially supported by our training courses.
+
+00:32:36.120 --> 00:32:39.100
+How does your team keep their Python skills sharp?
+
+00:32:39.100 --> 00:32:43.240
+How do you make sure new hires get started fast and learn the Pythonic way?
+
+00:32:43.740 --> 00:32:52.240
+If the answer is a series of boring videos that don't inspire or a subscription service you pay way too much for and use way too little, listen up.
+
+00:32:52.240 --> 00:32:56.140
+At Talk Python Training, we have enterprise tiers for all of our courses.
+
+00:32:56.140 --> 00:33:00.700
+Get just the one course you need for your team with full reporting and monitoring.
+
+00:33:00.960 --> 00:33:08.420
+Or ditch that unused subscription for our course bundles, which include all the courses and you pay about the same price as a subscription once.
+
+00:33:08.420 --> 00:33:15.740
+For details, visit training. talkpython.fm/business or just email sales at talkpython.fm.
+
+00:33:15.740 --> 00:33:22.440
+Another thing I like to do is relate quantum mechanics back to programming ideas.
+
+00:33:22.440 --> 00:33:26.940
+And I think they're really relevant in both profiling and debugging.
+
+00:33:27.820 --> 00:33:35.440
+And that is the idea I'm thinking of is the observer effect, that by observing some phenomenon, you might actually change it, right?
+
+00:33:35.440 --> 00:33:39.240
+Maybe the tool you're using to measure it actually makes some difference.
+
+00:33:39.240 --> 00:33:43.960
+Or in quantum mechanics, like just insane, bizarre observer effect.
+
+00:33:43.960 --> 00:33:47.520
+Things happen that, again, shouldn't, but it does.
+
+00:33:47.520 --> 00:33:55.200
+One of the challenges I see around profiling is, especially instrumenting style profilers,
+
+00:33:55.740 --> 00:33:59.960
+is you run it because it's too slow, you won't understand the performance.
+
+00:33:59.960 --> 00:34:02.120
+So you apply the profiler to it.
+
+00:34:02.120 --> 00:34:06.440
+Now it's 10 times slower or 20 times slower, but not evenly, right?
+
+00:34:06.440 --> 00:34:13.580
+Like if it's in a really tight loop, that part slows down more than if you're calling like a C function that you're not technically profiling that part,
+
+00:34:13.580 --> 00:34:14.500
+but it's still slow.
+
+00:34:14.500 --> 00:34:15.840
+That might not really slow down at all.
+
+00:34:15.840 --> 00:34:18.460
+So you might exaggerate different parts of it as well.
+
+00:34:19.100 --> 00:34:23.060
+And it sounds to me like Phil doesn't have much of this observer problem.
+
+00:34:23.060 --> 00:34:23.320
+Yeah.
+
+00:34:23.320 --> 00:34:34.640
+So the observer problems tend to be worse in CPU profiling, because as you said, like the act of profiling can change how fast the process runs or which parts of the code run faster.
+
+00:34:34.640 --> 00:34:39.500
+So C profile suffers from this, because it's adding overhead per Python function.
+
+00:34:39.500 --> 00:34:46.500
+And so code that has a lot of Python functions will be slower than code that has less Python functions, even if the actual runtime is the same.
+
+00:34:46.500 --> 00:34:48.420
+So the ads are already unevenly.
+
+00:34:48.420 --> 00:34:51.980
+And the solution on the hand CPU profile is actually sampling.
+
+00:34:51.980 --> 00:34:55.980
+We only like every thousand times a second, you see what's running right now.
+
+00:34:55.980 --> 00:34:59.700
+And tools, I believe Austin works that way and PySpy and PyInstrument.
+
+00:34:59.900 --> 00:35:00.060
+All right.
+
+00:35:00.060 --> 00:35:02.500
+It's more like a helicopter parent.
+
+00:35:02.500 --> 00:35:03.200
+Like, what are you doing?
+
+00:35:03.200 --> 00:35:03.760
+What are you doing?
+
+00:35:03.760 --> 00:35:04.560
+What are you doing?
+
+00:35:04.560 --> 00:35:08.000
+Instead of actually walking along every step, just constantly asking.
+
+00:35:08.000 --> 00:35:09.020
+Yeah.
+
+00:35:09.020 --> 00:35:12.480
+And so then it gets a chance to run faster or whatever when it's not asking.
+
+00:35:12.480 --> 00:35:12.660
+Yeah.
+
+00:35:12.660 --> 00:35:14.820
+The impact is quite minimal.
+
+00:35:14.820 --> 00:35:21.940
+And because slower CPU functions will show up more when you're just peaking every once in a while, like statistically it'll converge.
+
+00:35:22.520 --> 00:35:31.500
+You'll get an overview of where performance is being spent that isn't exactly right, but it's close enough that it doesn't matter that it's not exact.
+
+00:35:31.500 --> 00:35:32.820
+So that's CPU.
+
+00:35:32.820 --> 00:35:38.940
+In memory, sampling might work well for something like a memory leak.
+
+00:35:38.940 --> 00:35:43.920
+Because with a memory leak, like eventually all your memory usage is this one function being called over and over.
+
+00:35:43.920 --> 00:35:47.360
+So if you only check some of the time, it's like eventually you'll catch it.
+
+00:35:48.080 --> 00:35:59.120
+But if you care about the peak, you have to maybe not have to capture all the allocations, but like you may have like one specific allocation that's like 20 gigabytes.
+
+00:35:59.120 --> 00:36:00.500
+That's what causes your peak.
+
+00:36:00.500 --> 00:36:06.460
+And if your sampling doesn't catch it, then the sampling, the profiling is useless.
+
+00:36:06.460 --> 00:36:13.500
+And so effectively, one way or another, you have to track every memory allocation if you actually want to find peak memory.
+
+00:36:13.960 --> 00:36:26.960
+So the implementation approach, whereas sampling is like the superior approach for CPU, if you will care about a high watermark or peak memory, instrumentation is often the only way to go.
+
+00:36:26.960 --> 00:36:31.580
+If you have uneven allocation patterns, which is the case in data processing applications.
+
+00:36:31.580 --> 00:36:31.940
+Right.
+
+00:36:31.940 --> 00:36:32.840
+Yeah.
+
+00:36:32.840 --> 00:36:36.940
+And it sounds like maybe a 50% speed hit is what the docs say.
+
+00:36:36.940 --> 00:36:38.000
+That doesn't sound too bad.
+
+00:36:38.000 --> 00:36:38.120
+Yeah.
+
+00:36:38.920 --> 00:36:43.440
+I mean, it's probably slower in some cases and faster than others.
+
+00:36:43.440 --> 00:36:44.920
+This is what you like if you run PyStone.
+
+00:36:44.920 --> 00:36:45.260
+Yeah.
+
+00:36:45.260 --> 00:36:47.420
+It's not like a thousand percent or something like that.
+
+00:36:47.420 --> 00:36:47.620
+Right.
+
+00:36:47.620 --> 00:36:47.980
+Yeah.
+
+00:36:47.980 --> 00:36:54.420
+And I spent basically, once your profile is slow enough, people just don't use it because they don't have the patience.
+
+00:36:54.420 --> 00:36:54.800
+Yeah.
+
+00:36:54.900 --> 00:37:02.460
+So a lot of the effort I put, like, the basic idea of what it does is not that sophisticated.
+
+00:37:02.460 --> 00:37:06.900
+It's basically, like, you intercept all memory allocations and keep track.
+
+00:37:06.900 --> 00:37:12.080
+And then whenever you hit a new peak, you store a copy of that so that you know that's the peak.
+
+00:37:12.080 --> 00:37:16.340
+It's just if you want to do that with low overhead, that takes work.
+
+00:37:16.340 --> 00:37:16.740
+Right.
+
+00:37:16.740 --> 00:37:17.120
+Absolutely.
+
+00:37:18.120 --> 00:37:28.620
+So one of the challenges is the reason you're using the profiler probably is because you have a lot of data and you built it in some small scenario and then you run it in the real scenario, then it actually is not doing as well as you'd hoped.
+
+00:37:28.620 --> 00:37:32.220
+That's exactly when you need to be able to run it with the profiler.
+
+00:37:32.220 --> 00:37:36.600
+And you need it to work fast, I guess is what I'm saying, to really use it in real scenarios.
+
+00:37:36.600 --> 00:37:36.940
+Yeah.
+
+00:37:36.940 --> 00:37:43.980
+And another thing I've done to handle that, which, and this is a new project, so this is all, like, work in progress.
+
+00:37:43.980 --> 00:37:52.620
+But I know at least, like, I've gotten at least one success story of someone saying they found a, like, in within minutes, they found a memory issue they wouldn't have found otherwise.
+
+00:37:52.620 --> 00:37:56.280
+So I know it's useful for some people and other people have bugs.
+
+00:37:56.280 --> 00:38:04.540
+But another feature that I've added is when the worst case scenario for running out of memory is your program just crashes.
+
+00:38:04.540 --> 00:38:09.680
+And this can be as bad as, like, your computer just wedges altogether, which is not uncommon.
+
+00:38:09.680 --> 00:38:19.040
+Like, just everything's become so utterly slow that, like, yes, if you left it alone for a day, it'd come back, but you put files to restart it.
+
+00:38:19.040 --> 00:38:20.960
+Or you get, like, or it just crashes.
+
+00:38:20.960 --> 00:38:23.260
+And you can do a core dump, but, like, the core dump doesn't tell you.
+
+00:38:23.260 --> 00:38:25.180
+In theory, it has information you want.
+
+00:38:25.440 --> 00:38:28.560
+Yeah, in practice, that's a whole other level right there.
+
+00:38:28.560 --> 00:38:28.860
+Yeah.
+
+00:38:28.860 --> 00:38:32.660
+Or it actually does not have the information you want, to come to think of it.
+
+00:38:32.660 --> 00:38:39.460
+Another thing, a feature I've added is Phil makes some attempts to handle out-of-memory crashes.
+
+00:38:39.460 --> 00:38:49.200
+Like, if you run out of memory, it'll say, like, okay, you just got a failed allocation, so I'm going to try to deallocate all the large allocations that I know about just to free up some memory.
+
+00:38:49.200 --> 00:38:55.320
+And it has, like, this emergency stash of, like, 16 megabytes that, like, just allocates up front and select it.
+
+00:38:55.320 --> 00:38:56.360
+It breaks the glass.
+
+00:38:56.360 --> 00:38:58.040
+It allocates that memory, so it's a bit more.
+
+00:38:58.040 --> 00:39:00.920
+It lets it go and then starts tearing stuff down as hard as it can.
+
+00:39:00.920 --> 00:39:01.040
+Yeah.
+
+00:39:01.040 --> 00:39:04.600
+And then it tries to dump a report of, like, this is what your memory usage was.
+
+00:39:04.600 --> 00:39:08.880
+And it won't always work, and I suspect it needs a bunch more work.
+
+00:39:08.880 --> 00:39:13.360
+Like, it needs a bunch of optimization, because I feel it dumping the report from field text memory.
+
+00:39:13.540 --> 00:39:24.400
+But the idea, like, my goal, at least, is that when you run out of memory, instead of just a crash, you'll actually get some feedback that will help you diagnose the problem.
+
+00:39:24.400 --> 00:39:25.700
+Yeah, that's really, really cool.
+
+00:39:25.700 --> 00:39:32.620
+I don't know how CPython, a Cprofile, excuse me, I don't know exactly how deep its reach is.
+
+00:39:32.620 --> 00:39:48.240
+But in Cprofile, if I'm trying to look at, say, data science stuff, and I'm calling a library, and it's using its internal malloc and its internal C stuff to manage the memory down in the C layer, I don't know if Cprofile will check that.
+
+00:39:48.340 --> 00:39:53.940
+You know, if it's doing, like, crazy Fortran stuff or other allocations, who knows?
+
+00:39:53.940 --> 00:39:57.320
+So CPprofile, I mean, it's giving you CPU, but it's...
+
+00:39:57.320 --> 00:40:00.420
+Yeah, I'm sorry, Memory Profiler, the one that does memory one.
+
+00:40:00.420 --> 00:40:00.840
+Yeah, yeah.
+
+00:40:00.840 --> 00:40:09.700
+So Python actually has a memory profiler thing, TraceMalloc, but it only knows about Python memory APIs.
+
+00:40:09.700 --> 00:40:12.920
+Like, if you're using an arbitrary C++ library, you won't know about it.
+
+00:40:12.920 --> 00:40:14.900
+Which is common in the data science world, right?
+
+00:40:14.900 --> 00:40:16.820
+I mean, that's exactly where a lot of the action is.
+
+00:40:16.820 --> 00:40:17.140
+Yeah.
+
+00:40:17.260 --> 00:40:23.080
+Yeah, Memory Profiler has a bunch of different ways it can work, but it can actually...
+
+00:40:23.080 --> 00:40:29.840
+The most general way it works is, like, at the beginning of the line of code, the end of the line of code, it checks just how much memory that process is using.
+
+00:40:29.840 --> 00:40:35.700
+And so it'll work with any allocation, but it has the other downsides that we talked about earlier.
+
+00:40:35.700 --> 00:40:38.060
+So Memory Profiler can actually...
+
+00:40:38.060 --> 00:40:43.160
+The reason I was using it was because it can actually catch any allocation from any C library.
+
+00:40:43.160 --> 00:40:44.180
+I see.
+
+00:40:44.540 --> 00:40:47.840
+Painfully, for purposes of reducing memory usage.
+
+00:40:47.840 --> 00:40:48.720
+Yeah, for sure.
+
+00:40:48.720 --> 00:41:00.140
+And so my goal with Phil was to not just be tied to Python code allocations and be able to just generically support anything that any third-party library is using.
+
+00:41:00.140 --> 00:41:03.960
+Yeah.
+
+00:41:03.960 --> 00:41:04.960
+Yeah.
+
+00:41:04.960 --> 00:41:05.960
+I think that's a lot of things that I've done.
+
+00:41:05.960 --> 00:41:05.960
+I think that's a lot of things that I've done.
+
+00:41:05.960 --> 00:41:06.960
+I think that's a lot of things that I've done.
+
+00:41:06.960 --> 00:41:07.960
+I think that's a lot of things that I've done.
+
+00:41:07.960 --> 00:41:08.960
+I think that's a lot of things that I've done.
+
+00:41:08.960 --> 00:41:10.960
+I think that's a lot of things that I've done.
+
+00:41:10.960 --> 00:41:11.960
+I think that's a lot of things that I've done.
+
+00:41:11.960 --> 00:41:12.960
+I think that's a lot of things that I've done.
+
+00:41:12.960 --> 00:41:13.960
+I think that's a lot of things that I've done.
+
+00:41:13.960 --> 00:41:14.960
+I think that's a lot of things that I've done.
+
+00:41:14.960 --> 00:41:15.960
+I think that's a lot of things that I've done.
+
+00:41:15.960 --> 00:41:16.960
+I think that's a lot of things that I've done.
+
+00:41:16.960 --> 00:41:17.960
+I think that's a lot of things that I've done.
+
+00:41:17.960 --> 00:41:18.960
+I think that's a lot of things that I've done.
+
+00:41:18.960 --> 00:41:19.960
+I think that's a lot of things that I've done.
+
+00:41:19.960 --> 00:41:20.960
+I think that's a lot of things that I've done.
+
+00:41:20.960 --> 00:41:21.960
+I think that's a lot of things that I've done.
+
+00:41:21.960 --> 00:41:22.960
+I think that's a lot of things that I've done.
+
+00:41:22.960 --> 00:41:23.960
+I think that's a lot of things that I've done.
+
+00:41:23.960 --> 00:41:24.960
+I think that's a lot of things that I've done.
+
+00:41:24.960 --> 00:41:25.960
+I think that's a lot of things that I've done.
+
+00:41:25.960 --> 00:41:26.960
+I think that's a lot of things that I've done.
+
+00:41:26.960 --> 00:41:27.960
+I think that's a lot of things that I've done.
+
+00:41:27.960 --> 00:41:28.960
+I think that's a lot of things that I've done.
+
+00:41:28.960 --> 00:41:29.960
+I think that's a lot of things that I've done.
+
+00:41:29.960 --> 00:41:30.960
+I think that's a lot of things that I've done.
+
+00:41:30.960 --> 00:41:31.960
+I think that I've done.
+
+00:41:31.960 --> 00:41:36.960
+because the operating system will cleverly load and unload stuff from disk on demand.
+
+00:41:36.960 --> 00:41:41.960
+And so it is affecting how much memory you use, but the OS will sort of optimize it for you.
+
+00:41:41.960 --> 00:41:43.960
+So it's not clear how to measure it.
+
+00:41:43.960 --> 00:41:48.960
+So there's a lot of ways that if you want to track everything, like there's a lot of them,
+
+00:41:48.960 --> 00:41:50.960
+and I don't do all of them quite yet.
+
+00:41:50.960 --> 00:41:57.960
+But I've been sort of adding them one by one and hope to cover the vast majority of cases pretty soon.
+
+00:41:57.960 --> 00:42:00.960
+Yeah, but you covered some of these at least already, huh?
+
+00:42:00.960 --> 00:42:01.960
+Yeah.
+
+00:42:01.960 --> 00:42:10.960
+I cover basic MF usage, malloc, calloc, realloc, which I said, the standard APIs, added aligned alloc, which is C++.
+
+00:42:10.960 --> 00:42:16.960
+Apparently, at least in some cases, Fortran, I've never done anything with Fortran.
+
+00:42:16.960 --> 00:42:19.960
+I just know that it's a thing that scientific computing uses.
+
+00:42:19.960 --> 00:42:23.960
+And so like I said, okay, I'm going to figure out if Fortran is covered by this.
+
+00:42:23.960 --> 00:42:28.960
+And it turns out that traditionally Fortran never actually had memory allocation.
+
+00:42:28.960 --> 00:42:34.960
+You would just like write some code and you would say, I'm going to have this array and that's all you ever got.
+
+00:42:34.960 --> 00:42:38.960
+But modern Fortran from 1990 onwards has explicit allocation.
+
+00:42:38.960 --> 00:42:43.960
+And Phil can at least capture that if you use at least GCC's Fortran compiler.
+
+00:42:43.960 --> 00:42:51.960
+And so the idea is you should be able to just take arbitrary data processing or scientific computing code and it will figure out those allocations.
+
+00:42:51.960 --> 00:42:59.960
+It won't tell you like which line of Fortran and which line of C was responsible because that's like there are tools that do that.
+
+00:42:59.960 --> 00:43:02.960
+But the performance overhead is immense.
+
+00:43:02.960 --> 00:43:07.960
+But it will tell you at least which line of Python was responsible and much of the time that's sufficient.
+
+00:43:07.960 --> 00:43:10.960
+Right. And as a Python developer, really, that's kind of the answer you want.
+
+00:43:10.960 --> 00:43:13.960
+You don't want to know that like this internal part of NumPy did it.
+
+00:43:13.960 --> 00:43:18.960
+You just want to know I called, you know, load CSV on Pandas or something.
+
+00:43:18.960 --> 00:43:20.960
+And that's where the memory is or something.
+
+00:43:20.960 --> 00:43:20.960
+Yeah, exactly.
+
+00:43:20.960 --> 00:43:25.960
+You want to see the kind of boundary into that library because that's where you control.
+
+00:43:25.960 --> 00:43:26.960
+You're not going to go rewrite Pandas or NumPy.
+
+00:43:26.960 --> 00:43:27.960
+Yeah.
+
+00:43:27.960 --> 00:43:28.960
+And yeah, much of it.
+
+00:43:28.960 --> 00:43:41.960
+So yeah, you will like the goal field is to tell you where in your Python code the memory usage was and not only tell you that in a very easy to understand way, which was another one of my goals.
+
+00:43:41.960 --> 00:43:45.960
+Yeah. So you want to tell people maybe describe the flame graphs that they can see and explore.
+
+00:43:45.960 --> 00:43:46.960
+Yeah.
+
+00:43:46.960 --> 00:43:48.960
+And maybe we can link to one of the show notes.
+
+00:43:48.960 --> 00:43:52.960
+So flame graph, I think Brendan Gregg came up with the idea.
+
+00:43:52.960 --> 00:44:02.960
+And the idea is it's sort of showing you, you know, your programs that you can think of as a, any point you have like a call stack, like you have function F calls function Z calls function H.
+
+00:44:02.960 --> 00:44:04.960
+That's sort of a stack.
+
+00:44:04.960 --> 00:44:10.960
+And so you can put these bars that where the wider they are, the more resource they're using.
+
+00:44:10.960 --> 00:44:12.960
+Brendan Gregg originally did this for CPU.
+
+00:44:12.960 --> 00:44:13.960
+I'm using it for memory.
+
+00:44:13.960 --> 00:44:21.960
+And the idea is so if you have a really wide, like if you have a bar that's like 100% of the screen, that's like it's things using all this or the functions of call.
+
+00:44:21.960 --> 00:44:22.960
+They're using all your memory.
+
+00:44:22.960 --> 00:44:25.960
+If it's like narrower, it's using less memory.
+
+00:44:25.960 --> 00:44:28.960
+And then I've arranged it in a way that it actually includes the source code.
+
+00:44:28.960 --> 00:44:30.960
+So what you're reading looks like a stack trace.
+
+00:44:30.960 --> 00:44:34.960
+It looks like like something through an exception and you're just reading it.
+
+00:44:34.960 --> 00:44:40.960
+But the width of the bar shows you which lines of code were responsible for how much memory cumulatively.
+
+00:44:40.960 --> 00:44:47.960
+I also added some stuff where there's a building on a Rust library called Inferno, which is great, which didn't much of the heavy lifting.
+
+00:44:47.960 --> 00:44:53.960
+But I added a feature to Inferno where the wider the bar, the more memory it's using, the redder it is.
+
+00:44:53.960 --> 00:44:58.960
+And so the idea is you just look at the graph and you can just see like where it's red is where.
+
+00:44:58.960 --> 00:44:59.960
+Where is it red?
+
+00:44:59.960 --> 00:45:00.960
+That's the problem.
+
+00:45:00.960 --> 00:45:01.960
+That's the thing you got to focus on, right?
+
+00:45:01.960 --> 00:45:02.960
+Yeah.
+
+00:45:02.960 --> 00:45:05.960
+It really focuses on the expensive parts of the code.
+
+00:45:05.960 --> 00:45:07.960
+And then what you're reading is a stetress.
+
+00:45:07.960 --> 00:45:08.960
+Yeah.
+
+00:45:08.960 --> 00:45:09.960
+And these are cool.
+
+00:45:09.960 --> 00:45:17.960
+You can embed these into the web pages and then you can hover over them and click and like zoom into the functions and really explore it quick and easy, right?
+
+00:45:17.960 --> 00:45:18.960
+Yeah.
+
+00:45:18.960 --> 00:45:26.960
+I originally rolled this sort of Perl script that converted data into these SVGs and then Inferno library ported that to Rust and so I'm using it.
+
+00:45:26.960 --> 00:45:30.960
+So they didn't much of the work and I'm just building on top of it mostly.
+
+00:45:30.960 --> 00:45:32.960
+So they did a few small features.
+
+00:45:32.960 --> 00:45:33.960
+Yeah.
+
+00:45:33.960 --> 00:45:35.960
+It's like this whole UI for exploring there.
+
+00:45:35.960 --> 00:45:36.960
+To use it is super simple.
+
+00:45:36.960 --> 00:45:47.960
+Like if you were going to run Python space your app.py with its arguments, you just would replace Python with fill dash profile space run and that's it, right?
+
+00:45:47.960 --> 00:45:48.960
+And you get this output.
+
+00:45:48.960 --> 00:45:48.960
+Yeah.
+
+00:45:48.960 --> 00:45:51.960
+My goal was also no options.
+
+00:45:51.960 --> 00:45:56.960
+Like this isn't a people don't run memory profiling like every day.
+
+00:45:56.960 --> 00:46:02.960
+Like it's not like a tool you want to tweak and customize your own personal needs or that you want to spend a lot of time learning.
+
+00:46:02.960 --> 00:46:05.960
+So another of my goals is just it should just work.
+
+00:46:05.960 --> 00:46:11.960
+So I've at the moment it has one command line option, like where it dumped the data, you know, you need to set that or think about it.
+
+00:46:11.960 --> 00:46:17.960
+And then the output is like a HTML page that has the graphs embedded and has some explanations.
+
+00:46:17.960 --> 00:46:23.960
+And so the goal is as much as possible to make it as sort of transparent and easy to use.
+
+00:46:23.960 --> 00:46:28.960
+And I have some further ideas of how to improve the UX, which I haven't gotten to yet.
+
+00:46:28.960 --> 00:46:29.960
+Nice.
+
+00:46:29.960 --> 00:46:39.960
+So if I'm like a data scientist or a computing person who is not necessarily a programmer, I could just drop in here, pip install, fill, fill dash profile, run my thing that normally I would just say Python run.
+
+00:46:39.960 --> 00:46:41.960
+And that's, that's all I really got to know.
+
+00:46:41.960 --> 00:46:43.960
+And then I just look at a web page.
+
+00:46:43.960 --> 00:46:44.960
+Yeah.
+
+00:46:44.960 --> 00:46:46.960
+It'll open the web page automatically if you're, it can.
+
+00:46:46.960 --> 00:46:47.960
+So you don't even have to.
+
+00:46:47.960 --> 00:46:48.960
+Yeah.
+
+00:46:48.960 --> 00:46:50.960
+If you're, the goal is you run it and it, yeah.
+
+00:46:50.960 --> 00:46:51.960
+Yeah.
+
+00:46:51.960 --> 00:46:55.960
+If you're, the goal is you run it, it pops up a web page, read the web page and you have the answer.
+
+00:46:55.960 --> 00:46:56.960
+Yeah.
+
+00:46:56.960 --> 00:46:57.960
+What's using where memory is going.
+
+00:46:57.960 --> 00:47:06.960
+You spoke about one of the cool features being the out of memory catch and analysis, and you've got to do a slightly different thing on the command line to make that work.
+
+00:47:06.960 --> 00:47:06.960
+Right?
+
+00:47:06.960 --> 00:47:07.960
+Yeah.
+
+00:47:07.960 --> 00:47:11.960
+The issue is, and this is a thing I can probably fix eventually.
+
+00:47:11.960 --> 00:47:13.960
+It's just, this is sort of a limit in my implementation.
+
+00:47:13.960 --> 00:47:16.960
+The code that generates the report right now is in Python.
+
+00:47:16.960 --> 00:47:20.960
+And if you just run out of memory, you can't go back into Python at that point.
+
+00:47:20.960 --> 00:47:21.960
+Yeah.
+
+00:47:21.960 --> 00:47:25.960
+So if you run out of memory, like it's not, the experience isn't quite as nice.
+
+00:47:25.960 --> 00:47:33.960
+Eventually I might end up like, if it reaches the point where I'm not like iterating it as quickly, I might rewrite that in Rust.
+
+00:47:33.960 --> 00:47:39.960
+And then at that point, it might be feasible to actually like have the fully nice UI and the crash.
+
+00:47:39.960 --> 00:47:39.960
+Yeah.
+
+00:47:39.960 --> 00:47:40.960
+Right.
+
+00:47:40.960 --> 00:47:41.960
+Okay, cool.
+
+00:47:41.960 --> 00:47:46.960
+Now also currently it runs on POSIX, Linux and macOS only, right?
+
+00:47:46.960 --> 00:47:47.960
+Yeah.
+
+00:47:47.960 --> 00:47:48.960
+I would expect that.
+
+00:47:48.960 --> 00:47:52.960
+I'm not sure it would run on anything other than like, if you run this in FreeBSD, my guess is it will work.
+
+00:47:52.960 --> 00:47:53.960
+Yeah.
+
+00:47:53.960 --> 00:47:54.960
+But I don't think-
+
+00:47:54.960 --> 00:47:55.960
+Linux and macOS, yeah.
+
+00:47:55.960 --> 00:47:56.960
+Yeah.
+
+00:47:56.960 --> 00:47:56.960
+Yeah.
+
+00:47:56.960 --> 00:47:58.960
+I don't think data scientists or scientists are using much FreeBSD.
+
+00:47:58.960 --> 00:47:59.960
+Right.
+
+00:47:59.960 --> 00:48:00.960
+Yeah.
+
+00:48:00.960 --> 00:48:04.960
+And macOS was added fairly recently.
+
+00:48:04.960 --> 00:48:18.960
+And someday I would like to add Windows, but it's, there's a lot of like dealing with like linkers and like fairly low level details that I don't know as much about on Windows.
+
+00:48:18.960 --> 00:48:19.960
+So it should be possible.
+
+00:48:19.960 --> 00:48:23.960
+I've seen things that make that make me think that it is possible.
+
+00:48:23.960 --> 00:48:27.960
+I just, it's a chunk of work I haven't done too, because they're hard.
+
+00:48:27.960 --> 00:48:28.960
+Sure.
+
+00:48:28.960 --> 00:48:29.960
+Yeah.
+
+00:48:29.960 --> 00:48:31.960
+You've either got to get it working or-
+
+00:48:31.960 --> 00:48:32.960
+Yeah.
+
+00:48:32.960 --> 00:48:34.960
+You're just supporting macOS, because that's a lot of work, so.
+
+00:48:34.960 --> 00:48:35.960
+Yeah.
+
+00:48:35.960 --> 00:48:36.960
+Yeah.
+
+00:48:36.960 --> 00:48:37.960
+I'm sure it was.
+
+00:48:37.960 --> 00:48:41.960
+So I actually think that maybe you don't have to worry too much about Windows.
+
+00:48:41.960 --> 00:48:43.960
+And that's not to say that people don't use Windows.
+
+00:48:43.960 --> 00:48:49.960
+Windows is used by like half the Python developers, and it's probably pretty heavy in the data science world as well.
+
+00:48:49.960 --> 00:48:55.960
+But, you know, Windows 10 now has Windows subsystem for Linux, and V2 is quite nice.
+
+00:48:55.960 --> 00:49:00.960
+So it's very possible you can just point people at, you know, you have to use Windows subsystem for Linux.
+
+00:49:00.960 --> 00:49:07.960
+It would probably work, because it's all, it's all APIs that I would expect are emulated fairly faithfully.
+
+00:49:07.960 --> 00:49:07.960
+Yeah.
+
+00:49:07.960 --> 00:49:12.960
+I think it's just a BlinkView virtual machine, so I don't think you have to do anything.
+
+00:49:12.960 --> 00:49:15.960
+My impression is that it, well, at least the original one was rather more sophisticated.
+
+00:49:15.960 --> 00:49:18.960
+Like, there was something about like, translating syscalls.
+
+00:49:18.960 --> 00:49:19.960
+I don't know about version two.
+
+00:49:19.960 --> 00:49:23.960
+But yeah, there's a decent chance it'll work just fine on WSL.
+
+00:49:23.960 --> 00:49:32.960
+Yeah, I'll put a link to Chris Moffitt's article on creating a, using Windows SL to build a Python development environment on Windows.
+
+00:49:32.960 --> 00:49:34.960
+And maybe that'll help people in general.
+
+00:49:34.960 --> 00:49:35.960
+Maybe this will work.
+
+00:49:35.960 --> 00:49:35.960
+I don't know.
+
+00:49:35.960 --> 00:49:36.960
+We can give it a try.
+
+00:49:36.960 --> 00:49:37.960
+Cool.
+
+00:49:37.960 --> 00:49:42.960
+And then you also, you know, it's one thing to just say, well, too bad that didn't work.
+
+00:49:43.960 --> 00:49:44.960
+It's a lot better to say.
+
+00:49:44.960 --> 00:49:46.960
+And here are some ideas for making it better.
+
+00:49:46.960 --> 00:49:53.960
+So you have a couple of recommendations for data scientists on how to be more efficient with their code and their memory.
+
+00:49:53.960 --> 00:49:57.960
+So I talked earlier about batching, indexing, and compression.
+
+00:49:57.960 --> 00:50:02.960
+And I actually gave a, supposed to give a talk at PyCon about that this year.
+
+00:50:02.960 --> 00:50:05.960
+It was, I mean, there's a recorded recording of it, but I never gave it live.
+
+00:50:05.960 --> 00:50:12.960
+And there's a series of articles here that sort of talk about those ideas and then show how to apply them in NumPy, show how to apply them in Pandas.
+
+00:50:12.960 --> 00:50:23.960
+And I started writing some articles about like how to just Python level issues, like how do you, like we talked about with like function calls and just ways to structure a code to reduce memory usage.
+
+00:50:23.960 --> 00:50:34.960
+So there's a bunch of articles that are already adding more over time, just with sort of the techniques you need to, once you figure out where the problem is to reduce the memory usage.
+
+00:50:34.960 --> 00:50:35.960
+Right, right.
+
+00:50:35.960 --> 00:50:35.960
+Yeah.
+
+00:50:35.960 --> 00:50:37.960
+I just saw your video.
+
+00:50:37.960 --> 00:50:39.960
+I didn't realize, I didn't watch it yet.
+
+00:50:39.960 --> 00:50:43.960
+So I'll put a link to it in the show notes so people can watch your virtual PyCon talk.
+
+00:50:43.960 --> 00:50:44.960
+Yeah.
+
+00:50:44.960 --> 00:50:47.960
+I've been going to PyCon for a very long time.
+
+00:50:47.960 --> 00:50:51.960
+And so it's just really sad not being able to see like friends that leave me once a year.
+
+00:50:51.960 --> 00:51:01.960
+And I know, PyCon is like my geek holiday, you know, just get out of there and hang out with a lot of my friends that I only see otherwise interact with online.
+
+00:51:01.960 --> 00:51:02.960
+And it's really special.
+
+00:51:02.960 --> 00:51:03.960
+It's too bad it didn't happen this year.
+
+00:51:03.960 --> 00:51:04.960
+Yeah.
+
+00:51:04.960 --> 00:51:05.960
+Someday.
+
+00:51:05.960 --> 00:51:05.960
+Yeah.
+
+00:51:05.960 --> 00:51:08.960
+Someday it'll be back someday, like everything.
+
+00:51:08.960 --> 00:51:09.960
+All right.
+
+00:51:09.960 --> 00:51:12.960
+Well, these are really interesting ideas.
+
+00:51:12.960 --> 00:51:14.960
+I think covering them in general was good.
+
+00:51:14.960 --> 00:51:15.960
+And Phil is a cool project.
+
+00:51:15.960 --> 00:51:19.960
+So I think it'll help some people out there who are having challenges.
+
+00:51:19.960 --> 00:51:27.960
+Maybe their code is using too much memory and swaps out and becomes insanely slow, or they just couldn't process the data they wanted because it didn't work.
+
+00:51:27.960 --> 00:51:32.960
+So they can hit it with this, use some of your recommendations and maybe unlock some answers.
+
+00:51:32.960 --> 00:51:32.960
+Yeah.
+
+00:51:32.960 --> 00:51:34.960
+I should add, this is a very new project.
+
+00:51:34.960 --> 00:51:43.960
+And so like, I know one person for whom it worked right, but I also know one person for whom it just wildly misreported the memory usage.
+
+00:51:43.960 --> 00:51:44.960
+Okay.
+
+00:51:44.960 --> 00:51:46.960
+He's hoping to send me a reproducer later this week.
+
+00:51:46.960 --> 00:51:47.960
+We can fix it.
+
+00:51:47.960 --> 00:51:52.960
+So if it doesn't work, I very much encourage you to file a bug report.
+
+00:51:52.960 --> 00:51:53.960
+Let me know.
+
+00:51:53.960 --> 00:51:55.960
+I'm happy to do a screen sharing session.
+
+00:51:55.960 --> 00:52:01.960
+So some people will bug it just because I want this to be a tool that works for people.
+
+00:52:01.960 --> 00:52:03.960
+And so if it's not working, I want to help.
+
+00:52:03.960 --> 00:52:11.960
+And it's an early enough stage that I expect that there are still a bunch of major issues, even if it does actually work in some cases.
+
+00:52:11.960 --> 00:52:12.960
+So please try it.
+
+00:52:12.960 --> 00:52:13.960
+It might just work.
+
+00:52:13.960 --> 00:52:15.960
+And if it doesn't, please let me know.
+
+00:52:15.960 --> 00:52:16.960
+I'll do my best to help.
+
+00:52:16.960 --> 00:52:16.960
+Yeah.
+
+00:52:16.960 --> 00:52:17.960
+Very cool.
+
+00:52:17.960 --> 00:52:22.960
+And speaking of which, you know, people are asking me recently, hey, I'm looking for an open source project to contribute to.
+
+00:52:22.960 --> 00:52:27.960
+Do you have any recommendations on ones I might look at or consider contributing to?
+
+00:52:27.960 --> 00:52:28.960
+What's the story there?
+
+00:52:28.960 --> 00:52:30.960
+Are you looking for people who might participate?
+
+00:52:30.960 --> 00:52:33.960
+I would be happy to accept contributions.
+
+00:52:33.960 --> 00:52:37.960
+It's some parts of it are, there's a lot of fun stuff in there.
+
+00:52:37.960 --> 00:52:47.960
+Like in terms of low level systems programming, there's like, there's a bunch of rust and like a bunch of C code and like poking into the internals of CPython.
+
+00:52:47.960 --> 00:52:50.960
+If that is a thing that interests you, there's a bunch of work there.
+
+00:52:50.960 --> 00:52:53.960
+There's also a bunch of UI things that could be done.
+
+00:52:53.960 --> 00:53:04.960
+Like, if you think about profiling, the real usage pattern should really be profile this program, try to fix it, and then say, profile this again and show me the difference.
+
+00:53:04.960 --> 00:53:07.960
+Like, and then you can have a visualization of the differences.
+
+00:53:07.960 --> 00:53:15.960
+That is my eventual goal is like, to have a user experience that's not just what you use now, but actually shows you if things are better or worse and where.
+
+00:53:15.960 --> 00:53:21.960
+So if people are interested in sort of that sort of UX kind of work, there's a room there.
+
+00:53:21.960 --> 00:53:25.960
+What about building like tutorials and stuff like that?
+
+00:53:25.960 --> 00:53:26.960
+Yeah.
+
+00:53:26.960 --> 00:53:33.960
+I mean, like in general, it'd be exciting to see people pick it on, but it's also the same time.
+
+00:53:33.960 --> 00:53:34.960
+Yeah.
+
+00:53:34.960 --> 00:53:35.960
+Some low level stuff, right?
+
+00:53:35.960 --> 00:53:45.960
+You will hit these places where it's like, I'm poking into the, like I'm causing slight memory leaks internally in CPython for optimization purposes.
+
+00:53:45.960 --> 00:53:46.960
+Yeah.
+
+00:53:46.960 --> 00:53:47.960
+Things like that.
+
+00:53:47.960 --> 00:53:48.960
+Sure.
+
+00:53:48.960 --> 00:53:56.960
+Because you want to be able to refer to pointers being like, there's a bunch of work in order to not have a lot of overhead when you report a new allocation.
+
+00:53:56.960 --> 00:54:04.960
+And so you want to be able to like keep like a pointer address in the Python interpreter as a persistent key, which means you have to make sure things don't think garbage.
+
+00:54:04.960 --> 00:54:05.960
+Yeah.
+
+00:54:05.960 --> 00:54:05.960
+Makes sense.
+
+00:54:05.960 --> 00:54:06.960
+Yeah.
+
+00:54:06.960 --> 00:54:07.960
+I can imagine low level.
+
+00:54:07.960 --> 00:54:08.960
+This is a beast.
+
+00:54:08.960 --> 00:54:09.960
+Yeah.
+
+00:54:09.960 --> 00:54:12.960
+The debugging can be tricky, but it's a lot of fun.
+
+00:54:12.960 --> 00:54:22.960
+And it's a very, I find it sort of a therapeutic project because like, it's like, it's tricky and difficult, but it's also like a very, it's like a closed universe.
+
+00:54:22.960 --> 00:54:25.960
+You know, you're doing web development or distributed systems.
+
+00:54:25.960 --> 00:54:35.960
+It's like, you're talking to remote services and like, you have to spin up five processes and like, you're dependent on the whole external world to make anything work these days.
+
+00:54:35.960 --> 00:54:40.960
+Otherwise, this is sort of like, it's a program that runs in your computer, read some data, write some data.
+
+00:54:40.960 --> 00:54:43.960
+Like there's no, there's no outside world.
+
+00:54:43.960 --> 00:54:44.960
+Yeah, that's cool.
+
+00:54:44.960 --> 00:54:51.960
+So it's just like, you can stay focused on the problem on hand and not the fact that like GitHub is down or whatever.
+
+00:54:51.960 --> 00:54:52.960
+Yeah, I've been there.
+
+00:54:52.960 --> 00:54:53.960
+All right.
+
+00:54:53.960 --> 00:54:55.960
+Before I let you out here though, let me ask you the final two questions.
+
+00:54:55.960 --> 00:54:58.960
+If you're going to write some Python code, what editor do you use?
+
+00:54:58.960 --> 00:55:04.960
+I use space max, which is a configuration of Emacs that makes Emacs a lot more like a modern ID.
+
+00:55:04.960 --> 00:55:05.960
+Nice.
+
+00:55:05.960 --> 00:55:06.960
+Okay.
+
+00:55:06.960 --> 00:55:10.960
+It makes Emacs like experience jump 20 years forward.
+
+00:55:10.960 --> 00:55:11.960
+That's awesome.
+
+00:55:11.960 --> 00:55:12.960
+Just by installing and configuring the right packages.
+
+00:55:12.960 --> 00:55:13.960
+Cool.
+
+00:55:13.960 --> 00:55:16.960
+And a notable PI PI package.
+
+00:55:16.960 --> 00:55:17.960
+Pip install.
+
+00:55:17.960 --> 00:55:18.960
+Is it Phil or Phil dash profile?
+
+00:55:18.960 --> 00:55:19.960
+I got a pip install.
+
+00:55:19.960 --> 00:55:22.960
+It's Phil profiler, no dash or hyphen.
+
+00:55:22.960 --> 00:55:26.960
+So like F I L E R F I L E R.
+
+00:55:26.960 --> 00:55:27.960
+That's an obvious one.
+
+00:55:27.960 --> 00:55:30.960
+What's another one that maybe you've come across recently and you're like, oh, this is really cool.
+
+00:55:30.960 --> 00:55:31.960
+People should know about.
+
+00:55:31.960 --> 00:55:36.960
+Nothing is, I guess, to mention Austin.
+
+00:55:36.960 --> 00:55:42.960
+I don't know quite as much about it, but Pyspy is another, another sampling profiler.
+
+00:55:42.960 --> 00:55:52.960
+And it's another kind of a system programming package where like it's doing these interesting things in Rust where it's like, it looks at like the memory layout.
+
+00:55:52.960 --> 00:55:58.960
+It doesn't, it looks at the memory layout of your Python program, like parses out the data structures and reads things out.
+
+00:55:58.960 --> 00:56:05.960
+So it's another sort of very intense system programming, which ideally is all hidden behind the scenes.
+
+00:56:05.960 --> 00:56:06.960
+It just gives you really useful results.
+
+00:56:06.960 --> 00:56:07.960
+Cool.
+
+00:56:07.960 --> 00:56:08.960
+All right.
+
+00:56:08.960 --> 00:56:09.960
+That's a good one.
+
+00:56:09.960 --> 00:56:10.960
+Yeah.
+
+00:56:10.960 --> 00:56:11.960
+I have to check it out.
+
+00:56:11.960 --> 00:56:12.960
+I haven't tried that one.
+
+00:56:12.960 --> 00:56:13.960
+All right.
+
+00:56:13.960 --> 00:56:14.960
+Final call to action.
+
+00:56:14.960 --> 00:56:15.960
+People want to get started with Phil.
+
+00:56:15.960 --> 00:56:16.960
+What do they do?
+
+00:56:16.960 --> 00:56:18.960
+Go to pythonspeed.com/products/philprofiler.
+
+00:56:18.960 --> 00:56:19.960
+Maybe get a URL wrong.
+
+00:56:19.960 --> 00:56:22.960
+I should probably get a shorter URL.
+
+00:56:22.960 --> 00:56:23.960
+Excuse me.
+
+00:56:23.960 --> 00:56:24.960
+Google F-I-L space profiler.
+
+00:56:24.960 --> 00:56:25.960
+That should do it.
+
+00:56:25.960 --> 00:56:27.960
+Or you can put a link in the show notes.
+
+00:56:27.960 --> 00:56:28.960
+Yeah.
+
+00:56:28.960 --> 00:56:29.960
+I'll definitely have a link in the show notes.
+
+00:56:29.960 --> 00:56:30.960
+No doubt.
+
+00:56:30.960 --> 00:56:31.960
+Yeah.
+
+00:56:31.960 --> 00:56:32.960
+Google in Phil space profiler works for me.
+
+00:56:32.960 --> 00:56:33.960
+Works for me.
+
+00:56:33.960 --> 00:56:37.960
+Or you can go to pythonspeed.com and then I'll do some links to that and other stuff I've
+
+00:56:37.960 --> 00:56:38.960
+written.
+
+00:56:38.960 --> 00:56:39.960
+All right.
+
+00:56:39.960 --> 00:56:40.960
+Very cool.
+
+00:56:40.960 --> 00:56:43.960
+Also include the link to your virtual PyCon talk as well so people can check that out.
+
+00:56:43.960 --> 00:56:44.960
+Cool.
+
+00:56:44.960 --> 00:56:45.960
+All right.
+
+00:56:45.960 --> 00:56:46.960
+Thanks for having me.
+
+00:56:46.960 --> 00:56:48.960
+This has been another episode of Talk Python to Me.
+
+00:56:48.960 --> 00:56:51.960
+Our guest on this episode was Itamar Turing-Trowing.
+
+00:56:51.960 --> 00:56:55.960
+And it's been brought to you by Linode and us over at Talk Python Training.
+
+00:56:55.960 --> 00:56:59.960
+Start your next Python project on Linode's state of the art cloud service.
+
+00:56:59.960 --> 00:57:03.960
+Just visit talkpython.fm/linode.
+
+00:57:03.960 --> 00:57:07.960
+You'll automatically get a $20 credit when you create a new account.
+
+00:57:07.960 --> 00:57:09.960
+Want to level up your Python?
+
+00:57:09.960 --> 00:57:14.960
+If you're just getting started, try my Python jumpstart by building 10 apps course.
+
+00:57:14.960 --> 00:57:19.960
+Or if you're looking for something more advanced, check out our new async course that digs into
+
+00:57:19.960 --> 00:57:22.960
+all the different types of async programming you can do in Python.
+
+00:57:22.960 --> 00:57:26.960
+And of course, if you're interested in more than one of these, be sure to check out our
+
+00:57:26.960 --> 00:57:27.960
+everything bundle.
+
+00:57:27.960 --> 00:57:29.960
+It's like a subscription that never expires.
+
+00:57:29.960 --> 00:57:31.960
+Be sure to subscribe to the show.
+
+00:57:31.960 --> 00:57:33.960
+Open your favorite podcatcher and search for Python.
+
+00:57:33.960 --> 00:57:34.960
+We should be right at the top.
+
+00:57:34.960 --> 00:57:40.960
+You can also find the iTunes feed at /itunes, the Google Play feed at /play, and the direct
+
+00:57:40.960 --> 00:57:43.960
+RSS feed at /rss on talkpython.fm.
+
+00:57:44.960 --> 00:57:46.960
+This is your host, Michael Kennedy.
+
+00:57:46.960 --> 00:57:47.960
+Thanks so much for listening.
+
+00:57:47.960 --> 00:57:48.960
+I really appreciate it.
+
+00:57:48.960 --> 00:57:50.960
+Now get out there and write some Python code.
+
+00:57:50.960 --> 00:57:51.960
+I'll see you next time.
+
+00:57:51.960 --> 00:57:51.960
+Bye.
+
+00:57:51.960 --> 00:57:52.960
+Bye.
+
+00:57:52.960 --> 00:57:53.960
+Bye.
+
+00:57:53.960 --> 00:57:54.960
+Bye.
+
+00:57:54.960 --> 00:57:55.960
+Bye.
+
+00:57:55.960 --> 00:57:56.960
+Bye.
+
+00:57:56.960 --> 00:57:57.960
+Bye.
+
+00:57:57.960 --> 00:57:58.960
+Bye.
+
+00:57:58.960 --> 00:57:59.960
+Bye.
+
+00:57:59.960 --> 00:58:00.960
+Bye.
+
+00:58:00.960 --> 00:58:01.960
+Bye.
+
+00:58:01.960 --> 00:58:02.960
+Bye.
+
+00:58:02.960 --> 00:58:03.960
+Bye.
+
+00:58:03.960 --> 00:58:04.960
+Bye.
+
+00:58:04.960 --> 00:58:04.960
+Bye.
+
+00:58:04.960 --> 00:58:05.960
+Bye.
+
+00:58:05.960 --> 00:58:05.960
+Bye.
+
+00:58:05.960 --> 00:58:06.960
+Bye.
+
+00:58:06.960 --> 00:58:07.960
+Bye.
+
+00:58:07.960 --> 00:58:08.460
+you
+
+00:58:08.460 --> 00:58:08.960
+you
+
+00:58:08.960 --> 00:58:10.960
+Thank you.
+
+00:58:10.960 --> 00:58:40.940
+Thank you.
+

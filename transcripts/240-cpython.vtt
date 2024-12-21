@@ -1,0 +1,2777 @@
+WEBVTT
+
+00:00:00.001 --> 00:00:06.260
+You might use Python every day, but how much do you know about what happens under the covers, down at the C-level?
+
+00:00:06.260 --> 00:00:11.440
+When you type something like variable equals open bracket square bracket to create an empty list,
+
+00:00:11.440 --> 00:00:14.120
+what are the bytecodes that accomplish this?
+
+00:00:14.120 --> 00:00:17.140
+How about the class backing the list itself?
+
+00:00:17.140 --> 00:00:21.200
+All of these details live at the C-layer of CPython.
+
+00:00:21.200 --> 00:00:23.140
+On this episode, you'll meet Anthony Shaw.
+
+00:00:23.140 --> 00:00:26.460
+He and I take a guided tour of the CPython source code.
+
+00:00:26.800 --> 00:00:30.180
+After listening to this episode, you won't have to guess what's happening.
+
+00:00:30.180 --> 00:00:33.800
+You can get clone the CPython source code and see for yourself.
+
+00:00:33.800 --> 00:00:39.680
+This is Talk Python to Me, episode 240, recorded Wednesday, October 30th, 2019.
+
+00:00:53.180 --> 00:00:59.420
+Welcome to Talk Python to Me, a weekly podcast on Python, the language, the libraries, the ecosystem, and the personalities.
+
+00:00:59.420 --> 00:01:01.340
+This is your host, Michael Kennedy.
+
+00:01:01.340 --> 00:01:03.480
+Follow me on Twitter, where I'm @mkennedy.
+
+00:01:03.480 --> 00:01:07.240
+Keep up with the show and listen to past episodes at talkpython.fm.
+
+00:01:07.240 --> 00:01:09.720
+And follow the show on Twitter via at Talk Python.
+
+00:01:09.720 --> 00:01:14.160
+This episode is sponsored by Linode and the University of San Francisco.
+
+00:01:14.160 --> 00:01:16.560
+Please check out what they're offering during their segments.
+
+00:01:16.560 --> 00:01:18.120
+It really helps support the show.
+
+00:01:18.120 --> 00:01:20.620
+Anthony, welcome back to Talk Python to Me.
+
+00:01:20.620 --> 00:01:22.000
+Hey, Michael. It's great to be back.
+
+00:01:22.000 --> 00:01:23.180
+Yeah, it's great to have you back.
+
+00:01:23.180 --> 00:01:25.860
+To say you've been on the show before is a bit of an understatement.
+
+00:01:25.860 --> 00:01:29.300
+You were on episode 131, contributed to open source.
+
+00:01:29.300 --> 00:01:32.140
+155, practical steps from moving to Python 3.
+
+00:01:32.140 --> 00:01:35.560
+168, 10 Python security holes and how to plug them.
+
+00:01:35.560 --> 00:01:37.700
+180, what's new in Python 3.
+
+00:01:37.700 --> 00:01:40.440
+7, and then 214, diving into 3.
+
+00:01:40.440 --> 00:01:40.840
+8.
+
+00:01:40.840 --> 00:01:46.280
+So I think you might be one of the most prolific guests here on the show, which is awesome.
+
+00:01:46.280 --> 00:01:47.100
+I love having you on here.
+
+00:01:47.100 --> 00:01:48.220
+Yeah, thanks for having me back.
+
+00:01:48.220 --> 00:01:49.140
+It's good to be on the show.
+
+00:01:49.780 --> 00:01:53.040
+Yeah, I can't believe that this is the sixth time I've been on here.
+
+00:01:53.040 --> 00:01:58.020
+Yeah, I had to actually use the search engine on the website to figure out how many times you've been here.
+
+00:01:58.020 --> 00:02:04.040
+So yeah, this is going to be a good one because we're going to dive into something that everybody uses.
+
+00:02:04.560 --> 00:02:10.620
+But there's so many dark corners for most folks who are not core developers, right?
+
+00:02:10.620 --> 00:02:12.940
+Like, okay, we all know there's CPython.
+
+00:02:12.940 --> 00:02:14.260
+There's probably other Pythons.
+
+00:02:14.260 --> 00:02:16.660
+You maybe have heard of those like PyPy and whatnot.
+
+00:02:16.660 --> 00:02:19.340
+But can you open up the code?
+
+00:02:19.340 --> 00:02:19.980
+Where do you get it?
+
+00:02:19.980 --> 00:02:21.900
+Where are the important parts, right?
+
+00:02:21.900 --> 00:02:22.860
+It's a huge project.
+
+00:02:22.860 --> 00:02:25.120
+But there's certain parts you really should pay attention to.
+
+00:02:25.120 --> 00:02:26.840
+And the others are like details, right?
+
+00:02:27.020 --> 00:02:27.580
+Yeah, absolutely.
+
+00:02:27.580 --> 00:02:33.420
+I mean, I think if it's kind of like my car, like if I open up the bonnet of my car, I know where the engine is.
+
+00:02:33.420 --> 00:02:34.480
+I know where to put the oil.
+
+00:02:34.480 --> 00:02:35.940
+And that's pretty much it.
+
+00:02:35.940 --> 00:02:37.840
+Like, I don't know what half the other components do.
+
+00:02:37.840 --> 00:02:40.640
+So yeah, I feel like it's like that with CPython sometimes.
+
+00:02:40.640 --> 00:02:42.700
+You know how to use it.
+
+00:02:42.700 --> 00:02:45.900
+But in terms of how it actually works, it's a bit of a mystery.
+
+00:02:45.900 --> 00:02:47.200
+That's a good analogy for sure.
+
+00:02:47.200 --> 00:02:53.020
+Now, before we dig into this, maybe just tell people what it is that you did day to day.
+
+00:02:53.020 --> 00:02:57.480
+So they get a sense of where you're coming from, like in the open source space and in your day to day job.
+
+00:02:57.480 --> 00:03:02.600
+If they want your whole story, they go back to episode 132 and the whole getting started and whatnot.
+
+00:03:02.600 --> 00:03:04.240
+But give us the quick summary there.
+
+00:03:04.240 --> 00:03:04.840
+Yeah, sure.
+
+00:03:04.840 --> 00:03:06.460
+I work for a company called NTT.
+
+00:03:06.460 --> 00:03:09.500
+And I run talent transformation for them.
+
+00:03:09.500 --> 00:03:14.080
+So looking at skills and development of employees for NTT globally.
+
+00:03:14.080 --> 00:03:15.620
+That's my day job.
+
+00:03:15.620 --> 00:03:21.940
+And then I'm also a sort of Python enthusiast and get involved with various open source projects as well.
+
+00:03:21.940 --> 00:03:25.640
+Some Apache projects as well as some of my own personal projects.
+
+00:03:25.640 --> 00:03:26.240
+Yeah, awesome.
+
+00:03:26.240 --> 00:03:27.140
+Like Wiley.
+
+00:03:27.140 --> 00:03:28.080
+Like Wiley, yeah.
+
+00:03:28.080 --> 00:03:32.200
+And been playing a lot with pytest and Azure Pipelines recently as well.
+
+00:03:32.200 --> 00:03:32.760
+Yeah, right on.
+
+00:03:32.760 --> 00:03:33.080
+Cool.
+
+00:03:33.080 --> 00:03:39.360
+So we're going to talk about this whole CPython source code story.
+
+00:03:39.360 --> 00:03:42.880
+And you've been touching on this in several ways.
+
+00:03:42.880 --> 00:03:43.920
+You've been writing some articles.
+
+00:03:43.920 --> 00:03:48.680
+But then you decided to write a book and disguise it as an article.
+
+00:03:49.520 --> 00:03:53.440
+And you called it your guide to the CPython source code over at RealPython.
+
+00:03:53.440 --> 00:03:54.040
+It's excellent.
+
+00:03:54.040 --> 00:03:55.360
+We'll link over to it.
+
+00:03:55.360 --> 00:04:00.240
+But we're going to cover a bunch of the ideas that you touched on in there because this is a really good exploration.
+
+00:04:00.240 --> 00:04:04.280
+But, you know, what got you started in like digging into the source code in the first place?
+
+00:04:04.400 --> 00:04:05.400
+Some of it was curiosity.
+
+00:04:05.400 --> 00:04:10.980
+A few years ago, I wrote an article on how to add an operator to the Python syntax.
+
+00:04:10.980 --> 00:04:12.960
+So how to add a plus plus.
+
+00:04:12.960 --> 00:04:18.320
+So like an in-place increment operator, which Guido is famously against for good reasons.
+
+00:04:18.320 --> 00:04:25.700
+But it was more of an exploration, like how would you actually add that to the syntax and recompile Python, which was really, really interesting to dig into.
+
+00:04:25.900 --> 00:04:39.240
+And also I found that if you want to contribute to CPython, the documentation that there's a site called the dev guide, which is great telling you like the process for raising pull requests, like what the branch strategy is.
+
+00:04:39.240 --> 00:04:49.760
+But if you, you know, if you were to join a new software team, you would expect that in the first few weeks, one of the senior developers would sit you down and walk you through the code and explain how everything works.
+
+00:04:49.760 --> 00:04:52.980
+But that documentation is kind of missing.
+
+00:04:53.440 --> 00:05:10.060
+So I wanted to write something that kind of filled that gap so that if people wanted to get into working on CPython, contributing to it or making tweaks, enhancements or customizations, then there's something that really kind of takes them through in depth, the whole source code and how it works and what each component does.
+
+00:05:10.060 --> 00:05:11.020
+It definitely does that.
+
+00:05:11.020 --> 00:05:19.800
+I feel like these large projects that often have a bunch of special steps to get started, to get your machine configured and whatnot, you know, they can be intimidating.
+
+00:05:20.100 --> 00:05:26.740
+But, you know, using the article, I was able to get the code, get it up and running and be playing with Python 3.9 super quick.
+
+00:05:26.740 --> 00:05:30.660
+It was just, I don't know, most of the time was waiting on the compiler, actually.
+
+00:05:30.660 --> 00:05:34.600
+Yeah, there's ways of making it faster, but it's a big piece of code to compile.
+
+00:05:34.600 --> 00:05:35.460
+So it takes a while.
+
+00:05:35.460 --> 00:05:39.920
+Yeah, I definitely ramped up the number of cores getting used there, but it still takes a while.
+
+00:05:39.920 --> 00:05:40.720
+It's quite cool.
+
+00:05:40.720 --> 00:05:41.540
+All right.
+
+00:05:41.540 --> 00:05:49.280
+So before I guess we maybe dive into the source code itself, let's maybe talk a little bit higher level.
+
+00:05:49.280 --> 00:05:52.740
+It was like some of Python is Python, which is cool and meta.
+
+00:05:52.740 --> 00:06:01.180
+And some of Python is C code, which is maybe surprising to some folks who are kind of new to Python and how it's like executes internally.
+
+00:06:01.180 --> 00:06:04.460
+And maybe there's even some other code in there as well.
+
+00:06:04.460 --> 00:06:07.860
+Like I haven't seen any inline assembly, but you never know, right?
+
+00:06:07.860 --> 00:06:09.200
+What's the breakdown there?
+
+00:06:09.200 --> 00:06:10.700
+Or like, how would you categorize that?
+
+00:06:10.700 --> 00:06:15.520
+It's about 70% Python and then the rest is C code.
+
+00:06:15.780 --> 00:06:25.200
+So there's about 350,000 lines of C code, which is a lot of C code, but over 800,000 lines of Python, which includes, I guess, the test suites as well.
+
+00:06:25.200 --> 00:06:31.720
+On top of that, actually, there's documentation is over 220,000 lines of documentation.
+
+00:06:31.720 --> 00:06:35.760
+So the documentation itself is a huge amount of work.
+
+00:06:35.760 --> 00:06:39.100
+So the restructured text is actually one of the main languages.
+
+00:06:39.100 --> 00:06:41.540
+Restructured text is one of the main languages.
+
+00:06:41.540 --> 00:06:42.120
+Yeah, absolutely.
+
+00:06:42.120 --> 00:06:44.260
+230,000 lines of restructured text.
+
+00:06:44.260 --> 00:06:53.740
+Would it be safe to say that most of the standard library is written in Python, but not all of it, but almost all of the core interpreter and compiler is written in C.
+
+00:06:53.740 --> 00:06:55.900
+Is that a good representation?
+
+00:06:55.900 --> 00:06:57.480
+The core types are written in C.
+
+00:06:57.480 --> 00:06:59.620
+The compiler is written in C.
+
+00:06:59.620 --> 00:07:03.180
+Most of the sort of core engine and the runtime is written in C.
+
+00:07:03.180 --> 00:07:11.060
+In terms of the standard library, anything which doesn't need to patch into any of the operating system,
+
+00:07:11.060 --> 00:07:16.220
+APIs, like the networking or any hardware or anything, is written in Python.
+
+00:07:16.220 --> 00:07:17.380
+Otherwise, it's written in C.
+
+00:07:17.380 --> 00:07:22.120
+Some languages that all of it are written in that language, right?
+
+00:07:22.120 --> 00:07:23.280
+Like Go, for example.
+
+00:07:23.280 --> 00:07:27.420
+Then there's other ones like Python words, some Python, some C.
+
+00:07:27.420 --> 00:07:30.900
+But we also have things like PyPy, which is more Python.
+
+00:07:30.900 --> 00:07:32.080
+Is it 100% Python?
+
+00:07:32.200 --> 00:07:35.060
+I'm not sure there might be some little tiny shim to get it started.
+
+00:07:35.060 --> 00:07:37.220
+But why is it in C?
+
+00:07:37.220 --> 00:07:43.600
+If you're making a new programming language, to write the compiler, you need a programming language to write the compiler in.
+
+00:07:43.760 --> 00:07:47.340
+So it's difficult if you're starting a new language from scratch.
+
+00:07:47.340 --> 00:07:53.060
+The Go is actually a good example because the Go compiler is now written in Go, but it wasn't originally.
+
+00:07:53.060 --> 00:07:59.520
+Once they got Go a bit more mature, then they basically rewrote the compiler in Go.
+
+00:07:59.520 --> 00:08:04.040
+But you still need an actual interpreter and a compiler to be able to do that.
+
+00:08:04.200 --> 00:08:08.940
+So CPython is written in C largely because they need something to start off with.
+
+00:08:08.940 --> 00:08:11.020
+This was written a while ago.
+
+00:08:11.020 --> 00:08:12.940
+C is still a very popular language.
+
+00:08:12.940 --> 00:08:19.180
+And also Python has a lot of integrations into the operating system components.
+
+00:08:19.180 --> 00:08:23.660
+And most operating system APIs are in C.
+
+00:08:23.660 --> 00:08:29.620
+So for Windows, Linux, and macOS, if you want to talk to the sound card, if you want to talk to the screen,
+
+00:08:29.620 --> 00:08:34.060
+and if you want to open a socket on the network, then you're going to be talking about C APIs.
+
+00:08:34.060 --> 00:08:39.700
+So, you know, the ability to do all that stuff seamlessly in Python means that at some point,
+
+00:08:39.700 --> 00:08:43.580
+it needs a C layer to integrate into the kernel.
+
+00:08:43.580 --> 00:08:49.820
+Right, to call the Win32 API or down into Linux or macOS, their native APIs, right?
+
+00:08:49.820 --> 00:08:50.380
+Yeah, exactly.
+
+00:08:50.380 --> 00:08:51.080
+Yeah, cool.
+
+00:08:51.080 --> 00:08:58.800
+So this is a huge project, as the size, my joke about your book, you know, I sort of hinted at.
+
+00:08:59.080 --> 00:09:01.520
+So when you look at it, like, how did you get started?
+
+00:09:01.520 --> 00:09:04.120
+There's got to be a bunch of stuff you decided not to cover.
+
+00:09:04.120 --> 00:09:05.540
+Some stuff you did.
+
+00:09:05.540 --> 00:09:10.660
+You do have your sort of mission of like, here's the missing dev guide, sit down with a senior developer.
+
+00:09:10.660 --> 00:09:12.420
+But how do you decide to get started on this?
+
+00:09:12.420 --> 00:09:14.060
+Or like, what goes in and out?
+
+00:09:14.060 --> 00:09:17.900
+Yeah, so the approach I took was not to go file by file,
+
+00:09:18.400 --> 00:09:25.940
+but instead kind of follow a trace from typing Python at the command line with some code,
+
+00:09:25.940 --> 00:09:29.540
+all the way to it being executed and then back up again.
+
+00:09:29.540 --> 00:09:34.460
+So it kind of takes the article takes you through, you know, what happens when you run Python,
+
+00:09:34.460 --> 00:09:39.660
+how and then basically steps through each layer deeper and deeper and deeper into the code,
+
+00:09:39.740 --> 00:09:42.200
+and then explains each point what's happening.
+
+00:09:42.200 --> 00:09:46.220
+And then kind of I've added diagrams and stuff like that to show you.
+
+00:09:46.220 --> 00:09:49.440
+So it's almost like a, you know, like a traceback.
+
+00:09:49.440 --> 00:09:55.800
+If you were to kind of add like a custom traceback, but actually doing tracebacks in Python is really hard.
+
+00:09:55.960 --> 00:09:57.600
+So not in Python, but in CPython.
+
+00:09:57.600 --> 00:10:01.760
+Yeah, most of the code that you'd be trying to look at would actually be in C, not in Python, right?
+
+00:10:01.760 --> 00:10:02.520
+Yeah, exactly.
+
+00:10:02.520 --> 00:10:09.600
+And I've ended up writing some tools to help me put the article together and also do some debugging to kind of pick this apart.
+
+00:10:09.600 --> 00:10:09.840
+Sure.
+
+00:10:09.840 --> 00:10:11.100
+Well, what's your background in C?
+
+00:10:11.100 --> 00:10:14.180
+Like how prepared were you for this journey?
+
+00:10:14.180 --> 00:10:15.060
+And how easy was it?
+
+00:10:15.060 --> 00:10:16.100
+I guess is what I'm getting at.
+
+00:10:16.100 --> 00:10:20.860
+I thought I understood C, but then diving deeper and deeper into this code,
+
+00:10:20.860 --> 00:10:23.920
+I really kind of had my head scratching a few times.
+
+00:10:24.500 --> 00:10:27.860
+There's a lot of macros in the CPython source as well.
+
+00:10:27.860 --> 00:10:33.260
+So anyone who's worked quite a bit with C code might be surprised at the shiv volume of macros.
+
+00:10:33.260 --> 00:10:38.680
+So a macro is basically a way of before the code gets compiled,
+
+00:10:38.680 --> 00:10:44.820
+the preprocessor will replace a macro with another piece of text basically before it gets compiled.
+
+00:10:44.820 --> 00:10:46.880
+And there's a lot of these in CPython.
+
+00:10:46.880 --> 00:10:50.720
+So it makes it basically they're micro optimizations to the code,
+
+00:10:50.720 --> 00:10:53.720
+but it does make it quite tricky to read and understand.
+
+00:10:53.980 --> 00:10:54.660
+Yeah, I can imagine.
+
+00:10:54.660 --> 00:11:00.220
+You know, when I was looking through it, I used to do for a handful of years, professional C++ development.
+
+00:11:00.220 --> 00:11:05.160
+And I could read it, but I was thinking, you know, I'm really glad I'm writing Python these days because,
+
+00:11:05.160 --> 00:11:07.480
+wow, I know what this means.
+
+00:11:07.480 --> 00:11:09.140
+It's a lot of work.
+
+00:11:09.140 --> 00:11:10.340
+A lot of work to write C.
+
+00:11:10.340 --> 00:11:10.780
+Yeah.
+
+00:11:10.780 --> 00:11:13.840
+And also making changes to the code.
+
+00:11:13.840 --> 00:11:19.020
+So in the article, it kind of encourages you to not just understand how it works,
+
+00:11:19.020 --> 00:11:24.000
+but also to make little tweaks and changes and add your own customer statements and maybe,
+
+00:11:24.000 --> 00:11:27.000
+you know, interfere or look at the tracing and stuff like that.
+
+00:11:27.160 --> 00:11:34.240
+And as part of this, I ended up kind of writing a few pull requests into CPython and doing a couple of bug fixes and things like that.
+
+00:11:34.240 --> 00:11:34.680
+That's awesome.
+
+00:11:34.680 --> 00:11:35.300
+What were they for?
+
+00:11:35.300 --> 00:11:39.280
+They were really minor ones, just stuff that I discovered when I was kind of digging in.
+
+00:11:39.760 --> 00:11:41.720
+There's a couple that still need to be merged as well.
+
+00:11:41.720 --> 00:11:46.720
+I'm still working on one for Windows support for changing the parser generator.
+
+00:11:46.720 --> 00:11:52.680
+So if you want to add custom syntax to Python from Windows, then getting that support in.
+
+00:11:52.680 --> 00:12:01.200
+And also I worked on one which was rejected, but it was an interesting experiment to do with list comprehensions.
+
+00:12:01.720 --> 00:12:11.340
+So if you basically do a list comprehension over a list, so typically you'd use list comprehensions for things like filtering a list into another list.
+
+00:12:11.340 --> 00:12:16.180
+But when you run a list comprehension, it first of all initializes an empty list.
+
+00:12:16.180 --> 00:12:25.320
+And what I realized is that if you initialized that list to a larger size or you predicted the size of the list, then it's a lot more efficient.
+
+00:12:25.320 --> 00:12:27.500
+So it ends up being about 10%.
+
+00:12:27.500 --> 00:12:36.300
+If there was no if block, there's no if part in the list, and you know you were doing a comprehension over the list, the size should be exactly the same as before, right?
+
+00:12:36.300 --> 00:12:37.460
+So you should just pre-allocate that.
+
+00:12:37.460 --> 00:12:37.780
+Yeah.
+
+00:12:37.780 --> 00:12:42.400
+So it was an experiment to see if that was possible, which it was, but it was a bit hacky.
+
+00:12:42.400 --> 00:12:44.980
+And it did make a difference in terms of performance.
+
+00:12:44.980 --> 00:12:51.420
+I think it worked out being about 8% or 10% faster on list comprehensions, but it added too much complexity.
+
+00:12:51.420 --> 00:12:53.240
+So it was rejected.
+
+00:12:53.240 --> 00:12:56.400
+But I think it's an ongoing experiment that we need to look into.
+
+00:12:56.400 --> 00:12:59.260
+That's a non-trivial difference you made by doing that.
+
+00:12:59.260 --> 00:13:06.220
+I mean, I understand the complexity thing, but 8% is a lot these days on a 30-year-old polished piece of software.
+
+00:13:06.220 --> 00:13:16.500
+Yeah, it's if you're doing a list comprehension over a list of a fixed size, but all of the benchmarking tools in CPython use the range function, which doesn't have a fixed size.
+
+00:13:16.500 --> 00:13:24.520
+So basically, the benchmark suite didn't think there was much difference because the benchmark suite heavily uses range.
+
+00:13:24.520 --> 00:13:27.900
+But in practical applications, you wouldn't use range a great deal.
+
+00:13:28.040 --> 00:13:28.440
+How interesting.
+
+00:13:28.440 --> 00:13:28.800
+Okay.
+
+00:13:28.800 --> 00:13:29.980
+That's a super cool one.
+
+00:13:29.980 --> 00:13:30.680
+I love it.
+
+00:13:30.680 --> 00:13:31.180
+Nice.
+
+00:13:31.180 --> 00:13:31.380
+All right.
+
+00:13:31.380 --> 00:13:32.540
+Well, let's start at the beginning.
+
+00:13:32.540 --> 00:13:36.960
+I'm interested in the CPython source code, and I want to play around with it.
+
+00:13:36.960 --> 00:13:38.020
+How do I get it?
+
+00:13:38.020 --> 00:13:39.780
+What is it, in Subversion or something these days?
+
+00:13:39.780 --> 00:13:41.340
+Well, so it's really easy.
+
+00:13:41.340 --> 00:13:42.160
+Yeah.
+
+00:13:42.280 --> 00:13:43.260
+So it's all moved to GitHub.
+
+00:13:43.260 --> 00:13:44.920
+It's easy to find.
+
+00:13:44.920 --> 00:13:47.820
+GitHub.com slash Python slash CPython.
+
+00:13:47.820 --> 00:13:50.440
+And you can download that as a zip file.
+
+00:13:50.440 --> 00:13:54.900
+You can download that using a Git client, or you can use your IDE to pull it for you.
+
+00:13:54.900 --> 00:13:57.580
+Yeah, it's so cool that it's over on GitHub these days.
+
+00:13:57.580 --> 00:14:00.040
+It's really nice to have it kind of modernized.
+
+00:14:00.040 --> 00:14:04.080
+I think it encourages people to participate more in the discussion.
+
+00:14:04.080 --> 00:14:09.480
+They were talking about moving the issues there as well, but I don't know if they were moved yet.
+
+00:14:09.480 --> 00:14:11.020
+That'll be cool when that happens.
+
+00:14:11.220 --> 00:14:16.440
+There's a PEP that Marietta has put together, and it's proposing moving GitHub to GitHub issues
+
+00:14:16.440 --> 00:14:19.120
+from a bug tracker that they have at the moment.
+
+00:14:19.120 --> 00:14:21.280
+I don't think that's been decided on yet.
+
+00:14:21.280 --> 00:14:25.900
+It wouldn't surprise me to see it happen, but I guess maybe one of the questions is just
+
+00:14:25.900 --> 00:14:32.540
+all the historical issues get somehow migrated over, and I can see challenges there.
+
+00:14:32.540 --> 00:14:37.860
+This portion of Talk Python to me is brought to you by Linode.
+
+00:14:38.360 --> 00:14:41.580
+Are you looking for hosting that's fast, simple, and incredibly affordable?
+
+00:14:41.580 --> 00:14:46.700
+Well, look past that bookstore and check out Linode at talkpython.fm/Linode.
+
+00:14:46.700 --> 00:14:48.580
+That's L-I-N-O-D-E.
+
+00:14:48.580 --> 00:14:53.000
+Plans start at just $5 a month for a dedicated server with a gig of RAM.
+
+00:14:53.000 --> 00:14:57.300
+They have 10 data centers across the globe, so no matter where you are or where your users
+
+00:14:57.300 --> 00:14:59.040
+are, there's a data center for you.
+
+00:14:59.260 --> 00:15:03.540
+Whether you want to run a Python web app, host a private Git server, or just a file server,
+
+00:15:03.540 --> 00:15:10.320
+you'll get native SSDs on all the machines, a newly upgraded 200 gigabit network, 24-7 friendly
+
+00:15:10.320 --> 00:15:13.440
+support even on holidays, and a seven-day money-back guarantee.
+
+00:15:13.440 --> 00:15:15.080
+Need a little help with your infrastructure?
+
+00:15:15.080 --> 00:15:19.820
+They even offer professional services to help you with architecture, migrations, and more.
+
+00:15:19.820 --> 00:15:22.780
+Do you want a dedicated server for free for the next four months?
+
+00:15:23.120 --> 00:15:25.840
+Just visit talkpython.fm/Linode.
+
+00:15:25.840 --> 00:15:28.780
+All right, so we've got the code.
+
+00:15:28.780 --> 00:15:31.600
+We get cloned it, or however we're going to get it off of GitHub.
+
+00:15:31.600 --> 00:15:36.960
+And then you get this project structure with like 13 or 14 top-level folders.
+
+00:15:36.960 --> 00:15:41.380
+So maybe we could talk through just some of the major sections, because I think the file
+
+00:15:41.380 --> 00:15:43.820
+structure is a pretty good partitioning.
+
+00:15:43.820 --> 00:15:48.480
+The folder structure, there's pretty good partitioning to start to understand, like, where do I go explore?
+
+00:15:48.480 --> 00:15:52.880
+Yeah, once you've downloaded the source code, the first folder is called doc, which is where
+
+00:15:52.880 --> 00:15:53.860
+the documentation is.
+
+00:15:53.860 --> 00:15:57.400
+So that's the 230,000 lines of restructured text.
+
+00:15:57.400 --> 00:15:58.220
+Wow.
+
+00:15:58.220 --> 00:16:02.760
+Yeah, and if you want to start off by understanding some of the APIs as well, the documentation is
+
+00:16:02.760 --> 00:16:03.860
+a good place to go.
+
+00:16:03.860 --> 00:16:10.320
+There's also a folder called grammar, which is for the sort of computer-readable language
+
+00:16:10.320 --> 00:16:10.860
+definition.
+
+00:16:10.860 --> 00:16:13.520
+So what is in the Python syntax?
+
+00:16:13.520 --> 00:16:15.800
+What makes an if statement an if statement?
+
+00:16:15.800 --> 00:16:19.780
+Are you, you know, could you type if else colon?
+
+00:16:19.780 --> 00:16:21.160
+Like, that wouldn't make sense.
+
+00:16:21.160 --> 00:16:21.600
+And why?
+
+00:16:21.740 --> 00:16:25.200
+So the computer understands, I guess, how the language is structured.
+
+00:16:25.200 --> 00:16:31.340
+There's a folder for include for C header files, which is also good to understand the
+
+00:16:31.340 --> 00:16:32.780
+API in a bit more detail.
+
+00:16:32.780 --> 00:16:38.360
+There's the lib directory for basically the standard library models, all the ones that are
+
+00:16:38.360 --> 00:16:39.020
+written in Python.
+
+00:16:39.220 --> 00:16:43.620
+Yeah, I think the include one is pretty good because you can just see the function definitions.
+
+00:16:43.620 --> 00:16:48.820
+You don't have to like jump through all the implementation and the macros and the hash if def stuff.
+
+00:16:48.820 --> 00:16:51.400
+You can say like, these are the things I can call over here.
+
+00:16:51.400 --> 00:16:51.860
+Right.
+
+00:16:51.860 --> 00:16:53.220
+You can get a little higher level view.
+
+00:16:53.360 --> 00:17:05.240
+This is why if you're going to jump into this, you want to pick a pretty decent IDE because there's a lot of code in here and using a plain text editor is going to be extremely difficult to navigate things.
+
+00:17:05.400 --> 00:17:06.040
+I agree.
+
+00:17:06.040 --> 00:17:09.280
+So yeah, I'd recommend picking a decent IDE to start off with.
+
+00:17:09.280 --> 00:17:13.520
+For me, when I was playing with this, I used VS Code on the whole top level project.
+
+00:17:13.520 --> 00:17:17.580
+And it just said, hey, you should have the C, C++ extension installed.
+
+00:17:17.580 --> 00:17:18.120
+Sure.
+
+00:17:18.120 --> 00:17:18.780
+Do that.
+
+00:17:18.780 --> 00:17:19.260
+Yeah.
+
+00:17:19.260 --> 00:17:20.020
+It was pretty good from there.
+
+00:17:20.020 --> 00:17:22.200
+Also installed the restructured text extension.
+
+00:17:22.440 --> 00:17:23.540
+It was kind of adapting.
+
+00:17:23.540 --> 00:17:31.140
+Maybe over if I was on Windows, I might use Visual Studio proper because it's got a Visual Studio solution in there, which is kind of cool for Windows developers.
+
+00:17:31.140 --> 00:17:31.560
+Yeah.
+
+00:17:31.560 --> 00:17:33.600
+And the article actually I'll take through.
+
+00:17:33.600 --> 00:17:38.240
+So Visual Studio 2019 came out whilst I was writing this.
+
+00:17:38.240 --> 00:17:43.860
+So it's been updated to explain how to use the community edition, which is the free version.
+
+00:17:43.860 --> 00:17:45.720
+So it's different to VS Code.
+
+00:17:45.720 --> 00:17:48.660
+Visual Studio is like a fully blown IDE.
+
+00:17:49.100 --> 00:17:52.720
+It's designed for sort of C, C++ and C# development.
+
+00:17:52.720 --> 00:18:02.140
+And there's some explanation in here about how to use that to both compile CPython from source as well as do debugging and stuff like that.
+
+00:18:02.140 --> 00:18:02.380
+Yeah.
+
+00:18:02.380 --> 00:18:09.080
+You've got some really cool stuff how you have like the REPL running in a debugging instance embedded in Visual Studio or something like that, right?
+
+00:18:09.080 --> 00:18:09.480
+Yeah.
+
+00:18:09.480 --> 00:18:10.060
+It's pretty cool.
+
+00:18:10.060 --> 00:18:11.400
+Actually, I was really impressed.
+
+00:18:11.400 --> 00:18:17.540
+Definitely for Windows users, I'd say if you want to make changes and not just explore,
+
+00:18:18.060 --> 00:18:24.220
+then I'd pick on Visual Studio rather than VS Code because you're going to get much richer debugging.
+
+00:18:24.220 --> 00:18:28.900
+And Visual Studio 2019 as well is going to be able to compile for you.
+
+00:18:28.900 --> 00:18:34.840
+So if you just use VS Code, then you're going to need to run the MSBuild script files,
+
+00:18:34.840 --> 00:18:37.980
+which are located in the PCBuild directory.
+
+00:18:37.980 --> 00:18:42.640
+But it's actually a lot easier to use Visual Studio rather than running it all in the command line.
+
+00:18:42.640 --> 00:18:43.400
+Yeah, that makes sense.
+
+00:18:43.440 --> 00:18:46.120
+And I totally derailed your summary of these things over here.
+
+00:18:46.120 --> 00:18:52.620
+So we were talking about the lib folder is full of all the part of the standard library that is written in Python,
+
+00:18:52.620 --> 00:18:55.580
+like the CSV module or whatever.
+
+00:18:55.580 --> 00:18:56.660
+But then there's a bunch more, yeah?
+
+00:18:56.660 --> 00:18:57.040
+Yeah.
+
+00:18:57.040 --> 00:18:59.420
+So there's a folder for macOS support files.
+
+00:18:59.420 --> 00:19:03.680
+There's a couple of other miscellaneous directories that you shouldn't need to worry about.
+
+00:19:03.680 --> 00:19:08.260
+There's a folder called modules, which is the standard library modules that are written in C.
+
+00:19:08.600 --> 00:19:13.220
+So the standard library modules are split between the lib and the modules folders.
+
+00:19:13.220 --> 00:19:16.540
+So whether they're written in Python or C, they're in two different places.
+
+00:19:16.540 --> 00:19:16.900
+Right.
+
+00:19:16.900 --> 00:19:22.640
+So object, where you have a class and it drives from object, there's an object.c file in modules.
+
+00:19:22.640 --> 00:19:23.660
+Right.
+
+00:19:23.660 --> 00:19:24.680
+That part's pure C.
+
+00:19:24.680 --> 00:19:26.180
+Actually, they're in the objects folder.
+
+00:19:26.180 --> 00:19:27.280
+Oh, yeah.
+
+00:19:27.280 --> 00:19:34.660
+So there's a folder called objects, which has got the core types and the object model.
+
+00:19:34.660 --> 00:19:36.800
+So what is a number type?
+
+00:19:36.800 --> 00:19:38.120
+What is a string?
+
+00:19:38.120 --> 00:19:40.060
+What is an array?
+
+00:19:40.060 --> 00:19:41.260
+That sort of thing.
+
+00:19:41.260 --> 00:19:42.720
+Yeah, I had it totally wrong.
+
+00:19:42.720 --> 00:19:44.400
+So maybe like GC or something like that.
+
+00:19:44.400 --> 00:19:44.680
+Yeah.
+
+00:19:44.680 --> 00:19:50.980
+Then there's the parser, which is basically the thing that actually parses the source code into something that can be interpreted.
+
+00:19:51.420 --> 00:19:54.220
+Then there's some directories for Windows users.
+
+00:19:54.220 --> 00:19:55.720
+So there's PC and PC build.
+
+00:19:55.720 --> 00:19:58.200
+PC is the new version.
+
+00:19:58.200 --> 00:20:03.380
+PC build has got some sort of legacy scripts for building for older versions of Windows.
+
+00:20:03.380 --> 00:20:13.560
+There's a programs directory, which is the source code for the sort of either the Python.exe or the Python binary that you end up with on your machine.
+
+00:20:14.180 --> 00:20:19.840
+And there's a Python folder, which is confusing, but it has the interpreter source code.
+
+00:20:19.840 --> 00:20:23.760
+So I think it interprets the code through to execution.
+
+00:20:23.760 --> 00:20:30.800
+And then there's a folder called tools, which has got some tools and scripts and stuff like that for either building or extending Python.
+
+00:20:30.800 --> 00:20:31.480
+Super cool.
+
+00:20:31.480 --> 00:20:36.320
+And yeah, there's some of these that you want to really dive into and others are just support files.
+
+00:20:36.320 --> 00:20:41.680
+When I was looking around in the lib folder, I was kind of blown away at some of the stuff that's in there.
+
+00:20:41.680 --> 00:20:44.900
+I'm like, all right, well, what in here is actually implemented in Python?
+
+00:20:44.900 --> 00:20:47.080
+What's the code look like?
+
+00:20:47.080 --> 00:20:48.860
+You know, those are all interesting things.
+
+00:20:48.860 --> 00:20:52.560
+And then I came across some stuff that surprised me.
+
+00:20:52.560 --> 00:20:59.120
+Obviously, you would expect that these files would have comments, documentation that describes what they do, right?
+
+00:20:59.120 --> 00:20:59.520
+Absolutely.
+
+00:20:59.960 --> 00:21:00.280
+Yeah.
+
+00:21:00.280 --> 00:21:13.660
+So, but then I saw that a lot of them, not a lot, some of them, non-trivial number of them, actually have like ASCII diagrams that describe, say, like workflows or like relationships in the comments.
+
+00:21:13.660 --> 00:21:14.460
+It's pretty wild.
+
+00:21:14.460 --> 00:21:23.780
+Like the lib concurrent features process.py has like a great long like in process, out of process, like workflow diagram in the help doc.
+
+00:21:23.780 --> 00:21:24.220
+Oh, wow.
+
+00:21:24.220 --> 00:21:24.580
+Okay.
+
+00:21:24.800 --> 00:21:25.720
+That's pretty funny, right?
+
+00:21:25.720 --> 00:21:31.960
+And then also the JSON module, you know, has like cool ASCII art documentation.
+
+00:21:31.960 --> 00:21:34.360
+So anyway, I thought those were, those were surprising to me.
+
+00:21:34.360 --> 00:21:36.140
+Like really, there's, there's like diagrams in here.
+
+00:21:36.140 --> 00:21:36.580
+How cool.
+
+00:21:36.580 --> 00:21:37.040
+Yeah.
+
+00:21:37.120 --> 00:21:48.300
+I think if anyone wants to have a go at contributing to CPython, a really easy place to start is in the lib folder is all the standard library modules that are written in Python.
+
+00:21:48.300 --> 00:21:49.380
+They're easy to read.
+
+00:21:49.380 --> 00:21:51.240
+Most of them are not too complicated.
+
+00:21:51.240 --> 00:21:56.800
+Have a look through some of those because there's stuff in there, which is legacy syntax, which needs updating.
+
+00:21:57.420 --> 00:22:01.980
+There are bugs in there, which have been reported in the bug tracker, but never fixed.
+
+00:22:01.980 --> 00:22:09.740
+As well as if you compare what's in the code to what's in the documentation, you'll pretty quickly find gaps.
+
+00:22:09.740 --> 00:22:16.720
+The functions, which either don't have any documentation or the documentation is wrong, or the argument list is up to, is not up to date.
+
+00:22:17.120 --> 00:22:29.000
+So if you want to have a go and contribute and you're looking for something simple to get started with, then I'd say pick some of the, probably some of the more obscure standard library modules and see what needs fixing in those.
+
+00:22:29.000 --> 00:22:29.900
+Yeah, that's a good idea.
+
+00:22:29.900 --> 00:22:35.700
+And I honestly don't know how much of those have these, these issues, but it seems like a pretty straightforward way.
+
+00:22:35.700 --> 00:22:44.800
+Certainly contributing to the lib folder or the docs folder seems much more approachable to me than to like the objects or the modules.
+
+00:22:44.800 --> 00:22:47.300
+Cause down there, that's where the C code lives, right?
+
+00:22:47.300 --> 00:22:47.720
+Yeah.
+
+00:22:47.720 --> 00:22:53.160
+Before you get stuck into the core runtime, then I think it's a good idea to have a look at some of the high level Python code first.
+
+00:22:53.160 --> 00:22:55.740
+Probably a good idea as well.
+
+00:22:55.740 --> 00:23:04.260
+So I thought I'd just pull out a couple of files from each of these major sections, these folders that you talked about that were just kind of interesting.
+
+00:23:04.260 --> 00:23:12.600
+So over in the lib module, we have things like CSV, whole CSV implementation is over there.
+
+00:23:12.600 --> 00:23:14.000
+And it's, you know, it's not that much.
+
+00:23:14.000 --> 00:23:20.260
+I don't remember exactly how long it was, but it's, you know, a couple hundred lines, maybe 500 lines and you can just go read it and play with it.
+
+00:23:20.260 --> 00:23:20.420
+Right.
+
+00:23:20.420 --> 00:23:20.800
+Yeah.
+
+00:23:20.800 --> 00:23:21.680
+And you can make changes.
+
+00:23:21.680 --> 00:23:26.740
+You can put your own debug statements in, you can see how things are working, but it's pretty straightforward.
+
+00:23:26.740 --> 00:23:32.980
+There's a, you used to use the dict reader before, which is a really handy way of doing CSV parsing.
+
+00:23:32.980 --> 00:23:33.640
+Yeah.
+
+00:23:33.640 --> 00:23:35.200
+It's easy to understand how that works.
+
+00:23:35.200 --> 00:23:37.020
+It's written in clear, clear Python.
+
+00:23:37.020 --> 00:23:37.600
+Super cool.
+
+00:23:37.900 --> 00:23:37.980
+Yeah.
+
+00:23:37.980 --> 00:23:40.660
+So people can poke around there over in, let's say objects.
+
+00:23:40.660 --> 00:23:42.760
+That's the one I got wrong, actually.
+
+00:23:42.760 --> 00:23:43.900
+Over in objects.
+
+00:23:43.900 --> 00:23:47.260
+This is where object.c is defined, right?
+
+00:23:47.260 --> 00:23:50.280
+And this thing is way more complicated than I expected it.
+
+00:23:50.280 --> 00:23:52.740
+Obviously it's the base class for everything.
+
+00:23:53.000 --> 00:23:54.420
+So it's going to be doing a lot.
+
+00:23:54.420 --> 00:23:59.040
+It doesn't do as much as I thought it would, but it, there's a lot of code involved in there, isn't there?
+
+00:23:59.040 --> 00:24:01.780
+The core object types are actually quite complicated.
+
+00:24:02.560 --> 00:24:15.020
+That was something that surprised me when I was going through this deep dive is that I thought that there wasn't really a big difference between objects that I defined and objects that were built in like the, you know, the int type and the string type.
+
+00:24:15.020 --> 00:24:20.180
+I thought that they were more or less the same, but actually everything kind of sits on top of the core types.
+
+00:24:20.180 --> 00:24:30.020
+So the core types are all declared in C effectively, and they have C functions and everything that you put on top of that goes into a dictionary and is, is pure Python.
+
+00:24:30.340 --> 00:24:37.540
+Right. And it seems like there's a lot of memory management stuff that's happening down in there as well, like allocation and finalization.
+
+00:24:37.540 --> 00:24:42.080
+And it seems like that's the main purpose of what the plain object is about.
+
+00:24:42.080 --> 00:24:48.340
+Yeah. I think the two ones that are really interesting to look into is the list object and the dictionary object.
+
+00:24:48.340 --> 00:24:57.460
+So the beautiful thing about the list object is that you never have to worry about writing linked lists or doing list allocation like you would in many other languages.
+
+00:24:57.900 --> 00:25:02.440
+You can just add items to a list and it just magically makes it the right size.
+
+00:25:02.440 --> 00:25:09.540
+In the article, we actually talk about the growth pattern and how it reallocates the size automatically and how that works.
+
+00:25:09.540 --> 00:25:12.840
+But yeah, it's pretty cool to see how that is behind behind the scenes.
+
+00:25:12.840 --> 00:25:15.200
+Yeah. Do you really appreciate what it's doing for you down there?
+
+00:25:15.200 --> 00:25:15.840
+That's awesome.
+
+00:25:15.840 --> 00:25:17.280
+I love that.
+
+00:25:17.280 --> 00:25:19.220
+It's not just here's an array.
+
+00:25:19.380 --> 00:25:23.860
+Now you get to figure out all the complicated details of using it dynamically.
+
+00:25:23.860 --> 00:25:24.220
+Right.
+
+00:25:24.220 --> 00:25:25.660
+It's no, it's beautiful.
+
+00:25:25.660 --> 00:25:26.120
+It's a list.
+
+00:25:26.120 --> 00:25:37.240
+You know, there's one, you know, I told you I opened this whole project up in Visual Studio Code and Visual Studio Code has this cool extension, built in extension or like something I installed that has like a little gray highlight.
+
+00:25:37.760 --> 00:25:44.620
+When you're on a line of, you know, who's done what I think it's called get lens, maybe it's the thing I installed.
+
+00:25:44.620 --> 00:25:49.500
+But it had, you know, I was just poking around and it shows, you know, who's contributed or checked in this file.
+
+00:25:49.700 --> 00:25:55.300
+Like, so Pablo Galindo had just worked on object.c 22 days ago.
+
+00:25:55.300 --> 00:25:58.900
+But then as I arrowed down, like different parts would light up with people doing different things.
+
+00:25:58.900 --> 00:26:03.240
+Like line three, it says, get it on Rossum 29 years ago, initial revision.
+
+00:26:03.240 --> 00:26:08.100
+Some of the code in the CPython source is quite old and hasn't needed to change.
+
+00:26:08.100 --> 00:26:13.900
+Like it just worked the first time and it hasn't needed to be updated or there's nothing that's been changed in it.
+
+00:26:13.900 --> 00:26:19.640
+It's really interesting because when you dive through the code, I guess you can kind of see there.
+
+00:26:19.640 --> 00:26:30.180
+If you're looking at the Python 3.8 source code, you're actually looking at a almost like a canvas of 2.anything all the way up to the latest version.
+
+00:26:30.180 --> 00:26:35.200
+Even actually, even before 2.something, like some of this stuff is all the way back from version one.
+
+00:26:35.200 --> 00:26:35.780
+Right, right.
+
+00:26:35.780 --> 00:26:36.820
+Like object.c.
+
+00:26:36.820 --> 00:26:37.280
+Yeah.
+
+00:26:37.280 --> 00:26:37.940
+Yeah, exactly.
+
+00:26:37.940 --> 00:26:43.820
+So some things haven't really changed since the first versions, but the vast majority of the code has been drastically rewritten.
+
+00:26:43.820 --> 00:26:44.960
+over the last 10 years.
+
+00:26:44.960 --> 00:26:51.620
+It makes me think of like a canvas that like a painter would paint on and it's been painted over and painted over, right?
+
+00:26:51.620 --> 00:26:52.240
+Yeah, exactly.
+
+00:26:52.240 --> 00:26:52.640
+Cool.
+
+00:26:52.640 --> 00:26:53.220
+All right.
+
+00:26:53.220 --> 00:27:00.740
+So the next major area was the modules folder and this is where the standard library C implementation goes, right?
+
+00:27:00.740 --> 00:27:01.260
+Yeah.
+
+00:27:01.260 --> 00:27:06.800
+So there we have the main.c, which is the Python interpreter main program, which is pretty cool.
+
+00:27:06.800 --> 00:27:09.260
+And also GC module and stuff like that, right?
+
+00:27:09.260 --> 00:27:11.040
+Like memory allocation and whatnot.
+
+00:27:11.300 --> 00:27:11.420
+Yeah.
+
+00:27:11.420 --> 00:27:14.160
+So one of the ones we dig into quite a lot is main.c.
+
+00:27:14.160 --> 00:27:20.400
+So this is some of the really high level APIs for initializing the Python application.
+
+00:27:20.400 --> 00:27:21.760
+So the binary that you would run.
+
+00:27:21.760 --> 00:27:25.100
+So there's different ways that you can run Python.
+
+00:27:25.100 --> 00:27:29.420
+One that you typically use is just by typing Python on the command line or Python.xe.
+
+00:27:30.100 --> 00:27:34.660
+And that basically goes through a sort of a high level binary.
+
+00:27:34.660 --> 00:27:41.820
+And then that either takes an argument, which is the name of the file you want to run or the library you want to run or the module.
+
+00:27:41.820 --> 00:27:47.000
+Or you can even do, you know, Python dash C, for example, and actually give it a string with some Python code.
+
+00:27:47.280 --> 00:27:54.520
+So all the wrappers around that are in both this main.c and also another file called pymain.
+
+00:27:54.520 --> 00:28:00.140
+And then also there's a Python API, which you can call at the C level.
+
+00:28:01.080 --> 00:28:05.840
+So the Python binary is actually just a wrapper for the Python C API.
+
+00:28:05.840 --> 00:28:10.300
+And the Python C API, you can also import and use from your own application.
+
+00:28:10.300 --> 00:28:16.420
+So you can actually write an application in C that has embedded Python.
+
+00:28:16.680 --> 00:28:23.440
+And it uses exactly the same code, compilation, parsing, everything that you get when you type Python at the command line.
+
+00:28:23.440 --> 00:28:26.200
+So there are some practical uses for that.
+
+00:28:26.200 --> 00:28:31.600
+So there's some big applications out there that have Python kind of like built into them.
+
+00:28:31.600 --> 00:28:37.200
+One would be like a 3D designer called Houdini, which is like a 3D graphics tool.
+
+00:28:37.200 --> 00:28:43.040
+This kind of uses Python like deeply integrated into it, you know, using the C APIs.
+
+00:28:43.040 --> 00:28:44.120
+Yeah, that's really cool.
+
+00:28:44.120 --> 00:28:47.420
+I don't think people do that maybe as much as they should, right?
+
+00:28:47.420 --> 00:28:55.880
+Because saying the way that you extend our application is not to go write tons of C code that you could forget to allocate something and crash the whole program.
+
+00:28:55.880 --> 00:28:59.600
+But here, just write a little simple Python code and it makes our main app go.
+
+00:28:59.600 --> 00:29:10.260
+I think the folks in the movie and 3D game space use that a lot in a lot of their tools and actually use Python to like kind of drive those pipelines, the automation of a lot of the tooling like you're talking about Houdini.
+
+00:29:10.260 --> 00:29:11.560
+Yeah, that's pretty cool.
+
+00:29:11.620 --> 00:29:15.840
+So you spend a whole lot of time in the article diving into those different things and how that works.
+
+00:29:15.840 --> 00:29:16.660
+That's pretty cool.
+
+00:29:16.660 --> 00:29:25.760
+And then I guess the last interesting, there's lots of interesting stuff, but there's the last one that I want to call out on the different sections of different directories is the whole Python one.
+
+00:29:26.180 --> 00:29:36.520
+And this is where the Python runtime lives as opposed to the standard library or maybe the stuff that starts up the processes or the builds.
+
+00:29:36.520 --> 00:29:39.700
+Like this is where the execution happens, right?
+
+00:29:39.700 --> 00:29:47.480
+So the Python directory in the source code is really the brain of the whole application.
+
+00:29:47.480 --> 00:29:57.680
+So it's basically how it does the evaluation of the top codes, which is the sort of low level assembly code that Python ends up building.
+
+00:29:57.920 --> 00:30:00.500
+The Python run.c, ceval.c.
+
+00:30:00.500 --> 00:30:10.360
+So these are highly optimized C files, which have been written in and changed over time that basically executes the Python code.
+
+00:30:10.360 --> 00:30:10.820
+For sure.
+
+00:30:10.820 --> 00:30:14.560
+And so ceval.c, this is the big one when it comes to execution.
+
+00:30:17.140 --> 00:30:21.100
+This portion of Talk Python to me is brought to you by the University of San Francisco.
+
+00:30:21.100 --> 00:30:28.500
+Learn how to use Python to analyze the digital economy in the new master's in applied economics at the University of San Francisco.
+
+00:30:28.500 --> 00:30:34.920
+Located at the epicenter of digital disruption, USF is the ideal launching pad for the next phase of your career.
+
+00:30:34.920 --> 00:30:44.920
+Their new STEM designated economics program doesn't just provide technical training in high demand skills like machine learning, causal inference, experimental design, and econometrics.
+
+00:30:45.700 --> 00:30:55.560
+It takes the next step, teaching you how to apply these techniques to understand the economics of platforms, auctions, pricing, and competitive business strategy in the world of big data.
+
+00:30:55.560 --> 00:31:01.180
+The program is open to beginner and to advanced coders looking to apply their skills in a new area.
+
+00:31:01.180 --> 00:31:05.140
+Applications are now open for the fall 2020 classes.
+
+00:31:05.140 --> 00:31:11.180
+To learn more and get an application fee waiver, go to talkpython.fm/USF.
+
+00:31:11.180 --> 00:31:13.940
+That's talkpython.fm/USF.
+
+00:31:13.940 --> 00:31:27.860
+Maybe talk about the process of going from Python source code, what we would think of as what we wrote, to getting to Python bytecode before we get to CofLC.
+
+00:31:27.860 --> 00:31:29.320
+Like, what's the high-level flow there?
+
+00:31:29.320 --> 00:31:30.160
+Okay, cool, cool.
+
+00:31:30.160 --> 00:31:32.180
+So, first things first.
+
+00:31:32.180 --> 00:31:36.340
+So, you've written some Python code in a file, I'm assuming.
+
+00:31:36.680 --> 00:31:44.220
+So, first of all, it has to read the file, which is actually non-trivial because you've got to think about encodings and all sorts of other fun things.
+
+00:31:44.220 --> 00:31:52.320
+Then, basically, the parser will go through and take the file apart and put it into something called an abstract syntax tree.
+
+00:31:52.920 --> 00:32:00.140
+So, there's basically, actually, before that, there's a step called tokenization, which is to split the application into components.
+
+00:32:00.140 --> 00:32:02.860
+Then it goes into an abstract syntax tree.
+
+00:32:02.860 --> 00:32:04.740
+You can use the AST module.
+
+00:32:04.740 --> 00:32:08.640
+And in the article, I talk about how to use the AST module.
+
+00:32:08.640 --> 00:32:13.820
+And I wrote a small web application called Instaviz, which you can download on GitHub.
+
+00:32:13.820 --> 00:32:14.200
+Nice.
+
+00:32:14.200 --> 00:32:14.780
+What does it do?
+
+00:32:14.780 --> 00:32:21.420
+It basically represents the Python syntax in a massive tree that you can explore, like an interactive tree.
+
+00:32:21.420 --> 00:32:29.660
+And you can write Python code and it will give you the abstract syntax tree in, like, web application, like an interactive D3 graph.
+
+00:32:29.660 --> 00:32:31.840
+So, you can kind of play around and see.
+
+00:32:31.840 --> 00:32:42.200
+So, it's a bit easier to see how that tree works with the syntax and understanding the difference between a new line and an indent and what a name is and things like that.
+
+00:32:42.200 --> 00:32:48.340
+So, yeah, the tokenizer will kind of look at the file and wrap it up into tokens.
+
+00:32:48.340 --> 00:32:53.720
+And then the next step will be to put that into an abstract syntax tree.
+
+00:32:53.720 --> 00:33:01.840
+Once it's got the abstract syntax tree, then it will essentially compile that by doing a depth-first search.
+
+00:33:01.840 --> 00:33:05.520
+And then it puts it into something called a concrete syntax tree.
+
+00:33:05.520 --> 00:33:08.020
+That is more of a sort of literal interpretation.
+
+00:33:08.020 --> 00:33:16.660
+So, an abstract syntax tree says that you've got an if statement and inside the if statement you're comparing two variables and you're checking that they equal each other.
+
+00:33:16.660 --> 00:33:24.080
+And then if that is successful, then you're going and doing these three extra lines of code, which you've nested with a tab, for example.
+
+00:33:24.080 --> 00:33:27.300
+So, that's what an abstract syntax tree would look like.
+
+00:33:27.300 --> 00:33:32.180
+The concrete syntax tree, the CST, is basically a bit more low level than that.
+
+00:33:32.300 --> 00:33:36.880
+So, it's actually saying at the lower level, like, here's the statements we need to execute.
+
+00:33:36.880 --> 00:33:46.180
+And then the compiler is another step, which basically takes the concrete syntax tree and converts it into a list of opcodes.
+
+00:33:46.180 --> 00:33:53.300
+And this is the Python bytecode, basically, which is no longer a byte.
+
+00:33:53.300 --> 00:33:54.020
+It's actually a word.
+
+00:33:54.020 --> 00:33:55.300
+But, yeah, there's a separate issue.
+
+00:33:56.040 --> 00:33:57.060
+They're long words.
+
+00:33:57.060 --> 00:33:58.440
+Yeah, they're long words.
+
+00:33:58.440 --> 00:33:59.260
+Yeah, yeah.
+
+00:33:59.260 --> 00:34:04.440
+So, I think that's interesting because a lot of folks think of Python as a scripting language.
+
+00:34:04.440 --> 00:34:11.640
+They think of it as, like, this thing that is not, like, one of the things that defines what Python is that it's not compiled.
+
+00:34:11.640 --> 00:34:12.960
+But you just said there's a compiler.
+
+00:34:12.960 --> 00:34:13.520
+Yes.
+
+00:34:13.520 --> 00:34:15.220
+So, it absolutely is compiled.
+
+00:34:15.220 --> 00:34:17.560
+It's compiled into an intermediate language.
+
+00:34:18.040 --> 00:34:21.540
+So, similar to .NET and Java.
+
+00:34:21.540 --> 00:34:24.220
+So, .NET and Java both have JITs.
+
+00:34:24.220 --> 00:34:27.060
+So, just-in-time compiles and execution.
+
+00:34:27.060 --> 00:34:29.180
+But Python is a bit different.
+
+00:34:29.180 --> 00:34:30.560
+CPython, that is.
+
+00:34:30.560 --> 00:34:31.740
+PyPy does have a JIT.
+
+00:34:31.740 --> 00:34:36.280
+But CPython compiles down to an intermediate language as well.
+
+00:34:36.280 --> 00:34:39.460
+It's kind of like Csharpen.net or like Java.
+
+00:34:39.460 --> 00:34:43.000
+But where it differs is what happens when you try to execute that, right?
+
+00:34:43.000 --> 00:34:46.360
+In, like, Java, it would JIT that to machine instructions.
+
+00:34:46.360 --> 00:34:53.220
+In Python, it takes this big bunch of these opcodes and feeds them off to ceval.c.
+
+00:34:53.220 --> 00:34:53.700
+Yeah.
+
+00:34:53.700 --> 00:34:54.900
+There's a switch statement.
+
+00:34:54.900 --> 00:35:04.040
+The opcodes end up getting cached in a PYC file or in newer versions in the Dunder PyCache folder.
+
+00:35:04.240 --> 00:35:13.060
+So, if you've ever noticed that when you've run a Python application, it creates this cache folder in your application directory.
+
+00:35:13.060 --> 00:35:19.540
+So, basically, it goes from the source code all the way through to almost like the compiled code.
+
+00:35:19.540 --> 00:35:21.460
+And then it puts that in a cache folder.
+
+00:35:21.460 --> 00:35:23.240
+So, it does actually do the compilation.
+
+00:35:23.240 --> 00:35:25.840
+And then the next step is to execute that.
+
+00:35:25.840 --> 00:35:28.620
+It's a literal list of statements that it works through.
+
+00:35:29.120 --> 00:35:36.300
+And it has a frame stack and a value stack, which I talked through in the article because it takes a bit of time to get your head around those.
+
+00:35:36.300 --> 00:35:45.000
+But in a nutshell, the frame stack is if you called a function inside your Python code, then you'd expect the local variables to be different, for example.
+
+00:35:45.000 --> 00:35:49.020
+And you couldn't just reference the stuff that you were using beforehand.
+
+00:35:49.700 --> 00:35:51.280
+So, there's essentially these frames.
+
+00:35:51.280 --> 00:35:58.420
+And then also there's a value stack, which is used by the opcode so that it doesn't really understand the different variables you have.
+
+00:35:58.420 --> 00:35:59.520
+They're just all on the pile.
+
+00:35:59.520 --> 00:36:02.760
+And you can add things on top of the pile and you can remove things from the pile.
+
+00:36:02.760 --> 00:36:05.180
+So, that's essentially how it works.
+
+00:36:05.180 --> 00:36:05.480
+Right.
+
+00:36:05.560 --> 00:36:11.280
+It might load three things onto the value stack and then call the function with that, right?
+
+00:36:11.280 --> 00:36:12.500
+Something to that effect.
+
+00:36:12.500 --> 00:36:15.840
+So, the opcodes are really low-level statements, essentially.
+
+00:36:15.840 --> 00:36:27.060
+So, they're sort of push and pop values from the stack, for example, or to initialize a new list or to initialize a new variable or to call a C function.
+
+00:36:27.060 --> 00:36:27.660
+That's cool.
+
+00:36:27.660 --> 00:36:31.100
+If you want to explore those, there's the disk module, right?
+
+00:36:31.100 --> 00:36:39.020
+And people can import, they can say, from disk, import disk, and then they can start taking a function and asking what bytecodes or opcodes make up this thing, right?
+
+00:36:39.020 --> 00:36:39.400
+Yeah.
+
+00:36:39.400 --> 00:36:44.100
+I've got a small snippet of code which will work in Python 3.7 and above.
+
+00:36:44.100 --> 00:36:51.380
+So, in 3.7 and above, you can actually do, in the sys module, there's a tracing flag, which you can enable.
+
+00:36:51.380 --> 00:36:59.180
+And you can run a piece of code and it'll actually print out where you are in the frame stack, what opcodes are being executed,
+
+00:36:59.600 --> 00:37:01.840
+and you can inspect the value stack as well.
+
+00:37:01.840 --> 00:37:08.840
+So, if you want to almost, like, play around with the runtime and see what's happening live when I run this piece of code,
+
+00:37:08.840 --> 00:37:15.160
+there's a snippet in the article, which we'll link to in the show notes as well, where you can basically see the frame stack live.
+
+00:37:15.160 --> 00:37:15.900
+That's pretty awesome.
+
+00:37:15.900 --> 00:37:19.060
+So, you can just get it to just dump, like, every bit of what it's up to, huh?
+
+00:37:19.060 --> 00:37:23.860
+Yeah, and I got it to nest as well, so that, you know, as you go deeper down in terms of the frame stack,
+
+00:37:23.860 --> 00:37:28.640
+it will pad things out further and further to the right, so you can see where you are in the tree as well.
+
+00:37:28.800 --> 00:37:31.680
+Yeah, that sounds like you'd almost have to have it or you'd just go crazy.
+
+00:37:31.680 --> 00:37:33.560
+That's cool, though.
+
+00:37:33.560 --> 00:37:35.760
+It sounds super useful if you're just trying to understand.
+
+00:37:35.760 --> 00:37:44.240
+Yeah, so then eventually it goes down to ceval.c, which is a very complicated piece of C code.
+
+00:37:44.960 --> 00:37:48.180
+It has a lot of macros as well, which makes it quite hard to follow.
+
+00:37:48.180 --> 00:37:50.980
+But essentially, it's a big loop.
+
+00:37:50.980 --> 00:37:57.660
+So, it's a big for loop, essentially, and it goes through each opcode in that frame and executes it.
+
+00:37:57.660 --> 00:38:03.580
+So, it's a big for loop, and inside the for loop, there's a massive switch statement, which says, you know,
+
+00:38:03.620 --> 00:38:06.260
+if it's this opcode, do this, if it's that opcode, do this.
+
+00:38:06.260 --> 00:38:10.000
+And then for each one, it typically calls a C function.
+
+00:38:10.000 --> 00:38:18.240
+So, you know, if you're going to load a variable onto the value stack, then it would fetch the variable and push it onto the stack.
+
+00:38:18.380 --> 00:38:22.020
+Like, there would be, you know, two or three lines of code for each opcode.
+
+00:38:22.020 --> 00:38:24.000
+Some of them are a bit more complicated.
+
+00:38:24.000 --> 00:38:30.640
+So, you can do, let's say, set add, for example, is a basic opcode.
+
+00:38:30.640 --> 00:38:37.880
+So, if you had set add, you're adding two sets together, then basically it would call py set add, which is a C API.
+
+00:38:37.880 --> 00:38:40.980
+So, most of the opcodes actually just call C functions.
+
+00:38:40.980 --> 00:38:45.820
+Right, they take the variables that are on this value stack and they just go call the C function with that.
+
+00:38:45.820 --> 00:38:46.060
+Yeah.
+
+00:38:46.200 --> 00:38:49.340
+Yeah, this is like a serious switch statement.
+
+00:38:49.340 --> 00:38:51.900
+It's, you know, people haven't looked at it yet.
+
+00:38:51.900 --> 00:38:54.760
+It's like three, four thousand lines long.
+
+00:38:54.760 --> 00:38:56.980
+I don't have it pulled up just right a second.
+
+00:38:56.980 --> 00:39:03.000
+Another thing that surprised me is there's some interesting flow control mechanisms in there.
+
+00:39:03.000 --> 00:39:04.620
+Like, go-to.
+
+00:39:04.620 --> 00:39:05.840
+There's a lot of go-tos.
+
+00:39:05.840 --> 00:39:08.720
+How did that, did you feel like when you saw that?
+
+00:39:08.720 --> 00:39:09.780
+Were you like, what is this?
+
+00:39:09.780 --> 00:39:14.660
+The go-tos make sense because basically there's some optimizations in here.
+
+00:39:14.660 --> 00:39:18.860
+So, sometimes you'll get opcodes that typically come in pairs.
+
+00:39:18.860 --> 00:39:31.340
+So, what they've done is over time they've said, okay, you know, if you're going to create a new list, then, you know, you're going to create a new name and initialize a new list.
+
+00:39:31.440 --> 00:39:34.020
+And those two opcodes are going to end up being next to each other.
+
+00:39:34.580 --> 00:39:45.560
+So, in the switch statement, it actually kind of has like shortcuts in the code so that it knows that if it's running this opcode, the chances are it's probably going to run that opcode next.
+
+00:39:45.560 --> 00:39:50.140
+So, it basically shortcuts a lot of the other inspections and a lot of the other checks.
+
+00:39:50.560 --> 00:39:54.160
+Also, there's a lot of go-tos in terms of yields.
+
+00:39:54.160 --> 00:39:57.820
+So, if you're yielding values back as well as doing errors.
+
+00:39:57.820 --> 00:40:11.720
+So, if you call a function and the function crashes or if you try and store an attribute but there's some sort of error at the low level, then it will go to like a generic error section which basically starts off the whole exception process.
+
+00:40:11.720 --> 00:40:14.860
+It makes sense because it's so highly optimized.
+
+00:40:14.860 --> 00:40:17.240
+Like, forget doing it the right way.
+
+00:40:17.240 --> 00:40:20.420
+If the go-to makes it a little bit faster, get in a go-to, right?
+
+00:40:20.420 --> 00:40:24.840
+Because this is the hot loop that runs every single thing that happens in the language.
+
+00:40:24.840 --> 00:40:28.800
+Yeah, this thing is going to run thousands and thousands and thousands of times.
+
+00:40:28.800 --> 00:40:31.300
+So, you want it to be as fast as possible.
+
+00:40:31.300 --> 00:40:38.580
+I'd say that in terms of micro-optimizations, I think they've pretty much done most of what they can.
+
+00:40:38.700 --> 00:40:42.780
+There was some stuff introduced in 3.7 to do with the fast method calls.
+
+00:40:42.780 --> 00:40:44.960
+Right, for methods without keywords, right?
+
+00:40:44.960 --> 00:40:52.720
+Yeah, so the fast method calls were to do with if you're calling a method in a class that doesn't have keyword arguments, then it's about 20% faster.
+
+00:40:52.720 --> 00:40:57.520
+And you can see in this loop, you can actually see that opcode and how it works as well.
+
+00:40:57.520 --> 00:40:58.340
+So, it's pretty cool.
+
+00:40:58.340 --> 00:41:05.880
+I would say if you are trying to understand how CPython executes code, the C eval C and the switch statement, this is the place to start, right?
+
+00:41:05.880 --> 00:41:07.240
+It's a good place to understand.
+
+00:41:07.240 --> 00:41:08.580
+I wouldn't say start here.
+
+00:41:09.560 --> 00:41:10.820
+I'd say get here.
+
+00:41:10.820 --> 00:41:13.460
+I'd say work your way towards it.
+
+00:41:13.460 --> 00:41:16.540
+If you just jump in, it's not going to make a whole lot of sense.
+
+00:41:16.540 --> 00:41:17.560
+Right, okay, fair enough.
+
+00:41:17.560 --> 00:41:23.380
+So, another thing that you spent a fair amount of time on and you tied it back to the underlying C API was memory management.
+
+00:41:23.380 --> 00:41:26.540
+Yeah, this is definitely one of my weaknesses in understanding.
+
+00:41:27.280 --> 00:41:30.480
+I thought I understood how memory management worked in CPython.
+
+00:41:30.480 --> 00:41:33.740
+But the more I looked into it, the more complicated it actually is.
+
+00:41:33.740 --> 00:41:35.320
+There's basically different types.
+
+00:41:35.320 --> 00:41:38.920
+There's different ways it allocates blocks and also arenas.
+
+00:41:39.480 --> 00:41:44.500
+And there's basically a Python version of, or a CPython version of Memalik.
+
+00:41:44.940 --> 00:41:52.480
+So, instead of calling Memalik directly from C, you're supposed to call the sort of CPython version, which has got more governance and also more cleanup.
+
+00:41:52.480 --> 00:41:56.640
+Yeah, and it also does a bunch of work to try to avoid fragmentation and stuff like that.
+
+00:41:56.640 --> 00:41:57.840
+So, I think it's interesting.
+
+00:41:57.920 --> 00:42:00.760
+I don't think people talk about memory management in Python very much.
+
+00:42:00.760 --> 00:42:01.900
+On one hand, like, who cares?
+
+00:42:01.900 --> 00:42:02.360
+Whatever.
+
+00:42:02.360 --> 00:42:03.380
+We don't have to worry about it.
+
+00:42:03.380 --> 00:42:04.360
+Hooray, right?
+
+00:42:04.360 --> 00:42:06.320
+That's, like, one of the reasons we like the language.
+
+00:42:06.320 --> 00:42:09.000
+Like, I'm so done with calling Malik and free.
+
+00:42:09.000 --> 00:42:10.200
+I just don't want to do that again.
+
+00:42:10.200 --> 00:42:20.200
+But on the other hand, just having a conceptual understanding of what is happening at a pretty good level helps you think through, this algorithm might be better than that.
+
+00:42:20.200 --> 00:42:27.700
+Or if we're having these memory problems, we might be able to, you know, do something slightly different in terms of how we're using, like, how we're defining our code.
+
+00:42:27.700 --> 00:42:31.980
+Like, you know, maybe to take advantage of not work against the way it works, but to work with it, right?
+
+00:42:31.980 --> 00:42:38.340
+Yeah, one of the biggest benefits to the CPython is that everything basically comes from PyObject.
+
+00:42:38.340 --> 00:42:50.060
+So, the core type of an object, which is used by integers and strings and lists and everything, including the objects that you define, everything kind of comes from the same type.
+
+00:42:50.060 --> 00:42:56.380
+So, the memory management is very optimized because basically everything inherits from something.
+
+00:42:56.580 --> 00:42:59.440
+So, you know that the structure at least has this fixed size.
+
+00:42:59.440 --> 00:43:11.440
+So, what they've done is they've built in these utilities for allocating sections of memory on your machine so that you can store objects easily and fetch them and reference them.
+
+00:43:12.120 --> 00:43:16.360
+So, that's something called the PyArena, which is referenced quite a lot in the code.
+
+00:43:16.360 --> 00:43:20.800
+And you'll see, you know, when you add objects to the arena, where that goes to.
+
+00:43:20.800 --> 00:43:24.180
+So, basically, it's a way of putting Python objects into memory.
+
+00:43:24.420 --> 00:43:30.160
+And also, that's where the PyArena malloc kind of comes from, which is to do with object memory allocation.
+
+00:43:30.160 --> 00:43:46.280
+So, that's the really sort of low-level memory allocation techniques that are used in size-seat Python, which are optimized around the size of the PyObject type and typically the types of memory that are requested and the way that they're used.
+
+00:43:46.280 --> 00:43:51.220
+But if you're using Python at the Python level, you'd never care about that sort of thing.
+
+00:43:51.220 --> 00:43:56.160
+You just expect that when you declare an object, it has its memory.
+
+00:43:56.160 --> 00:43:58.560
+Like, you know, it figures that out itself.
+
+00:43:59.580 --> 00:44:10.560
+But at the Python layer, you definitely do need to know about the reference counter and the garbage collector if you're writing applications which run for any long period of time.
+
+00:44:10.560 --> 00:44:10.920
+Yeah.
+
+00:44:10.920 --> 00:44:13.420
+Well, you talked about Java and .NET before.
+
+00:44:13.420 --> 00:44:17.260
+Those are both market sweep garbage collecting type of systems.
+
+00:44:17.260 --> 00:44:20.540
+If you go back to something like C or C++, it's manual.
+
+00:44:20.540 --> 00:44:25.280
+You know, maybe you could create a smart pointer in C++ and then that's kind of reference counting.
+
+00:44:25.280 --> 00:44:28.240
+But Python's interesting, I think, because it has this blend, right?
+
+00:44:28.240 --> 00:44:32.980
+It's like, well, we're going to do reference counting, which is pretty awesome and predictable and deterministic and fast.
+
+00:44:32.980 --> 00:44:35.100
+Except for when you have cycles.
+
+00:44:35.100 --> 00:44:38.320
+Like, that's the main weakness of reference counting, right?
+
+00:44:38.320 --> 00:44:43.240
+You cannot break a cycle because the reference count is never going to go below one.
+
+00:44:43.240 --> 00:44:46.840
+Or if you have two things that refer to each other, like, how do they become garbage, right?
+
+00:44:46.840 --> 00:44:49.220
+So we have this GC that also runs.
+
+00:44:49.220 --> 00:44:50.880
+But yeah, it's pretty interesting.
+
+00:44:50.880 --> 00:44:53.640
+And you could see some of that happening that you're exploring there.
+
+00:44:53.640 --> 00:44:56.520
+I'll go through the garbage collection module.
+
+00:44:56.720 --> 00:44:57.800
+So there's GC module.
+
+00:44:57.800 --> 00:45:02.420
+And you can actually put debugging in the GC module from the Python layer.
+
+00:45:02.420 --> 00:45:18.980
+So if you import GC and then run GC set debug, you can basically turn on debug statistics so that when you're even at the REPL, like if you want to assign variables and stuff like that, you can see like what's happening at the garbage collector and what the threshold is and when it runs.
+
+00:45:19.160 --> 00:45:23.820
+And you can also customize how many cycles the garbage collector runs at.
+
+00:45:23.820 --> 00:45:31.760
+Because basically the garbage collector, I've taken the easy analogy that it's like the trash trucks that come and pick up your garbage.
+
+00:45:31.760 --> 00:45:36.040
+Like it doesn't make sense for them to come every time you put something in the bin.
+
+00:45:36.180 --> 00:45:38.380
+They come once a week or once a fortnight.
+
+00:45:38.380 --> 00:45:40.460
+So you can basically customize that.
+
+00:45:40.460 --> 00:45:47.820
+So you can say how many cycles until it goes and checks which objects are no longer needed and which ones don't have any references anymore.
+
+00:45:47.820 --> 00:45:49.480
+And it'll go and clean those up.
+
+00:45:49.480 --> 00:45:59.300
+Another thing that's interesting, the two things that are interesting that you can write in Python code that are fun to play with to give you a better understanding is you can write some code.
+
+00:45:59.300 --> 00:46:05.240
+I think you've got to do some C imports, but you can basically ask how many references are there to this object ID.
+
+00:46:05.780 --> 00:46:06.220
+Right.
+
+00:46:06.220 --> 00:46:09.380
+And it'll tell you there's five or whatever and so on.
+
+00:46:09.380 --> 00:46:15.780
+The other one that you can do that's interesting is to play with the weak reference type to create a weak reference to a thing.
+
+00:46:15.780 --> 00:46:18.600
+Then see if it's still alive or not.
+
+00:46:18.600 --> 00:46:19.340
+Right.
+
+00:46:19.340 --> 00:46:26.060
+Because that doesn't still let you address that thing, but not actually keep it alive by holding a pointer to it.
+
+00:46:26.060 --> 00:46:26.260
+Right.
+
+00:46:26.260 --> 00:46:32.820
+The garbage collector's debug stats are a great way of doing that because it kind of dumps that information to the to the repo as well.
+
+00:46:32.820 --> 00:46:33.280
+So, yeah.
+
+00:46:33.280 --> 00:46:36.860
+Another thing you can do is implement the Dunderdell, I think.
+
+00:46:36.860 --> 00:46:41.260
+You can actually get it to print out when an object is finalized or deleted.
+
+00:46:41.260 --> 00:46:41.680
+Yeah.
+
+00:46:41.680 --> 00:46:45.100
+Dunderdell is really useful for doing any of the custom cleanup code.
+
+00:46:45.100 --> 00:46:51.880
+So it's almost like you have a constructor and Dunder in it and then you have a destructor as well.
+
+00:46:51.880 --> 00:46:52.440
+Yeah, exactly.
+
+00:46:52.800 --> 00:46:57.520
+So while we're on this memory stuff, let me just throw out this really quick, this article by Instagram.
+
+00:46:57.520 --> 00:46:58.840
+It's a little bit old.
+
+00:46:58.840 --> 00:47:03.920
+It's a couple of years old now, but it's called Dismissing Python Garbage Collection at Instagram.
+
+00:47:03.920 --> 00:47:13.860
+I think maybe I covered this on Python Bytes long, long ago, but it says because you can import GC and say GC.disable or GC.collect now.
+
+00:47:13.860 --> 00:47:14.080
+Right.
+
+00:47:14.080 --> 00:47:15.440
+You can take a little bit of control.
+
+00:47:15.440 --> 00:47:17.900
+Not necessarily that you should, but you can.
+
+00:47:18.460 --> 00:47:31.800
+And over at Instagram, they said they can run 10% more efficiently by disabling GC and reduce the memory footprint and improve the CPU LLC cache hit ratio on their Django servers.
+
+00:47:31.800 --> 00:47:33.420
+That's a very focused use case.
+
+00:47:33.420 --> 00:47:34.820
+But they happen to do that.
+
+00:47:34.820 --> 00:47:36.180
+I'll put a link to that in the show notes.
+
+00:47:36.180 --> 00:47:39.680
+So you can also see about playing around the GC, some over there and whatnot.
+
+00:47:39.680 --> 00:47:40.080
+Awesome.
+
+00:47:40.240 --> 00:47:41.080
+Yeah, pretty wild.
+
+00:47:41.080 --> 00:47:41.780
+All right.
+
+00:47:41.780 --> 00:47:42.780
+Oh, let's see.
+
+00:47:42.780 --> 00:47:50.880
+So another thing that I think will be fun to talk about, we've got just a little bit of time left, not much, is just objects in the Python data model.
+
+00:47:50.880 --> 00:47:51.860
+Right.
+
+00:47:51.860 --> 00:47:54.240
+So the objects folder is where all that stuff lives.
+
+00:47:54.240 --> 00:48:00.140
+And we talked a little bit about object C, but there's more stuff that defines the object, the data model, right?
+
+00:48:00.140 --> 00:48:05.460
+Like dunder iter, dunder enter, dunder exit, repper, all that kind of stuff, right?
+
+00:48:05.460 --> 00:48:09.780
+There's basically a list of these core in the Python data model.
+
+00:48:09.780 --> 00:48:14.960
+And actually, I referenced Luciano Romano's book, which if you want to understand.
+
+00:48:14.960 --> 00:48:16.000
+Yeah, it's a fluent Python.
+
+00:48:16.000 --> 00:48:16.800
+It's a great book.
+
+00:48:16.800 --> 00:48:17.080
+Yeah.
+
+00:48:17.080 --> 00:48:17.920
+Fantastic book.
+
+00:48:17.920 --> 00:48:25.040
+And if you want to understand the Python data model and how to really leverage it to write fluent Python, then I'd recommend checking out that book.
+
+00:48:25.260 --> 00:48:27.280
+It's available in pretty much every language now.
+
+00:48:27.280 --> 00:48:28.700
+So that's awesome.
+
+00:48:28.700 --> 00:48:31.040
+I think it's a must read for any Python programmer.
+
+00:48:31.040 --> 00:48:41.040
+But basically, if you are writing a custom type that was a sequence, so it was a sequence of items, then you'd have dunder len, for example.
+
+00:48:41.040 --> 00:48:43.360
+You can customize what the length is.
+
+00:48:43.360 --> 00:48:47.020
+You can say dunder contains or you can do slicing.
+
+00:48:47.020 --> 00:48:49.260
+You can do repeats, concatenation.
+
+00:48:49.260 --> 00:48:54.920
+So you can kind of override the behavior of these kind of core operators.
+
+00:48:54.920 --> 00:48:58.060
+But that stuff is actually built in to the object.
+
+00:48:58.060 --> 00:49:00.080
+So there's a list object.
+
+00:49:00.080 --> 00:49:01.820
+If I pick on a list as an example.
+
+00:49:01.820 --> 00:49:13.040
+And in the list object type, there is something called sequence methods, which is basically in the data model, the dunder methods that are in place for anything which is a sequence.
+
+00:49:13.040 --> 00:49:15.960
+So a byte array, for example, or a list.
+
+00:49:16.300 --> 00:49:20.680
+So you can go in there and just look at all the different parts or aspects of the core data model.
+
+00:49:20.680 --> 00:49:23.580
+It's spread across all these different classes, right?
+
+00:49:23.580 --> 00:49:25.420
+It's not just all jammed into object.c.
+
+00:49:25.420 --> 00:49:31.120
+Like you said, there's a list object.c and an iter object.c and so on.
+
+00:49:31.120 --> 00:49:33.880
+Yeah, so there's basically these core types.
+
+00:49:33.880 --> 00:49:38.200
+I think there's about 20 of them, the core types.
+
+00:49:38.200 --> 00:49:44.340
+So you'd recognize them, things like dictionaries and modules and methods, memory and long objects.
+
+00:49:44.340 --> 00:49:47.720
+So yeah, it's interesting to dig through them.
+
+00:49:47.720 --> 00:49:54.860
+If you want to look at them, I'd say don't jump into the Unicode object first because it's probably one of the most complicated.
+
+00:49:55.300 --> 00:49:57.400
+So the Unicode object is the string type.
+
+00:49:57.400 --> 00:50:01.100
+The old string type basically doesn't really exist anymore.
+
+00:50:01.100 --> 00:50:02.680
+You can do byte arrays.
+
+00:50:02.680 --> 00:50:05.340
+So there's a byte array object type now.
+
+00:50:05.340 --> 00:50:08.300
+But if you want to look at strings, the Unicode object is in there.
+
+00:50:08.300 --> 00:50:13.120
+But it's hugely complicated because it has to deal with all the encodings and all that magic.
+
+00:50:13.120 --> 00:50:16.800
+Yeah, wide character pointers and all that.
+
+00:50:16.800 --> 00:50:17.600
+Yeah, no thanks.
+
+00:50:17.600 --> 00:50:18.900
+I'll start somewhere else.
+
+00:50:18.900 --> 00:50:24.340
+So, you know, that about covers it for our guided tour through the actual source code.
+
+00:50:24.340 --> 00:50:28.040
+But maybe we could talk just really quickly about a couple of things before we're out of time.
+
+00:50:28.040 --> 00:50:31.320
+You talked about doing a lot of stuff with pytest and doing testing.
+
+00:50:31.320 --> 00:50:34.800
+What's the story around testing in Python, Python source code?
+
+00:50:34.800 --> 00:50:39.980
+In CPython, there's a huge test suite, which takes a lot of time to run.
+
+00:50:39.980 --> 00:50:41.160
+It's both.
+
+00:50:41.160 --> 00:50:44.200
+There's a all the tests are written in Python, which is great.
+
+00:50:44.200 --> 00:50:46.300
+They are written using unit tests.
+
+00:50:46.300 --> 00:50:47.720
+They're using the unit test module.
+
+00:50:48.620 --> 00:50:52.000
+And they run using concurrent processes as well.
+
+00:50:52.000 --> 00:50:54.720
+Because there are so many tests to run in the test suite.
+
+00:50:54.720 --> 00:50:57.940
+There's basically a it doesn't call unit test directly.
+
+00:50:57.940 --> 00:51:02.340
+It actually runs like this test runner, this custom test runner that they've built.
+
+00:51:02.460 --> 00:51:09.400
+So inside the test module for CPython, it'll test both the standard library module behaviors,
+
+00:51:09.400 --> 00:51:14.980
+as well as the parser, as well as the core runtime, as well as the APIs.
+
+00:51:14.980 --> 00:51:18.580
+So, yeah, like I said, there's a huge test suite.
+
+00:51:19.000 --> 00:51:23.420
+The simple ones to understand, I guess, are the tests which are focused on the standard
+
+00:51:23.420 --> 00:51:28.180
+library modules because it's Python code testing Python code, which is fairly simple.
+
+00:51:28.180 --> 00:51:34.660
+And then if you look at the C layer, then basically the way that you wrap C code and call it from
+
+00:51:34.660 --> 00:51:39.440
+Python, essentially using that from the test code to test different functionality.
+
+00:51:39.440 --> 00:51:45.040
+There's also documented somewhere is the sort of coverage for the different parts of Python.
+
+00:51:45.360 --> 00:51:50.140
+Some standard modules, standard library modules have a pretty low test coverage.
+
+00:51:50.140 --> 00:51:54.760
+So if you do want to get started somewhere, adding tests is always a great place to have a look.
+
+00:51:54.760 --> 00:51:59.660
+And you'll find some of the more obscure modules as well have little to no tests.
+
+00:51:59.660 --> 00:52:01.480
+Yeah. So you could write some potentially, right?
+
+00:52:01.480 --> 00:52:02.940
+Yeah, definitely. You could write some.
+
+00:52:02.940 --> 00:52:07.400
+And, you know, when you're writing tests, you might come across a few bugs that you want to fix as well,
+
+00:52:07.400 --> 00:52:10.940
+which is awesome. But the core runtime itself is heavily tested.
+
+00:52:10.940 --> 00:52:13.660
+I'm sure it's super, super heavily tested.
+
+00:52:13.780 --> 00:52:19.160
+The other thing that might be fun to talk about is, you know, now that CPython is over on GitHub,
+
+00:52:19.160 --> 00:52:22.740
+it's really easy to go look at the branches and how they're working at those.
+
+00:52:22.740 --> 00:52:24.640
+Maybe give people an overview of that.
+
+00:52:24.640 --> 00:52:29.860
+It looks like it's pretty much focused around releases and not like, say, feature branches or
+
+00:52:29.860 --> 00:52:30.520
+something like that.
+
+00:52:30.520 --> 00:52:32.880
+Yeah. So they have released branches.
+
+00:52:32.880 --> 00:52:38.160
+So if you were to go and look at CPython now, it would say Python 3.9,
+
+00:52:38.560 --> 00:52:43.220
+which might take some of you by surprise because 3.8 only came out a week ago.
+
+00:52:43.220 --> 00:52:50.060
+So actually what they do is they declare a sort of a feature freeze in the Python release cycle.
+
+00:52:50.060 --> 00:52:54.080
+So the feature freeze for 3.8 actually happened a few months ago.
+
+00:52:54.080 --> 00:52:55.680
+Basically when they go to beta, right?
+
+00:52:55.940 --> 00:53:01.040
+Yeah, basically. So any new enhancements or stuff like that would go into the next version,
+
+00:53:01.040 --> 00:53:05.140
+which is 3.9 and bug fixes would get merged back in.
+
+00:53:05.640 --> 00:53:12.880
+There's a series of bots in the GitHub repository that do merging back of bug fixes and stuff like that.
+
+00:53:12.880 --> 00:53:18.000
+So when you tag the issues or the PRs that you've raised with certain tags,
+
+00:53:18.000 --> 00:53:24.120
+there's some really cool bots that Marietta wrote that will actually go and merge that back into the appropriate releases,
+
+00:53:24.120 --> 00:53:24.840
+which is really cool.
+
+00:53:24.840 --> 00:53:26.380
+Yeah, that actually sounds super awesome.
+
+00:53:26.380 --> 00:53:27.460
+That's awesome. That's great.
+
+00:53:27.460 --> 00:53:31.140
+I suspect people who are core developers or making contributions,
+
+00:53:31.140 --> 00:53:33.860
+they might do feature branches, but not here in the main repo.
+
+00:53:33.860 --> 00:53:38.140
+Yeah. So basically most of the core developers have their own fork
+
+00:53:38.140 --> 00:53:41.460
+and they run feature branches on their own forks.
+
+00:53:41.460 --> 00:53:44.780
+So if you want to look at some of the proposed peps,
+
+00:53:44.780 --> 00:53:49.860
+then typically at the bottom of the pep, there'll be a link to example implementation.
+
+00:53:49.860 --> 00:53:55.480
+And that typically sits on a fork of the CPython repo on that core developer's copy.
+
+00:53:55.480 --> 00:54:00.260
+So you can actually see different experimental versions and different experimental features,
+
+00:54:00.260 --> 00:54:03.820
+like some of the work that Eric Snow was doing on subinterpreters,
+
+00:54:03.820 --> 00:54:07.280
+lived inside his fork, which is really interesting to explore.
+
+00:54:07.280 --> 00:54:11.060
+But it doesn't live in the main Python, CPython repository.
+
+00:54:11.060 --> 00:54:13.800
+Right. Not until it's officially accepted, part of it.
+
+00:54:13.800 --> 00:54:18.800
+Yeah. And then when it gets officially accepted, they typically rewrite it anyway and clean up the code.
+
+00:54:18.800 --> 00:54:19.580
+Yeah, I can imagine.
+
+00:54:19.580 --> 00:54:20.620
+Oh, very cool.
+
+00:54:20.980 --> 00:54:26.960
+And then I, you know, just it's worth throwing out that we're over on GitHub.com slash Python slash CPython.
+
+00:54:26.960 --> 00:54:29.840
+But if you step it up one level just to the Python organization,
+
+00:54:29.840 --> 00:54:33.100
+there's actually some other interesting projects there as well.
+
+00:54:33.100 --> 00:54:35.600
+Right. We've got the peps are over there.
+
+00:54:35.600 --> 00:54:40.660
+TypeShed, which are the stubs that define the static types for various Python things.
+
+00:54:40.660 --> 00:54:42.220
+Python.org is there.
+
+00:54:42.300 --> 00:54:45.220
+The dev guide that you referenced, a bunch of stuff to go play with, right?
+
+00:54:45.220 --> 00:54:46.640
+Yeah, there's heaps of stuff on there.
+
+00:54:46.640 --> 00:54:47.060
+Super cool.
+
+00:54:47.060 --> 00:54:48.100
+All right, Anthony.
+
+00:54:48.100 --> 00:54:49.420
+Well, this is really interesting.
+
+00:54:49.420 --> 00:54:54.360
+Thanks for doing all the research, writing this great article, and walking us all through it.
+
+00:54:54.360 --> 00:54:56.460
+It's going to be a good resource for years to come, I think.
+
+00:54:56.460 --> 00:55:00.340
+Yeah, I'm hoping that people read this and get some value out of it, get some knowledge,
+
+00:55:00.340 --> 00:55:04.640
+and hopefully fix some bugs, write some documentation, do some tests,
+
+00:55:04.640 --> 00:55:08.120
+or maybe even add a new feature and get it merged into CPython.
+
+00:55:08.280 --> 00:55:12.680
+Yeah, absolutely. You know, one really quick thing, you did mention that as you were writing this,
+
+00:55:12.680 --> 00:55:16.820
+the source code that you were referring back to was changing, and you didn't want it to get out
+
+00:55:16.820 --> 00:55:21.040
+of date. So you also did some cool extensions to keep the article up to date, didn't you?
+
+00:55:21.040 --> 00:55:27.300
+In the article, I reference some of the functions actually a lot of times. So like thousands of times,
+
+00:55:27.300 --> 00:55:32.560
+I reference a particular function or a particular file. And as I was writing the article,
+
+00:55:32.560 --> 00:55:37.660
+obviously the code is not static, it's changing all the time. So what I ended up having to do was
+
+00:55:37.660 --> 00:55:41.800
+actually write a markdown preprocessor in Python.
+
+00:55:41.800 --> 00:55:44.680
+Were you inspired by the C macros you were seeing all over the place?
+
+00:55:44.680 --> 00:55:48.820
+Yeah, I just saw so many macros. So I thought it'd be a good idea. So in the article,
+
+00:55:48.820 --> 00:55:55.380
+like if I reference a function, you can click on it, and it takes you to the GitHub source code,
+
+00:55:55.380 --> 00:56:00.080
+and it takes you straight to the line where that function is defined. But actually, that work was
+
+00:56:00.080 --> 00:56:07.200
+done using Python using a preprocessor, so that I can basically refresh the article with newer versions
+
+00:56:07.200 --> 00:56:11.340
+of newer versions of CPython as they come out, and it rewrites it for me.
+
+00:56:11.340 --> 00:56:14.040
+That's awesome. I love it. That's really, really a cool way to approach it.
+
+00:56:14.040 --> 00:56:18.820
+All right, so I think we have to leave it there for the guided tour. But I do have the two questions
+
+00:56:18.820 --> 00:56:23.800
+to ask you, of course, before I let you out of here. I'm going to write some Python code. Maybe let's
+
+00:56:23.800 --> 00:56:28.160
+change it. If we're going to work on this project, right, where it's got Python and C,
+
+00:56:28.260 --> 00:56:29.680
+what editor are you going to use on it?
+
+00:56:29.680 --> 00:56:38.040
+I use, thanks to the nice people, JetBrains. I've got access to PyCharm and CLion. CLion is the
+
+00:56:38.040 --> 00:56:45.660
+C version of PyCharm. So it's made by JetBrains. It's very similar. So I use CLion for really deep
+
+00:56:45.660 --> 00:56:52.500
+debugging and PyCharm for exploring some of the Python code. And then when I was writing on Windows,
+
+00:56:52.660 --> 00:56:59.680
+I would use Visual Studio 2019. So I'd recommend either of those two stacks. You can use VS Code
+
+00:56:59.680 --> 00:57:04.560
+in both environments as well. But for the deep debugging and stuff like that, then I found that
+
+00:57:04.560 --> 00:57:05.400
+CLion was pretty good.
+
+00:57:05.400 --> 00:57:09.540
+Yeah, that's cool. I was definitely considering CLion to explore this as well. But I'm not going
+
+00:57:09.540 --> 00:57:12.860
+to compile it. I just want to walk through it and kind of pull some stuff out. So VS Code.
+
+00:57:12.860 --> 00:57:17.620
+Super cool. All right. And then notable PyPI package. What have you run across lately that you're
+
+00:57:17.620 --> 00:57:18.820
+like, oh, this is sweet?
+
+00:57:18.820 --> 00:57:22.560
+That's a hard one, actually. I'm kind of working on a few at the moment.
+
+00:57:22.560 --> 00:57:30.000
+Yeah, at the moment, I'm working on pytest support for Azure Pipelines. So if you search
+
+00:57:30.000 --> 00:57:36.780
+for pytest as Azure Pipelines, if you're using Azure's new CICD service, and you're using pytest,
+
+00:57:36.780 --> 00:57:42.600
+then please check out the module. It basically automates how you run pytest and upload test results.
+
+00:57:42.600 --> 00:57:46.440
+And it gives you coverage automatically and stuff like that. So yeah, it's a really,
+
+00:57:46.440 --> 00:57:51.900
+really simple package that I put together. And it's ended up being referenced in the documentation.
+
+00:57:51.900 --> 00:57:53.820
+So it's become quite popular pretty quickly.
+
+00:57:53.820 --> 00:57:58.040
+That's super cool. So it's becoming officially part of the way to work over there, right?
+
+00:57:58.040 --> 00:58:05.520
+Yeah. And then there's also now a plugin for your GUI. So in the Azure GUI, if you install this plugin,
+
+00:58:05.520 --> 00:58:09.340
+you can actually get all the pytest information in the UI as well.
+
+00:58:09.340 --> 00:58:13.140
+Okay, that's awesome. People definitely have to check that out. All right, final call to action.
+
+00:58:13.140 --> 00:58:17.460
+People are excited about CPython. You gave them some ideas about going back,
+
+00:58:18.020 --> 00:58:22.920
+adding some documentation, adding some tests, looking for unsolved bugs, things like that.
+
+00:58:22.920 --> 00:58:23.780
+What are you telling them?
+
+00:58:23.780 --> 00:58:28.860
+Oh, yeah. Have fun as well. Like you can add silly features. You can do experiments.
+
+00:58:28.860 --> 00:58:34.400
+You know, don't feel like you have to do something that's, you know, might seem like a chore at first.
+
+00:58:34.400 --> 00:58:40.000
+Just experiment, see what you can break, see what you can change, and run your own custom fork.
+
+00:58:40.000 --> 00:58:42.720
+And just I think you'll learn a lot by just experimenting.
+
+00:58:43.100 --> 00:58:46.960
+Yeah, it's super easy to get started with the article you put together. So it's fun to experiment for sure.
+
+00:58:46.960 --> 00:58:48.580
+All right. Well, thanks. Bye.
+
+00:58:48.580 --> 00:58:49.220
+Thanks, Michael.
+
+00:58:50.160 --> 00:58:52.820
+This has been another episode of Talk Python to Me.
+
+00:58:52.820 --> 00:58:58.980
+Our guest on this episode was Anthony Shaw, and it's been brought to you by Linode and the University of San Francisco.
+
+00:58:58.980 --> 00:59:03.280
+Linode is your go-to hosting for whatever you're building with Python.
+
+00:59:03.280 --> 00:59:08.720
+Get four months free at talkpython.fm/linode. That's L-I-N-O-D-E.
+
+00:59:08.720 --> 00:59:16.020
+Learn how to use Python to analyze the digital economy in the Masters of Applied Economics at the University of San Francisco.
+
+00:59:16.340 --> 00:59:20.840
+Just go to talkpython.fm/USF to find out more.
+
+00:59:20.840 --> 00:59:23.060
+Want to level up your Python?
+
+00:59:23.060 --> 00:59:27.900
+If you're just getting started, try my Python Jumpstart by Building 10 Apps course.
+
+00:59:27.900 --> 00:59:36.080
+Or if you're looking for something more advanced, check out our new async course that digs into all the different types of async programming you can do in Python.
+
+00:59:36.080 --> 00:59:40.740
+And of course, if you're interested in more than one of these, be sure to check out our Everything Bundle.
+
+00:59:40.740 --> 00:59:42.620
+It's like a subscription that never expires.
+
+00:59:43.020 --> 00:59:44.780
+Be sure to subscribe to the show.
+
+00:59:44.780 --> 00:59:47.180
+Open your favorite podcatcher and search for Python.
+
+00:59:47.180 --> 00:59:48.400
+We should be right at the top.
+
+00:59:48.400 --> 00:59:57.400
+You can also find the iTunes feed at /itunes, the Google Play feed at /play, and the direct RSS feed at /rss on talkpython.fm.
+
+00:59:57.400 --> 00:59:59.480
+This is your host, Michael Kennedy.
+
+00:59:59.480 --> 01:00:00.980
+Thanks so much for listening.
+
+01:00:00.980 --> 01:00:02.020
+I really appreciate it.
+
+01:00:02.020 --> 01:00:03.780
+Now get out there and write some Python code.
+
+01:00:03.780 --> 01:00:24.540
+I really appreciate it.
+
