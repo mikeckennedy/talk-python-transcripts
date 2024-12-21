@@ -1,0 +1,4097 @@
+WEBVTT
+
+00:00:00.001 --> 00:00:04.140
+Is Python slow? We touched on that question with Guido and Mark in the last episode.
+
+00:00:04.140 --> 00:00:09.480
+This time, we welcome back friend of the show, Anthony Shaw. He's here to share the massive
+
+00:00:09.480 --> 00:00:13.560
+amount of work that he's been doing to answer that question and speed up things where the answer
+
+00:00:13.560 --> 00:00:21.160
+is yes. And he just released version one of the Pigeon project. Pigeon is a drop-in JIT compiler
+
+00:00:21.160 --> 00:00:29.220
+for Python 3.10. It uses the .NET 6 cross-platform JIT to compile and optimize Python code on the fly
+
+00:00:29.220 --> 00:00:36.300
+with zero changes to your source code. It runs on Linux, macOS, and Windows, both x64 and ARM64.
+
+00:00:36.300 --> 00:00:39.620
+It's a cool project, and I'm excited Anthony's here to tell us all about it.
+
+00:00:39.620 --> 00:00:45.500
+This is Talk Python to Me, episode 340, recorded November 3rd, 2021.
+
+00:00:58.440 --> 00:01:03.780
+Welcome to Talk Python to Me, a weekly podcast on Python. This is your host, Michael Kennedy. Follow
+
+00:01:03.780 --> 00:01:08.100
+me on Twitter, where I'm @mkennedy, and keep up with the show and listen to past episodes at
+
+00:01:08.100 --> 00:01:14.480
+talkpython.fm. And follow the show on Twitter via at Talk Python. We've started streaming most of our
+
+00:01:14.480 --> 00:01:20.320
+episodes live on YouTube. Subscribe to our YouTube channel over at talkpython.fm/youtube to get
+
+00:01:20.320 --> 00:01:26.800
+notified about upcoming shows and be part of that episode. This episode is brought to you by Shortcut
+
+00:01:26.800 --> 00:01:34.060
+and Linode, and the transcripts are sponsored by Assembly AI. Anthony Shaw, welcome to Talk By The
+
+00:01:34.060 --> 00:01:34.200
+Enemy.
+
+00:01:34.200 --> 00:01:35.680
+Hi, Michael. Good to see you again.
+
+00:01:35.680 --> 00:01:41.880
+Yeah, it's great to have you back. You're at least yearly appearance here. If not by name,
+
+00:01:41.880 --> 00:01:46.340
+you know, you have at least appear yourself once. But I think you get mentioned a bunch of times with
+
+00:01:46.340 --> 00:01:47.080
+all the stuff you're doing.
+
+00:01:47.080 --> 00:01:51.560
+Yeah, we're just trying to work out when there's the last time. It's like a year, over a year ago.
+
+00:01:51.560 --> 00:01:58.080
+Yeah, yeah, it was May 2020. See, that was when the whole COVID thing was about to end. Like,
+
+00:01:58.080 --> 00:02:01.620
+hey, it's just a couple of months. We'll be through this. It'll be fine. Everyone will wear their mask
+
+00:02:01.620 --> 00:02:03.660
+and get their shots and it'll be totally normal.
+
+00:02:03.660 --> 00:02:06.040
+I had to pause for a second. I was trying to work out what year it was.
+
+00:02:08.080 --> 00:02:12.640
+I know. I know. Well, you're in Australia, so it's probably the next year.
+
+00:02:12.640 --> 00:02:13.520
+2022, yeah.
+
+00:02:13.520 --> 00:02:15.560
+Yeah, you guys are always ahead by a little bit.
+
+00:02:15.560 --> 00:02:16.160
+Yeah, exactly.
+
+00:02:16.160 --> 00:02:21.320
+Awesome. Well, welcome to the show. This time we're here to talk about a project that you've
+
+00:02:21.320 --> 00:02:27.880
+been spearheading for the last year or so, Pigeon, which is a JIT compiler for Python,
+
+00:02:27.880 --> 00:02:29.360
+which is pretty awesome.
+
+00:02:29.360 --> 00:02:34.940
+Yeah, I kind of, it was sitting on the shelf for a few years and I decided to pick it up. It was
+
+00:02:35.020 --> 00:02:39.880
+related to a thread of things that I've been working on, looking at Python performance. And also
+
+00:02:39.880 --> 00:02:42.720
+when I kind of finished working on the book, so.
+
+00:02:42.720 --> 00:02:44.740
+The CPython internals book, yeah.
+
+00:02:44.740 --> 00:02:50.140
+CPython internals book. Yeah, it was like really interesting to dig into a compiler and I really
+
+00:02:50.140 --> 00:02:56.180
+wanted to put some of that theory into practice and work on my own compiler. So yeah, that's kind
+
+00:02:56.180 --> 00:02:57.000
+of what led into it.
+
+00:02:57.000 --> 00:03:02.140
+It looks like no small feat as people will see as we get into it, but how much did the diving into
+
+00:03:02.140 --> 00:03:06.560
+the C internals make you feel like, all right, I'm ready to actually start messing with this and
+
+00:03:06.560 --> 00:03:11.020
+messing with how it runs and, you know, compiling stuff to machine instruction. Yeah.
+
+00:03:11.020 --> 00:03:15.180
+Yeah, massively. I don't know where I would have started otherwise. It's a pretty steep learning
+
+00:03:15.180 --> 00:03:15.500
+curve.
+
+00:03:15.500 --> 00:03:19.240
+Yeah. If someone gave me that job, I'd be like, I have no idea how to do this.
+
+00:03:19.240 --> 00:03:24.760
+Yeah. I was one of those projects I got started on because it just had my curiosity. I didn't
+
+00:03:24.760 --> 00:03:29.960
+understand how it could work and yeah, I just really wanted to learn and it just seemed like
+
+00:03:29.960 --> 00:03:33.320
+a really big challenge. So yeah, I looked at it and thought this is an interesting thing.
+
+00:03:33.320 --> 00:03:38.060
+I know that Brett and Dino were no longer working on it and just decided to pick it up and see how
+
+00:03:38.060 --> 00:03:38.800
+far I could take it.
+
+00:03:38.800 --> 00:03:45.020
+Yeah, absolutely. I think you've taken it pretty far and it's about to go to 1.0. Is that right?
+
+00:03:45.220 --> 00:03:53.460
+Yeah. So it could be launching version 1.0 of Pigeon in a few days. So I'm waiting for .NET 6 to be
+
+00:03:53.460 --> 00:03:56.340
+released and I'll explain why probably a bit later.
+
+00:03:56.340 --> 00:04:01.040
+Wait, wait, wait, wait, wait, wait, wait, wait, wait, hold on, hold on. This is the Python project
+
+00:04:01.040 --> 00:04:04.880
+on a Python podcast and you're waiting for .NET 6? Oh my gosh, I don't understand.
+
+00:04:04.880 --> 00:04:10.200
+Yeah, this bit confuses people and it did originally, I think when the project was written. So
+
+00:04:10.500 --> 00:04:18.160
+it's a JIT compiler for Python written in C++ and you could write your own JIT compiler,
+
+00:04:18.160 --> 00:04:20.460
+which is no small feat.
+
+00:04:20.460 --> 00:04:22.500
+Yeah. And then you'd be done in like 10 years.
+
+00:04:22.500 --> 00:04:28.840
+Exactly. Or you can take a JIT compiler off the shelf. So a JIT compiler compiles some sort of
+
+00:04:28.840 --> 00:04:36.240
+intermediary language into machine code. So assembly. A lot of JIT compilers are working with basically
+
+00:04:36.240 --> 00:04:42.640
+like which registers to use, which operations and instructions are supported on different CPUs.
+
+00:04:42.640 --> 00:04:50.460
+There's a whole bunch of stuff to work on. Very, very involved. And .NET Core, what was called .NET Core,
+
+00:04:50.460 --> 00:04:56.960
+now just .NET, has a JIT compiler in it. And yeah, you can actually use just the JIT compiler.
+
+00:04:57.540 --> 00:05:04.200
+So that's what the project originally did was to basically use the JIT compiler for .NET Core.
+
+00:05:04.200 --> 00:05:10.220
+Other JITs for Python, some of them use the LLVM JIT. And there's a few other JITs as well you can get
+
+00:05:10.220 --> 00:05:16.400
+off the shelf. So yeah, I started to use the .NET one. That was originally Dino and Brett when they
+
+00:05:16.400 --> 00:05:20.720
+built this. It was actually before .NET Core was even released. It was still in beta back then,
+
+00:05:20.720 --> 00:05:22.160
+but the other used .NET Core's JIT.
+
+00:05:22.160 --> 00:05:28.020
+Yeah. I think it was a much earlier version of .NET Core back then, right? Like it's come a long way.
+
+00:05:28.020 --> 00:05:33.760
+I think back then, you probably know this better than I do now, but back then I think there was like
+
+00:05:33.760 --> 00:05:41.400
+a fork in the road to pass for the .NET world. You could do traditional .NET on Windows only,
+
+00:05:41.400 --> 00:05:47.260
+but that was like the 15-year polished version of .NET. And then there was this alternative,
+
+00:05:47.260 --> 00:05:54.260
+funky, open source .NET Core thing that sort of derived, but was not the same thing as that.
+
+00:05:54.260 --> 00:05:58.560
+And so I think probably when Brett and Dino were working on it, it was really early days on that
+
+00:05:58.560 --> 00:06:00.300
+version of the JIT compiler.
+
+00:06:00.300 --> 00:06:02.440
+Yeah, it was version 0.9 of .NET Core.
+
+00:06:02.440 --> 00:06:02.780
+Right.
+
+00:06:02.780 --> 00:06:08.280
+So yeah, I did actually get involved back then at just helping out, upgrading it from version
+
+00:06:08.280 --> 00:06:15.100
+0.9 of .NET Core to version one. So I did like help on the original Pigeon project with some of the
+
+00:06:15.100 --> 00:06:22.400
+builds and stuff, but that early version of Pigeon required a fork of CPython and a fork of .NET Core.
+
+00:06:22.400 --> 00:06:29.120
+So it required you to compile both projects from source with patches and like stick a whole bunch
+
+00:06:29.120 --> 00:06:34.320
+of stuff together. And yeah, very tricky to set up. And that's one of the things when I kind of came in
+
+00:06:34.320 --> 00:06:39.680
+a year ago to pick this project up again, that I really wanted to tackle was let's make it easy
+
+00:06:39.680 --> 00:06:45.080
+to install this, which means it should just be pip installable. So you can just pip install Pigeon
+
+00:06:45.080 --> 00:06:50.480
+on Python. And that's the second thing I had to do was to upgrade it to the latest versions of Python,
+
+00:06:50.480 --> 00:06:58.780
+the latest versions of .NET. So yeah, it's running on .NET 6 and CPython 3.10. So yeah,
+
+00:06:58.780 --> 00:07:01.400
+it's basically a JIT compiler for Python 3.10.
+
+00:07:01.400 --> 00:07:07.080
+Right. So now we have .NET is, I think they've closed that fork. It's a little bit like the two
+
+00:07:07.080 --> 00:07:12.320
+to three boundary that we've crossed. It's just back to this .NET thing and it's open source,
+
+00:07:12.320 --> 00:07:19.800
+which is cool. So that closes the .NET JIT side of things from a beta thing. On the other hand,
+
+00:07:19.800 --> 00:07:24.840
+there's a PEP and you'll, I'm sure you know the number. I don't know the number off the top of my head
+
+00:07:24.840 --> 00:07:32.180
+that allowed for extensions into standard CPython. So you don't have to fork it and reprogram
+
+00:07:32.180 --> 00:07:38.120
+ceval.c. There's an extensible, an extensibility layer for this kind of stuff now, right?
+
+00:07:38.120 --> 00:07:42.380
+Yeah. So maybe to backtrack a little bit, but when you write Python code and then execute it
+
+00:07:42.380 --> 00:07:47.460
+in CPython, which is the most popular Python interpreter, the one you get from Python.org,
+
+00:07:47.460 --> 00:07:51.680
+when you compile the, well, you don't compile the Python code. Python does it for you.
+
+00:07:52.180 --> 00:07:59.260
+When you compile Python code, it compiles down into an abstract syntax tree. And then the next level
+
+00:07:59.260 --> 00:08:06.160
+down is a bytecode sequence, which you can see if you import the disk module and you run the disk
+
+00:08:06.160 --> 00:08:12.160
+function on your code. I've got to talk about Pidgin, which I did at PyCon this year.
+
+00:08:12.160 --> 00:08:13.780
+Yeah. We'll link to that in the show notes. Yeah.
+
+00:08:13.780 --> 00:08:20.460
+Yeah. So it gives some explanations and examples. So that's kind of the bytecode. And yeah, basically
+
+00:08:20.460 --> 00:08:28.240
+this looks at how can the bytecode gets handed off onto an evaluation loop in Python, which is called
+
+00:08:28.240 --> 00:08:29.380
+a ceval.
+
+00:08:29.380 --> 00:08:34.780
+Is that one of the first things you looked at when you started diving into the c source code? Is that
+
+00:08:34.780 --> 00:08:35.980
+the first file you went to?
+
+00:08:35.980 --> 00:08:42.180
+I was one of, yeah. It's such a big one. I remember on Python bytes last week, you mentioned that
+
+00:08:42.180 --> 00:08:48.280
+Lukash had been analyzing bits of Python that changed the most. And that was like the most changed bit of
+
+00:08:48.280 --> 00:08:52.540
+Python. It's kind of like the brain of Python, really. It's the loop that evaluates all the
+
+00:08:52.540 --> 00:08:58.380
+instructions and then calls all the different C APIs to actually make your code do things.
+
+00:08:58.380 --> 00:09:04.320
+And what you can do in this PEP, which Brett proposed when originally when he was working on
+
+00:09:04.320 --> 00:09:10.960
+Pidgin, was that you can actually tell cPython to not use its own evaluation loop, but use a
+
+00:09:10.960 --> 00:09:17.580
+replacement one. So this PEP 523 it is, you can basically write an extension module for Python
+
+00:09:17.580 --> 00:09:25.280
+and then say, okay, from now on, I will evaluate all Python code. Well, Python compiles it for you and
+
+00:09:25.280 --> 00:09:31.560
+then just gives it to you as a bytecode code object with bytecodes in it. And then you can write a custom
+
+00:09:31.560 --> 00:09:34.120
+function which will evaluate those bytecodes.
+
+00:09:34.400 --> 00:09:38.080
+Right. Exactly. Normally there's just a switch statement that says, if I get this bytecode,
+
+00:09:38.080 --> 00:09:41.000
+here's what I do. If I get that bytecode, here's what I do.
+
+00:09:41.000 --> 00:09:47.120
+One of the drawbacks of that, that makes it super hard to optimize, among other things, is it's one
+
+00:09:47.120 --> 00:09:53.880
+statement at a time, right? Like the C of L dot C, that switch statement, that loop doesn't go,
+
+00:09:53.880 --> 00:10:01.480
+here's a series of possibly related opcodes, make that happen. It goes, no, you need to load this
+
+00:10:01.480 --> 00:10:07.300
+variable. Now create this object. And there's just not a lot of room for optimization there,
+
+00:10:07.300 --> 00:10:10.940
+right? You're not going to inline a function or do other types of things when it's, you know,
+
+00:10:10.940 --> 00:10:12.380
+instruction by instruction.
+
+00:10:12.380 --> 00:10:19.920
+Yeah, exactly. So what Pidgin does essentially is it implements that API. When you install Pidgin
+
+00:10:19.920 --> 00:10:24.760
+and activate Pidgin, which you do by importing Pidgin and then just doing Pidgin dot enable,
+
+00:10:24.760 --> 00:10:31.100
+it will tell CPython that Pidgin will be the function to evaluate all Python code from now on.
+
+00:10:31.100 --> 00:10:37.680
+And when it sees a new function for the first time, instead of interpreting all the bytecode
+
+00:10:37.680 --> 00:10:43.840
+instructions, when you execute the function, it will basically interpret those ahead of time and
+
+00:10:43.840 --> 00:10:50.600
+then compile them into machine code instructions and then store that machine code in memory and then
+
+00:10:50.600 --> 00:10:56.340
+re-execute it every time you run the function. So it basically compiles the function down into
+
+00:10:56.340 --> 00:11:03.400
+assembly, essentially, and then puts that assembly object in memory. And then when you run the Python
+
+00:11:03.400 --> 00:11:07.920
+function, if it's already been compiled, it will then just run those instructions.
+
+00:11:07.920 --> 00:11:13.100
+Right. As standard JIT stuff, it has to do it once. But then once it's hit one method, it's like,
+
+00:11:13.100 --> 00:11:17.600
+okay, this one, here's the machine instructions for it. We're just going to reuse that, right?
+
+00:11:17.600 --> 00:11:24.200
+Yeah, because the computer needs machine code to do anything. So something has to have compiled it
+
+00:11:24.200 --> 00:11:30.240
+down into machine code. And in the case of normal CPython, CPython is written in C and the C compiler
+
+00:11:30.240 --> 00:11:36.200
+has compiled that down into machine code. But it's a loop that it runs through for each bytecode
+
+00:11:36.200 --> 00:11:43.220
+instruction to go, okay, this is a add operator. So, you know, I'm going to take two objects off the
+
+00:11:43.220 --> 00:11:48.540
+stack, the left-hand side and the right-hand side, and then I'm going to call the add function in the
+
+00:11:48.540 --> 00:11:48.920
+C API.
+
+00:11:48.920 --> 00:11:54.280
+Right. Exactly. I kind of got you diving down deep a little too quick. I do want to set the stage just
+
+00:11:54.280 --> 00:12:01.120
+a moment before we get into how all of this works. Because understanding where you're coming from and
+
+00:12:01.120 --> 00:12:05.580
+understanding some of the problems you're trying to solve are really going to be helpful to seeing
+
+00:12:05.580 --> 00:12:13.160
+the value here. So back in, what was it, April of 2020, whatever PyCon was, that virtual PyCon,
+
+00:12:13.160 --> 00:12:18.340
+the first virtual PyCon, you had that talk called Why Python is Slow. And you talked about some
+
+00:12:18.340 --> 00:12:23.760
+interesting things that really set the stage for, well, if you had a JIT and you had all sorts of
+
+00:12:23.760 --> 00:12:27.800
+control over it, as you do, how could it be faster? What could we do, right? So one of the things you
+
+00:12:27.800 --> 00:12:33.740
+talked about was this in-body problem, how C++ relative to say Python, there was a bit of a
+
+00:12:33.740 --> 00:12:37.860
+difference there, but also .NET Core was a lot faster. And really importantly, JavaScript was
+
+00:12:37.860 --> 00:12:38.600
+faster, right?
+
+00:12:38.600 --> 00:12:41.100
+Yeah. So that was 2019.
+
+00:12:41.100 --> 00:12:43.540
+My gosh. Okay.
+
+00:12:43.540 --> 00:12:49.220
+Yeah. This is part of this lovely pandemic. So yeah, I covered the in-body problem, which is
+
+00:12:49.220 --> 00:12:55.600
+interesting because it's not a, the in-body problem is a mathematical formula that calculates
+
+00:12:55.600 --> 00:12:59.060
+the position of the jovial planets.
+
+00:12:59.060 --> 00:13:02.660
+And as soon as you have three or more, it starts to get super complicated, right?
+
+00:13:02.660 --> 00:13:07.300
+Yeah. It's basically like a big mathematical formula and it just loops through the iterations
+
+00:13:07.300 --> 00:13:13.000
+to work out the position of different planets. So it's, it's kind of the difference between C is
+
+00:13:13.000 --> 00:13:18.400
+seven seconds it takes to run the algorithm in C and 14 minutes it takes to run it in Python.
+
+00:13:18.400 --> 00:13:21.280
+Python's even slower than Perl, which isn't embarrassing.
+
+00:13:21.280 --> 00:13:27.020
+That's a little embarrassing. Yeah. It's actually pretty much the, the worst case scenario for all
+
+00:13:27.020 --> 00:13:28.260
+the reasonable languages. Yeah.
+
+00:13:28.260 --> 00:13:34.420
+In that talk, I dug into the details about why some of the reasons why that is. And kind of the core of
+
+00:13:34.420 --> 00:13:40.640
+the in-body algorithm is this, is a few lines of code, which basically calculate, look at floating
+
+00:13:40.640 --> 00:13:45.100
+point numbers and it calculates, does the big calculation. So there's a lot of mathematical
+
+00:13:45.100 --> 00:13:51.600
+operations. There's like minus divide power add, which is great. And it can all be done in line.
+
+00:13:51.600 --> 00:13:58.680
+CPUs are very efficient at doing this because CPUs natively understand floating point numbers.
+
+00:13:58.680 --> 00:14:03.080
+Yeah. But a number in C and a number in Python, these are not equivalent, right? A floating point
+
+00:14:03.080 --> 00:14:09.120
+number in C is probably eight bytes on the stack. A floating point number in Python is a, what is that?
+
+00:14:09.120 --> 00:14:15.980
+A PI float object that's 50 bytes and is out on the heap, probably separated in space from the other
+
+00:14:15.980 --> 00:14:21.060
+numbers in terms of like, it'll cause more cache misses and flushes and all sorts of stuff, right?
+
+00:14:21.060 --> 00:14:28.880
+Yeah. So a floating point number in Python is a, is an immutable object and it's basically a wrapper
+
+00:14:28.880 --> 00:14:35.140
+around a double. So yeah, basically you have to create a Python object to store the floating
+
+00:14:35.140 --> 00:14:40.340
+point number. And then if the value changes, you have to create a new one. So the issue in N body
+
+00:14:40.340 --> 00:14:46.680
+is that you have to create for one, one line of Python that just does a whole bunch of work to get a
+
+00:14:46.680 --> 00:14:52.240
+single answer, like a single floating point number, all the interim values in that calculation create
+
+00:14:52.240 --> 00:14:55.040
+like 18 objects, which are immediately discarded.
+
+00:14:55.040 --> 00:15:00.080
+Right, right, right. So the, the memory management kicks in just constantly. Yeah.
+
+00:15:00.080 --> 00:15:06.780
+Yeah. And Python is pretty efficient at allocating small objects, but when you magnify that to the
+
+00:15:06.780 --> 00:15:11.940
+level that is seen in the N body problem, then yeah, that's why it's so slow effectively because
+
+00:15:11.940 --> 00:15:16.800
+it's creating all these temporary objects and then destroying them in the next operation.
+
+00:15:19.280 --> 00:15:25.560
+This portion of talk Python to me is brought to you by shortcut, formerly known as clubhouse.io. Happy
+
+00:15:25.560 --> 00:15:30.380
+with your project management tool. Most tools are either too simple for a growing engineering team to
+
+00:15:30.380 --> 00:15:35.240
+manage everything or way too complex for anyone to want to use them without constant prodding.
+
+00:15:35.240 --> 00:15:39.600
+Shortcut is different though, because it's worse. No, wait, no, I mean, it's better.
+
+00:15:39.600 --> 00:15:45.360
+Shortcut is project management built specifically for software teams. It's fast, intuitive, flexible,
+
+00:15:45.360 --> 00:15:50.720
+powerful, and many other nice positive adjectives. Key features include team-based workflows.
+
+00:15:50.720 --> 00:15:55.760
+Individual teams can use default workflows or customize them to match the way they work.
+
+00:15:55.760 --> 00:16:01.520
+Org wide goals and roadmaps. The work in these workflows is automatically tied into larger company
+
+00:16:01.520 --> 00:16:07.360
+goals. It takes one click to move from a roadmap to a team's work to individual updates and back.
+
+00:16:07.360 --> 00:16:13.520
+Type version control integration. Whether you use GitHub, GitLab, or Bitbucket, clubhouse ties directly into
+
+00:16:13.520 --> 00:16:18.560
+them so you can update progress from the command line. Keyboard friendly interface. The rest of
+
+00:16:18.560 --> 00:16:24.080
+shortcut is just as friendly as their power bar allowing you to do virtually anything without
+
+00:16:24.080 --> 00:16:29.840
+touching your mouse. Throw that thing in the trash. Iteration planning. Set weekly priorities and let
+
+00:16:29.840 --> 00:16:36.080
+shortcut run the schedule for you with accompanying burndown charts and other reporting. Give it a try over at
+
+00:16:36.080 --> 00:16:46.960
+talkpython.fm/shortcut. Again, that's talkpython.fm/shortcut. Choose shortcut because you shouldn't have to project manage your project management.
+
+00:16:46.960 --> 00:16:53.680
+One of the things you can do is maybe understand that there are numbers there and treat them.
+
+00:16:53.680 --> 00:16:58.640
+Keep, say, the intermediate values as floating points and only return the result to Python.
+
+00:16:58.640 --> 00:17:09.120
+Like, okay, this Python runtime is going to need a pyint or a pylong or a pyflow or whatever, but we don't need to do all the intermediate steps that way.
+
+00:17:09.120 --> 00:17:17.360
+We could compute those in a lower level thing because we, again, understand the whole function, not just understand, you know, multiply two numbers,
+
+00:17:17.360 --> 00:17:21.520
+multiply two numbers, add two numbers, but like that whole thing as a group, right?
+
+00:17:21.520 --> 00:17:36.000
+Yeah, exactly. So the principle behind some of the design ideas in Pidgin is that, and in lots of other compilers, this is not something I came up with. But the idea is to try and keep things as efficient as possible by just carrying
+
+00:17:36.000 --> 00:17:44.160
+values on the CPU registers and then not allocating memory in the heap. And a floating point number fits in a CPU register.
+
+00:17:44.160 --> 00:17:59.760
+So a 64-bit integer or a floating point number fit in a CPU register. So let's just carry those values on the registers and then do low level instructions to do addition and minus and multiplication as well, but not divide.
+
+00:17:59.760 --> 00:18:05.920
+Because I found out Python has a whole bunch of like custom rules for division.
+
+00:18:05.920 --> 00:18:06.400
+Yeah.
+
+00:18:06.400 --> 00:18:06.800
+Yeah.
+
+00:18:06.800 --> 00:18:09.840
+So I can rely on the CPU instructions to do that.
+
+00:18:09.840 --> 00:18:19.440
+So these are the types of things that you're like, well, maybe we could use this PEP 523 and some kind of JIT compiler and turn it loose on this.
+
+00:18:19.440 --> 00:18:26.560
+I just earlier this week interviewed Guido and Mark Shannon about just general Python performance.
+
+00:18:26.560 --> 00:18:31.360
+They're working on sort of a parallel branch of making Python faster, which is great.
+
+00:18:31.360 --> 00:18:33.920
+So out of the live stream, Josh Peake asks,
+
+00:18:33.920 --> 00:18:39.280
+Mark Guido teased the potential of addition of a JIT to CPython 3.13.14.
+
+00:18:39.280 --> 00:18:43.040
+Would this potentially intersect with that project?
+
+00:18:43.040 --> 00:18:44.320
+Is this totally separate?
+
+00:18:44.320 --> 00:18:45.840
+Do you have any visibility there?
+
+00:18:45.840 --> 00:18:48.800
+Yeah, I haven't asked to be involved in that yet.
+
+00:18:48.800 --> 00:18:56.640
+I don't know if, I mean, Mark Shannon's experience with compilers is like miles ahead of mine.
+
+00:18:56.640 --> 00:19:00.320
+And to be frank and, and, and, you know, Guido has invented the language.
+
+00:19:00.320 --> 00:19:03.680
+So like their knowledge surpasses quite substantially.
+
+00:19:03.680 --> 00:19:04.080
+Yeah.
+
+00:19:04.080 --> 00:19:10.880
+I hope that the work done in this project will be insightful when they're designing the JIT.
+
+00:19:10.880 --> 00:19:17.280
+And I've already spoken to both of them about this project and walk through like what's working and what isn't.
+
+00:19:17.280 --> 00:19:23.600
+And cause it's, I guess, quite a bit ahead and it's dealing with some challenges, which they're probably going to hit when they come to this.
+
+00:19:23.600 --> 00:19:26.640
+And then yeah, it will, it will steer, steer them in that direction.
+
+00:19:26.640 --> 00:19:26.960
+Cool.
+
+00:19:26.960 --> 00:19:31.680
+Let's talk about compiling just for a bit, because I did a lot of C++.
+
+00:19:31.680 --> 00:19:38.000
+I remember pressing compile the build button or the run, which would build in a run and you would see it grind.
+
+00:19:38.000 --> 00:19:42.160
+And actually thinking back, that was when computers actually made noises.
+
+00:19:42.160 --> 00:19:48.720
+They would like, you know, like their hard drive would like make noises that they are, they, you would hear it compiling even.
+
+00:19:48.720 --> 00:19:49.040
+Yeah.
+
+00:19:49.040 --> 00:19:53.120
+Also in C#, .NET compile, but less and much faster.
+
+00:19:53.120 --> 00:19:55.360
+But in Python, it's just, it runs.
+
+00:19:55.360 --> 00:19:56.640
+It feels like it just runs.
+
+00:19:56.640 --> 00:19:58.160
+And I don't remember this compile step.
+
+00:19:58.160 --> 00:20:01.600
+And yet there is a, there is an aspect of compiling, right?
+
+00:20:01.600 --> 00:20:02.480
+Yeah, it happens.
+
+00:20:02.480 --> 00:20:03.440
+You just don't see it.
+
+00:20:03.440 --> 00:20:04.960
+So yeah, it happens behind the scenes.
+
+00:20:04.960 --> 00:20:07.520
+It compiles it, but it doesn't compile it into machine code.
+
+00:20:07.520 --> 00:20:09.440
+It compiles it into bytecode.
+
+00:20:09.440 --> 00:20:09.680
+Right.
+
+00:20:09.680 --> 00:20:11.440
+Which is the same as .NET and Java.
+
+00:20:11.440 --> 00:20:14.400
+But the difference is what happens to that bytecode next, right?
+
+00:20:14.400 --> 00:20:19.280
+Yeah, it is similar, but the Python bytecode is, is much higher level.
+
+00:20:19.280 --> 00:20:24.080
+So there's like single operations for just add two objects, for example.
+
+00:20:24.080 --> 00:20:24.400
+Right.
+
+00:20:24.400 --> 00:20:25.520
+Or put this thing in a list.
+
+00:20:25.520 --> 00:20:25.920
+Yeah.
+
+00:20:25.920 --> 00:20:28.640
+Like add this thing to a list or merge two dictionaries.
+
+00:20:28.640 --> 00:20:32.720
+It's like dict merge is, is a single bytecode instruction.
+
+00:20:32.720 --> 00:20:35.600
+Whereas .NET uses a specification.
+
+00:20:35.600 --> 00:20:39.680
+It's an open specification called ECMA 335.
+
+00:20:39.680 --> 00:20:44.560
+And this specification describes different stack types.
+
+00:20:44.560 --> 00:20:51.440
+So it says, you know, there's like a 32 bit integer, 64 bit integer, 16 bit, et cetera.
+
+00:20:51.440 --> 00:20:58.480
+There's floating point numbers, which come in the form of four byte, eight or four or eight
+
+00:20:58.480 --> 00:21:00.480
+byte floating point numbers.
+
+00:21:00.480 --> 00:21:05.280
+And there's also things like Booleans and then how branches and evaluations work.
+
+00:21:05.280 --> 00:21:08.080
+So it's closer to assembly.
+
+00:21:08.080 --> 00:21:12.640
+But the reason you don't want to write things in assembly is because assembly is specific to a CPU.
+
+00:21:12.640 --> 00:21:18.720
+And you often find yourself writing instructions, which would only work on that particular CPU.
+
+00:21:18.720 --> 00:21:21.920
+And then when you ship it to the real world, like that doesn't work.
+
+00:21:21.920 --> 00:21:22.240
+Right.
+
+00:21:22.240 --> 00:21:26.960
+One of the big benefits of JIT is it can look exactly at what you're running on and say,
+
+00:21:26.960 --> 00:21:29.840
+oh, this has this vectorized hardware thing.
+
+00:21:29.840 --> 00:21:31.600
+So let's use that version here.
+
+00:21:31.600 --> 00:21:33.840
+Or this has this type of threading.
+
+00:21:33.840 --> 00:21:37.040
+So we're going to do some sort of memory management around that.
+
+00:21:37.040 --> 00:21:39.920
+C and C++ are ahead of time compilers.
+
+00:21:39.920 --> 00:21:45.600
+They will interpret your code, parse it and compile it down into machine code instructions,
+
+00:21:45.600 --> 00:21:50.320
+and then put it in a binary format, like a shared library or a standalone executable.
+
+00:21:50.320 --> 00:21:59.440
+.NET Java and other languages that have a JIT, they have both a compiled VM, which is something
+
+00:21:59.440 --> 00:22:03.840
+which has actually been compiled into a standalone executable, which is the framework.
+
+00:22:03.840 --> 00:22:06.560
+So the, you know, the Java.exe, for example.
+
+00:22:06.560 --> 00:22:12.480
+And then it could compile down the code into an intermediary language and then evaluate that
+
+00:22:12.480 --> 00:22:19.120
+just in time, and then typically cache the machine code onto a disk or into memory.
+
+00:22:19.120 --> 00:22:21.360
+And it does that using a JIT.
+
+00:22:21.360 --> 00:22:27.520
+And Python, CPython interprets everything at runtime, essentially.
+
+00:22:27.520 --> 00:22:32.000
+So it does cache the bytecode, but it doesn't cache the machine code because it doesn't compile
+
+00:22:32.000 --> 00:22:32.880
+to machine code.
+
+00:22:32.880 --> 00:22:33.840
+And that's what Pigeon does.
+
+00:22:33.840 --> 00:22:34.800
+Right, exactly.
+
+00:22:34.800 --> 00:22:41.040
+If you've seen PYC files with the Dunderpy cache, right, down in theirs, that's the compiled
+
+00:22:41.040 --> 00:22:41.840
+output of Python.
+
+00:22:41.840 --> 00:22:45.440
+But like you said, it's much higher level and it gets interpreted after that.
+
+00:22:45.440 --> 00:22:45.760
+Yeah.
+
+00:22:45.760 --> 00:22:46.080
+Yeah.
+
+00:22:46.080 --> 00:22:52.080
+So part of the insight of Pigeon is like, well, let's take that compile step.
+
+00:22:52.080 --> 00:22:58.000
+And instead of outputting Python bytecode, what if we output intermediate language bytecode?
+
+00:22:58.000 --> 00:23:01.760
+Because there's a nice compiler hanging around that can compile that.
+
+00:23:01.760 --> 00:23:06.000
+If you could somehow feed it that IL instead of PYC content, right?
+
+00:23:06.000 --> 00:23:06.400
+Yeah.
+
+00:23:06.400 --> 00:23:09.920
+So the steps are, it's quite involved.
+
+00:23:09.920 --> 00:23:10.320
+Yeah.
+
+00:23:10.320 --> 00:23:16.960
+The steps are, and I do go to this in the talk, but Python code, abstract syntax tree, code object,
+
+00:23:16.960 --> 00:23:18.640
+which has Python bytecode.
+
+00:23:18.640 --> 00:23:25.680
+And then Pigeon will basically compile Python bytecode into .NET intermediary bytecode.
+
+00:23:25.680 --> 00:23:30.880
+And then .NET will compile the intermediary bytecode into assembly, into machine code.
+
+00:23:30.880 --> 00:23:35.040
+And then you attach that to say the function object or a class or something like that, right?
+
+00:23:35.040 --> 00:23:35.360
+Yeah.
+
+00:23:35.360 --> 00:23:40.960
+And then that bytecode is, that machine code, sorry, is essentially an executable, which lives
+
+00:23:40.960 --> 00:23:41.840
+in memory.
+
+00:23:41.840 --> 00:23:45.920
+And then when you want to call it, you just call that memory address and it runs the function.
+
+00:23:45.920 --> 00:23:51.440
+Just in the same way that you would load a shared library and just call the address.
+
+00:23:51.440 --> 00:23:51.840
+Right.
+
+00:23:51.840 --> 00:23:52.240
+Right.
+
+00:23:52.240 --> 00:23:55.440
+You might have a .so file and you import it and run it.
+
+00:23:55.440 --> 00:23:58.320
+And as far as you're concerned, magically, it just runs, right?
+
+00:23:58.320 --> 00:23:58.800
+Exactly.
+
+00:23:58.800 --> 00:23:59.200
+Okay.
+
+00:23:59.200 --> 00:24:00.240
+Is it slow?
+
+00:24:00.240 --> 00:24:04.880
+The compilation step in particular, not necessarily, we'll get to the performance of the overall
+
+00:24:04.880 --> 00:24:05.200
+system.
+
+00:24:05.200 --> 00:24:08.160
+But like, is this JIT step, is this a big deal?
+
+00:24:08.160 --> 00:24:09.120
+Does it take a lot of memory?
+
+00:24:09.120 --> 00:24:09.840
+What's it like?
+
+00:24:09.840 --> 00:24:10.000
+Yeah.
+
+00:24:10.000 --> 00:24:13.920
+I haven't actually focused too hard on the performance of the compilation step because
+
+00:24:13.920 --> 00:24:19.280
+a lot of the problems that I'm looking at are compile once, execute 50,000 times.
+
+00:24:19.280 --> 00:24:23.200
+And the overhead doesn't really matter that much.
+
+00:24:23.200 --> 00:24:25.440
+Although it's pretty fast.
+
+00:24:25.440 --> 00:24:26.640
+I've been really impressed.
+
+00:24:26.640 --> 00:24:32.640
+Pigeon is written in C++ and the compilation step is actually pretty quick.
+
+00:24:32.640 --> 00:24:39.120
+The overhead is 10 to 15% of the execution time on the first pass, depending on the complexity
+
+00:24:39.120 --> 00:24:39.680
+of the function.
+
+00:24:39.680 --> 00:24:45.520
+But yeah, like if the function takes a second to run, then, you know, 0.15 of a second is
+
+00:24:45.520 --> 00:24:48.000
+around how much it'll take to compile it.
+
+00:24:48.000 --> 00:24:48.560
+Yeah.
+
+00:24:48.560 --> 00:24:49.520
+That's not bad.
+
+00:24:49.520 --> 00:24:50.560
+And then it goes faster.
+
+00:24:50.560 --> 00:24:50.960
+Yeah.
+
+00:24:50.960 --> 00:24:53.040
+And then once it's done it once, that's it.
+
+00:24:53.040 --> 00:24:58.880
+With the exception that Pigeon has a feature called profile-guided compilation, which is
+
+00:24:58.880 --> 00:25:05.040
+kind of something that I designed to get around how dynamic Python is.
+
+00:25:05.040 --> 00:25:09.440
+So JIT compilers are brilliant when you've got statically typed languages.
+
+00:25:09.440 --> 00:25:13.680
+So if you know that this variable is an integer and this variable is a string and this variable is
+
+00:25:13.680 --> 00:25:17.280
+an object, then you can compile all the correct instructions.
+
+00:25:17.280 --> 00:25:24.640
+But in Python, variable A could be assigned as a string and then changed to an integer and then
+
+00:25:24.640 --> 00:25:27.840
+you can assign it to the return of a function, which could be anything.
+
+00:25:27.840 --> 00:25:32.320
+So one of the challenges I kind of looked at was how do you actually make a JIT is only going to be
+
+00:25:32.320 --> 00:25:37.200
+faster if you've got optimizations and you can't make optimizations if you have to generalize
+
+00:25:37.200 --> 00:25:37.680
+everything.
+
+00:25:37.680 --> 00:25:38.000
+Yeah.
+
+00:25:38.000 --> 00:25:44.240
+So what it does is a feature called PGC, which it will compile a profiling function.
+
+00:25:44.240 --> 00:25:50.640
+So the first time it runs the Python code, it's basically going to sort of look at what variables
+
+00:25:50.640 --> 00:25:50.960
+are.
+
+00:25:50.960 --> 00:25:54.160
+It's almost like you're doing a C profile on itself.
+
+00:25:54.160 --> 00:25:54.640
+Yeah.
+
+00:25:54.640 --> 00:25:59.920
+So basically it compiles a function that runs and then when that function is running, it
+
+00:25:59.920 --> 00:26:03.040
+kind of captures a whole bunch of information about what's actually happening.
+
+00:26:03.040 --> 00:26:07.840
+And then it makes some assumptions and says, oh, you, when you were adding these three variables
+
+00:26:07.840 --> 00:26:09.360
+last time, they were all integers.
+
+00:26:09.360 --> 00:26:12.800
+So let's optimize that for integers next time.
+
+00:26:12.800 --> 00:26:15.200
+And if they do change, then it depends.
+
+00:26:15.200 --> 00:26:17.120
+It won't crash.
+
+00:26:17.120 --> 00:26:18.240
+What happens if they change?
+
+00:26:18.240 --> 00:26:18.640
+Okay.
+
+00:26:18.640 --> 00:26:19.840
+A crashing is an option.
+
+00:26:19.840 --> 00:26:24.960
+You probably don't totally want to go with the crashing part, but that might be a an intermediate,
+
+00:26:24.960 --> 00:26:27.440
+like we're building it and it's getting dialed in.
+
+00:26:27.440 --> 00:26:27.840
+Yeah.
+
+00:26:27.840 --> 00:26:33.280
+Some options that come to mind is you could have a, an alternate compiled version that says,
+
+00:26:33.280 --> 00:26:37.680
+okay, we've also seen this come as a string and, and so we're going to compile a separate
+
+00:26:37.680 --> 00:26:41.280
+one and then do like a lookup on the arguments and go from there.
+
+00:26:41.280 --> 00:26:41.600
+Yes.
+
+00:26:41.600 --> 00:26:46.560
+So they're called specializations and that's something that Mark Shannon talked about.
+
+00:26:46.560 --> 00:26:50.800
+And I think when CPython does its own JIT, they will definitely have specializations.
+
+00:26:50.800 --> 00:26:57.040
+The downside is extremely, and the downside is that you have a lot of memory overhead if there
+
+00:26:57.040 --> 00:26:58.720
+are lots of specializations.
+
+00:26:58.720 --> 00:27:03.600
+And a good example would be in the unit test module, the assert equal function.
+
+00:27:03.600 --> 00:27:09.040
+This is pretty much the first one I kind of slammed into like Pigeon tried to optimize the
+
+00:27:09.040 --> 00:27:12.400
+assert equal function, which could take anything.
+
+00:27:12.400 --> 00:27:14.480
+Like it could take two strings, a string and a number.
+
+00:27:14.480 --> 00:27:14.640
+Yeah.
+
+00:27:14.640 --> 00:27:15.120
+Yeah.
+
+00:27:15.120 --> 00:27:18.880
+Probably the first question is, are they the same type or can they be coerced in the same
+
+00:27:18.880 --> 00:27:19.200
+type?
+
+00:27:19.200 --> 00:27:19.520
+Yeah.
+
+00:27:19.520 --> 00:27:22.000
+And then just keep going down like these different cases.
+
+00:27:22.000 --> 00:27:22.800
+It can't be simple.
+
+00:27:22.800 --> 00:27:23.200
+Yeah.
+
+00:27:23.200 --> 00:27:28.400
+And it was actually in a conversation with Guido, he suggested looking at type guards.
+
+00:27:28.400 --> 00:27:36.720
+So the type guard is, so before I go into the optimized code, it will check to see, has the
+
+00:27:36.720 --> 00:27:40.640
+variable changed from what it was last time it got profiled?
+
+00:27:40.640 --> 00:27:45.280
+And then if it has changed type, then it will default back into a generic path.
+
+00:27:45.280 --> 00:27:49.360
+So that's essentially how it deals with different types.
+
+00:27:49.360 --> 00:27:49.680
+Yeah.
+
+00:27:49.680 --> 00:27:53.360
+One of the fall through paths could be just, well, let Python have it, right?
+
+00:27:53.360 --> 00:27:54.960
+Let Python just run the bytecode.
+
+00:27:54.960 --> 00:27:55.360
+Yeah.
+
+00:27:55.360 --> 00:27:57.520
+There are some things that Pigeon doesn't support.
+
+00:27:57.520 --> 00:28:00.320
+Async and await is one major, major feature.
+
+00:28:00.320 --> 00:28:05.360
+If it comes across asynchronous generators, then it will just hand them back to Python and Python
+
+00:28:05.360 --> 00:28:06.080
+executes them.
+
+00:28:06.080 --> 00:28:07.520
+It should be in there though, right?
+
+00:28:07.520 --> 00:28:10.800
+I mean, C# and .NET also have async and await.
+
+00:28:10.800 --> 00:28:14.720
+I know that means quite a bit differently, but theoretically in a future down the road,
+
+00:28:14.720 --> 00:28:18.480
+when you have more time, maybe it's not completely out of the world possible.
+
+00:28:18.480 --> 00:28:23.760
+I actually kind of started implementing it and put most of it together, only to realize that
+
+00:28:23.760 --> 00:28:28.080
+the APIs for asynchronous generators are all private in CPython.
+
+00:28:28.080 --> 00:28:33.200
+So I can't import them, which makes it technically impossible to implement, which is a bit of a
+
+00:28:33.200 --> 00:28:34.160
+shame.
+
+00:28:34.160 --> 00:28:38.880
+But yeah, that's one of the drawbacks at the moment is you can't do async and await.
+
+00:28:38.880 --> 00:28:39.280
+Right.
+
+00:28:39.280 --> 00:28:43.440
+But if this were super successful, I can see that that's like, okay, well, let's go ahead and expose
+
+00:28:44.160 --> 00:28:45.920
+that because Anthony's so close.
+
+00:28:45.920 --> 00:28:47.200
+Yeah.
+
+00:28:47.200 --> 00:28:49.200
+They could probably maybe be coerced.
+
+00:28:49.200 --> 00:28:51.280
+It's like a one line code change, I think.
+
+00:28:51.280 --> 00:28:51.760
+Yeah.
+
+00:28:51.760 --> 00:28:58.080
+Now this doesn't apply to the profile guided optimizations, but one of the things that
+
+00:28:58.720 --> 00:29:03.920
+these frameworks have, you know, I know that .NET has had it at several levels, like they've got this
+
+00:29:03.920 --> 00:29:11.360
+NGen utility that will take a .NET assembly in IL and you can pre-compile it like ahead of time, compile it
+
+00:29:11.360 --> 00:29:13.360
+and generate a native image on your machine.
+
+00:29:13.360 --> 00:29:19.280
+And then Xamarin had that because they had to have something like this to get onto iOS where they
+
+00:29:19.280 --> 00:29:23.600
+pre like ahead of, they ran the JIT compiler in advance and saved it.
+
+00:29:23.600 --> 00:29:25.840
+Is that something that could potentially be done here?
+
+00:29:25.840 --> 00:29:27.200
+Or is it, is it too much?
+
+00:29:27.200 --> 00:29:28.960
+I watched this space.
+
+00:29:28.960 --> 00:29:31.280
+I've been researching that.
+
+00:29:31.280 --> 00:29:37.120
+That's kind of one of the things I've been looking into is, can you compile it down into a
+
+00:29:37.120 --> 00:29:41.760
+format which can be stored and then loaded or marshaled?
+
+00:29:41.760 --> 00:29:47.520
+Or can it be stored into a portable executable format or some other binary format?
+
+00:29:47.520 --> 00:29:49.920
+Lots of security implications there as well.
+
+00:29:49.920 --> 00:29:51.680
+So that's one thing I'm cautious of.
+
+00:29:51.680 --> 00:29:53.040
+But yeah, I want to look into.
+
+00:29:53.040 --> 00:29:55.520
+Yeah, I hadn't even thought about all the challenges you got there.
+
+00:29:55.520 --> 00:29:57.040
+Yeah, that could be interesting.
+
+00:29:57.040 --> 00:30:03.920
+But you know, if it comes along that, yeah, this is pretty good, but there's this slower startup.
+
+00:30:03.920 --> 00:30:08.560
+And I know something that the core devs and, you know, have been very protective of is the startup
+
+00:30:08.560 --> 00:30:10.160
+speed of Python, right?
+
+00:30:10.160 --> 00:30:16.560
+That they don't want it to start super slow because often it's, it's sort of run on a little tiny bit of
+
+00:30:16.560 --> 00:30:20.480
+do this tiny thing and then we're going to drop back and then maybe run Python again on this tiny
+
+00:30:20.480 --> 00:30:25.840
+thing or even mic, multi-processing, you know, fork it, run these things, drop out of it.
+
+00:30:25.840 --> 00:30:32.240
+So I'm just thinking of like, how do you protect, like, how do you still achieve that goal and gain these advantages?
+
+00:30:32.240 --> 00:30:35.920
+Yeah, I think there probably could be work done to make the compiler more efficient.
+
+00:30:35.920 --> 00:30:41.360
+Also, you can set the threshold of how many times should a function be called before you JIT compile it.
+
+00:30:41.360 --> 00:30:41.760
+Right.
+
+00:30:41.760 --> 00:30:43.840
+So that's the threshold setting.
+
+00:30:43.840 --> 00:30:47.920
+So if you call a function once, there's probably no need to JIT compile it.
+
+00:30:47.920 --> 00:30:52.080
+Well, there's, there is no need to JIT compile it because, you know, you're compiling and then
+
+00:30:52.080 --> 00:30:53.600
+just running it straight afterwards.
+
+00:30:53.600 --> 00:30:56.960
+Whereas if it gets called a lot, then you would, you would want to call it a lot.
+
+00:30:56.960 --> 00:31:00.880
+So, and that's kind of where you get these sort of things, your hot functions, which is
+
+00:31:00.880 --> 00:31:02.800
+a function, which is run a lot.
+
+00:31:02.800 --> 00:31:07.120
+You want to specialize and make more efficient essentially.
+
+00:31:07.120 --> 00:31:13.120
+So yeah, if you are like sorting a list, for example, then doing comparisons between two
+
+00:31:13.120 --> 00:31:16.480
+different types, you'd want to make that as efficient as possible.
+
+00:31:16.480 --> 00:31:19.520
+And that would inherently make sorting algorithms all quicker.
+
+00:31:19.520 --> 00:31:19.920
+For sure.
+
+00:31:19.920 --> 00:31:20.320
+Yeah.
+
+00:31:20.320 --> 00:31:23.040
+So there's multiple stages here, right?
+
+00:31:23.040 --> 00:31:26.320
+There's the uncompiled code or letting Python run the code.
+
+00:31:26.320 --> 00:31:31.600
+Then there's compiling it with those hooks to understand what types come in for the specialization.
+
+00:31:31.600 --> 00:31:35.040
+And then there's the generate, generating the optimized version.
+
+00:31:35.040 --> 00:31:41.600
+So if it's run once at best, you'll get the unoptimized compiled version and unoptimized
+
+00:31:41.600 --> 00:31:44.240
+compiled code is probably not that much better, right?
+
+00:31:44.240 --> 00:31:44.640
+Yeah.
+
+00:31:44.640 --> 00:31:47.920
+There are some things that have been that it can do to optimize.
+
+00:31:47.920 --> 00:31:53.280
+For example, there's a list of all the built-ins and it knows what return types the built-ins
+
+00:31:53.280 --> 00:31:53.840
+have.
+
+00:31:53.840 --> 00:32:00.400
+So for sure, like it knows if you run list as a built-in function, then it will return a list.
+
+00:32:00.400 --> 00:32:08.400
+And I have even put in a check if somebody's overridden the list built-in, which is possible
+
+00:32:08.400 --> 00:32:11.120
+and had to test that as well, which is interesting.
+
+00:32:11.120 --> 00:32:17.680
+But yeah, it does make a whole bunch of assumptions like that, which is generic and works in most code.
+
+00:32:17.680 --> 00:32:24.800
+And for example, if you're accessing the fourth item in a list, so you've got a list called
+
+00:32:24.800 --> 00:32:25.760
+names.
+
+00:32:25.760 --> 00:32:31.600
+And in square brackets, you put names, square bracket, the number three, then you three is
+
+00:32:31.600 --> 00:32:32.160
+a constant.
+
+00:32:32.160 --> 00:32:33.360
+So it can't change.
+
+00:32:33.360 --> 00:32:34.640
+It's compiled into the function.
+
+00:32:34.640 --> 00:32:43.120
+If the code knows for sure that names is a list, then instead of calling a C API to see what it is and get the
+
+00:32:43.120 --> 00:32:44.880
+index, et cetera, et cetera, et cetera.
+
+00:32:44.880 --> 00:32:49.280
+The JIT compiler can go, oh, I already know this is a list.
+
+00:32:49.280 --> 00:32:51.280
+I know the index you want is the fourth number.
+
+00:32:51.280 --> 00:32:57.600
+So instead of calling all the stuff, let's just calculate the memory address of the fourth item
+
+00:32:57.600 --> 00:32:58.160
+in the list.
+
+00:32:58.400 --> 00:33:02.640
+And then put in a little check to make sure that there are four items in that list.
+
+00:33:02.640 --> 00:33:05.440
+And then, yeah, just compile that into the function.
+
+00:33:05.440 --> 00:33:08.240
+And it's immediately significantly quicker.
+
+00:33:08.240 --> 00:33:10.160
+Go to where the data is stored in the list.
+
+00:33:10.160 --> 00:33:13.200
+Go over by the size of four pointers.
+
+00:33:13.200 --> 00:33:15.280
+So eight times four or something like that.
+
+00:33:15.280 --> 00:33:16.240
+And just read it right there.
+
+00:33:16.240 --> 00:33:17.040
+Something like that.
+
+00:33:17.040 --> 00:33:17.520
+Yeah, exactly.
+
+00:33:17.800 --> 00:33:21.800
+I mean, for sure that that's what it is, right?
+
+00:33:21.800 --> 00:33:23.480
+It sounds dangerous, isn't it?
+
+00:33:23.480 --> 00:33:24.200
+Yeah, exactly.
+
+00:33:24.200 --> 00:33:26.440
+This is some of the security things, right?
+
+00:33:26.440 --> 00:33:30.120
+Go over some part in memory and read it and then do something like that.
+
+00:33:30.120 --> 00:33:32.680
+Sounds like buffer overflow when done wrong.
+
+00:33:32.680 --> 00:33:34.200
+So I can see why you'd be nervous.
+
+00:33:34.200 --> 00:33:35.240
+Yeah, exactly.
+
+00:33:35.240 --> 00:33:37.480
+But that's how compilers work.
+
+00:33:37.480 --> 00:33:42.360
+They you're dealing with memory addresses, essentially, and low level instructions.
+
+00:33:42.360 --> 00:33:43.080
+So yeah.
+
+00:33:43.080 --> 00:33:45.640
+Something we thankfully don't have to do a ton of in Python.
+
+00:33:45.640 --> 00:33:48.600
+But like in CPython, you're in C, right?
+
+00:33:48.600 --> 00:33:49.240
+That's a C thing.
+
+00:33:49.240 --> 00:33:49.880
+Yeah, definitely.
+
+00:33:49.880 --> 00:33:52.920
+And when you're working with duples, yeah, you do that as well.
+
+00:33:52.920 --> 00:33:58.680
+So you work out the address of the nth element and then just use that address and increment
+
+00:33:58.680 --> 00:34:00.520
+the reference counter.
+
+00:34:00.520 --> 00:34:00.920
+Yeah.
+
+00:34:00.920 --> 00:34:03.400
+Also, don't forget that or memory management breaks.
+
+00:34:03.400 --> 00:34:10.200
+This portion of Talk Python to Me is sponsored by Linode.
+
+00:34:10.200 --> 00:34:14.360
+Cut your cloud bills in half with Linode's Linux virtual machines.
+
+00:34:14.360 --> 00:34:18.680
+Develop, deploy, and scale your modern applications faster and easier.
+
+00:34:18.680 --> 00:34:23.240
+Whether you're developing a personal project or managing larger workloads, you deserve simple,
+
+00:34:23.240 --> 00:34:25.720
+affordable, and accessible cloud computing solutions.
+
+00:34:25.720 --> 00:34:31.480
+Get started on Linode today with $100 in free credit for listeners of Talk Python.
+
+00:34:31.480 --> 00:34:35.400
+You can find all the details over at talkpython.fm/linode.
+
+00:34:35.400 --> 00:34:40.760
+Linode has data centers around the world with the same simple and consistent pricing,
+
+00:34:40.760 --> 00:34:42.280
+regardless of location.
+
+00:34:42.280 --> 00:34:44.360
+Choose the data center that's nearest to you.
+
+00:34:44.360 --> 00:34:52.760
+You also receive 24/7/365 human support with no tiers or handoffs, regardless of your plan size.
+
+00:34:52.760 --> 00:34:55.080
+Imagine that real human support for everyone.
+
+00:34:55.080 --> 00:35:01.880
+You can choose shared or dedicated compute instances, or you can use your $100 in credit on S3 compatible
+
+00:35:01.880 --> 00:35:05.400
+object storage, managed Kubernetes clusters, and more.
+
+00:35:05.400 --> 00:35:08.200
+If it runs on Linux, it runs on Linode.
+
+00:35:08.200 --> 00:35:15.560
+If it runs on Linux, you can find the link right in your podcast player show notes.
+
+00:35:15.560 --> 00:35:18.440
+Thank you to Linode for supporting Talk Python.
+
+00:35:18.440 --> 00:35:22.120
+Where are you with this?
+
+00:35:22.120 --> 00:35:27.640
+You said it's going to go to 1.0, which sounds like I could install this and I could run it and
+
+00:35:27.640 --> 00:35:28.760
+it would do its magic, right?
+
+00:35:28.760 --> 00:35:30.040
+It's going to 1.0.
+
+00:35:30.040 --> 00:35:32.280
+Works only on Python 3.10.
+
+00:35:32.280 --> 00:35:33.960
+That's one big thing.
+
+00:35:33.960 --> 00:35:36.040
+I've upgraded it from 3.9 to 3.10.
+
+00:35:36.040 --> 00:35:40.520
+When 3.10 was released, actually, and I won't be backporting it.
+
+00:35:40.520 --> 00:35:45.080
+It's just so much has changed in Python and the APIs.
+
+00:35:45.080 --> 00:35:47.720
+You can pip install it on Python 3.10.
+
+00:35:47.720 --> 00:35:51.400
+You need to have .NET 6 installed when that is released.
+
+00:35:51.400 --> 00:35:55.000
+Or you can install release candidate 2, which is already out.
+
+00:35:55.000 --> 00:35:57.560
+Yeah, you can enable it.
+
+00:35:57.560 --> 00:35:59.720
+Yeah, it sounds like it's pretty close to done, right?
+
+00:35:59.720 --> 00:36:03.800
+I don't know when it's actually, but they've got their .NET conference in, what is that?
+
+00:36:03.800 --> 00:36:04.360
+Six days?
+
+00:36:04.360 --> 00:36:04.680
+Yeah.
+
+00:36:04.680 --> 00:36:05.240
+Surely.
+
+00:36:05.240 --> 00:36:06.440
+Yeah, they say it launches then.
+
+00:36:06.440 --> 00:36:07.400
+It's already online.
+
+00:36:07.400 --> 00:36:11.960
+By the time this episode out, it's very likely very close to just out.
+
+00:36:11.960 --> 00:36:13.720
+So, okay, that's a pretty easy thing.
+
+00:36:13.720 --> 00:36:15.000
+Can I brew install .NET?
+
+00:36:15.000 --> 00:36:15.400
+Do you know?
+
+00:36:15.400 --> 00:36:16.120
+I've not tried.
+
+00:36:16.120 --> 00:36:17.080
+I don't know.
+
+00:36:17.080 --> 00:36:17.880
+That's a good question.
+
+00:36:17.880 --> 00:36:18.200
+Yeah.
+
+00:36:18.200 --> 00:36:19.240
+There is an installer for Mac.
+
+00:36:19.240 --> 00:36:19.480
+Yeah.
+
+00:36:19.480 --> 00:36:23.080
+Pigeon also works on ARM 64, which is worth noting.
+
+00:36:23.080 --> 00:36:26.040
+And it's a very complicated detail of Jet Comparters.
+
+00:36:26.040 --> 00:36:31.720
+But yeah, ARM support was no small feat, but it's something that people just expected to be there.
+
+00:36:31.720 --> 00:36:32.920
+Yeah, sure.
+
+00:36:32.920 --> 00:36:35.800
+Well, I mean, there's obviously the M1s, right?
+
+00:36:35.800 --> 00:36:40.200
+Everyone with an M1 would like, who wants to do this would really like it to work on ARM.
+
+00:36:40.200 --> 00:36:44.760
+But there's also Raspberry Pis and other places that Python shows up.
+
+00:36:44.760 --> 00:36:46.360
+I don't know, helicopters on Mars.
+
+00:36:46.360 --> 00:36:47.800
+I don't know if that's ARM or not, probably.
+
+00:36:47.800 --> 00:36:48.200
+Yeah.
+
+00:36:48.200 --> 00:36:53.160
+So I've tested Linux ARM 64, which will be the Raspberry Pis and other.
+
+00:36:53.160 --> 00:36:55.880
+And also Mac ARM 64.
+
+00:36:55.880 --> 00:37:03.400
+I have not tested Windows ARM 64 because there is no Python for ARM 64 on Windows.
+
+00:37:03.400 --> 00:37:03.960
+Interesting.
+
+00:37:03.960 --> 00:37:04.360
+Okay.
+
+00:37:04.360 --> 00:37:12.200
+Steve Dower has released a preview package of the libraries, but not a standalone executable.
+
+00:37:12.200 --> 00:37:13.800
+But it may come out in the future.
+
+00:37:13.800 --> 00:37:16.360
+We're going off on a bit of a tangent, but...
+
+00:37:16.360 --> 00:37:18.840
+No, but that whole story with Windows on ARM is...
+
+00:37:18.840 --> 00:37:21.560
+I would love to see it better handled.
+
+00:37:21.560 --> 00:37:24.120
+But it's like you can't even buy it, right?
+
+00:37:24.120 --> 00:37:25.160
+Is it supported?
+
+00:37:25.160 --> 00:37:28.280
+It's provided OEMs, but kind of, sort of.
+
+00:37:28.280 --> 00:37:28.680
+I don't know.
+
+00:37:28.680 --> 00:37:30.280
+It's in a weird state, right?
+
+00:37:30.280 --> 00:37:31.240
+It's not normal Windows.
+
+00:37:31.240 --> 00:37:33.080
+It's not super supported.
+
+00:37:33.080 --> 00:37:33.480
+Yeah.
+
+00:37:33.480 --> 00:37:34.280
+I think...
+
+00:37:34.280 --> 00:37:34.680
+Who knows?
+
+00:37:34.680 --> 00:37:35.720
+I can't speak...
+
+00:37:35.720 --> 00:37:38.680
+I do work for Microsoft, so I'm definitely not going to give my opinion.
+
+00:37:38.680 --> 00:37:38.760
+Yeah.
+
+00:37:38.760 --> 00:37:40.920
+I'm not asking for your...
+
+00:37:40.920 --> 00:37:42.840
+This is more of me just making a proclamation.
+
+00:37:42.840 --> 00:37:47.920
+I have Windows 11 running on my Mac Mini M1, and it is running the ARM.
+
+00:37:47.920 --> 00:37:52.320
+But to get it, I had to go join the Insiders program and then install it.
+
+00:37:52.320 --> 00:37:57.920
+And it's permanently got this, like, watermark that it's a tainted version, but you can try
+
+00:37:57.920 --> 00:37:58.480
+to use it.
+
+00:37:58.480 --> 00:38:01.560
+And, you know, it works fine, but it's kind of sluggish and whatnot.
+
+00:38:01.560 --> 00:38:02.460
+So, anyway.
+
+00:38:02.460 --> 00:38:04.040
+Hopefully, that comes along better.
+
+00:38:04.040 --> 00:38:04.360
+Yeah.
+
+00:38:04.440 --> 00:38:07.360
+So, it sounds like it's supported on the various things.
+
+00:38:07.360 --> 00:38:07.680
+Yeah.
+
+00:38:07.680 --> 00:38:11.480
+I have .NET 6 installed and Python 3.10 installed.
+
+00:38:11.480 --> 00:38:14.040
+Neither of those have to be messed with, right?
+
+00:38:14.040 --> 00:38:17.760
+You've got the PEP for Python, and you've got just the JIT.
+
+00:38:17.760 --> 00:38:19.060
+Vanilla installations, yeah.
+
+00:38:19.060 --> 00:38:19.400
+Yeah.
+
+00:38:19.400 --> 00:38:19.880
+That's beautiful.
+
+00:38:19.880 --> 00:38:23.060
+And so, give us a little walkthrough on, like, how we might use this.
+
+00:38:23.060 --> 00:38:27.360
+What do I have to do to change my code to get these compilation steps?
+
+00:38:27.360 --> 00:38:32.660
+Wherever your code starts running, you need to import Pigeon and then call the enable function
+
+00:38:32.660 --> 00:38:33.220
+on Pigeon.
+
+00:38:33.220 --> 00:38:33.500
+Okay.
+
+00:38:33.500 --> 00:38:38.880
+There's also a config function, which configures different settings in terms of how Pigeon
+
+00:38:38.880 --> 00:38:39.280
+runs.
+
+00:38:39.280 --> 00:38:43.140
+Like that threshold, for example, like how many times before you compile.
+
+00:38:43.140 --> 00:38:43.320
+Yeah.
+
+00:38:43.320 --> 00:38:49.580
+The hot code threshold optimization level, which is a level between zero and two, which is
+
+00:38:49.580 --> 00:38:51.400
+like how aggressive the optimizer is.
+
+00:38:51.400 --> 00:38:54.100
+And you can also enable or disable the profiler.
+
+00:38:54.100 --> 00:38:54.500
+Yeah.
+
+00:38:54.500 --> 00:39:01.400
+I remember in C, way back when I was doing C for projects, there were these different optimization
+
+00:39:01.400 --> 00:39:02.060
+levels.
+
+00:39:02.060 --> 00:39:02.720
+Yeah.
+
+00:39:02.720 --> 00:39:06.800
+And it was like, well, you can go to one or two and it'll probably still work.
+
+00:39:06.800 --> 00:39:08.140
+If you go too far, it'll just crash.
+
+00:39:08.140 --> 00:39:10.640
+It's like, what is going on?
+
+00:39:10.640 --> 00:39:11.460
+Like, I don't understand.
+
+00:39:11.460 --> 00:39:14.620
+But okay, we'll just, we'll dial it back until it's stable.
+
+00:39:14.620 --> 00:39:16.840
+And that's as fast as we can make it go.
+
+00:39:16.840 --> 00:39:17.160
+Yeah.
+
+00:39:17.160 --> 00:39:18.020
+This is the same.
+
+00:39:18.020 --> 00:39:21.620
+This is my recommendation is go as hard as you can without it catching fire.
+
+00:39:22.340 --> 00:39:23.400
+Take a step back.
+
+00:39:23.400 --> 00:39:24.460
+Go with that.
+
+00:39:24.460 --> 00:39:26.560
+The start, maybe start at zero.
+
+00:39:26.560 --> 00:39:28.200
+I know it defaults to one.
+
+00:39:28.200 --> 00:39:28.580
+Yeah.
+
+00:39:28.580 --> 00:39:28.880
+Yeah.
+
+00:39:28.880 --> 00:39:31.200
+So yeah, don't turn out to 11, but yeah.
+
+00:39:31.200 --> 00:39:37.860
+And then the profiler is on by default, which I may disable in the future because the profiler
+
+00:39:37.860 --> 00:39:44.840
+probably causes the most issues where you've got a function, which ran with integers a thousand
+
+00:39:44.840 --> 00:39:45.300
+times.
+
+00:39:45.300 --> 00:39:48.400
+And then all of a sudden somebody gave it some floating point numbers.
+
+00:39:48.400 --> 00:39:49.320
+It won't crash.
+
+00:39:49.380 --> 00:39:53.160
+It will just, it will either fall back to default path or it will raise an exception
+
+00:39:53.160 --> 00:39:55.960
+to say that it got some values, which it didn't expect.
+
+00:39:55.960 --> 00:40:00.540
+And if you do see that, it's called a, it'll tell you in the error message and it will suggest
+
+00:40:00.540 --> 00:40:03.620
+that you turn the profiler off and then rerun the code.
+
+00:40:03.620 --> 00:40:07.400
+You know, for me, I feel like that would suggest to me that maybe I should go check my code.
+
+00:40:07.400 --> 00:40:08.000
+Yeah.
+
+00:40:08.000 --> 00:40:12.780
+Not always, but often if I got something like I'm trying to take these things and add them
+
+00:40:12.780 --> 00:40:14.260
+and get what I think is the result.
+
+00:40:14.260 --> 00:40:17.200
+And I'm trying to do math, not string concatenation.
+
+00:40:17.260 --> 00:40:23.120
+And I get a string, chances are that's actually a mistake, not something that I wanted to take
+
+00:40:23.120 --> 00:40:23.620
+account for.
+
+00:40:23.620 --> 00:40:24.940
+It could be, but probably not.
+
+00:40:24.940 --> 00:40:25.220
+Yeah.
+
+00:40:25.220 --> 00:40:28.200
+I actually saw a useful example of this yesterday on, on Twitter.
+
+00:40:28.200 --> 00:40:34.620
+Somebody shared adding two floating point numbers in Python, A and B, A plus B is not the
+
+00:40:34.620 --> 00:40:35.660
+same as B plus A.
+
+00:40:35.660 --> 00:40:38.600
+They actually give different results, which is crazy.
+
+00:40:38.820 --> 00:40:43.160
+But yeah, when you work with floating point numbers and, and integers and you, you don't
+
+00:40:43.160 --> 00:40:47.200
+mean to, but you end up with different types, you will get some weird results anyway.
+
+00:40:47.200 --> 00:40:47.680
+Interesting.
+
+00:40:47.680 --> 00:40:48.000
+Yeah.
+
+00:40:48.000 --> 00:40:48.480
+Yeah.
+
+00:40:48.480 --> 00:40:48.680
+Yeah.
+
+00:40:48.680 --> 00:40:53.020
+So yeah, in terms of whether this will work, I've compiled some pretty big libraries and
+
+00:40:53.020 --> 00:40:54.040
+they've worked fine.
+
+00:40:54.040 --> 00:40:59.780
+Pandas, Flask, Django, chucked a lot of the CPython's test suite.
+
+00:40:59.840 --> 00:40:59.940
+Yeah.
+
+00:40:59.940 --> 00:41:00.640
+This as well.
+
+00:41:00.640 --> 00:41:05.560
+So yeah, it will run about, I guess to about 50,000 tests or something.
+
+00:41:05.560 --> 00:41:06.800
+I think quite happily.
+
+00:41:06.800 --> 00:41:06.980
+That's really awesome.
+
+00:41:06.980 --> 00:41:12.560
+A lot of CPython tests, testing specific internal things in CPython.
+
+00:41:12.560 --> 00:41:15.720
+So some of them do fail, but it's not anything that Pigeon's done.
+
+00:41:15.720 --> 00:41:17.640
+And pytest works as well.
+
+00:41:17.880 --> 00:41:20.780
+So yeah, there's a lot of big libraries.
+
+00:41:20.780 --> 00:41:22.300
+NumPy works fine.
+
+00:41:22.300 --> 00:41:27.200
+I have this test for NumPy, test for Pandas, test for Flask, Django, all the stuff that I'd
+
+00:41:27.200 --> 00:41:29.240
+expect people to try is in there.
+
+00:41:29.240 --> 00:41:32.720
+If you're working with a lot of C extension modules, they also do work.
+
+00:41:32.720 --> 00:41:34.220
+Cython extensions work.
+
+00:41:34.220 --> 00:41:39.000
+So in terms of like compatibility, that was one of the main things I wanted to focus on
+
+00:41:39.000 --> 00:41:42.800
+was instead of going super aggressive with the optimizations, I just want to make sure
+
+00:41:42.800 --> 00:41:47.240
+this works with existing code because there are lots of other projects which.
+
+00:41:47.440 --> 00:41:47.520
+Right.
+
+00:41:47.520 --> 00:41:52.200
+We have PyPy already, P-Y-P-Y, which is also a JIT compiler.
+
+00:41:52.200 --> 00:41:58.340
+And it works in not with the .NET backing the JIT, but some of like the hot functions getting
+
+00:41:58.340 --> 00:42:00.160
+compiled versus just running in Python.
+
+00:42:00.160 --> 00:42:04.660
+That kind of stuff is pretty similar now, but they made the big trade-off like we're going
+
+00:42:04.660 --> 00:42:08.980
+to just go all in on compiling and we're going to not necessarily integrate with the C APIs
+
+00:42:08.980 --> 00:42:13.160
+in the same way, which means breaking with some of these things like NumPy or Pandas that
+
+00:42:13.160 --> 00:42:14.240
+people sometimes care about.
+
+00:42:14.240 --> 00:42:14.500
+Yeah.
+
+00:42:14.500 --> 00:42:17.000
+And they also have to play catch up on the language features.
+
+00:42:17.000 --> 00:42:24.760
+So if there's new features in 3.9, 3.10 in the language, like new operators or whatever,
+
+00:42:24.760 --> 00:42:27.440
+then PyPy has to then go and implement that, which is hard.
+
+00:42:27.440 --> 00:42:30.220
+But Pidgin is, you load it into CPython.
+
+00:42:30.220 --> 00:42:33.440
+So like in terms of language, it would be exactly the same.
+
+00:42:33.440 --> 00:42:33.720
+Right.
+
+00:42:33.800 --> 00:42:38.880
+Often a lot of those language features are just syntactic sugar over existing things,
+
+00:42:38.880 --> 00:42:39.140
+right?
+
+00:42:39.140 --> 00:42:39.840
+Yeah, exactly.
+
+00:42:39.840 --> 00:42:44.060
+And then if there's anything which is not compatible, like I mentioned, async and await, then it will
+
+00:42:44.060 --> 00:42:45.460
+default back to CPython.
+
+00:42:45.680 --> 00:42:47.600
+And that transition is seamless.
+
+00:42:47.600 --> 00:42:51.440
+And you wouldn't, you won't notice it will just, it will just run the code regardless.
+
+00:42:51.440 --> 00:42:51.980
+Awesome.
+
+00:42:51.980 --> 00:42:55.280
+So it looks like, I'll say it works for the most part.
+
+00:42:55.280 --> 00:42:58.100
+I haven't totally tried it, but it sounds like it works quite extensively.
+
+00:42:58.480 --> 00:43:02.960
+The way you use it is you pip install Pidgin and then just import Pidgin, Pidgin.enable
+
+00:43:02.960 --> 00:43:04.100
+is option one.
+
+00:43:04.100 --> 00:43:05.120
+And then that's it, right?
+
+00:43:05.120 --> 00:43:06.600
+There's nothing else that you have to do.
+
+00:43:06.600 --> 00:43:07.560
+Nothing else you have to do.
+
+00:43:07.560 --> 00:43:13.280
+You just run the Python code and it all just automatically spots stuff that it should compile
+
+00:43:13.280 --> 00:43:14.280
+and compile it for you.
+
+00:43:14.280 --> 00:43:14.760
+Fantastic.
+
+00:43:14.920 --> 00:43:19.360
+And then another option I see on the page here is I can say Pidgin space some Python
+
+00:43:19.360 --> 00:43:23.480
+file and not necessarily modify the file, but tell it to execute.
+
+00:43:23.480 --> 00:43:24.500
+What does it do?
+
+00:43:24.500 --> 00:43:30.180
+Import Pidgin, Pidgin.enable, eval, something like that.
+
+00:43:30.180 --> 00:43:34.000
+Yeah, basically it's a very small script.
+
+00:43:34.000 --> 00:43:38.820
+So yeah, Pidgin is a standalone command that you can run instead of, so instead of running
+
+00:43:38.820 --> 00:43:44.400
+Python, you run Pidgin against a script or a module and all the arguments should work as
+
+00:43:44.400 --> 00:43:45.120
+normal.
+
+00:43:45.120 --> 00:43:45.540
+Awesome.
+
+00:43:45.540 --> 00:43:48.060
+You also have the dash M for built and stuff, right?
+
+00:43:48.060 --> 00:43:48.440
+Yeah.
+
+00:43:48.440 --> 00:43:52.980
+So if you want to run a script, then you'd run Pidgin and then the name of the script.
+
+00:43:52.980 --> 00:43:57.980
+If you want to run a module like pytest, for example, then you would do Pidgin dash pytest
+
+00:43:57.980 --> 00:44:01.200
+and it would run pytest with the JIT enabled.
+
+00:44:01.200 --> 00:44:01.620
+Yeah.
+
+00:44:01.620 --> 00:44:02.180
+Fantastic.
+
+00:44:02.180 --> 00:44:04.000
+Or Flask or something like that, right?
+
+00:44:04.000 --> 00:44:04.580
+Yeah, exactly.
+
+00:44:04.580 --> 00:44:04.960
+Yeah.
+
+00:44:04.960 --> 00:44:05.200
+Yeah.
+
+00:44:05.200 --> 00:44:07.920
+So I guess the dash M would work with external libraries, right?
+
+00:44:07.920 --> 00:44:09.720
+Long as like Python can see them.
+
+00:44:09.720 --> 00:44:10.080
+Yeah.
+
+00:44:10.160 --> 00:44:16.560
+And I've shipped a whiskey extension as well so that you can use it in whiskey apps.
+
+00:44:16.560 --> 00:44:19.500
+I think that that's an interesting use case, actually.
+
+00:44:20.120 --> 00:44:24.900
+So when I run my regular Python code, it just loads up and runs.
+
+00:44:24.900 --> 00:44:30.960
+But when I run Flask or FastAPI or Django or Pyramid or whatever, there's all sorts of
+
+00:44:30.960 --> 00:44:35.700
+layers of indirection or layers of not directly running it, right?
+
+00:44:35.840 --> 00:44:39.860
+In production, you would say, hey, I want Microwiskey or G Unicorn to run this.
+
+00:44:39.860 --> 00:44:44.960
+Like for FastAPI, it would be, I want G Unicorn to run this, but with UVicorn workers and run
+
+00:44:44.960 --> 00:44:46.580
+five of them and like, boom, boom, boom.
+
+00:44:46.580 --> 00:44:50.000
+Now you've described like this chain of events, right?
+
+00:44:50.000 --> 00:44:50.700
+Yeah.
+
+00:44:50.700 --> 00:44:55.360
+But it sounds like there's, what, middleware to make this work still?
+
+00:44:55.360 --> 00:44:55.800
+Yeah.
+
+00:44:55.800 --> 00:45:01.900
+It's a whiskey middleware that is for Pidgin, which will do the enabling and disabling.
+
+00:45:01.900 --> 00:45:02.400
+Fantastic.
+
+00:45:02.620 --> 00:45:06.660
+So that sounds like it works for any whiskey app, Flash, Django, Pyramid, et cetera.
+
+00:45:06.660 --> 00:45:08.980
+What about ASGI apps?
+
+00:45:08.980 --> 00:45:12.260
+Well, due to the lack of async and await support, then no.
+
+00:45:12.260 --> 00:45:13.820
+It doesn't really make much sense, right?
+
+00:45:13.820 --> 00:45:18.100
+Because like the big thing that it does is like not the thing that's supported, right?
+
+00:45:18.100 --> 00:45:18.500
+Yeah.
+
+00:45:18.500 --> 00:45:22.320
+I mean, if it's an async function, then it will just give it back to CPython.
+
+00:45:22.320 --> 00:45:28.120
+I'm sure there's a lot of synchronous things happening in those various places, right?
+
+00:45:28.120 --> 00:45:31.920
+Maybe the view method itself is async, but it might call a whole bunch of, you know,
+
+00:45:32.020 --> 00:45:34.860
+give me the headers and the cookies synchronously.
+
+00:45:34.860 --> 00:45:35.360
+Who knows?
+
+00:45:35.360 --> 00:45:35.980
+Yeah, exactly.
+
+00:45:35.980 --> 00:45:40.620
+It also depends on the nature of the program as to whether Pidgin's actually going to make
+
+00:45:40.620 --> 00:45:42.300
+a difference to their performance.
+
+00:45:42.300 --> 00:45:42.820
+Yeah.
+
+00:45:43.000 --> 00:45:50.100
+So that's kind of where I'm up to at the moment is different benchmarks and running Pidgin
+
+00:45:50.100 --> 00:45:52.500
+against some standard benchmarks.
+
+00:45:52.500 --> 00:45:58.860
+I shared the N-body execution time at my PyCon talk, and that was 33% faster.
+
+00:45:58.860 --> 00:46:01.280
+It's now 65% faster.
+
+00:46:01.280 --> 00:46:02.140
+So I've doubled that.
+
+00:46:02.140 --> 00:46:02.960
+Oh, nice.
+
+00:46:02.960 --> 00:46:03.480
+Gain.
+
+00:46:03.740 --> 00:46:08.660
+So, however, most people aren't calculating the position of planets.
+
+00:46:08.660 --> 00:46:12.660
+But the few who are, they'll be super thrilled.
+
+00:46:12.660 --> 00:46:13.260
+Yeah.
+
+00:46:13.260 --> 00:46:16.780
+For the few people who are and are doing it in Python, the system doing it in Python.
+
+00:46:16.780 --> 00:46:17.260
+Yeah.
+
+00:46:17.260 --> 00:46:18.140
+Then they'll be delighted.
+
+00:46:18.140 --> 00:46:24.920
+So there are, so code, which is doing a lot of math and is in pure Python would be faster
+
+00:46:24.920 --> 00:46:30.760
+up to 20% fast, 20 times, not 20%, 20 times faster.
+
+00:46:30.760 --> 00:46:35.820
+I've got some micro benchmarks that do like simple calculus and stuff like that.
+
+00:46:35.860 --> 00:46:39.740
+And they're 20 times faster with floating point numbers.
+
+00:46:39.740 --> 00:46:46.740
+And for, I'll say, small integers, because an integer in Python, an int in Python is a
+
+00:46:46.740 --> 00:46:47.520
+called a...
+
+00:46:47.520 --> 00:46:48.700
+It's an unbounded thing.
+
+00:46:48.700 --> 00:46:50.040
+It's bounded by your memory, right?
+
+00:46:50.040 --> 00:46:50.300
+Yeah.
+
+00:46:50.300 --> 00:46:51.380
+It's actually a list of digits.
+
+00:46:51.380 --> 00:46:51.920
+It's not...
+
+00:46:51.920 --> 00:46:52.120
+Yeah.
+
+00:46:52.120 --> 00:46:56.320
+So it can have like an almost infinitely large number inside it.
+
+00:46:56.320 --> 00:47:00.340
+Whereas CPUs work with 32-bit or 64-bit numbers.
+
+00:47:00.340 --> 00:47:04.220
+And the other languages, instead of keep growing, they just go like, we broke.
+
+00:47:04.220 --> 00:47:07.660
+So instead of going one more, it goes like negative 2 billion.
+
+00:47:07.660 --> 00:47:08.040
+Yeah.
+
+00:47:08.040 --> 00:47:09.560
+Yeah.
+
+00:47:09.560 --> 00:47:11.020
+You get funny overflows and stuff.
+
+00:47:11.020 --> 00:47:11.320
+Yeah.
+
+00:47:11.320 --> 00:47:18.380
+So one of the challenges I've had with Pidgin is trying to optimize integers, but trying to
+
+00:47:18.380 --> 00:47:23.900
+understand where it potentially could be a very big number and where the number is like
+
+00:47:23.900 --> 00:47:24.500
+five.
+
+00:47:24.500 --> 00:47:25.800
+What's five times five?
+
+00:47:25.800 --> 00:47:30.920
+You don't need to allocate half a meg of memory to do five times five.
+
+00:47:30.920 --> 00:47:31.220
+Yeah.
+
+00:47:31.220 --> 00:47:31.780
+Yeah.
+
+00:47:31.780 --> 00:47:32.060
+Yeah.
+
+00:47:32.060 --> 00:47:33.520
+So that's one of the challenges.
+
+00:47:33.720 --> 00:47:37.020
+So if you're working with integers and you're working with floating point numbers and you're
+
+00:47:37.020 --> 00:47:39.660
+doing a lot of math and Pidgin will make a dramatic difference.
+
+00:47:39.660 --> 00:47:48.320
+There's also a feature called the graph, which will create .graphviz files for the functions
+
+00:47:48.320 --> 00:47:49.140
+that it's compiled.
+
+00:47:49.140 --> 00:47:51.660
+And you can see this on the website.
+
+00:47:51.660 --> 00:47:53.800
+So if you go to live.trypidgin.com.
+
+00:47:53.900 --> 00:47:55.840
+You've got this interactive live website, right?
+
+00:47:55.840 --> 00:47:56.160
+Yeah.
+
+00:47:56.160 --> 00:48:01.980
+So I've kind of made a sort of live demo site where you can type Python code in and click
+
+00:48:01.980 --> 00:48:04.460
+compile and then it will show you.
+
+00:48:04.460 --> 00:48:05.840
+Oh, don't change it, Michael.
+
+00:48:05.840 --> 00:48:06.540
+You broke it.
+
+00:48:06.540 --> 00:48:08.760
+It's going to be fine.
+
+00:48:08.760 --> 00:48:10.040
+And then do you compile?
+
+00:48:10.040 --> 00:48:11.060
+It's going to be fine.
+
+00:48:11.060 --> 00:48:11.940
+I got faith in you.
+
+00:48:11.940 --> 00:48:13.120
+Now I can delete it.
+
+00:48:13.120 --> 00:48:13.980
+It catches fire.
+
+00:48:13.980 --> 00:48:14.260
+Okay.
+
+00:48:14.580 --> 00:48:18.080
+That's the assembly that it has compiled that Python code into.
+
+00:48:18.080 --> 00:48:18.560
+Okay.
+
+00:48:18.780 --> 00:48:23.620
+And a fun thing I actually added was there's a comment in assembly, which says which byte
+
+00:48:23.620 --> 00:48:25.320
+code this is for, which is fun.
+
+00:48:25.320 --> 00:48:28.520
+If you scroll down on the page, you see this graph.
+
+00:48:28.520 --> 00:48:29.680
+I got to do my screen.
+
+00:48:29.680 --> 00:48:31.700
+Press the IL and then keep going down.
+
+00:48:31.700 --> 00:48:32.280
+Okay.
+
+00:48:32.280 --> 00:48:33.180
+There we go.
+
+00:48:33.180 --> 00:48:33.780
+Here we go.
+
+00:48:33.780 --> 00:48:35.880
+I don't have a big enough screen there.
+
+00:48:35.880 --> 00:48:36.340
+Here we go.
+
+00:48:36.340 --> 00:48:37.500
+Okay.
+
+00:48:37.500 --> 00:48:42.360
+So this instruction graph gets generated if you enable graphing.
+
+00:48:42.360 --> 00:48:44.280
+It's on the documentation.
+
+00:48:44.280 --> 00:48:48.500
+But when you enable graphing, it will show you all the Python byte codes.
+
+00:48:48.500 --> 00:48:51.840
+And then what values are being sent between those byte codes.
+
+00:48:51.840 --> 00:48:54.780
+So this is basically the output of the profiler.
+
+00:48:54.780 --> 00:48:57.820
+It can see here that you've got A and B.
+
+00:48:57.820 --> 00:48:58.980
+B was a float.
+
+00:48:58.980 --> 00:49:00.120
+A is an integer.
+
+00:49:00.120 --> 00:49:03.080
+And then it's doing a multiplication operation.
+
+00:49:03.080 --> 00:49:06.860
+And it knows that if you multiply a float by an integer, then the output is a float.
+
+00:49:06.860 --> 00:49:09.180
+So it carries that value through the graph.
+
+00:49:09.180 --> 00:49:11.920
+PyPyde actually does things quite similar to this.
+
+00:49:11.920 --> 00:49:18.220
+And then once the profiler has run, it will look at the graph and then make some decisions
+
+00:49:18.220 --> 00:49:21.800
+about which values don't need to be Python objects.
+
+00:49:22.000 --> 00:49:24.860
+So for example, A times B.
+
+00:49:24.860 --> 00:49:25.600
+Right.
+
+00:49:25.600 --> 00:49:29.000
+There's these intermediate binaries here and stuff, right?
+
+00:49:29.000 --> 00:49:30.700
+This in-place add, all those, yeah?
+
+00:49:30.700 --> 00:49:31.700
+So yeah, exactly.
+
+00:49:31.700 --> 00:49:35.080
+So all of those values do not need to be Python objects.
+
+00:49:35.280 --> 00:49:39.340
+So what it will do on the next pass is it will recompile that.
+
+00:49:39.340 --> 00:49:41.160
+And then it will, what's called, unbox them.
+
+00:49:41.160 --> 00:49:46.340
+So it basically just carries them in CPU registers as integers and floats.
+
+00:49:46.340 --> 00:49:54.860
+And then instead of running the C function to add two numbers together, it will just emit the assembly instruction to add two numbers on the register.
+
+00:49:54.860 --> 00:49:55.880
+Yeah, that's fantastic.
+
+00:49:55.880 --> 00:50:04.680
+That's what you're talking about where you don't have to drop back into allocating Python numbers if you know for sure that no one's going to look at it.
+
+00:50:04.680 --> 00:50:06.140
+It's just an intermediate value.
+
+00:50:06.140 --> 00:50:08.380
+And this is where it gets tricky with integers, right?
+
+00:50:08.380 --> 00:50:12.500
+Because A and B might be small, but A to the power of B might be larger.
+
+00:50:12.980 --> 00:50:13.460
+Exactly.
+
+00:50:13.460 --> 00:50:19.000
+And then it goes one step beyond as well if you have code that uses fast values.
+
+00:50:19.000 --> 00:50:24.220
+It's tricky because when you do eval on the website, it will never have used fast locals.
+
+00:50:24.220 --> 00:50:33.940
+But if you do have a function that has fast locals, if it detects that that local is only ever used in places where it can be unboxed,
+
+00:50:33.940 --> 00:50:38.720
+then it won't actually store the variable as a Python object either.
+
+00:50:38.720 --> 00:50:40.780
+It will store it as a native stack value.
+
+00:50:41.260 --> 00:50:46.620
+So that's something it even does will, like if you have a variable called A and you assign it to the number two,
+
+00:50:46.620 --> 00:50:52.640
+then it will actually just reserve an area in memory just to store that stack value.
+
+00:50:52.640 --> 00:50:54.000
+And it will be an offset.
+
+00:50:54.000 --> 00:50:55.840
+Which is way more efficient.
+
+00:50:55.840 --> 00:50:58.720
+Enormous, like thousands of times more efficient.
+
+00:50:58.720 --> 00:51:06.780
+And when you refer to that variable in your function, it will basically just access that point in memory to get the actual value.
+
+00:51:06.780 --> 00:51:07.140
+Yeah.
+
+00:51:07.140 --> 00:51:07.740
+Yeah.
+
+00:51:07.740 --> 00:51:08.140
+Awesome.
+
+00:51:08.140 --> 00:51:09.080
+This is really neat.
+
+00:51:09.140 --> 00:51:14.480
+One thing that stands out to me here is I wrote name equals Anthony plus Shaw as two strings.
+
+00:51:14.480 --> 00:51:16.700
+And that was, you're like, don't do it.
+
+00:51:16.700 --> 00:51:22.640
+And yet what I see in the graph here is that it loads the string Anthony Shaw.
+
+00:51:22.860 --> 00:51:28.260
+So did Python look at that and then decide that that's actually, those are two constants.
+
+00:51:28.260 --> 00:51:32.100
+So we'll just make it one constant or was that .NET or what happened there?
+
+00:51:32.100 --> 00:51:32.520
+Yeah.
+
+00:51:32.520 --> 00:51:35.340
+That's constant folding is a feature of Python.
+
+00:51:35.340 --> 00:51:35.700
+Yeah.
+
+00:51:35.700 --> 00:51:36.260
+That's what I thought.
+
+00:51:36.260 --> 00:51:41.640
+If you do, yeah, two strings and a plus, it will actually compile those into one string.
+
+00:51:41.640 --> 00:51:43.240
+You'd never, you'd never see it.
+
+00:51:43.240 --> 00:51:43.860
+Oh, interesting.
+
+00:51:43.860 --> 00:51:45.580
+Because they're statics, right?
+
+00:51:45.580 --> 00:51:46.900
+Like it knows both of them.
+
+00:51:46.900 --> 00:51:47.040
+Yeah.
+
+00:51:47.360 --> 00:51:47.660
+Okay.
+
+00:51:47.660 --> 00:51:48.640
+Very interesting.
+
+00:51:48.640 --> 00:51:52.320
+So it sounds like for numerical stuff, this is quite a bit faster.
+
+00:51:52.320 --> 00:51:54.700
+Did you do any tests on the web frameworks?
+
+00:51:54.700 --> 00:51:58.960
+I mean, it's kind of appealing to say, what if I could get Flask to kind of run natively?
+
+00:51:58.960 --> 00:51:59.800
+Yeah, I have.
+
+00:51:59.860 --> 00:52:11.940
+Because when you look at what, when you think about I'm writing this code to make this website go, most of what you're doing is you're doing like a little tiny bit of code on top of a big framework that's doing most of the heavy lifting, right?
+
+00:52:11.940 --> 00:52:16.840
+So if you could make Flask do that magic faster or Django or whatever.
+
+00:52:16.840 --> 00:52:17.640
+Yeah.
+
+00:52:18.020 --> 00:52:25.520
+So the areas where Python is faster as numerical work, similar to PyPy, PyPy is a lot faster with numerical work.
+
+00:52:25.520 --> 00:52:25.760
+Yeah.
+
+00:52:25.760 --> 00:52:30.480
+It can make clear and simple assumptions and optimize based on the CPU.
+
+00:52:30.480 --> 00:52:31.380
+So that's brilliant.
+
+00:52:31.380 --> 00:52:41.320
+Areas where it's, it's sometimes it's not faster or sometimes even slower is code, which is just uses a lot of classes and very small functions.
+
+00:52:41.660 --> 00:52:47.720
+Partly just because of the way the PEP is designed, it will JIT compile functions.
+
+00:52:47.720 --> 00:52:57.560
+And if your functions are just working with custom classes and you're passing things around, then trying to decide what type things are and then how it can optimize types.
+
+00:52:57.560 --> 00:52:57.740
+Yeah.
+
+00:52:57.740 --> 00:53:04.680
+If everything is a Python, custom Python object, custom Python class, there's very little it can actually do to optimize.
+
+00:53:04.680 --> 00:53:05.160
+Yeah.
+
+00:53:05.200 --> 00:53:15.420
+And when you were talking about the specializations earlier, it's one thing to say, well, I'm passing a customer and an order object, but then they have fields themselves, each of which have potential types, right?
+
+00:53:15.420 --> 00:53:20.240
+Like it's this, this object graph, this closure of all the object graphs.
+
+00:53:20.240 --> 00:53:22.600
+And you got to look at all those types you might touch, right?
+
+00:53:22.600 --> 00:53:23.060
+Yeah.
+
+00:53:23.060 --> 00:53:25.800
+And then you've also got to check that fields exist.
+
+00:53:25.800 --> 00:53:26.580
+It's been set.
+
+00:53:26.580 --> 00:53:27.320
+It's not none.
+
+00:53:27.320 --> 00:53:28.560
+I mean, like if you Django.
+
+00:53:28.560 --> 00:53:31.360
+By the time you're done testing them all, you might as well just run it.
+
+00:53:31.360 --> 00:53:36.580
+By the time you've done all of that, you've basically just written what CPython would have done anyway.
+
+00:53:36.580 --> 00:53:36.960
+Yeah.
+
+00:53:36.960 --> 00:53:40.580
+But the difference is that if you JIT compile it, you've got to emit all those instructions.
+
+00:53:40.580 --> 00:53:51.020
+And the compiled function, the JIT compiled function ends up being bigger because, you know, if it's compiled in C, it just has one function that does that, that's shared by all libraries.
+
+00:53:51.020 --> 00:53:56.060
+Whereas in the JIT, you have to make it so that it's their standalone functions.
+
+00:53:56.460 --> 00:54:10.060
+So that's one downside is that if you're working with stuff which is similar to Django and Flask, I guess like lots of classes, lots of variables, which are all custom types, probably not going to see a performance improvement or potentially it could even be slower.
+
+00:54:10.060 --> 00:54:11.280
+Will it be transitive?
+
+00:54:11.280 --> 00:54:14.940
+If I write code that runs in Flask, let's just pick one of them.
+
+00:54:14.940 --> 00:54:17.760
+And I run Flask with Pigeon.
+
+00:54:17.760 --> 00:54:22.800
+Will that then make all my code that Flask is executing also run in Pigeon?
+
+00:54:22.920 --> 00:54:23.060
+Yeah.
+
+00:54:23.060 --> 00:54:29.120
+So maybe if I was doing like highly computational stuff in my Flask app, having to do that might be worthwhile.
+
+00:54:29.120 --> 00:54:29.760
+Yeah, definitely.
+
+00:54:29.760 --> 00:54:36.180
+And in that case, you can just enable Pigeon before those functions or you can set the threshold to be higher.
+
+00:54:36.180 --> 00:54:38.060
+That's probably what makes more sense, I think.
+
+00:54:38.060 --> 00:54:38.320
+Yeah.
+
+00:54:38.320 --> 00:54:40.120
+The other area is strings.
+
+00:54:40.120 --> 00:54:44.820
+So if you're doing a lot of work with strings, I haven't done any work on optimizing strings.
+
+00:54:44.820 --> 00:54:50.540
+And I'm not particularly sure what you would optimize either because they're so complicated.
+
+00:54:50.540 --> 00:54:56.900
+Because you're dealing all with Unicode, different encodings, different bit lengths.
+
+00:54:56.900 --> 00:55:03.340
+Yeah, I don't even know how you would improve upon CPython's string implementation, to be honest.
+
+00:55:03.680 --> 00:55:09.680
+Yeah, there's a lot of nuances to strings in all the languages about it, especially in Python, because you don't have to think about it, right?
+
+00:55:09.680 --> 00:55:19.400
+The fact that you don't know how complicated Unicode is and, you know, word alignment and null characters and so on and so on.
+
+00:55:19.400 --> 00:55:25.260
+Yeah, if you want a glimpse of how complicated it is, look at the Unicode object source file in CPython.
+
+00:55:25.260 --> 00:55:26.500
+Is it big?
+
+00:55:26.500 --> 00:55:27.900
+It's an absolute monster.
+
+00:55:27.900 --> 00:55:29.340
+I bet it is.
+
+00:55:29.340 --> 00:55:31.640
+It's probably more complicated than C of L, actually.
+
+00:55:31.640 --> 00:55:32.300
+It's...
+
+00:55:32.300 --> 00:55:33.060
+Oh my goodness.
+
+00:55:33.060 --> 00:55:33.500
+Yeah.
+
+00:55:33.500 --> 00:55:34.940
+All of that for emojis.
+
+00:55:34.940 --> 00:55:35.800
+For emojis.
+
+00:55:35.800 --> 00:55:37.700
+Okay, I understand there's other languages.
+
+00:55:37.700 --> 00:55:39.500
+No, interesting.
+
+00:55:39.500 --> 00:55:48.580
+So one thing I wanted to ask you about here, I was hunting around on the screen for it, is it's cool that you can compile these things down and run them as native machine instructions,
+
+00:55:48.580 --> 00:55:52.880
+instead of piping them through C of L.C as single line operations.
+
+00:55:52.880 --> 00:55:53.360
+That's great.
+
+00:55:53.360 --> 00:56:00.960
+But when I think of the stuff that compilers can do and JIT compilers, it's a lot about the optimizations.
+
+00:56:00.960 --> 00:56:03.100
+It's like, I saw this function and this function.
+
+00:56:03.100 --> 00:56:04.560
+Actually, we're going to inline that one.
+
+00:56:04.560 --> 00:56:11.300
+And this one, we're going to rewrite this as some other thing that's going to be more efficient because we're seeing that.
+
+00:56:11.300 --> 00:56:13.280
+And so you do have some optimizations, right?
+
+00:56:13.280 --> 00:56:14.800
+Like that's part of the magic.
+
+00:56:14.800 --> 00:56:15.200
+Yeah.
+
+00:56:15.320 --> 00:56:19.320
+So I've kind of documented them as best I can on the Pigeon documentation.
+
+00:56:19.320 --> 00:56:21.540
+There's a section called built-in optimizations.
+
+00:56:21.540 --> 00:56:23.320
+And I've given them all numbers.
+
+00:56:23.320 --> 00:56:30.340
+And if it uses that optimization, it will flag the function to say, oh, I'd use this optimization on this function.
+
+00:56:30.340 --> 00:56:33.680
+And then in the documentation, I'll explain what's the background.
+
+00:56:33.680 --> 00:56:34.760
+What was the idea?
+
+00:56:34.760 --> 00:56:36.460
+What difference does it make?
+
+00:56:36.660 --> 00:56:40.340
+You want to give some examples from some of these, like the is one, for example?
+
+00:56:40.340 --> 00:56:40.780
+Yeah.
+
+00:56:40.780 --> 00:56:49.000
+So if you're using the is operator in Python, so if something is false, or you actually probably use not something.
+
+00:56:49.000 --> 00:56:50.400
+Is none or something like that.
+
+00:56:50.400 --> 00:56:51.140
+Yeah, is none.
+
+00:56:51.140 --> 00:56:54.780
+Then it won't run the pyis function.
+
+00:56:54.780 --> 00:56:57.660
+It won't run the C API to do an is comparison.
+
+00:56:57.660 --> 00:57:00.960
+It will just look at the address of both objects and see if they're the same.
+
+00:57:01.540 --> 00:57:06.740
+Because is actually asking, are these objects the same, not are they equivalent, right?
+
+00:57:06.740 --> 00:57:10.580
+So the same in CPython is the pointer addresses are equal.
+
+00:57:10.580 --> 00:57:11.160
+Yeah, exactly.
+
+00:57:11.160 --> 00:57:14.040
+It will just compile that down to a simple pointer comparison.
+
+00:57:14.040 --> 00:57:18.540
+That's actually one of the first ones I wrote, and it was good to learn.
+
+00:57:18.540 --> 00:57:21.700
+Also, when it's doing comparisons for small numbers.
+
+00:57:22.240 --> 00:57:28.300
+So Python inter, it kind of immortalizes numbers between, I can't remember the range.
+
+00:57:28.300 --> 00:57:29.560
+Negative five and 256?
+
+00:57:29.560 --> 00:57:30.540
+Yeah, that's it.
+
+00:57:30.540 --> 00:57:32.540
+Because they use so much that...
+
+00:57:32.540 --> 00:57:34.000
+Maybe 255, but basically.
+
+00:57:34.000 --> 00:57:35.020
+It's around that many.
+
+00:57:35.020 --> 00:57:40.500
+It immortalizes them, and then that keeps them as constant objects so that they're just reused.
+
+00:57:40.500 --> 00:57:45.360
+So if you create a new integer with the number one, it will just reuse the same number one that it used before.
+
+00:57:45.360 --> 00:57:45.680
+Right.
+
+00:57:45.680 --> 00:57:47.140
+Because they're not created on the stack.
+
+00:57:47.140 --> 00:57:49.540
+They're like complicated things on the heap.
+
+00:57:49.540 --> 00:57:50.120
+So yeah.
+
+00:57:50.120 --> 00:57:50.560
+Exactly.
+
+00:57:50.800 --> 00:57:58.320
+So if you do, if something equals equals 25, Pidgin will go, oh, well, I know 25 is an intern number.
+
+00:57:58.320 --> 00:58:03.940
+So I'm actually just going to do a pointer comparison instead of a value comparison if the left-hand side is a number.
+
+00:58:03.940 --> 00:58:09.140
+So that they have to sort of like little things like this, which make small differences, but when you add up...
+
+00:58:09.140 --> 00:58:09.540
+They add up, right?
+
+00:58:09.540 --> 00:58:10.040
+Yeah.
+
+00:58:10.040 --> 00:58:14.560
+So I felt like, I don't know where you are now from where you were when you spoke at PyCon,
+
+00:58:14.560 --> 00:58:18.480
+but I feel like this is an area that people could come contribute to.
+
+00:58:18.660 --> 00:58:22.540
+This is an area for growth that doesn't require a lot of changes.
+
+00:58:22.540 --> 00:58:23.580
+It could be super focused.
+
+00:58:23.580 --> 00:58:27.520
+But if you see this situation, you know, here's one more way to make it faster.
+
+00:58:27.520 --> 00:58:28.040
+Absolutely.
+
+00:58:28.040 --> 00:58:35.560
+So yeah, this is one area where I was hoping that the research that I was doing whilst writing Pidgin could contribute to other projects.
+
+00:58:36.380 --> 00:58:41.660
+And I'm going to, I've been talking to Carl Friedrich-Osch as well, who works on PyPy.
+
+00:58:41.660 --> 00:58:50.280
+And we're going to do some pair programming at some point to see kind of like how different projects work and stuff like that.
+
+00:58:50.280 --> 00:58:58.500
+But kind of hopefully these optimizations can be learned from and then used when CPython gets to implementing its JIT.
+
+00:58:58.500 --> 00:58:58.760
+Yeah.
+
+00:58:58.760 --> 00:59:03.920
+Surely the .NET compiler has all sorts of optimizations in it.
+
+00:59:03.920 --> 00:59:06.720
+Are you already taking advantage of those to some degree?
+
+00:59:06.720 --> 00:59:07.620
+Yeah, some of them.
+
+00:59:07.620 --> 00:59:09.840
+Just by nature of letting it run, basically.
+
+00:59:09.840 --> 00:59:11.320
+Yeah, some of those optimize it.
+
+00:59:11.320 --> 00:59:12.760
+It does a lot of them already.
+
+00:59:13.420 --> 00:59:18.360
+And I've been working with the compiler team on the .NET project as well.
+
+00:59:18.360 --> 00:59:22.600
+Pidgin is one of the only projects to use the compiler directly.
+
+00:59:22.600 --> 00:59:32.800
+Even though it can be used in that way, it's, it wasn't, it was really, I think it was designed to be run directly, but it's not like advertised as an off the shelf JIT.
+
+00:59:32.800 --> 00:59:36.140
+So yeah, there aren't many projects that are using it in that way.
+
+00:59:36.140 --> 00:59:40.520
+And I do work with the compiler team, like specific test cases and stuff as well.
+
+00:59:40.520 --> 00:59:51.360
+You do have that advantage of being on the inside at Microsoft, even if you're like half a world away, you still can get direct access remotely, which is like being down the street these days.
+
+00:59:51.360 --> 00:59:52.340
+Yeah, I've done everything.
+
+00:59:52.340 --> 00:59:53.520
+It's all been via GitHub though.
+
+00:59:53.520 --> 00:59:59.400
+So I think as far as they're concerned, I'm just another name on GitHub, but like I don't, it doesn't.
+
+00:59:59.400 --> 01:00:00.900
+They might not even know, right?
+
+01:00:00.900 --> 01:00:02.140
+I probably didn't even know.
+
+01:00:02.140 --> 01:00:02.380
+Yeah.
+
+01:00:02.380 --> 01:00:03.140
+That I work.
+
+01:00:03.140 --> 01:00:04.280
+Yeah.
+
+01:00:04.280 --> 01:00:06.300
+Let's see.
+
+01:00:06.300 --> 01:00:06.800
+What else?
+
+01:00:07.120 --> 01:00:10.740
+I think we pretty much have covered it given the time that we got.
+
+01:00:10.740 --> 01:00:18.320
+I mean, another area that's interesting is how does it compare to the other things that have been done before it or going along a parallel?
+
+01:00:18.320 --> 01:00:22.440
+And, you know, you do have a whole section on the read me on the GitHub page.
+
+01:00:22.440 --> 01:00:29.080
+Like how does this compare to X, Y, Z, PyPy, Piston, Numba, Iron Python, and so on.
+
+01:00:29.080 --> 01:00:31.320
+Do you want to maybe just have a quick statement about that?
+
+01:00:31.460 --> 01:00:33.840
+Yeah, I think it's really hard to compare them.
+
+01:00:33.840 --> 01:00:39.700
+So probably the most obvious ones to compare it with would be Cite and Numba and PyPy.
+
+01:00:39.700 --> 01:00:44.220
+So PyPy is a Python interpreter that has a JIT.
+
+01:00:44.220 --> 01:00:48.840
+So it interprets, compiles, and runs Python code written in Python.
+
+01:00:48.840 --> 01:00:50.380
+PyPy has been around.
+
+01:00:50.380 --> 01:00:50.660
+Right.
+
+01:00:50.660 --> 01:00:55.880
+It's like a fork of Python that was rewritten to behave differently rather than PEP523, right?
+
+01:00:55.980 --> 01:00:56.460
+Yeah, exactly.
+
+01:00:56.460 --> 01:00:58.520
+So it's not Cite Python is written in C.
+
+01:00:58.520 --> 01:01:05.860
+PyPy is written in Python and probably significantly faster in many cases.
+
+01:01:05.860 --> 01:01:07.660
+It's a very mature project.
+
+01:01:07.660 --> 01:01:14.200
+But obviously that there's limitations around C APIs and some things don't work in PyPy.
+
+01:01:14.200 --> 01:01:16.600
+Numba is a JIT.
+
+01:01:16.600 --> 01:01:18.840
+It's a JIT specific for NumPy.
+
+01:01:19.240 --> 01:01:27.680
+If you're using NumPy, then if you use Numba, Numba can JIT compile NumPy data arrays and stuff like that.
+
+01:01:27.680 --> 01:01:29.900
+That's actually a very specific use case.
+
+01:01:29.900 --> 01:01:30.260
+Right.
+
+01:01:30.260 --> 01:01:30.700
+That's great.
+
+01:01:30.700 --> 01:01:33.560
+But if you're not doing NumPy, then not too much.
+
+01:01:33.560 --> 01:01:37.640
+In any other use case, it would make very little, if any, difference at all.
+
+01:01:37.640 --> 01:01:40.580
+And then Siphon is not a JIT.
+
+01:01:40.580 --> 01:01:41.560
+It's an AOT compiler.
+
+01:01:42.700 --> 01:01:46.440
+And it's a way of annotating Python code with concrete types.
+
+01:01:46.440 --> 01:01:49.200
+And then it compiles them into C.
+
+01:01:49.200 --> 01:01:50.980
+Concrete compiles them into C extensions.
+
+01:01:50.980 --> 01:01:51.440
+Yeah.
+
+01:01:51.440 --> 01:01:56.120
+It's a little bit like what you're talking about, trying to understand what are these types and then can we create a specialization.
+
+01:01:56.120 --> 01:01:59.180
+But it's the developer who just says, no, these are integers.
+
+01:01:59.180 --> 01:02:00.480
+This is the list.
+
+01:02:00.480 --> 01:02:01.280
+For sure.
+
+01:02:01.280 --> 01:02:02.160
+Go with it.
+
+01:02:02.160 --> 01:02:02.400
+Yeah.
+
+01:02:02.400 --> 01:02:05.120
+That's the point where you actually specify the length of the integer as well.
+
+01:02:05.120 --> 01:02:14.680
+So in Siphon, you would say this is a 64-bit integer so that it knows that it can be converted into a 64-bit integer in C.
+
+01:02:14.680 --> 01:02:17.200
+Pidgin is probably the closest to Siphon.
+
+01:02:17.200 --> 01:02:21.100
+But obviously with Siphon, you have to compile it to a C extension ahead of time.
+
+01:02:21.100 --> 01:02:27.440
+Whereas with Pidgin, you just import it into Python and just turn it on and it just runs and compiles live.
+
+01:02:27.440 --> 01:02:35.700
+And it will, yeah, you don't have to have different compiled versions of your app or your library, not necessarily because of this anyway, for different platforms, right?
+
+01:02:35.700 --> 01:02:39.560
+And you don't have to annotate the code in this sort of special syntax either.
+
+01:02:39.560 --> 01:02:40.040
+Yeah.
+
+01:02:40.040 --> 01:02:43.160
+Well, let's close this out with a question on that.
+
+01:02:43.160 --> 01:02:54.480
+So in Python, we've been able to say optionally that this thing is an integer, you know, x colon int, or it's an optional integer or it's a customer or whatever the heck it is.
+
+01:02:54.660 --> 01:02:58.980
+We've had these type annotations and traditionally they've meant nothing, right?
+
+01:02:58.980 --> 01:03:00.760
+Except for if you run tools against them.
+
+01:03:00.760 --> 01:03:06.840
+On the other hand, we've had things come along like Pidantic, like FastAPI that look at that and go, you know what?
+
+01:03:06.840 --> 01:03:10.700
+I'm going to do something with that because I got a string because this is the web and that's all I usually get.
+
+01:03:10.700 --> 01:03:13.540
+I'm going to make that into an int because you said it's an int.
+
+01:03:13.540 --> 01:03:18.840
+Is there a scenario where type annotations play into this to enhance it somehow?
+
+01:03:18.840 --> 01:03:21.320
+I'm against that idea, potentially.
+
+01:03:21.320 --> 01:03:23.720
+I mean, that's how Siphon works.
+
+01:03:23.720 --> 01:03:24.120
+Yeah.
+
+01:03:24.260 --> 01:03:33.180
+I think, and with type annotations as well, having a type checker is great until the types are wrong and it's not a fault of your own.
+
+01:03:33.180 --> 01:03:42.400
+And having work on like strongly typed languages, like C Sharp, C Sharp is brilliant, except when you need to do things like reflection.
+
+01:03:42.680 --> 01:03:47.480
+So let's say you're working with JSON data or YAML, for example.
+
+01:03:47.480 --> 01:03:52.720
+And working with JSON and YAML in C Sharp is incredibly hard.
+
+01:03:53.680 --> 01:03:59.820
+Because you're like, oh, I've had to do parsing YAML files in Java.
+
+01:03:59.820 --> 01:04:12.000
+It's incredibly difficult because you're like, oh, well, this could be a list of strings or it could be a dictionary where the key is a string, but sometimes it's a number.
+
+01:04:12.560 --> 01:04:14.260
+Which is like YAML is like that sometimes.
+
+01:04:14.260 --> 01:04:15.340
+And JSON is like that.
+
+01:04:15.340 --> 01:04:16.120
+It's completely free.
+
+01:04:16.120 --> 01:04:20.840
+So when you're working with dynamic content using strongly typed languages is extremely difficult.
+
+01:04:21.480 --> 01:04:23.900
+It just gets in the way and just makes your life harder.
+
+01:04:23.900 --> 01:04:31.180
+And the compiler just complains and just won't let you parse because it's saying, oh, well, that's not compliant with my view on the world.
+
+01:04:31.180 --> 01:04:37.940
+With Python, I think it's cool to say, okay, if I just tag this as an integer, then it should be able to optimize it for integers.
+
+01:04:38.120 --> 01:04:39.840
+And I think that's what Mark was suggesting.
+
+01:04:39.840 --> 01:04:41.820
+If it stops there, that's fine.
+
+01:04:41.820 --> 01:04:44.960
+I think if it goes beyond that, then that's where things get very, very complicated.
+
+01:04:44.960 --> 01:04:50.380
+And it just becomes a thing that's in the way being noisy and it slows you down.
+
+01:04:50.380 --> 01:04:56.140
+That's where I have a strong disagreement with it is that we use Python because it's fast to develop in.
+
+01:04:56.140 --> 01:05:03.160
+And it's fast to develop in because, you know, if you know what you're trying to get it to do, then the compiler doesn't really give you any grief.
+
+01:05:03.160 --> 01:05:04.960
+If it's syntactically, it's okay.
+
+01:05:04.960 --> 01:05:05.840
+I'll just try and run it.
+
+01:05:05.840 --> 01:05:06.080
+Yeah.
+
+01:05:06.220 --> 01:05:10.380
+And I think the thing that's most similar to this is TypeScript.
+
+01:05:10.380 --> 01:05:14.600
+And my experiences with TypeScript have been often met with frustration.
+
+01:05:14.600 --> 01:05:17.140
+I think it's really cool that you can write.
+
+01:05:17.140 --> 01:05:21.440
+The language specification is really neat, but I want to use this library and that thing and pull them together.
+
+01:05:21.440 --> 01:05:30.200
+And if that thing doesn't have the type specified just right, I can't get JavaScript to pop out the other side because the transpiler gives you a compiler error.
+
+01:05:30.200 --> 01:05:31.220
+Like, this doesn't work right.
+
+01:05:31.220 --> 01:05:32.800
+Well, they know it's going to work right.
+
+01:05:32.800 --> 01:05:34.500
+Just let this little part go through.
+
+01:05:34.660 --> 01:05:36.180
+I just, I don't want to re...
+
+01:05:36.180 --> 01:05:39.260
+I know there's ways to say this is just any and stuff, but still.
+
+01:05:39.340 --> 01:05:47.120
+I feel like my experience was bumping up against that stuff, even though it's kind of the same as Python type annotations in a lot of ways.
+
+01:05:47.120 --> 01:05:47.560
+Yeah.
+
+01:05:47.560 --> 01:05:49.040
+And under the hood, it's still dynamic.
+
+01:05:49.040 --> 01:05:49.580
+Yeah.
+
+01:05:49.580 --> 01:05:50.400
+Yeah, exactly.
+
+01:05:50.400 --> 01:05:56.020
+At runtime, it would still be the same thing, but you won't get to the runtime because you can't get the stuff compiled.
+
+01:05:56.020 --> 01:05:56.440
+Yeah.
+
+01:05:56.460 --> 01:06:01.640
+Or it does really weird things at runtime that at compile time, it made assumptions that wouldn't happen.
+
+01:06:01.640 --> 01:06:01.860
+All right.
+
+01:06:01.860 --> 01:06:07.020
+Let me throw one quick thing out there before you pass final judgment on this type thing.
+
+01:06:07.020 --> 01:06:08.140
+Because you're right.
+
+01:06:08.140 --> 01:06:15.320
+I could write a thing that says my function takes an int and a string, and I could run my pi against my code.
+
+01:06:15.320 --> 01:06:18.660
+And sure enough, it only takes ints and strings in these situations.
+
+01:06:18.660 --> 01:06:20.640
+But if it's a library, all bets are off.
+
+01:06:20.640 --> 01:06:27.020
+There's nothing that says people who use your library are going to run my pi and listen to that or do anything, right?
+
+01:06:27.020 --> 01:06:32.720
+They could write in Notepad if they had no self-respect, but that would like you could write whatever you want, right?
+
+01:06:32.720 --> 01:06:35.900
+And then you could just feed it on and then you'd have these problems.
+
+01:06:35.900 --> 01:06:47.240
+That said, over on the Pydantic world, there is a validator, a decorator called at validate arguments that will make sure at runtime, they really are a string in an int.
+
+01:06:47.240 --> 01:06:47.820
+Yes.
+
+01:06:48.080 --> 01:06:49.140
+To make you feel any better?
+
+01:06:49.140 --> 01:06:54.700
+Probably not, because the transitive closure of objects is too complicated to check and describe.
+
+01:06:54.700 --> 01:06:57.480
+The validate arguments is, I think, it's a convenience function.
+
+01:06:57.480 --> 01:07:08.600
+It's there because you often have to validate data, user-provided data that's coming in from an interface, like a web interface, or via a file, or an API of some sort.
+
+01:07:08.600 --> 01:07:13.840
+So if people are submitting user-provided data, then you want to have to validate the types.
+
+01:07:13.840 --> 01:07:16.680
+And that is just a lot of boilerplate code, and it's annoying to write.
+
+01:07:17.500 --> 01:07:20.460
+As a convenience function, let's write this thing.
+
+01:07:20.460 --> 01:07:20.760
+Right.
+
+01:07:20.760 --> 01:07:24.180
+Probably because we're going to immediately try to convert it in the next thing, right?
+
+01:07:24.180 --> 01:07:24.480
+Yeah.
+
+01:07:24.480 --> 01:07:25.100
+Yeah, exactly.
+
+01:07:25.100 --> 01:07:34.720
+So I think it's quite different to using it internally to make changes in terms of how the code is compiled.
+
+01:07:34.720 --> 01:07:35.200
+Yeah.
+
+01:07:35.200 --> 01:07:39.040
+For numbers, like I said, numbers and strings and base types, I think is cool.
+
+01:07:39.540 --> 01:07:43.100
+But for objects, like which fields do you assume exist?
+
+01:07:43.100 --> 01:07:44.140
+Yes, exactly.
+
+01:07:44.140 --> 01:07:47.380
+And then do they all have to match the types or just the two that you touch?
+
+01:07:47.380 --> 01:07:48.000
+Yeah.
+
+01:07:48.000 --> 01:07:49.300
+You've got an attribute there.
+
+01:07:49.300 --> 01:07:51.440
+Like sometimes it has a getter and a setter.
+
+01:07:51.440 --> 01:07:53.660
+Sometimes it's just an attribute.
+
+01:07:53.660 --> 01:07:58.480
+Sometimes it's a descriptor that inside the descriptor is the thing you actually want.
+
+01:07:58.600 --> 01:07:59.380
+Is that the right type?
+
+01:07:59.380 --> 01:07:59.860
+Yeah, you're right.
+
+01:07:59.860 --> 01:08:00.520
+It's insane.
+
+01:08:00.520 --> 01:08:01.360
+It's just, oh yeah.
+
+01:08:01.360 --> 01:08:06.340
+Once you kind of open, I think that once you open custom types, then it just kind of mushrooms
+
+01:08:06.340 --> 01:08:07.140
+into this.
+
+01:08:07.140 --> 01:08:07.500
+Sure.
+
+01:08:07.860 --> 01:08:12.240
+And that's why you see things like Cython and stuff having like little fragments of here's
+
+01:08:12.240 --> 01:08:16.080
+some limited code that we're going to use, often fundamental types.
+
+01:08:16.080 --> 01:08:16.300
+Yeah.
+
+01:08:16.300 --> 01:08:16.640
+Yeah.
+
+01:08:16.640 --> 01:08:16.840
+Cool.
+
+01:08:16.840 --> 01:08:18.600
+All right, Anthony, this is really awesome.
+
+01:08:18.600 --> 01:08:21.060
+I could tell you've done a massive amount of work on it.
+
+01:08:21.060 --> 01:08:26.120
+That's more stuff I want to talk to you about, but I think we're out of time, like calling
+
+01:08:26.120 --> 01:08:27.520
+into .NET, stuff like that.
+
+01:08:27.520 --> 01:08:29.920
+But we'll save that for some other time, huh?
+
+01:08:29.920 --> 01:08:30.300
+Yeah.
+
+01:08:30.300 --> 01:08:34.260
+Until you have a little more progress.
+
+01:08:34.260 --> 01:08:37.600
+Now, you know, there's always the two questions at the end of the show.
+
+01:08:37.600 --> 01:08:41.520
+So if you're going to write some code, what editor are you using these days?
+
+01:08:41.520 --> 01:08:42.420
+VS Code.
+
+01:08:42.420 --> 01:08:42.860
+Right on.
+
+01:08:42.860 --> 01:08:43.120
+Yeah.
+
+01:08:43.120 --> 01:08:45.700
+And notable IPI library.
+
+01:08:45.700 --> 01:08:47.040
+I mean, it could be Pigeon.
+
+01:08:47.040 --> 01:08:48.080
+Anything else?
+
+01:08:48.080 --> 01:08:50.600
+It's like you come across like, wow, this is awesome.
+
+01:08:50.600 --> 01:08:50.860
+Yeah.
+
+01:08:50.860 --> 01:08:51.800
+I think I mentioned it before.
+
+01:08:51.800 --> 01:08:53.820
+Tortoise, I'm a big fan of at the moment.
+
+01:08:53.820 --> 01:08:54.060
+Yeah.
+
+01:08:54.060 --> 01:08:54.820
+Tortoise ORM.
+
+01:08:54.820 --> 01:08:55.240
+Yeah.
+
+01:08:55.240 --> 01:08:56.980
+It's a nice async ORM.
+
+01:08:56.980 --> 01:08:57.600
+Yeah.
+
+01:08:57.600 --> 01:08:59.300
+And Beanie as well.
+
+01:08:59.300 --> 01:09:01.820
+I'm really enjoying playing with Beanie as an ODM.
+
+01:09:01.820 --> 01:09:02.380
+Yeah.
+
+01:09:02.380 --> 01:09:04.500
+Async ODM on top of Mongo.
+
+01:09:04.500 --> 01:09:04.980
+Yep.
+
+01:09:04.980 --> 01:09:05.880
+Beanie is very cool.
+
+01:09:05.880 --> 01:09:10.180
+I'm actually having Roman Wright on the show talk about Beanie not too far out as well.
+
+01:09:10.180 --> 01:09:15.580
+And Beanie is cool because it's basically Pydantic plus async and await on top of MongoDB, which
+
+01:09:15.580 --> 01:09:15.900
+is cool.
+
+01:09:15.900 --> 01:09:16.580
+Can I have three?
+
+01:09:17.100 --> 01:09:17.980
+You can have three.
+
+01:09:17.980 --> 01:09:26.980
+I released like a small package called Hathi, which is a SQL attack tool for Postgres, MySQL, and SQL Server.
+
+01:09:26.980 --> 01:09:28.480
+I'm looking at your GitHub profile here.
+
+01:09:28.480 --> 01:09:33.080
+You've got one of these fancy profiles with the new readme that shows up and all of your stars.
+
+01:09:33.080 --> 01:09:33.700
+Look at this.
+
+01:09:33.700 --> 01:09:34.020
+Yeah.
+
+01:09:34.020 --> 01:09:35.540
+Like I made a custom graphic for everything.
+
+01:09:35.940 --> 01:09:36.680
+Yeah, you did.
+
+01:09:36.680 --> 01:09:37.340
+That's fantastic.
+
+01:09:37.340 --> 01:09:38.260
+Okay.
+
+01:09:38.260 --> 01:09:38.980
+What is this one called?
+
+01:09:38.980 --> 01:09:39.560
+Hathi.
+
+01:09:39.560 --> 01:09:41.400
+H-A-T-H.
+
+01:09:41.400 --> 01:09:42.980
+I have too many repositories.
+
+01:09:42.980 --> 01:09:43.440
+I need to go up.
+
+01:09:43.440 --> 01:09:43.780
+Hathi.
+
+01:09:43.780 --> 01:09:44.220
+Got it.
+
+01:09:44.360 --> 01:09:53.980
+It is a dictionary attack tool for Postgres, MySQL, and MSSQL, Microsoft SQL Server designed for internal testing, of course.
+
+01:09:53.980 --> 01:09:54.660
+Don't be bad.
+
+01:09:54.660 --> 01:09:55.080
+Yeah.
+
+01:09:55.080 --> 01:09:56.840
+So don't break the law.
+
+01:09:56.840 --> 01:10:04.940
+And yeah, I've been using it to test like internal, not internal stuff, but test environments and look at like bad passwords.
+
+01:10:05.480 --> 01:10:11.820
+See if like an admin has a login, like password, password one or admin or super user has a login or whatever.
+
+01:10:11.820 --> 01:10:12.260
+Yeah.
+
+01:10:12.260 --> 01:10:17.680
+It was also a test of like I think an await networking and how fast I could make it.
+
+01:10:17.680 --> 01:10:21.180
+It can do up to 120 login attempts a second.
+
+01:10:21.180 --> 01:10:23.720
+So yeah, on my machine.
+
+01:10:23.720 --> 01:10:30.140
+But if you maybe this is a four core Mac, but yeah, if you had a few more CPUs, you could probably get a bit more than that.
+
+01:10:30.140 --> 01:10:32.120
+But yeah, it'll go through a few thousand passwords.
+
+01:10:32.600 --> 01:10:37.600
+And there's a password list in there as well of about 10,000 common database passwords.
+
+01:10:37.600 --> 01:10:37.980
+Yeah.
+
+01:10:37.980 --> 01:10:38.280
+Nice.
+
+01:10:38.280 --> 01:10:40.260
+So yeah, just make sure your password is not on the list.
+
+01:10:40.260 --> 01:10:43.880
+And if it is, you can raise a pull request to remove it.
+
+01:10:43.880 --> 01:10:44.440
+Yeah.
+
+01:10:44.440 --> 01:10:45.020
+Yeah.
+
+01:10:45.020 --> 01:10:48.200
+You don't want to have your database open.
+
+01:10:48.200 --> 01:10:53.480
+Like it doesn't get much worse than I just have read write access to your database.
+
+01:10:53.480 --> 01:10:55.640
+But that's what this would test for, right?
+
+01:10:55.640 --> 01:10:55.920
+Yeah.
+
+01:10:55.920 --> 01:10:56.300
+Yeah.
+
+01:10:56.300 --> 01:11:01.620
+So you can scan a cluster or a machine and see if it can predict what the username password is.
+
+01:11:01.620 --> 01:11:01.920
+Yeah.
+
+01:11:01.920 --> 01:11:02.280
+Cool.
+
+01:11:02.480 --> 01:11:02.700
+All right.
+
+01:11:02.700 --> 01:11:04.140
+Well, those are three great recommendations.
+
+01:11:04.140 --> 01:11:07.180
+It's awesome to have you back on the show.
+
+01:11:07.180 --> 01:11:08.960
+And congratulations on the work here.
+
+01:11:08.960 --> 01:11:10.040
+You know, final call to action.
+
+01:11:10.040 --> 01:11:12.040
+You know, people maybe to try Pigeon.
+
+01:11:12.040 --> 01:11:13.300
+You want them to contribute.
+
+01:11:13.300 --> 01:11:14.500
+Got other ideas.
+
+01:11:14.500 --> 01:11:15.340
+What do you say?
+
+01:11:15.340 --> 01:11:15.560
+Yeah.
+
+01:11:15.560 --> 01:11:17.140
+Go to trypigeon.com.
+
+01:11:17.140 --> 01:11:17.720
+Yeah.
+
+01:11:17.720 --> 01:11:21.440
+On trypigeon.com, you'll see at the top, you can try it out live.
+
+01:11:21.440 --> 01:11:22.400
+Link to documentation.
+
+01:11:22.400 --> 01:11:23.700
+Link to download.
+
+01:11:23.700 --> 01:11:24.460
+Yeah.
+
+01:11:24.460 --> 01:11:30.900
+I'd love more contributions or discussion, I think, around what optimizations you could have and people using it and checking it out.
+
+01:11:31.360 --> 01:11:34.560
+And if you have any issues, you just raise them on GitHub and I'll check them out.
+
+01:11:34.560 --> 01:11:34.880
+All right.
+
+01:11:34.880 --> 01:11:35.380
+Fantastic.
+
+01:11:35.380 --> 01:11:36.260
+Well done.
+
+01:11:36.260 --> 01:11:37.480
+I can tell this is a ton of work.
+
+01:11:37.480 --> 01:11:40.040
+So you've come really a long ways.
+
+01:11:40.040 --> 01:11:42.680
+And congrats on 1.0 when it comes out in a few days.
+
+01:11:42.680 --> 01:11:43.160
+Thanks, Michael.
+
+01:11:43.320 --> 01:11:43.480
+Yeah.
+
+01:11:43.480 --> 01:11:43.840
+You bet.
+
+01:11:43.840 --> 01:11:44.400
+See ya.
+
+01:11:44.400 --> 01:11:44.700
+See ya.
+
+01:11:44.700 --> 01:11:44.720
+See ya.
+
+01:11:45.600 --> 01:11:48.340
+This has been another episode of Talk Python to Me.
+
+01:11:48.860 --> 01:11:50.100
+Thank you to our sponsors.
+
+01:11:50.100 --> 01:11:51.760
+Be sure to check out what they're offering.
+
+01:11:51.760 --> 01:11:53.180
+It really helps support the show.
+
+01:11:53.180 --> 01:11:58.060
+Choose Shortcut, formerly Clubhouse.io, for tracking all of your project's work.
+
+01:11:58.060 --> 01:12:01.440
+Because you shouldn't have to project manage your project management.
+
+01:12:01.440 --> 01:12:04.280
+Visit talkpython.fm/shortcut.
+
+01:12:04.280 --> 01:12:09.280
+Simplify your infrastructure and cut your cloud bills in half with Linode's Linux virtual machines.
+
+01:12:09.280 --> 01:12:12.640
+Develop, deploy, and scale your modern applications faster and easier.
+
+01:12:13.060 --> 01:12:17.620
+Visit talkpython.fm/Linode and click the Create Free Account button to get started.
+
+01:12:17.620 --> 01:12:21.320
+Do you need a great automatic speech-to-text API?
+
+01:12:21.320 --> 01:12:23.860
+Get human-level accuracy in just a few lines of code.
+
+01:12:23.860 --> 01:12:26.600
+Visit talkpython.fm/assemblyai.
+
+01:12:26.600 --> 01:12:28.480
+Want to level up your Python?
+
+01:12:28.480 --> 01:12:32.540
+We have one of the largest catalogs of Python video courses over at Talk Python.
+
+01:12:32.540 --> 01:12:37.720
+Our content ranges from true beginners to deeply advanced topics like memory and async.
+
+01:12:37.720 --> 01:12:40.380
+And best of all, there's not a subscription in sight.
+
+01:12:40.760 --> 01:12:43.280
+Check it out for yourself at training.talkpython.fm.
+
+01:12:43.280 --> 01:12:45.180
+Be sure to subscribe to the show.
+
+01:12:45.180 --> 01:12:47.960
+Open your favorite podcast app and search for Python.
+
+01:12:47.960 --> 01:12:49.280
+We should be right at the top.
+
+01:12:49.280 --> 01:12:52.220
+You can also find the iTunes feed at /itunes,
+
+01:12:52.220 --> 01:12:54.440
+the Google Play feed at /play,
+
+01:12:54.440 --> 01:12:58.640
+and the direct RSS feed at /rss on talkpython.fm.
+
+01:12:58.640 --> 01:13:02.060
+We're live streaming most of our recordings these days.
+
+01:13:02.060 --> 01:13:05.480
+If you want to be part of the show and have your comments featured on the air,
+
+01:13:05.480 --> 01:13:09.860
+be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+01:13:10.300 --> 01:13:11.760
+This is your host, Michael Kennedy.
+
+01:13:11.760 --> 01:13:13.040
+Thanks so much for listening.
+
+01:13:13.040 --> 01:13:14.200
+I really appreciate it.
+
+01:13:14.200 --> 01:13:16.120
+Now get out there and write some Python code.
+
+01:13:16.120 --> 01:13:16.180
+Thank you.
+
+01:13:16.180 --> 01:13:17.000
+Bye.
+
+01:13:17.000 --> 01:13:17.000
+Bye.
+
+01:13:17.000 --> 01:13:17.000
+Bye.
+
+01:13:17.000 --> 01:13:17.000
+Bye.
+
+01:13:17.000 --> 01:13:17.100
+Bye.
+
+01:13:17.100 --> 01:13:17.360
+Bye.
+
+01:13:17.360 --> 01:13:17.480
+Bye.
+
+01:13:17.480 --> 01:13:18.300
+Bye.
+
+01:13:18.300 --> 01:13:18.380
+Bye.
+
+01:13:18.380 --> 01:13:18.600
+Bye.
+
+01:13:18.600 --> 01:13:19.060
+Bye.
+
+01:13:19.060 --> 01:13:19.240
+Bye.
+
+01:13:19.240 --> 01:13:19.520
+Bye.
+
+01:13:19.520 --> 01:13:20.240
+Bye.
+
+01:13:20.240 --> 01:13:21.060
+Bye.
+
+01:13:21.060 --> 01:13:21.060
+Bye.
+
+01:13:21.060 --> 01:13:21.060
+Bye.
+
+01:13:21.060 --> 01:13:21.060
+Bye.
+
+01:13:21.060 --> 01:13:21.380
+Bye.
+
+01:13:21.380 --> 01:13:21.960
+Bye.
+
+01:13:21.960 --> 01:13:21.960
+Bye.
+
+01:13:21.960 --> 01:13:22.240
+Bye.
+
+01:13:22.240 --> 01:13:23.060
+Bye.
+
+01:13:23.060 --> 01:13:23.060
+Bye.
+
+01:13:23.060 --> 01:13:23.960
+Bye.
+
+01:13:23.960 --> 01:13:23.960
+Bye.
+
+01:13:23.960 --> 01:13:24.240
+Bye.
+
+01:13:24.240 --> 01:13:24.240
+Bye.
+
+01:13:24.240 --> 01:13:26.240
+Bye.
+
+01:13:26.240 --> 01:13:28.240
+Bye.
+
+01:13:28.240 --> 01:13:30.240
+Bye.
+
+01:13:30.240 --> 01:13:32.240
+Bye.
+
+01:13:32.240 --> 01:13:34.240
+Bye.
+
+01:13:34.240 --> 01:13:34.740
+you
+
+01:13:34.740 --> 01:13:36.740
+Thank you.
+
+01:13:36.740 --> 01:14:06.720
+Thank you.
+

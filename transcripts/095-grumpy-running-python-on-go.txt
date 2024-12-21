@@ -1,0 +1,1880 @@
+00:00:00 Google runs millions of lines of Python code.
+
+00:00:02 The front-end servers that drive YouTube.com and YouTube's API are primarily written in Python,
+
+00:00:09 and they serve millions of requests per second.
+
+00:00:13 On this episode, you'll meet Dylan Trotter, who is working to increase the performance and concurrency
+
+00:00:19 of these servers powering YouTube.
+
+00:00:20 He just launched Grumpy, a Python implementation based on Go, the highly concurrent language from Google.
+
+00:00:28 This is Talk Python to Me, recorded January 12, 2017.
+
+00:00:56 Welcome to Talk Python to Me, a weekly podcast on Python, the language, the libraries, the ecosystem, and the personalities.
+
+00:01:04 This is your host, Michael Kennedy.
+
+00:01:06 Follow me on Twitter, where I'm @mkennedy.
+
+00:01:08 Keep up with the show and listen to past episodes at talkpython.fm, and follow the show on Twitter via at Talk Python.
+
+00:01:15 This episode has been sponsored by Hired and, as a new sponsor, pyimagesearch.com.
+
+00:01:21 They're announcing a Kickstarter campaign called Deep Learning for Computer Vision with Python,
+
+00:01:26 launching on Kickstarter right now.
+
+00:01:28 Thank both of these companies for supporting the show by checking out what they have to offer
+
+00:01:32 during their segments.
+
+00:01:33 Dylan, welcome to Talk Python.
+
+00:01:35 Thanks.
+
+00:01:36 Nice to be here.
+
+00:01:37 Yeah, I'm really excited to talk about Grumpy, actually.
+
+00:01:41 Grumpy, your Python project.
+
+00:01:42 It's going to be fun.
+
+00:01:43 Yeah, it's been pretty exciting a couple weeks since the release.
+
+00:01:47 So, yeah, I'm excited to talk about it, too.
+
+00:01:48 Yeah, it's definitely gotten a lot of attention in the open source world on GitHub.
+
+00:01:52 And we're going to dig into a lot of the details behind it.
+
+00:01:55 But let's start with you and your story.
+
+00:01:56 How did you get into programming in Python?
+
+00:01:58 I started programming, I guess, when I was in high school.
+
+00:02:01 I took, like, an intro programming course and kind of got the bug.
+
+00:02:07 And I just kind of took it from there.
+
+00:02:10 I was really into, like, programming little games and stuff like that back then.
+
+00:02:13 I did not do CS in university.
+
+00:02:17 I actually did physics, but I continued to work on programming in my own time a lot.
+
+00:02:23 And after or during university, actually, I got a gig at a sort of summer gig at a software company.
+
+00:02:30 And that gave me a leg up when I graduated, which was pretty lucky.
+
+00:02:35 And so I got a job at a visual effects company doing software there.
+
+00:02:42 So there was a bunch of different things, like a lot of sort of proprietary languages for the different packages.
+
+00:02:48 But Python sort of came out as a front runner in terms of integration with different visual effects packages and stuff like that.
+
+00:02:56 And so that's where I started to dig into Python, especially not so much on the sort of, like, effect side,
+
+00:03:03 but more on the pipeline data management kind of side of things.
+
+00:03:07 So there's a lot of asset management and stuff going on in visual effects studios.
+
+00:03:11 And Python's great for that sort of stuff.
+
+00:03:14 Yeah, that's really cool.
+
+00:03:15 I did a whole episode on Python and, like, game development studios and movies and production and stuff.
+
+00:03:22 I was really surprised how much Python glues all the tooling together for those folks.
+
+00:03:27 Yeah, it's really deep in there.
+
+00:03:28 In fact, when I was working in that area, that's when Python sort of started to come to the fore.
+
+00:03:35 And so, like, Maya, which is a big, like, modeling and animation package, built Python integration around that time.
+
+00:03:44 And Houdini is another one, similar use cases that integrate.
+
+00:03:48 Or actually, I think from pretty early on, Houdini had Python integration.
+
+00:03:53 So, yeah, it sort of became the de facto visual effects integration language.
+
+00:03:58 Okay.
+
+00:03:58 Yeah, yeah, very cool.
+
+00:04:00 And I think that's only growing.
+
+00:04:01 It seems like there's a couple areas where Python is sort of past critical mass.
+
+00:04:06 It's kind of like a black hole now.
+
+00:04:09 It's just sucking everything into it.
+
+00:04:10 Totally.
+
+00:04:10 Yeah, yeah.
+
+00:04:11 And that's a good thing.
+
+00:04:12 So you don't do visual effects anymore, although you kind of work in the video world these days.
+
+00:04:19 Why don't you tell everybody what you're up to?
+
+00:04:20 Yeah, sure.
+
+00:04:21 So I'm at YouTube now.
+
+00:04:23 I started there about seven years ago.
+
+00:04:25 It was kind of a big shift for me.
+
+00:04:28 Visual effects was a fun environment, but it was always kind of a dream to work at Google and stuff.
+
+00:04:35 So I took a gig at YouTube.
+
+00:04:36 And I've worked on a number of different teams there, actually.
+
+00:04:40 I've worked on sort of user-facing features.
+
+00:04:43 I was on the channels team for a long time, working on YouTube channels and stuff around that.
+
+00:04:50 And eventually got more into the infrastructure side.
+
+00:04:54 And so now I'm working on what's called, I guess, the application infrastructure group.
+
+00:05:01 And our team specifically looks after the application server that serves YouTube.com and YouTube APIs and those sorts of things.
+
+00:05:10 Excellent.
+
+00:05:10 So when we're all watching various things on YouTube, be it cat videos or something educational, we have you to thank for keeping those servers running.
+
+00:05:19 Yeah, well, me and a lot of other people.
+
+00:05:22 Yep.
+
+00:05:22 Yeah, yeah, I'm sure.
+
+00:05:24 Well, I'll thank you individually.
+
+00:05:26 So, yeah, awesome.
+
+00:05:27 Yeah, it sounds like a really fun place to work.
+
+00:05:30 Where's YouTube?
+
+00:05:31 Where's the center of the universe for YouTube?
+
+00:05:33 Is that Mountain View or somewhere else?
+
+00:05:34 San Bruno actually is where the main YouTube campus is.
+
+00:05:38 So there's a few different offices around the world.
+
+00:05:42 But the biggest group of the biggest sort of geographical concentration is in San Bruno.
+
+00:05:49 So there's a few buildings there that are YouTube.
+
+00:05:52 Okay.
+
+00:05:52 Yeah.
+
+00:05:53 Nice.
+
+00:05:53 That sounds like so much fun.
+
+00:05:55 So Python actually plays a really important role at YouTube these days.
+
+00:05:59 Let's talk about how it's used now and then how that kind of came to be.
+
+00:06:02 Sure.
+
+00:06:02 Yeah.
+
+00:06:03 So Python is what is running the main application server and a lot of the application code for
+
+00:06:10 the YouTube front end and for that serves like the website and the API service APIs that,
+
+00:06:18 you know, service your phone and those sorts of things.
+
+00:06:21 So it's sort of like the gateway for most user traffic.
+
+00:06:26 Right.
+
+00:06:27 And then maybe the Python code branches back into all sorts of Google services behind the
+
+00:06:31 scenes that are in a variety of technologies or something like that.
+
+00:06:34 Right.
+
+00:06:34 Yeah.
+
+00:06:34 There's a, there's a lot of different technologies and servers involved in the whole thing.
+
+00:06:38 Yep.
+
+00:06:39 Okay.
+
+00:06:39 So YouTube wasn't initially a Google creation, right?
+
+00:06:43 It was created by some other folks.
+
+00:06:44 It was founded in, in 2005, I think by three guys.
+
+00:06:50 One of the one of the one of the one of the one of the ones that I joined in 2009 is Chad Hurley.
+
+00:06:55 I think at the time he was the president or something.
+
+00:06:59 He left shortly after I joined.
+
+00:07:01 But yeah, they, they built it in 2005 and it gained a lot of traction really early on.
+
+00:07:08 And I guess Google took an interest at some point in 2006 and, and ended up buying YouTube in
+
+00:07:16 November, 2006.
+
+00:07:17 Yeah.
+
+00:07:18 I'd say that was a great move for them because it's, it's such a central part of the internet.
+
+00:07:22 Yeah.
+
+00:07:23 I feel like it, it had YouTube.
+
+00:07:25 The idea was something that a lot of people probably had the idea.
+
+00:07:30 It was a thing that clearly should exist.
+
+00:07:33 But when you think of the infrastructure and the bandwidth costs and just the actual act
+
+00:07:39 of creating such, such a huge video network seems prohibitive.
+
+00:07:44 But, you know, once it came into existence, you know, I guess Google jumped on it.
+
+00:07:47 That's cool.
+
+00:07:48 I actually remember thinking what a simple idea it was and, and how like, it seemed so crazy
+
+00:07:54 at the time that I think the acquisition cost was like 1.6 billion or something like that.
+
+00:07:58 And, and I remember reading about that and I was like, good Lord, like, you know, you
+
+00:08:02 could, how, how is something so simple worth so much?
+
+00:08:06 But now that number seems so quaint compared to recent, recent stuff.
+
+00:08:11 So, yeah, yeah, of course, of course.
+
+00:08:13 I mean, a lot of companies go through the thinking, it's easy to go through the thinking of you
+
+00:08:18 could have just built that yourself.
+
+00:08:19 Yeah.
+
+00:08:20 Right.
+
+00:08:20 I mean, Facebook bought Instagram for like an insane amount of money and that's like a team
+
+00:08:24 of 12 people, right?
+
+00:08:25 For whatever it was like 19 billion or something.
+
+00:08:28 They, they could have easily paid 12 people to build another Instagram, but it's, it's also
+
+00:08:32 also got people's interests.
+
+00:08:35 It's got the users.
+
+00:08:36 It's got the momentum.
+
+00:08:37 And that, that's the thing I think people buy.
+
+00:08:40 Absolutely.
+
+00:08:40 That's what you're paying for.
+
+00:08:41 Yeah.
+
+00:08:42 But they didn't write it in Python at first, did they?
+
+00:08:44 No, they, the first implementation I believe was PHP.
+
+00:08:47 And I don't think that lasted very long.
+
+00:08:49 I think it was, most of that was rewritten in Python pretty early on.
+
+00:08:53 Well, before I was there.
+
+00:08:54 Sure.
+
+00:08:54 Sure.
+
+00:08:56 I suspect the way YouTube looks today with the growth of cloud computing and all the
+
+00:09:01 different APIs and services is probably super different from when, what you guys got back
+
+00:09:06 in 2006, right?
+
+00:09:07 Yeah.
+
+00:09:08 It's, I mean, I think, you know, the company has grown a lot.
+
+00:09:11 The, the use cases have grown a lot.
+
+00:09:14 It's just, I mean, it's kind of night and day.
+
+00:09:16 It's when I, when I first joined, you know, everyone was kind of in one floor of one building.
+
+00:09:21 And since then, you know, there's distributed all over the world.
+
+00:09:24 And so, yeah, it's, it's, it's changed a lot.
+
+00:09:27 Sure.
+
+00:09:27 Wow.
+
+00:09:29 Okay.
+
+00:09:29 So that brings us to today, to YouTube and what this project that you, was this something
+
+00:09:37 that you created this project called grumpy or where did this come from?
+
+00:09:40 Yeah.
+
+00:09:41 I talked about some of the challenges we were having with, you know, running Python at scale
+
+00:09:46 and on, on the blog post.
+
+00:09:48 And it basically, there's a few different aspects that, that affects our ability to run, you know,
+
+00:09:56 that many Python servers.
+
+00:09:58 The CPython runtime, well, it's, it's really great and it's highly optimized and, and it
+
+00:10:05 does a lot of things really well for our use case.
+
+00:10:09 It's never really been a focus for CPython as a project.
+
+00:10:14 You know, we thought, you know, maybe it makes sense to rethink how the runtime is built with
+
+00:10:22 a focus on concurrency and, and running large server applications.
+
+00:10:27 Yeah.
+
+00:10:27 And you're not, you guys are not the first people to have this idea of, well, maybe we
+
+00:10:31 could replace the CPython runtime interpreter with something else.
+
+00:10:37 There's like Jython, there's IronPython, there's PyPy, there's plugin JIT.
+
+00:10:44 So there's a lot of stuff happening there, but nobody's gone in the direction that you went
+
+00:10:48 in, right?
+
+00:10:49 Yeah.
+
+00:10:49 Yeah.
+
+00:10:49 It was, it was, it was an interesting, I mean, it's, you know, in a lot of ways it's kind
+
+00:10:53 of crazy.
+
+00:10:53 And the thing about Go, the Go runtime that Grumpy is based on is that it is kind of designed
+
+00:11:01 for very similar use cases to what we are interested in.
+
+00:11:06 So Go tends to be, tends to be used for writing highly concurrent server applications with,
+
+00:11:14 you know, a lot of like sort of message passing and things within the, within the application
+
+00:11:20 between threads.
+
+00:11:21 It seemed like kind of a good fit.
+
+00:11:25 And once I started to flesh things out and to build out some of the core functionality,
+
+00:11:30 some of the pieces started to fall into place and it started to look actually really compelling.
+
+00:11:35 And you're like, Hey, we could actually do this.
+
+00:11:37 We should stop for just a second.
+
+00:11:39 I don't think we've explicitly said your project is called Grumpy, which is a replacement for
+
+00:11:45 the CPython implementation with a entirely different Go implementation, right?
+
+00:11:51 Yeah, that's right.
+
+00:11:52 Yeah.
+
+00:11:52 Yeah.
+
+00:11:53 So, so very interesting.
+
+00:11:54 I think, you know, Go, obviously it makes sense for Google to be the ones experimenting
+
+00:12:00 with Go, right?
+
+00:12:01 Go comes from Google, doesn't it?
+
+00:12:03 It does.
+
+00:12:03 Yep.
+
+00:12:03 It was developed, I think, originally by, well, Rob Pike and I'm going to mix it up.
+
+00:12:11 It's either Ken Thompson or no, it's, yeah, it's Ken Thompson, I believe.
+
+00:12:15 Yeah.
+
+00:12:16 It was, it was developed for, I guess they had observed that I get similar to, you know, the,
+
+00:12:23 what the observations that we made about running Python programs for Python server programs.
+
+00:12:29 They had made sort of more general observations about writing server applications and how languages
+
+00:12:36 that existed didn't, didn't quite fit what our use cases.
+
+00:12:40 Yeah.
+
+00:12:40 Go is really quite, it's one of the newest languages out there that I would consider a mainstream
+
+00:12:45 language.
+
+00:12:46 It's not as mainstream as C, but it's definitely getting there and came out in 2012 in version
+
+00:12:51 one sort of officially.
+
+00:12:52 So it's born within this world of multi-core microservices, distributed cloud computing stuff,
+
+00:13:01 right?
+
+00:13:02 Yeah.
+
+00:13:03 Yeah.
+
+00:13:04 Okay.
+
+00:13:04 So let's dig into the, what is grumpy?
+
+00:13:08 Let's dig in a little bit.
+
+00:13:09 Like how do I take, so I can take my Python code.
+
+00:13:13 I can write some, presumably some web app or something in a web service, and then I can run
+
+00:13:20 that on grumpy.
+
+00:13:20 Like what, what does grumpy do?
+
+00:13:22 How does it take my Python code and run it?
+
+00:13:24 So grumpy is, takes a little bit of a different tack than CPython.
+
+00:13:29 It's actually a trans compiler and a runtime, whereas you can kind of think of CPython as
+
+00:13:36 a, it's like a virtual machine bytecode interpreter and runtime.
+
+00:13:40 And in that sense, it's kind of like a combination of Cython and, you know, a bundling of Cython and
+
+00:13:48 CPython, except that it's all in Go.
+
+00:13:50 Right.
+
+00:13:51 So Cython takes a flavor of Python and then compiles it to C directly.
+
+00:13:58 And like C, Go is a statically typed compiled language.
+
+00:14:04 And so it's no longer interpreted.
+
+00:14:07 It's not even like JIT compiled like Java or .NET.
+
+00:14:11 It's full on compiled, right?
+
+00:14:12 That's correct.
+
+00:14:13 Okay.
+
+00:14:14 So the sort of runtime side of things is actually like the correspondence is like this Python
+
+00:14:18 C API.
+
+00:14:20 There's actually a Go grumpy API.
+
+00:14:22 And so what it's compiling is code that uses that API to mutate objects, to pull out a state
+
+00:14:31 and those sorts of things.
+
+00:14:32 And so whereas CPython or vanilla CPython uses a bytecode interpreter to actually drive those
+
+00:14:40 API calls, the Grumpy and Cython are actually generating code that drives those API calls.
+
+00:14:49 Okay.
+
+00:14:49 Yeah.
+
+00:14:50 Very, very cool.
+
+00:14:51 Now in your GitHub repo or the blog post, I don't remember where I got this, but you said
+
+00:14:56 it's intended to be a near drop-in replacement for CPython 2.7.
+
+00:15:00 How's that going?
+
+00:15:02 How far are you towards that goal?
+
+00:15:04 That's a pretty big set of APIs to cover.
+
+00:15:07 Yeah.
+
+00:15:07 I'm learning every day like how big Python is.
+
+00:15:10 Nobody told me about this weird case I'm going to have to support.
+
+00:15:14 Oh yeah, totally.
+
+00:15:15 Yeah.
+
+00:15:16 I mean, I've been the amount of sort of spelunking I've done in CPython internals is I did not
+
+00:15:22 expect all that.
+
+00:15:24 But yeah, so it's going pretty well.
+
+00:15:27 The core functionality is there.
+
+00:15:29 So like the basic semantics of the language in terms of attribute access and how types work
+
+00:15:35 and how method dispatch works, all of that functions basically fine.
+
+00:15:42 The basic types are all there.
+
+00:15:43 So lists and dictionaries and things all kind of work.
+
+00:15:47 Do those mostly map directly to the underlying Go structures?
+
+00:15:53 Like does a list in Python map to a slice in Go and things like that?
+
+00:15:58 Or do you have to do more complicated things to map it?
+
+00:16:00 It's more complicated.
+
+00:16:01 And the reason is that Python is so dynamic, right?
+
+00:16:06 Like method dispatch is so dynamic and attribute access.
+
+00:16:10 You can put attributes on just about anything.
+
+00:16:12 You know, if it was just this native Go types, then you wouldn't be able to put an attribute
+
+00:16:20 on a list or on a slice, right?
+
+00:16:23 Right.
+
+00:16:23 So it's actually, there's sort of wrapper types, basically structures that actually map very closely
+
+00:16:29 to CPython's object structures.
+
+00:16:32 Okay.
+
+00:16:33 Yeah, I can see that because you're working with a non-dynamic language and yet it has
+
+00:16:38 to support dynamic capabilities.
+
+00:16:40 So you got to somehow put a shim in there for that, right?
+
+00:16:43 That's right.
+
+00:16:44 Okay.
+
+00:16:45 I guess the biggest kind of gaps in terms of supporting or being a drop-in replacement are
+
+00:16:50 the standard library still needs a lot of work.
+
+00:16:53 So CPython has a lot of its standard library is actually written as C extension modules, which
+
+00:17:00 Grumpy does not support.
+
+00:17:02 So that's one area of significant divergence between the two words.
+
+00:17:06 And we could talk about that more.
+
+00:17:08 That's turned out to be sort of a big kind of beast to slay.
+
+00:17:13 The nice thing is that with, you know, all those other Python runtimes out there, there's
+
+00:17:20 actually, you know, you can find pure Python versions of most things.
+
+00:17:24 So like PyPy, for example, implements a number of libraries that are in Python that aren't implemented
+
+00:17:30 in CPython.
+
+00:17:31 Right.
+
+00:17:32 So you could say, start this transition or this backfilling of APIs by just moving to
+
+00:17:39 pure Python implementations that then get sent through Grumpy that actually get compiled
+
+00:17:45 or run on Go, right?
+
+00:17:46 Yep.
+
+00:17:47 That's exactly right.
+
+00:17:48 And maybe do some profiling and say, well, you know, people use lists a lot.
+
+00:17:51 Let's write that directly in Go or something like this, right?
+
+00:17:55 You can optimize later.
+
+00:17:56 Exactly.
+
+00:17:56 Yep.
+
+00:17:57 Okay.
+
+00:17:57 Yeah.
+
+00:17:57 I suspect that there's a long tail of like stuff.
+
+00:18:00 This doesn't really need to be optimized that last 5%.
+
+00:18:03 Whereas these are the few things that we really should focus on, right?
+
+00:18:06 Yeah.
+
+00:18:06 So right now, you know, I'm kind of focused on getting support for the whole, like I want
+
+00:18:13 to be able to run some common libraries that are written in Python.
+
+00:18:17 Some, I want some program, Python programs that are out there, like open source programs to
+
+00:18:22 be able to just use Grumpy.
+
+00:18:24 So like just getting it to the point where everything runs is the first step and then
+
+00:18:30 you make it fast.
+
+00:18:30 Okay.
+
+00:18:31 Yeah, of course.
+
+00:18:31 Making it work and then making it fast seems like the right order to me as well.
+
+00:18:35 So you said in your blog post that there's going to be some things that Grumpy will never
+
+00:18:40 support and then there's things that it doesn't support yet, but you're working towards.
+
+00:18:44 Yeah.
+
+00:18:45 So one of the things I mentioned already is the C extension support.
+
+00:18:51 The API for CPython is a bit different than the API for Grumpy because it's, well, for one
+
+00:18:58 thing it's a different language, but also the data structures are a little bit different.
+
+00:19:02 The function return values and things are a little bit different.
+
+00:19:05 And so there wasn't a good mapping between those APIs and it would be too constraining for,
+
+00:19:14 you know, to try to make Grumpy map perfectly to the C API.
+
+00:19:20 Sure.
+
+00:19:20 Have you looked at the CFFI stuff that PyPy was using?
+
+00:19:25 Right.
+
+00:19:25 So that's, I have not looked very closely at that.
+
+00:19:29 That is something that we've looked at internally for other reasons as well.
+
+00:19:33 But that is an interesting way to approach the problem.
+
+00:19:38 And, and potentially, you know, there are ways to bridge the two APIs that C and CFFI may
+
+00:19:45 be one of those.
+
+00:19:46 Yeah.
+
+00:19:46 Okay.
+
+00:19:46 Does go must have a C C integration option somewhere, right?
+
+00:19:51 It does.
+
+00:19:51 Yeah.
+
+00:19:52 Yeah.
+
+00:19:52 Okay.
+
+00:19:52 And the other thing you said is not going to support is things like eval.
+
+00:19:55 And again, this is like, it is possible to implement something that's a little bit hokey to support
+
+00:20:03 eval or exec.
+
+00:20:04 Shell out and compile.
+
+00:20:06 Oh yeah, exactly.
+
+00:20:07 I mean, like that's, well, I mean, it's funny you think about it and like, that's, that's actually
+
+00:20:11 what Python is doing, right?
+
+00:20:13 It's like, except that it's a bytecode compiler and then it's executing in a VM.
+
+00:20:18 If you instead are actually doing a, you know, an actual static compilation and then executing
+
+00:20:26 that.
+
+00:20:26 It's not conceptually that much different, except that the tool chain that you have to use to
+
+00:20:32 do the compilation and stuff is much heavier.
+
+00:20:33 So it's going to be slower and it just, it kind of doesn't make a lot of sense.
+
+00:20:38 I think I could see maybe supporting it for, you know, debugging use cases and things like
+
+00:20:43 that.
+
+00:20:44 I don't think I, I kind of want to avoid having to worry too much about like, you know,
+
+00:20:50 making that performant or whatever.
+
+00:20:52 Yeah, sure.
+
+00:20:52 I, I, for one would, don't think I would miss it.
+
+00:20:56 I think it's fine.
+
+00:20:56 Yeah.
+
+00:20:57 The other thing about exec and eval is there's very few cases I've ever come across in all
+
+00:21:04 my years of programming Python where exec or eval was a good idea.
+
+00:21:08 So actually like, I kind of think that it's an unnecessary aspect of that language.
+
+00:21:14 Yeah.
+
+00:21:14 That's interesting.
+
+00:21:15 And you know, it is kind of keeping with go in the sense that go is very strict about
+
+00:21:20 conventions and some of the best practices that it believes.
+
+00:21:23 Like for example, if you have an import of a package and you're not using that package,
+
+00:21:29 that's a compilation error, right?
+
+00:21:30 Things like that.
+
+00:21:31 Right.
+
+00:21:31 Absolutely.
+
+00:21:32 Yep.
+
+00:21:32 Yeah.
+
+00:21:32 So eval skipping eval seems like that's all right.
+
+00:21:35 This portion of talk Python to me is brought to you by hired hired is the platform for
+
+00:21:51 top Python developer jobs, create your profile and instantly get access to 3,500 companies
+
+00:21:56 who will work to compete with you.
+
+00:21:58 Take it from one of hired users who recently got a job and said, I had my first offer on
+
+00:22:02 Thursday after going live on Monday and I ended up getting eight offers in total.
+
+00:22:06 I've worked with recruiters in the past, but they've always been pretty hit and miss.
+
+00:22:09 I tried LinkedIn, but I found hired to be the best.
+
+00:22:12 I really liked knowing the salary upfront.
+
+00:22:14 Privacy was also a huge seller for me.
+
+00:22:17 Sounds awesome.
+
+00:22:18 Doesn't it?
+
+00:22:18 Well, wait until you hear about the signing bonus.
+
+00:22:20 Everyone who accepts the job from hired gets a thousand dollars signing bonus.
+
+00:22:24 And as talk Python listeners, it gets way sweeter.
+
+00:22:27 Use the link hired.com slash talk Python to me and hired will double the signing bonus
+
+00:22:31 to $2,000.
+
+00:22:32 Opportunities knocking.
+
+00:22:33 Visit hired.com slash talk Python to me and answer the door.
+
+00:22:37 Then you said there's a set of things that you're going to support, but it doesn't yet.
+
+00:22:49 What are those?
+
+00:22:50 We talked a little bit about some of this stuff, but like the standard library is not there yet.
+
+00:22:56 There's a subset of the standard libraries is available currently.
+
+00:23:00 Can you give us like a percentage of what, how far you are down that path?
+
+00:23:04 I mean, everyone listening, this, this whole project has been like, I don't get up for three
+
+00:23:09 or four weeks.
+
+00:23:09 So it's not like you should have implemented at all.
+
+00:23:12 It's just curious, like how far you've gotten.
+
+00:23:14 It's really hard to put a percentage on it.
+
+00:23:16 I guess, I mean, I probably could like, you know, compare lines of code or something, but
+
+00:23:19 I think that what's going to happen is you're going to get sort of a core set of libraries
+
+00:23:25 that run all the other libraries and everything will just kind of fall into place.
+
+00:23:29 So I think it's, it's sort of more important to count those core libraries.
+
+00:23:33 And you know, that's, that's things like types and collections and operator and all those
+
+00:23:38 things.
+
+00:23:38 And some of those are already there.
+
+00:23:42 I mean, I, I feel like, yeah, it's hard to put a number on it.
+
+00:23:46 Yeah, sure.
+
+00:23:47 Maybe it's one of those things where it's, it seems like you're not very far and then all
+
+00:23:52 of a sudden it kind of unlocks and things go really quick.
+
+00:23:55 That's the dream.
+
+00:23:56 That's a good way to like, it's a, it's a optimistic view of the future.
+
+00:24:02 That's right.
+
+00:24:03 If you're going to clone the repo off GitHub and try things out, like you may be disappointed
+
+00:24:09 that, that your favorite libraries aren't there.
+
+00:24:12 There's a good chance that if you have a program that's, that's at all, you know, complex that
+
+00:24:18 there are some libraries that are missing for you.
+
+00:24:20 I'd say, I don't know, maybe 20% or something like that.
+
+00:24:23 Okay.
+
+00:24:24 Well, that's good.
+
+00:24:25 And you said you also want to support all the built-ins.
+
+00:24:27 That's right.
+
+00:24:28 Yeah.
+
+00:24:28 That's obviously a good idea.
+
+00:24:30 Yeah.
+
+00:24:30 Those are important.
+
+00:24:32 And again, you know, there's a bunch of stuff that just hasn't a bunch of like functions
+
+00:24:37 like map and, and reduce and things like that, that I haven't got around to, haven't needed
+
+00:24:45 to support them yet, but they're actually pretty straightforward to implement by and large.
+
+00:24:50 So, so I think we're, we're pretty far along on, on that stuff.
+
+00:24:54 So how much of your focus on Grumpy is going to be to make this a project that you guys could
+
+00:25:01 use for your specific use cases at Google and then make that a skeleton or base and people can
+
+00:25:09 come along and add other features and contribute to the open source project to make it more broad
+
+00:25:14 versus how much are you trying to make this like we're trying to re entirely replace CPython.
+
+00:25:19 So I think that we, I want to see, I like, okay.
+
+00:25:24 So, so I put it this way.
+
+00:25:25 I'm interested in, you know, solving some of these concurrent use cases that don't have a great answer
+
+00:25:33 in CPython.
+
+00:25:34 That's the primary focus.
+
+00:25:35 But I, again, it might be my optimism is showing again, but like, I feel like once you kind of have
+
+00:25:41 some of those use cases locked down, now people start to use it for, for things you didn't expect
+
+00:25:48 right away.
+
+00:25:49 I know that like scientific computing is an area where Python has a really well-established
+
+00:25:57 libraries and, and NumPy is, is sort of crucial to some of this stuff.
+
+00:26:01 And that's got, that's C, you know, involves C extensions.
+
+00:26:05 And I think in the near term, I don't see Grumpy being useful for numerical analysis.
+
+00:26:11 And, you know, that's kind of compounded by Go doesn't have too many sort of inroads in that
+
+00:26:17 direction either.
+
+00:26:19 So, but on the other hand, you know, some of the static, the advantages of like being
+
+00:26:25 statically compiled and, and type inferencing and compiling down to native operations, that is
+
+00:26:33 potentially useful for, you know, scientific computing and those sorts of things.
+
+00:26:37 So, so I kind of see, you know, I want to focus on our, our immediate use cases, but I have this
+
+00:26:42 kind of idea that there's.
+
+00:26:44 You know, more opportunities out there once that's, once things are kind of working.
+
+00:26:48 Okay.
+
+00:26:49 Yeah.
+
+00:26:49 Yeah.
+
+00:26:49 That, that seems like a good roadmap to me.
+
+00:26:51 It makes a lot of sense.
+
+00:26:52 So let's talk about the execution engine, which effectively, effectively is the execution engine
+
+00:26:59 of Go versus CPython.
+
+00:27:01 So CPython, the Python code gets converted to bytecode.
+
+00:27:06 Those bytecode instructions are sent to like a super large force for loop switch sort of thing.
+
+00:27:13 And those are interpreted and run.
+
+00:27:15 How does Go work?
+
+00:27:17 Go has a runtime, which is to say that there's code that is running, that's managing things
+
+00:27:25 like Go routines, which are the equivalent of threads and, and Go programs and garbage collection
+
+00:27:32 and things like that.
+
+00:27:33 But much of what is actually happening throughout a Go program is just, is actually, you know,
+
+00:27:39 low level machine instruction.
+
+00:27:41 So the Go program, much like a C program is compiled down to a machine code and actually
+
+00:27:47 executed natively.
+
+00:27:48 Right.
+
+00:27:48 That makes sense.
+
+00:27:49 So you say Go has a garbage collection, which is, is awesome.
+
+00:27:55 Do you know what kind it is?
+
+00:27:57 Is it reference counting or is it like mark and sweep or what, what kind of garbage is it
+
+00:28:02 deterministic?
+
+00:28:03 How's the garbage collector work and go?
+
+00:28:04 This is not my area of expertise.
+
+00:28:07 Nor mine.
+
+00:28:07 But it is not reference counted.
+
+00:28:10 So I believe that it is a, and actually this has changed significantly.
+
+00:28:15 I believe in 1.7, they significantly re retro or sort of retrofitted the garbage collector.
+
+00:28:22 It mostly just around the way that garbage for particular Go routines is managed garbage that
+
+00:28:31 is sort of local to particular Go routines.
+
+00:28:33 And, but it's, it's sort of a traditional, otherwise it's pretty, it's kind of a traditional garbage
+
+00:28:40 collector that much similar to what Java has.
+
+00:28:46 But it's actually much simpler.
+
+00:28:47 Java has a, a number of different algorithms it supports and a lot of tuning parameters.
+
+00:28:52 Go's garbage collection is fairly, is much simpler and is targeted for the use case of,
+
+00:28:59 you know, handling requests in a server application and those sorts of things.
+
+00:29:03 Yeah.
+
+00:29:04 It makes sense.
+
+00:29:04 I suspect they highly parallelize that thinking of Go as well.
+
+00:29:07 One thing you said that's nice about executing ultimately on Go is you said the deployment story
+
+00:29:13 is a little bit simpler.
+
+00:29:15 You know, Python, you do, when you deploy a Python program, you are actually including your like
+
+00:29:23 PY files or at least your PYC files in the deployment.
+
+00:29:28 And so you have to have some way to sort of package them together and ship them off to
+
+00:29:33 production or wherever you're running your program.
+
+00:29:36 Right.
+
+00:29:36 And beyond that, also the dependencies and the runtime, right?
+
+00:29:39 So you got to have all of those things.
+
+00:29:41 That's right.
+
+00:29:42 Which can make it really tricky.
+
+00:29:44 And there's things like PY2 AMP, PY2 XE, CX freeze, the, the Bware project.
+
+00:29:48 There's a lot of project trying to make that something you can ship around, but it's not simple.
+
+00:29:53 Yeah, that's right.
+
+00:29:54 And, you know, so I'm sure people who have run Python in production have run into, you
+
+00:29:59 know, version mismatches, things like that, using the system Python version, which was,
+
+00:30:04 you know, different than the one they were developing on and so on.
+
+00:30:07 The nice thing about statically compiled programs in general is that you, you produce a binary
+
+00:30:13 and you just, you can put that just about anywhere and it'll run.
+
+00:30:18 And that's very true for Go programs.
+
+00:30:21 There's few dependencies in most cases.
+
+00:30:24 Most of the, the runtime is actually compiled or is actually linked into the executable.
+
+00:30:30 Yeah, that's really cool.
+
+00:30:31 What's the size of like a Hello World compiled output?
+
+00:30:35 Do you know?
+
+00:30:35 I have not looked at the size myself.
+
+00:30:38 I think I saw some comment somewhere that said it was something like three megabytes.
+
+00:30:44 So it's, it's pretty substantial, but you know, that, that includes a lot of overhead for
+
+00:30:49 the runtime that, that wouldn't increase significantly if your program grew.
+
+00:30:54 Right.
+
+00:30:54 Absolutely.
+
+00:30:55 Like, you know, the next 10,000 lines add 10 K or something.
+
+00:30:58 Right.
+
+00:30:58 Exactly.
+
+00:30:59 Yeah.
+
+00:30:59 I think three megs is totally fine to get a good deployment story, stability.
+
+00:31:04 You run what you shipped, all those things.
+
+00:31:06 Like if this was 1994, three megs would be a problem, but it's not today, right?
+
+00:31:11 Yeah, that's right.
+
+00:31:12 Nice.
+
+00:31:13 So what sort of optimizations do you think are possible if you run Python on Go, if rather
+
+00:31:20 than as an interpreted system?
+
+00:31:22 This is not an area I've dug into significantly yet.
+
+00:31:27 My thinking is that if you can determine that a particular, for example, a particular integer
+
+00:31:33 counter in a function is only ever an integer type and it only, you know, uses integer operations
+
+00:31:40 like increment or, or whatever, then there's no need to go through the whole Python method
+
+00:31:46 dispatch and creating new integer objects.
+
+00:31:50 Every time you increment that counter, you can actually just use a native integer and increment
+
+00:31:56 using native operations.
+
+00:31:57 So that's a, that's a really simple example, but not, not uncommon.
+
+00:32:02 I think once you kind of broaden that to a whole program optimization, that's when things
+
+00:32:08 start to get interesting because then you can think about like, well, if you know that a
+
+00:32:12 function is only ever called with particular parameters or parameters of a particular type,
+
+00:32:18 then you can make some assumptions and again, use native, maybe use native data types.
+
+00:32:25 Sure.
+
+00:32:25 What about type annotations?
+
+00:32:27 And I know that's more a Python three thing, but would you be able to, or interested in having some flavor that
+
+00:32:35 takes type annotations and then uses that for certain types of optimizations?
+
+00:32:39 Yeah.
+
+00:32:40 I thought about this and, and I'm a little ambivalent because, you know, type annotations, the way that
+
+00:32:46 they are sort of used today, they're not intended to actually, you know, raise or anything if they're
+
+00:32:52 not respected.
+
+00:32:53 it's mostly for analysis before you ship your program to like, you know, make the linting, the
+
+00:33:01 linters job easier and things like that.
+
+00:33:02 Right.
+
+00:33:03 And so, when, once it actually in CPython, once your type annotations, once you're actually
+
+00:33:09 running your program, the type annotations basically have no effect.
+
+00:33:12 And so I'm a little hesitant to say that grumpy should use these in a more, in sort of a more
+
+00:33:21 strict way, because I think that might have affect programs compatibility and stuff like
+
+00:33:27 that.
+
+00:33:27 Yeah.
+
+00:33:28 It will absolutely do that.
+
+00:33:29 Wouldn't it?
+
+00:33:29 Yeah.
+
+00:33:29 There's some real advantages there.
+
+00:33:31 If you, if you do make them strict, then you say that a type, an argument is an integer,
+
+00:33:36 then yeah, it makes the optimizer's job way easier because it can, you know, it doesn't have
+
+00:33:40 to do any inferencing to determine that relationship.
+
+00:33:43 Obviously it would break the sort of contract with type annotations that these are just for editors
+
+00:33:49 and linters and to help you, but not actually meant to affect the runtime.
+
+00:33:53 That's right.
+
+00:33:54 On the other hand, if, if you could make some part of code that's like really critical go,
+
+00:33:59 you know, 10 or a hundred times faster by putting a type annotation that's strict, you know,
+
+00:34:05 you might be willing to make that trade off.
+
+00:34:06 So I have no, I don't know which way would be the right way to go either, but it's interesting
+
+00:34:10 to think about.
+
+00:34:11 Yeah.
+
+00:34:11 I'm very curious how that sort of evolves.
+
+00:34:15 Yeah.
+
+00:34:16 Yeah.
+
+00:34:16 Yeah.
+
+00:34:16 I'm going to keep an eye on it.
+
+00:34:18 That's cool.
+
+00:34:18 So let's talk about when you launched.
+
+00:34:20 So this should be pretty fresh in your mind, right?
+
+00:34:22 Yeah.
+
+00:34:23 It's not a very old project.
+
+00:34:25 It's about a week, week and a day.
+
+00:34:27 Yeah.
+
+00:34:28 Yeah.
+
+00:34:28 So we, well, I guess we migrated the code to GitHub in mid-December and I spent some time
+
+00:34:37 over the next month kind of cleaning it or the next few weeks cleaning up the code and adding
+
+00:34:42 some functionality for the build system that we were not able to use, obviously the internal
+
+00:34:50 Google build system in the open source project.
+
+00:34:53 So I had to build some of that out and then I guess January 4th.
+
+00:34:59 Yeah.
+
+00:34:59 I guess it was the 4th.
+
+00:35:01 That's eight days ago just for the day of the recording.
+
+00:35:03 Yeah.
+
+00:35:04 Yeah.
+
+00:35:04 We did.
+
+00:35:05 We, we sort of coordinated an open source blog post with, with the actual making the GitHub
+
+00:35:11 repo public and got a little bit of traction on hacker news and, and yeah, it was kind of
+
+00:35:18 astonishing how great the reception was.
+
+00:35:21 Yeah.
+
+00:35:21 It's going like crazy.
+
+00:35:22 Like when I took notes to, for this conversation, like four or five days ago, I had said there
+
+00:35:27 were 5,000 stars in GitHub.
+
+00:35:28 Now, maybe that was three days ago.
+
+00:35:31 Now there's 6,000, almost 6,317 contributors.
+
+00:35:35 That's, that's a pretty serious uptake for a project that's been out for eight days.
+
+00:35:40 Yeah.
+
+00:35:40 I, I think the thing that kind of blew me away most was the number of pull requests that
+
+00:35:46 I got.
+
+00:35:46 I mean, right on day one, people were digging into the code and, you know, doing like it,
+
+00:35:52 it, the code, there are tricky parts to the code and it's not necessarily obvious how you
+
+00:35:56 ought to write certain features.
+
+00:35:59 And people, you know, really dug in and started filling out some of this functionality that's
+
+00:36:04 missing and started talking about, you know, well, how are we going to support programs or
+
+00:36:09 libraries, Python, third party Python libraries out of the box and stuff like that.
+
+00:36:15 So it's been great.
+
+00:36:16 I've had a really good time working with some, some of these people that have been contributing.
+
+00:36:20 Yeah.
+
+00:36:21 Yeah.
+
+00:36:21 I would say that's really cool.
+
+00:36:22 You talked about the code a little bit, looking on GitHub, GitHub thinks it's 77% go
+
+00:36:28 code, 22% Python code and a bit of a make file.
+
+00:36:31 Yeah.
+
+00:36:32 That's about right.
+
+00:36:32 Yeah, that's about right.
+
+00:36:33 And, and a lot of that Python code is actually just tests, and benchmarks and things.
+
+00:36:38 So it's, it, most of it is, is go.
+
+00:36:41 And, and actually, I guess the standard libraries, which most of which are copied from, from
+
+00:36:47 other places like CPython, there's pretty substantial amount of Python, but that's not like, you know,
+
+00:36:51 I don't think about too much about that code since we don't have to write it or maintain it.
+
+00:36:55 Yeah, absolutely.
+
+00:36:56 So how do you ensure compatibility in this?
+
+00:36:59 Like, are you running the standard CPython test?
+
+00:37:01 That's something that we're working to.
+
+00:37:03 So that's sort of milestone number one.
+
+00:37:05 I haven't published a roadmap document yet, but getting to the point where we can run
+
+00:37:11 the unit test library is going to be a huge milestone because it means we can then run
+
+00:37:16 the unit tests that are written for CPython.
+
+00:37:19 That would be a huge milestone just on compatibility.
+
+00:37:21 Exactly.
+
+00:37:22 Before, we get there, we've been writing small tests to that, you know, demonstrate,
+
+00:37:30 compatibility concerns and stuff like that.
+
+00:37:32 And then running those in both Python and Crumpy.
+
+00:37:36 Okay.
+
+00:37:36 Yeah.
+
+00:37:37 Very cool.
+
+00:37:37 So let's talk about why you chose Go because are there three sort of officially blessed languages
+
+00:37:44 at Google?
+
+00:37:45 There's Python, there's Go and Java.
+
+00:37:47 Is that?
+
+00:37:48 And C++.
+
+00:37:48 Is that the story these days?
+
+00:37:49 Yeah.
+
+00:37:50 Right.
+
+00:37:50 Of course.
+
+00:37:50 And C++.
+
+00:37:51 So four.
+
+00:37:51 So why did you choose Go?
+
+00:37:53 Like you could have tried Jython or something, right?
+
+00:37:55 Jython is something that we, we've looked into.
+
+00:38:00 Jython is a really great mature product.
+
+00:38:03 it's our experience that it's better to start a project on Jython, than to migrate
+
+00:38:11 to Jython.
+
+00:38:12 There's a number of compatibility issues, not so much like the kinds of compatibility issues
+
+00:38:18 like, oh, on an, on CPython, this function returns, a different type or something like
+
+00:38:24 that more that there are certain constraints of running in the JVM that make certain programs
+
+00:38:31 not work very well or, or those sorts of things.
+
+00:38:34 So like performance issues that sort of crop up in those sorts of things.
+
+00:38:37 It sounds like running on the JVM was not the best concurrency server story as it might've
+
+00:38:45 been running on Go because Go is more focused on concurrency from the beginning and things
+
+00:38:49 like that.
+
+00:38:50 That might be more important to you guys.
+
+00:38:52 Yeah.
+
+00:38:52 I think that was part of it.
+
+00:38:53 I mean, like lightweight Go routines are definitely a big advantage to Go.
+
+00:38:59 So Java has native threads, which have large stacks.
+
+00:39:02 And so it has sort of a different performance characteristics for concurrent workloads.
+
+00:39:09 and so you have to kind of write programs, parallel programs in a slightly different way
+
+00:39:15 for Java, but also, for real time server applications, the JIT actually can be a liability.
+
+00:39:23 It becomes difficult to, you know, reproduce certain kinds of, certain kinds of issues,
+
+00:39:31 debug certain kinds of problems and consistent because consistency of, how requests are handled,
+
+00:39:39 is really important in these kinds of applications.
+
+00:39:42 And, and the JIT can make, you know, identical requests behave very differently depending on
+
+00:39:48 where in the life cycle the program is.
+
+00:39:50 Sure.
+
+00:39:50 Yeah.
+
+00:39:50 That makes a lot of sense.
+
+00:39:51 Being statically typed, you get a little more predictability.
+
+00:39:54 Absolutely.
+
+00:39:55 Well, not, sorry, not statically typed, compiled to like machine instructions rather than digits.
+
+00:39:59 Yeah.
+
+00:39:59 Yeah.
+
+00:40:00 Yeah.
+
+00:40:00 That's right.
+
+00:40:01 Yep.
+
+00:40:01 Hey everyone.
+
+00:40:02 Let me take just a moment and tell you about a new sponsor with a cool and timely offer.
+
+00:40:06 This portion of talk Python to me is brought to you by deep learning for computer vision
+
+00:40:11 with Python, a new book from pi image search.com launching on Kickstarter right now.
+
+00:40:16 Have you ever wondered how Facebook can not only detect your face in an image, but also recognize
+
+00:40:21 and tag you as well.
+
+00:40:22 It's not magic.
+
+00:40:24 Facebook uses specialized machine learning algorithms called deep learning in pi image search wants
+
+00:40:30 to pull back the curtain and show you how these algorithms work.
+
+00:40:32 Their new book is designed from the ground up to help you reach expert status.
+
+00:40:37 Even if you've never worked with machine learning or neural networks before inside deep learning
+
+00:40:41 for computer vision with Python, you'll find super practical walkthroughs, hands-on tutorials
+
+00:40:46 with lots of code and a no fluff teaching style that is guaranteed to cut through all the cruft
+
+00:40:50 and help you master deep learning for visual recognition.
+
+00:40:53 To learn more about this book and back the Kickstarter campaign, just head to pi image search.com
+
+00:40:59 slash Kickstarter.
+
+00:41:01 Yeah.
+
+00:41:01 So how do you run apps on, on Grumpy?
+
+00:41:03 Like if I have Python code and I want to make it, make it go, how do I make it go on Grumpy?
+
+00:41:09 This is sort of a hot topic right now in the, the issue tracker on GitHub because like the
+
+00:41:14 build system that I have and is strictly focused on, you know, getting the internal libraries working.
+
+00:41:20 And so it doesn't have good support for building a program that's outside that directory structure
+
+00:41:25 or using libraries that are in your Python path or anything like that.
+
+00:41:29 And so we're debating kind of how exactly it should be supported.
+
+00:41:32 So right now, if you want to run a program or compile a library, you have to kind of drop
+
+00:41:38 it into that directory structure and the make system will pick up on it and, and, try
+
+00:41:45 to compile it into go.
+
+00:41:46 But, ideally, you know, you have some kind of Python path style construct where it can find
+
+00:41:53 Python code and build it in a sort of standard way.
+
+00:41:58 That's something that we're working towards.
+
+00:42:00 Okay, cool.
+
+00:42:01 Now, if people want to contribute to Grumpy, there's like three major areas that, that make it up.
+
+00:42:08 You want to talk about those three areas so they maybe can use it as a roadmap?
+
+00:42:11 You can kind of think of it as the trans compiler, which is the tool called Grump C and that takes
+
+00:42:19 Python code and it actually uses it's written in Python and it uses the AST module.
+
+00:42:23 So it's kind of cheating.
+
+00:42:25 Another milestone will be when Grump C can compile Grump C and, that takes, the Python
+
+00:42:33 code and spits out some go code.
+
+00:42:36 And then you're going to, the second part is the Grumpy runtime, which is kind of the parallel
+
+00:42:41 of the C API.
+
+00:42:42 The trans compiled go code will depend on that runtime.
+
+00:42:48 So it imports the runtime and uses the, constructs and functions and things in the runtime.
+
+00:42:53 And so that's another sort of component that's written strictly in go.
+
+00:42:58 And that's where all the sort of data structures and things are defined.
+
+00:43:02 and finally there's the standard library that is a mostly written in or actually exclusively
+
+00:43:09 written in Python, but also has some uses some of the Grumpy native extensions to actually
+
+00:43:15 interface directly with go packages and, and functions and things.
+
+00:43:19 so those are, so there's sort of the three areas and there's a lot of work to do in,
+
+00:43:23 in all of those different areas.
+
+00:43:24 I'd say like the standard library is, is the biggest chunk of work to do at this point.
+
+00:43:29 Presumably you guys chose go because of the concurrency story, right?
+
+00:43:34 And if you have Python code running on go, you want to leverage that concurrency.
+
+00:43:40 Do you have to use a different API?
+
+00:43:43 this is Python two seven.
+
+00:43:44 So you don't have things like async or wait.
+
+00:43:47 How do I interact with the concurrency model of go?
+
+00:43:50 Currently, the way that go routines are made available is through the threading library.
+
+00:43:57 So the standard Python threading library, you create a thread and start it.
+
+00:44:00 And that actually starts a go routine instead of a native thread that will work pretty seamlessly with existing code.
+
+00:44:09 I don't foresee huge problems there in terms of like the differences between those kinds of threads.
+
+00:44:15 And again, like, you know, go has the concept of channels, which are sort of a message passing mechanism.
+
+00:44:22 And whereas in Python, you have a queue, the queue data structure, and this isn't actually implemented, but I plan to implement a queue using channels.
+
+00:44:31 And so you should be able to just write Python concurrent Python code like you always have.
+
+00:44:36 But I think to really take advantage of sort of the concurrency model, you probably, eventually I'd, I'd like to implement the async and await Python construct.
+
+00:44:48 I think that would be a huge win.
+
+00:44:50 Yeah, that would be, that would be a huge win.
+
+00:44:52 And it seems to me like using the threading API is much more coarse grained concurrency than go is really built for.
+
+00:45:02 And while it would work, it's not, not taking full advantage.
+
+00:45:06 The idea with go is you can start a go routine or starting a go routine is extremely lightweight and passing messages back and forth is the way to sort of share state rather than with sharing memory.
+
+00:45:20 Or sharing objects.
+
+00:45:21 So I think that programs that are written with sort of heavyweight threads in mind aren't necessarily going to be the best possible way to express that functionality.
+
+00:45:34 And so, you know, long-term I could see, you know, maybe, well, actually because you can access native go constructs.
+
+00:45:44 For example, you will be able to, in a grumpy program, use go channels directly.
+
+00:45:50 You know, that has upsides and downsides.
+
+00:45:52 It starts to diverge from the Python language and those sorts of things.
+
+00:45:55 Yeah, but it's not unlike, Iron Python or Jython or those things, right?
+
+00:46:00 Where you can reach down into the underlying JVM or CLR or something like that.
+
+00:46:05 That's right.
+
+00:46:06 Yep.
+
+00:46:06 Absolutely.
+
+00:46:07 Okay.
+
+00:46:08 So if you're going towards async and await, what's the story on Python three?
+
+00:46:13 Since I feel like the threading concurrency story is a lot better in Python three.
+
+00:46:17 Yeah.
+
+00:46:17 I'd love to support Python three.
+
+00:46:19 The long-term goal is definitely to support it.
+
+00:46:22 The reason for 2.7 is that we have a large, YouTube had a large existing Python code base and
+
+00:46:29 that was a 2.7.
+
+00:46:31 So that was the main reason for choosing 2.7 out of the gate, but certainly long-term,
+
+00:46:37 I'd like to see all Python three supported.
+
+00:46:39 Right.
+
+00:46:40 Oh, that'd be, that'd be fantastic.
+
+00:46:41 I'd like to see that as well.
+
+00:46:42 I mean, it certainly makes sense if you're working on the YouTube team.
+
+00:46:45 YouTube has a tremendously large and widely adopted deployment of Python two seven.
+
+00:46:51 Like you want to, you know, work where you can have the biggest impact locally, right?
+
+00:46:55 Absolutely.
+
+00:46:56 Yeah.
+
+00:46:56 So reading the tea leaves, does this mean that Grumpy might someday run YouTube?
+
+00:47:02 I want to hedge a little bit on that.
+
+00:47:04 I think there's a sort of a long road ahead before Grumpy's ready to handle the kinds of
+
+00:47:10 large applications that we run on YouTube.
+
+00:47:13 So I wouldn't want to speculate about the long-term outcomes there.
+
+00:47:18 Sure.
+
+00:47:18 Yeah.
+
+00:47:19 Yeah.
+
+00:47:19 Of course.
+
+00:47:19 You know, let me just imagine, let's imagine a world where it did.
+
+00:47:23 That would be, probably the first few weeks that it switched to Grumpy would be a little
+
+00:47:30 bit nerve wracking, right?
+
+00:47:31 Yeah.
+
+00:47:31 It would definitely.
+
+00:47:33 If YouTube goes down and it's your fault, that's going to be a problem.
+
+00:47:36 Yeah, exactly.
+
+00:47:37 I don't want to be that guy.
+
+00:47:39 Exactly.
+
+00:47:40 Exactly.
+
+00:47:40 Here's the four pages we're giving you.
+
+00:47:42 No, just kidding.
+
+00:47:43 But it would, if, if someday that, that came to be, that would be a really cool outcome of
+
+00:47:47 this project.
+
+00:47:47 Yeah, absolutely.
+
+00:47:48 that's, that's sort of the dream.
+
+00:47:50 Excellent.
+
+00:47:50 Okay.
+
+00:47:51 So maybe that's, that's a good place to leave it.
+
+00:47:52 Let me ask you just a couple of questions before we let you out of here.
+
+00:47:56 If you're going to write some code, what editor do you use?
+
+00:47:58 Vim.
+
+00:47:59 Vim.
+
+00:47:59 All right.
+
+00:48:00 Yeah.
+
+00:48:00 Very cool.
+
+00:48:01 And there's over 96,000 packages on PyPI these days.
+
+00:48:06 And I'm sure you've come across some that are kind of unique.
+
+00:48:09 You're like, Hey, have you heard about this package?
+
+00:48:11 It's pretty cool.
+
+00:48:11 You should check it out.
+
+00:48:12 You got any, coming to mind?
+
+00:48:13 You know, it's funny.
+
+00:48:14 I mean, because I do a lot of my, most of my development inside Google, you know, we
+
+00:48:20 kind of have a different set of tools we tend to use.
+
+00:48:26 I don't have a ton of, experience with a lot of PyPI packages.
+
+00:48:30 Yeah.
+
+00:48:30 So it's a little bit more a dark matter.
+
+00:48:33 We out here in the larger universe don't get to see a lot of the cool stuff you guys get
+
+00:48:38 to use.
+
+00:48:38 I'm sure it's pretty neat though.
+
+00:48:39 Absolutely.
+
+00:48:40 All right.
+
+00:48:41 Awesome.
+
+00:48:41 So how about a final call for action?
+
+00:48:43 Like how can people get started grumpy?
+
+00:48:44 What can they do if they, if this resonates with them, things like that?
+
+00:48:48 yeah.
+
+00:48:48 I mean, we're, we're super interested in, in seeing where the project goes.
+
+00:48:52 I, I don't have, like I said, I would like to see, where grumpy can be useful
+
+00:48:57 besides just, you know, large concurrent server applications.
+
+00:49:01 Community feedback around that is great.
+
+00:49:04 I, people have been filing, issues asking about, you know, support for different things.
+
+00:49:08 And that's been really illuminating seeing where people are thinking about where this might
+
+00:49:12 be useful.
+
+00:49:12 So that's huge.
+
+00:49:13 if, you have the time and the inclination, try it out, just clone the repo and type make
+
+00:49:20 run and, and try out Python and go and, report any issues.
+
+00:49:25 That's really useful to us.
+
+00:49:27 And, and obviously there's a ton of work to do.
+
+00:49:30 we talked about some of the different things and, you know, contributions, via PR,
+
+00:49:36 pull requests on GitHub are really appreciated.
+
+00:49:38 It's been kind of amazing how much people effort people have put in already.
+
+00:49:42 So that's been, really exciting for us.
+
+00:49:45 Yeah.
+
+00:49:45 It's, it's a cool project.
+
+00:49:47 And I think if we have yet another powerful, flexible runtime that has some different trade
+
+00:49:54 offs that we can make for Python, that's great for everyone.
+
+00:49:56 So congratulations on your project and thanks for sharing it with everyone.
+
+00:50:00 Yeah.
+
+00:50:00 Thanks very much, Michael.
+
+00:50:01 You bet.
+
+00:50:01 Talk to you later.
+
+00:50:02 This has been another episode of talk Python to me.
+
+00:50:06 Today's guest has been Dylan Trotter.
+
+00:50:09 And this episode has been sponsored by hired and pie image search.
+
+00:50:12 Thank you both for supporting the show.
+
+00:50:14 Hired wants to help you find your next big thing.
+
+00:50:17 Visit hired.com slash talk Python to me to get five or more offers with salary and equity
+
+00:50:22 presented right up front and a special listener signing bonus of $2,000.
+
+00:50:27 Struggling to get started with neural networks, deep learning and image recognition.
+
+00:50:31 Pie image search.com can help with that.
+
+00:50:33 To learn more about their new book, deep learning for visual recognition with Python and back the
+
+00:50:39 Kickstarter campaign.
+
+00:50:39 Just head to pie image search.com slash Kickstarter.
+
+00:50:44 Are you or a colleague trying to learn Python?
+
+00:50:46 Have you tried books and videos that just left you bored by covering topics point by point?
+
+00:50:51 Well, check out my online course Python Jumpstart by building 10 apps at talkpython.fm/course
+
+00:50:57 to experience a more engaging way to learn Python.
+
+00:50:59 And if you're looking for something a little more advanced, try my Write Pythonic Code course
+
+00:51:04 at talkpython.fm/pythonic.
+
+00:51:08 Be sure to subscribe to the show.
+
+00:51:10 Open your favorite podcatcher and search for Python.
+
+00:51:12 We should be right at the top.
+
+00:51:13 You can also find the iTunes feed at /itunes, Google Play feed at /play and direct
+
+00:51:19 RSS feed at /rss on talkpython.fm.
+
+00:51:22 Our theme music is Developers, Developers, Developers by Corey Smith, who goes by Smix.
+
+00:51:28 Corey just recently started selling his tracks on iTunes.
+
+00:51:31 So I recommend you check it out at talkpython.fm/music.
+
+00:51:34 You can browse his tracks he has for sale on iTunes and listen to the full length version of the theme song.
+
+00:51:40 This is your host, Michael Kennedy.
+
+00:51:42 Thanks so much for listening.
+
+00:51:43 I really appreciate it.
+
+00:51:44 Smix, let's get out of here.
+
+00:52:08 Don't forget.
+
+00:52:09 you
+

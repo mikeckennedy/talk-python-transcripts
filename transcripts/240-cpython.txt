@@ -1,0 +1,1830 @@
+00:00:00 You might use Python every day, but how much do you know about what happens under the covers, down at the C-level?
+
+00:00:06 When you type something like variable equals open bracket square bracket to create an empty list,
+
+00:00:11 what are the bytecodes that accomplish this?
+
+00:00:14 How about the class backing the list itself?
+
+00:00:17 All of these details live at the C-layer of CPython.
+
+00:00:21 On this episode, you'll meet Anthony Shaw.
+
+00:00:23 He and I take a guided tour of the CPython source code.
+
+00:00:26 After listening to this episode, you won't have to guess what's happening.
+
+00:00:30 You can get clone the CPython source code and see for yourself.
+
+00:00:33 This is Talk Python to Me, episode 240, recorded Wednesday, October 30th, 2019.
+
+00:00:53 Welcome to Talk Python to Me, a weekly podcast on Python, the language, the libraries, the ecosystem, and the personalities.
+
+00:00:59 This is your host, Michael Kennedy.
+
+00:01:01 Follow me on Twitter, where I'm @mkennedy.
+
+00:01:03 Keep up with the show and listen to past episodes at talkpython.fm.
+
+00:01:07 And follow the show on Twitter via at Talk Python.
+
+00:01:09 This episode is sponsored by Linode and the University of San Francisco.
+
+00:01:14 Please check out what they're offering during their segments.
+
+00:01:16 It really helps support the show.
+
+00:01:18 Anthony, welcome back to Talk Python to Me.
+
+00:01:20 Hey, Michael. It's great to be back.
+
+00:01:22 Yeah, it's great to have you back.
+
+00:01:23 To say you've been on the show before is a bit of an understatement.
+
+00:01:25 You were on episode 131, contributed to open source.
+
+00:01:29 155, practical steps from moving to Python 3.
+
+00:01:32 168, 10 Python security holes and how to plug them.
+
+00:01:35 180, what's new in Python 3.
+
+00:01:37 7, and then 214, diving into 3.
+
+00:01:40 8.
+
+00:01:40 So I think you might be one of the most prolific guests here on the show, which is awesome.
+
+00:01:46 I love having you on here.
+
+00:01:47 Yeah, thanks for having me back.
+
+00:01:48 It's good to be on the show.
+
+00:01:49 Yeah, I can't believe that this is the sixth time I've been on here.
+
+00:01:53 Yeah, I had to actually use the search engine on the website to figure out how many times you've been here.
+
+00:01:58 So yeah, this is going to be a good one because we're going to dive into something that everybody uses.
+
+00:02:04 But there's so many dark corners for most folks who are not core developers, right?
+
+00:02:10 Like, okay, we all know there's CPython.
+
+00:02:12 There's probably other Pythons.
+
+00:02:14 You maybe have heard of those like PyPy and whatnot.
+
+00:02:16 But can you open up the code?
+
+00:02:19 Where do you get it?
+
+00:02:19 Where are the important parts, right?
+
+00:02:21 It's a huge project.
+
+00:02:22 But there's certain parts you really should pay attention to.
+
+00:02:25 And the others are like details, right?
+
+00:02:27 Yeah, absolutely.
+
+00:02:27 I mean, I think if it's kind of like my car, like if I open up the bonnet of my car, I know where the engine is.
+
+00:02:33 I know where to put the oil.
+
+00:02:34 And that's pretty much it.
+
+00:02:35 Like, I don't know what half the other components do.
+
+00:02:37 So yeah, I feel like it's like that with CPython sometimes.
+
+00:02:40 You know how to use it.
+
+00:02:42 But in terms of how it actually works, it's a bit of a mystery.
+
+00:02:45 That's a good analogy for sure.
+
+00:02:47 Now, before we dig into this, maybe just tell people what it is that you did day to day.
+
+00:02:53 So they get a sense of where you're coming from, like in the open source space and in your day to day job.
+
+00:02:57 If they want your whole story, they go back to episode 132 and the whole getting started and whatnot.
+
+00:03:02 But give us the quick summary there.
+
+00:03:04 Yeah, sure.
+
+00:03:04 I work for a company called NTT.
+
+00:03:06 And I run talent transformation for them.
+
+00:03:09 So looking at skills and development of employees for NTT globally.
+
+00:03:14 That's my day job.
+
+00:03:15 And then I'm also a sort of Python enthusiast and get involved with various open source projects as well.
+
+00:03:21 Some Apache projects as well as some of my own personal projects.
+
+00:03:25 Yeah, awesome.
+
+00:03:26 Like Wiley.
+
+00:03:27 Like Wiley, yeah.
+
+00:03:28 And been playing a lot with pytest and Azure Pipelines recently as well.
+
+00:03:32 Yeah, right on.
+
+00:03:32 Cool.
+
+00:03:33 So we're going to talk about this whole CPython source code story.
+
+00:03:39 And you've been touching on this in several ways.
+
+00:03:42 You've been writing some articles.
+
+00:03:43 But then you decided to write a book and disguise it as an article.
+
+00:03:49 And you called it your guide to the CPython source code over at RealPython.
+
+00:03:53 It's excellent.
+
+00:03:54 We'll link over to it.
+
+00:03:55 But we're going to cover a bunch of the ideas that you touched on in there because this is a really good exploration.
+
+00:04:00 But, you know, what got you started in like digging into the source code in the first place?
+
+00:04:04 Some of it was curiosity.
+
+00:04:05 A few years ago, I wrote an article on how to add an operator to the Python syntax.
+
+00:04:10 So how to add a plus plus.
+
+00:04:12 So like an in-place increment operator, which Guido is famously against for good reasons.
+
+00:04:18 But it was more of an exploration, like how would you actually add that to the syntax and recompile Python, which was really, really interesting to dig into.
+
+00:04:25 And also I found that if you want to contribute to CPython, the documentation that there's a site called the dev guide, which is great telling you like the process for raising pull requests, like what the branch strategy is.
+
+00:04:39 But if you, you know, if you were to join a new software team, you would expect that in the first few weeks, one of the senior developers would sit you down and walk you through the code and explain how everything works.
+
+00:04:49 But that documentation is kind of missing.
+
+00:04:53 So I wanted to write something that kind of filled that gap so that if people wanted to get into working on CPython, contributing to it or making tweaks, enhancements or customizations, then there's something that really kind of takes them through in depth, the whole source code and how it works and what each component does.
+
+00:05:10 It definitely does that.
+
+00:05:11 I feel like these large projects that often have a bunch of special steps to get started, to get your machine configured and whatnot, you know, they can be intimidating.
+
+00:05:20 But, you know, using the article, I was able to get the code, get it up and running and be playing with Python 3.9 super quick.
+
+00:05:26 It was just, I don't know, most of the time was waiting on the compiler, actually.
+
+00:05:30 Yeah, there's ways of making it faster, but it's a big piece of code to compile.
+
+00:05:34 So it takes a while.
+
+00:05:35 Yeah, I definitely ramped up the number of cores getting used there, but it still takes a while.
+
+00:05:39 It's quite cool.
+
+00:05:40 All right.
+
+00:05:41 So before I guess we maybe dive into the source code itself, let's maybe talk a little bit higher level.
+
+00:05:49 It was like some of Python is Python, which is cool and meta.
+
+00:05:52 And some of Python is C code, which is maybe surprising to some folks who are kind of new to Python and how it's like executes internally.
+
+00:06:01 And maybe there's even some other code in there as well.
+
+00:06:04 Like I haven't seen any inline assembly, but you never know, right?
+
+00:06:07 What's the breakdown there?
+
+00:06:09 Or like, how would you categorize that?
+
+00:06:10 It's about 70% Python and then the rest is C code.
+
+00:06:15 So there's about 350,000 lines of C code, which is a lot of C code, but over 800,000 lines of Python, which includes, I guess, the test suites as well.
+
+00:06:25 On top of that, actually, there's documentation is over 220,000 lines of documentation.
+
+00:06:31 So the documentation itself is a huge amount of work.
+
+00:06:35 So the restructured text is actually one of the main languages.
+
+00:06:39 Restructured text is one of the main languages.
+
+00:06:41 Yeah, absolutely.
+
+00:06:42 230,000 lines of restructured text.
+
+00:06:44 Would it be safe to say that most of the standard library is written in Python, but not all of it, but almost all of the core interpreter and compiler is written in C.
+
+00:06:53 Is that a good representation?
+
+00:06:55 The core types are written in C.
+
+00:06:57 The compiler is written in C.
+
+00:06:59 Most of the sort of core engine and the runtime is written in C.
+
+00:07:03 In terms of the standard library, anything which doesn't need to patch into any of the operating system,
+
+00:07:11 APIs, like the networking or any hardware or anything, is written in Python.
+
+00:07:16 Otherwise, it's written in C.
+
+00:07:17 Some languages that all of it are written in that language, right?
+
+00:07:22 Like Go, for example.
+
+00:07:23 Then there's other ones like Python words, some Python, some C.
+
+00:07:27 But we also have things like PyPy, which is more Python.
+
+00:07:30 Is it 100% Python?
+
+00:07:32 I'm not sure there might be some little tiny shim to get it started.
+
+00:07:35 But why is it in C?
+
+00:07:37 If you're making a new programming language, to write the compiler, you need a programming language to write the compiler in.
+
+00:07:43 So it's difficult if you're starting a new language from scratch.
+
+00:07:47 The Go is actually a good example because the Go compiler is now written in Go, but it wasn't originally.
+
+00:07:53 Once they got Go a bit more mature, then they basically rewrote the compiler in Go.
+
+00:07:59 But you still need an actual interpreter and a compiler to be able to do that.
+
+00:08:04 So CPython is written in C largely because they need something to start off with.
+
+00:08:08 This was written a while ago.
+
+00:08:11 C is still a very popular language.
+
+00:08:12 And also Python has a lot of integrations into the operating system components.
+
+00:08:19 And most operating system APIs are in C.
+
+00:08:23 So for Windows, Linux, and macOS, if you want to talk to the sound card, if you want to talk to the screen,
+
+00:08:29 and if you want to open a socket on the network, then you're going to be talking about C APIs.
+
+00:08:34 So, you know, the ability to do all that stuff seamlessly in Python means that at some point,
+
+00:08:39 it needs a C layer to integrate into the kernel.
+
+00:08:43 Right, to call the Win32 API or down into Linux or macOS, their native APIs, right?
+
+00:08:49 Yeah, exactly.
+
+00:08:50 Yeah, cool.
+
+00:08:51 So this is a huge project, as the size, my joke about your book, you know, I sort of hinted at.
+
+00:08:59 So when you look at it, like, how did you get started?
+
+00:09:01 There's got to be a bunch of stuff you decided not to cover.
+
+00:09:04 Some stuff you did.
+
+00:09:05 You do have your sort of mission of like, here's the missing dev guide, sit down with a senior developer.
+
+00:09:10 But how do you decide to get started on this?
+
+00:09:12 Or like, what goes in and out?
+
+00:09:14 Yeah, so the approach I took was not to go file by file, but instead kind of follow a trace from typing Python at the command line with some code,
+
+00:09:25 all the way to it being executed and then back up again.
+
+00:09:29 So it kind of takes the article takes you through, you know, what happens when you run Python,
+
+00:09:34 how and then basically steps through each layer deeper and deeper and deeper into the code,
+
+00:09:39 and then explains each point what's happening.
+
+00:09:42 And then kind of I've added diagrams and stuff like that to show you.
+
+00:09:46 So it's almost like a, you know, like a traceback.
+
+00:09:49 If you were to kind of add like a custom traceback, but actually doing tracebacks in Python is really hard.
+
+00:09:55 So not in Python, but in CPython.
+
+00:09:57 Yeah, most of the code that you'd be trying to look at would actually be in C, not in Python, right?
+
+00:10:01 Yeah, exactly.
+
+00:10:02 And I've ended up writing some tools to help me put the article together and also do some debugging to kind of pick this apart.
+
+00:10:09 Sure.
+
+00:10:09 Well, what's your background in C?
+
+00:10:11 Like how prepared were you for this journey?
+
+00:10:14 And how easy was it?
+
+00:10:15 I guess is what I'm getting at.
+
+00:10:16 I thought I understood C, but then diving deeper and deeper into this code,
+
+00:10:20 I really kind of had my head scratching a few times.
+
+00:10:24 There's a lot of macros in the CPython source as well.
+
+00:10:27 So anyone who's worked quite a bit with C code might be surprised at the shiv volume of macros.
+
+00:10:33 So a macro is basically a way of before the code gets compiled, the preprocessor will replace a macro with another piece of text basically before it gets compiled.
+
+00:10:44 And there's a lot of these in CPython.
+
+00:10:46 So it makes it basically they're micro optimizations to the code, but it does make it quite tricky to read and understand.
+
+00:10:53 Yeah, I can imagine.
+
+00:10:54 You know, when I was looking through it, I used to do for a handful of years, professional C++ development.
+
+00:11:00 And I could read it, but I was thinking, you know, I'm really glad I'm writing Python these days because,
+
+00:11:05 wow, I know what this means.
+
+00:11:07 It's a lot of work.
+
+00:11:09 A lot of work to write C.
+
+00:11:10 Yeah.
+
+00:11:10 And also making changes to the code.
+
+00:11:13 So in the article, it kind of encourages you to not just understand how it works,
+
+00:11:19 but also to make little tweaks and changes and add your own customer statements and maybe,
+
+00:11:24 you know, interfere or look at the tracing and stuff like that.
+
+00:11:27 And as part of this, I ended up kind of writing a few pull requests into CPython and doing a couple of bug fixes and things like that.
+
+00:11:34 That's awesome.
+
+00:11:34 What were they for?
+
+00:11:35 They were really minor ones, just stuff that I discovered when I was kind of digging in.
+
+00:11:39 There's a couple that still need to be merged as well.
+
+00:11:41 I'm still working on one for Windows support for changing the parser generator.
+
+00:11:46 So if you want to add custom syntax to Python from Windows, then getting that support in.
+
+00:11:52 And also I worked on one which was rejected, but it was an interesting experiment to do with list comprehensions.
+
+00:12:01 So if you basically do a list comprehension over a list, so typically you'd use list comprehensions for things like filtering a list into another list.
+
+00:12:11 But when you run a list comprehension, it first of all initializes an empty list.
+
+00:12:16 And what I realized is that if you initialized that list to a larger size or you predicted the size of the list, then it's a lot more efficient.
+
+00:12:25 So it ends up being about 10%.
+
+00:12:27 If there was no if block, there's no if part in the list, and you know you were doing a comprehension over the list, the size should be exactly the same as before, right?
+
+00:12:36 So you should just pre-allocate that.
+
+00:12:37 Yeah.
+
+00:12:37 So it was an experiment to see if that was possible, which it was, but it was a bit hacky.
+
+00:12:42 And it did make a difference in terms of performance.
+
+00:12:44 I think it worked out being about 8% or 10% faster on list comprehensions, but it added too much complexity.
+
+00:12:51 So it was rejected.
+
+00:12:53 But I think it's an ongoing experiment that we need to look into.
+
+00:12:56 That's a non-trivial difference you made by doing that.
+
+00:12:59 I mean, I understand the complexity thing, but 8% is a lot these days on a 30-year-old polished piece of software.
+
+00:13:06 Yeah, it's if you're doing a list comprehension over a list of a fixed size, but all of the benchmarking tools in CPython use the range function, which doesn't have a fixed size.
+
+00:13:16 So basically, the benchmark suite didn't think there was much difference because the benchmark suite heavily uses range.
+
+00:13:24 But in practical applications, you wouldn't use range a great deal.
+
+00:13:28 How interesting.
+
+00:13:28 Okay.
+
+00:13:28 That's a super cool one.
+
+00:13:29 I love it.
+
+00:13:30 Nice.
+
+00:13:31 All right.
+
+00:13:31 Well, let's start at the beginning.
+
+00:13:32 I'm interested in the CPython source code, and I want to play around with it.
+
+00:13:36 How do I get it?
+
+00:13:38 What is it, in Subversion or something these days?
+
+00:13:39 Well, so it's really easy.
+
+00:13:41 Yeah.
+
+00:13:42 So it's all moved to GitHub.
+
+00:13:43 It's easy to find.
+
+00:13:44 GitHub.com slash Python slash CPython.
+
+00:13:47 And you can download that as a zip file.
+
+00:13:50 You can download that using a Git client, or you can use your IDE to pull it for you.
+
+00:13:54 Yeah, it's so cool that it's over on GitHub these days.
+
+00:13:57 It's really nice to have it kind of modernized.
+
+00:14:00 I think it encourages people to participate more in the discussion.
+
+00:14:04 They were talking about moving the issues there as well, but I don't know if they were moved yet.
+
+00:14:09 That'll be cool when that happens.
+
+00:14:11 There's a PEP that Marietta has put together, and it's proposing moving GitHub to GitHub issues
+
+00:14:16 from a bug tracker that they have at the moment.
+
+00:14:19 I don't think that's been decided on yet.
+
+00:14:21 It wouldn't surprise me to see it happen, but I guess maybe one of the questions is just
+
+00:14:25 all the historical issues get somehow migrated over, and I can see challenges there.
+
+00:14:32 This portion of Talk Python to me is brought to you by Linode.
+
+00:14:38 Are you looking for hosting that's fast, simple, and incredibly affordable?
+
+00:14:41 Well, look past that bookstore and check out Linode at talkpython.fm/Linode.
+
+00:14:46 That's L-I-N-O-D-E.
+
+00:14:48 Plans start at just $5 a month for a dedicated server with a gig of RAM.
+
+00:14:53 They have 10 data centers across the globe, so no matter where you are or where your users
+
+00:14:57 are, there's a data center for you.
+
+00:14:59 Whether you want to run a Python web app, host a private Git server, or just a file server,
+
+00:15:03 you'll get native SSDs on all the machines, a newly upgraded 200 gigabit network, 24-7 friendly
+
+00:15:10 support even on holidays, and a seven-day money-back guarantee.
+
+00:15:13 Need a little help with your infrastructure?
+
+00:15:15 They even offer professional services to help you with architecture, migrations, and more.
+
+00:15:19 Do you want a dedicated server for free for the next four months?
+
+00:15:23 Just visit talkpython.fm/Linode.
+
+00:15:25 All right, so we've got the code.
+
+00:15:28 We get cloned it, or however we're going to get it off of GitHub.
+
+00:15:31 And then you get this project structure with like 13 or 14 top-level folders.
+
+00:15:36 So maybe we could talk through just some of the major sections, because I think the file
+
+00:15:41 structure is a pretty good partitioning.
+
+00:15:43 The folder structure, there's pretty good partitioning to start to understand, like, where do I go explore?
+
+00:15:48 Yeah, once you've downloaded the source code, the first folder is called doc, which is where
+
+00:15:52 the documentation is.
+
+00:15:53 So that's the 230,000 lines of restructured text.
+
+00:15:57 Wow.
+
+00:15:58 Yeah, and if you want to start off by understanding some of the APIs as well, the documentation is
+
+00:16:02 a good place to go.
+
+00:16:03 There's also a folder called grammar, which is for the sort of computer-readable language
+
+00:16:10 definition.
+
+00:16:10 So what is in the Python syntax?
+
+00:16:13 What makes an if statement an if statement?
+
+00:16:15 Are you, you know, could you type if else colon?
+
+00:16:19 Like, that wouldn't make sense.
+
+00:16:21 And why?
+
+00:16:21 So the computer understands, I guess, how the language is structured.
+
+00:16:25 There's a folder for include for C header files, which is also good to understand the
+
+00:16:31 API in a bit more detail.
+
+00:16:32 There's the lib directory for basically the standard library models, all the ones that are
+
+00:16:38 written in Python.
+
+00:16:39 Yeah, I think the include one is pretty good because you can just see the function definitions.
+
+00:16:43 You don't have to like jump through all the implementation and the macros and the hash if def stuff.
+
+00:16:48 You can say like, these are the things I can call over here.
+
+00:16:51 Right.
+
+00:16:51 You can get a little higher level view.
+
+00:16:53 This is why if you're going to jump into this, you want to pick a pretty decent IDE because there's a lot of code in here and using a plain text editor is going to be extremely difficult to navigate things.
+
+00:17:05 I agree.
+
+00:17:06 So yeah, I'd recommend picking a decent IDE to start off with.
+
+00:17:09 For me, when I was playing with this, I used VS Code on the whole top level project.
+
+00:17:13 And it just said, hey, you should have the C, C++ extension installed.
+
+00:17:17 Sure.
+
+00:17:18 Do that.
+
+00:17:18 Yeah.
+
+00:17:19 It was pretty good from there.
+
+00:17:20 Also installed the restructured text extension.
+
+00:17:22 It was kind of adapting.
+
+00:17:23 Maybe over if I was on Windows, I might use Visual Studio proper because it's got a Visual Studio solution in there, which is kind of cool for Windows developers.
+
+00:17:31 Yeah.
+
+00:17:31 And the article actually I'll take through.
+
+00:17:33 So Visual Studio 2019 came out whilst I was writing this.
+
+00:17:38 So it's been updated to explain how to use the community edition, which is the free version.
+
+00:17:43 So it's different to VS Code.
+
+00:17:45 Visual Studio is like a fully blown IDE.
+
+00:17:49 It's designed for sort of C, C++ and C Sharp development.
+
+00:17:52 And there's some explanation in here about how to use that to both compile CPython from source as well as do debugging and stuff like that.
+
+00:18:02 Yeah.
+
+00:18:02 You've got some really cool stuff how you have like the REPL running in a debugging instance embedded in Visual Studio or something like that, right?
+
+00:18:09 Yeah.
+
+00:18:09 It's pretty cool.
+
+00:18:10 Actually, I was really impressed.
+
+00:18:11 Definitely for Windows users, I'd say if you want to make changes and not just explore,
+
+00:18:18 then I'd pick on Visual Studio rather than VS Code because you're going to get much richer debugging.
+
+00:18:24 And Visual Studio 2019 as well is going to be able to compile for you.
+
+00:18:28 So if you just use VS Code, then you're going to need to run the MSBuild script files,
+
+00:18:34 which are located in the PCBuild directory.
+
+00:18:37 But it's actually a lot easier to use Visual Studio rather than running it all in the command line.
+
+00:18:42 Yeah, that makes sense.
+
+00:18:43 And I totally derailed your summary of these things over here.
+
+00:18:46 So we were talking about the lib folder is full of all the part of the standard library that is written in Python,
+
+00:18:52 like the CSV module or whatever.
+
+00:18:55 But then there's a bunch more, yeah?
+
+00:18:56 Yeah.
+
+00:18:57 So there's a folder for macOS support files.
+
+00:18:59 There's a couple of other miscellaneous directories that you shouldn't need to worry about.
+
+00:19:03 There's a folder called modules, which is the standard library modules that are written in C.
+
+00:19:08 So the standard library modules are split between the lib and the modules folders.
+
+00:19:13 So whether they're written in Python or C, they're in two different places.
+
+00:19:16 Right.
+
+00:19:16 So object, where you have a class and it drives from object, there's an object.c file in modules.
+
+00:19:22 Right.
+
+00:19:23 That part's pure C.
+
+00:19:24 Actually, they're in the objects folder.
+
+00:19:26 Oh, yeah.
+
+00:19:27 So there's a folder called objects, which has got the core types and the object model.
+
+00:19:34 So what is a number type?
+
+00:19:36 What is a string?
+
+00:19:38 What is an array?
+
+00:19:40 That sort of thing.
+
+00:19:41 Yeah, I had it totally wrong.
+
+00:19:42 So maybe like GC or something like that.
+
+00:19:44 Yeah.
+
+00:19:44 Then there's the parser, which is basically the thing that actually parses the source code into something that can be interpreted.
+
+00:19:51 Then there's some directories for Windows users.
+
+00:19:54 So there's PC and PC build.
+
+00:19:55 PC is the new version.
+
+00:19:58 PC build has got some sort of legacy scripts for building for older versions of Windows.
+
+00:20:03 There's a programs directory, which is the source code for the sort of either the Python.exe or the Python binary that you end up with on your machine.
+
+00:20:14 And there's a Python folder, which is confusing, but it has the interpreter source code.
+
+00:20:19 So I think it interprets the code through to execution.
+
+00:20:23 And then there's a folder called tools, which has got some tools and scripts and stuff like that for either building or extending Python.
+
+00:20:30 Super cool.
+
+00:20:31 And yeah, there's some of these that you want to really dive into and others are just support files.
+
+00:20:36 When I was looking around in the lib folder, I was kind of blown away at some of the stuff that's in there.
+
+00:20:41 I'm like, all right, well, what in here is actually implemented in Python?
+
+00:20:44 What's the code look like?
+
+00:20:47 You know, those are all interesting things.
+
+00:20:48 And then I came across some stuff that surprised me.
+
+00:20:52 Obviously, you would expect that these files would have comments, documentation that describes what they do, right?
+
+00:20:59 Absolutely.
+
+00:20:59 Yeah.
+
+00:21:00 So, but then I saw that a lot of them, not a lot, some of them, non-trivial number of them, actually have like ASCII diagrams that describe, say, like workflows or like relationships in the comments.
+
+00:21:13 It's pretty wild.
+
+00:21:14 Like the lib concurrent features process.py has like a great long like in process, out of process, like workflow diagram in the help doc.
+
+00:21:23 Oh, wow.
+
+00:21:24 Okay.
+
+00:21:24 That's pretty funny, right?
+
+00:21:25 And then also the JSON module, you know, has like cool ASCII art documentation.
+
+00:21:31 So anyway, I thought those were, those were surprising to me.
+
+00:21:34 Like really, there's, there's like diagrams in here.
+
+00:21:36 How cool.
+
+00:21:36 Yeah.
+
+00:21:37 I think if anyone wants to have a go at contributing to CPython, a really easy place to start is in the lib folder is all the standard library modules that are written in Python.
+
+00:21:48 They're easy to read.
+
+00:21:49 Most of them are not too complicated.
+
+00:21:51 Have a look through some of those because there's stuff in there, which is legacy syntax, which needs updating.
+
+00:21:57 There are bugs in there, which have been reported in the bug tracker, but never fixed.
+
+00:22:01 As well as if you compare what's in the code to what's in the documentation, you'll pretty quickly find gaps.
+
+00:22:09 The functions, which either don't have any documentation or the documentation is wrong, or the argument list is up to, is not up to date.
+
+00:22:17 So if you want to have a go and contribute and you're looking for something simple to get started with, then I'd say pick some of the, probably some of the more obscure standard library modules and see what needs fixing in those.
+
+00:22:29 Yeah, that's a good idea.
+
+00:22:29 And I honestly don't know how much of those have these, these issues, but it seems like a pretty straightforward way.
+
+00:22:35 Certainly contributing to the lib folder or the docs folder seems much more approachable to me than to like the objects or the modules.
+
+00:22:44 Cause down there, that's where the C code lives, right?
+
+00:22:47 Yeah.
+
+00:22:47 Before you get stuck into the core runtime, then I think it's a good idea to have a look at some of the high level Python code first.
+
+00:22:53 Probably a good idea as well.
+
+00:22:55 So I thought I'd just pull out a couple of files from each of these major sections, these folders that you talked about that were just kind of interesting.
+
+00:23:04 So over in the lib module, we have things like CSV, whole CSV implementation is over there.
+
+00:23:12 And it's, you know, it's not that much.
+
+00:23:14 I don't remember exactly how long it was, but it's, you know, a couple hundred lines, maybe 500 lines and you can just go read it and play with it.
+
+00:23:20 Right.
+
+00:23:20 Yeah.
+
+00:23:20 And you can make changes.
+
+00:23:21 You can put your own debug statements in, you can see how things are working, but it's pretty straightforward.
+
+00:23:26 There's a, you used to use the dict reader before, which is a really handy way of doing CSV parsing.
+
+00:23:32 Yeah.
+
+00:23:33 It's easy to understand how that works.
+
+00:23:35 It's written in clear, clear Python.
+
+00:23:37 Super cool.
+
+00:23:37 Yeah.
+
+00:23:37 So people can poke around there over in, let's say objects.
+
+00:23:40 That's the one I got wrong, actually.
+
+00:23:42 Over in objects.
+
+00:23:43 This is where object.c is defined, right?
+
+00:23:47 And this thing is way more complicated than I expected it.
+
+00:23:50 Obviously it's the base class for everything.
+
+00:23:53 So it's going to be doing a lot.
+
+00:23:54 It doesn't do as much as I thought it would, but it, there's a lot of code involved in there, isn't there?
+
+00:23:59 The core object types are actually quite complicated.
+
+00:24:02 That was something that surprised me when I was going through this deep dive is that I thought that there wasn't really a big difference between objects that I defined and objects that were built in like the, you know, the int type and the string type.
+
+00:24:15 I thought that they were more or less the same, but actually everything kind of sits on top of the core types.
+
+00:24:20 So the core types are all declared in C effectively, and they have C functions and everything that you put on top of that goes into a dictionary and is, is pure Python.
+
+00:24:30 Right. And it seems like there's a lot of memory management stuff that's happening down in there as well, like allocation and finalization.
+
+00:24:37 And it seems like that's the main purpose of what the plain object is about.
+
+00:24:42 Yeah. I think the two ones that are really interesting to look into is the list object and the dictionary object.
+
+00:24:48 So the beautiful thing about the list object is that you never have to worry about writing linked lists or doing list allocation like you would in many other languages.
+
+00:24:57 You can just add items to a list and it just magically makes it the right size.
+
+00:25:02 In the article, we actually talk about the growth pattern and how it reallocates the size automatically and how that works.
+
+00:25:09 But yeah, it's pretty cool to see how that is behind behind the scenes.
+
+00:25:12 Yeah. Do you really appreciate what it's doing for you down there?
+
+00:25:15 That's awesome.
+
+00:25:15 I love that.
+
+00:25:17 It's not just here's an array.
+
+00:25:19 Now you get to figure out all the complicated details of using it dynamically.
+
+00:25:23 Right.
+
+00:25:24 It's no, it's beautiful.
+
+00:25:25 It's a list.
+
+00:25:26 You know, there's one, you know, I told you I opened this whole project up in Visual Studio Code and Visual Studio Code has this cool extension, built in extension or like something I installed that has like a little gray highlight.
+
+00:25:37 When you're on a line of, you know, who's done what I think it's called get lens, maybe it's the thing I installed.
+
+00:25:44 But it had, you know, I was just poking around and it shows, you know, who's contributed or checked in this file.
+
+00:25:49 Like, so Pablo Galindo had just worked on object.c 22 days ago.
+
+00:25:55 But then as I arrowed down, like different parts would light up with people doing different things.
+
+00:25:58 Like line three, it says, get it on Rossum 29 years ago, initial revision.
+
+00:26:03 Some of the code in the CPython source is quite old and hasn't needed to change.
+
+00:26:08 Like it just worked the first time and it hasn't needed to be updated or there's nothing that's been changed in it.
+
+00:26:13 It's really interesting because when you dive through the code, I guess you can kind of see there.
+
+00:26:19 If you're looking at the Python 3.8 source code, you're actually looking at a almost like a canvas of 2.anything all the way up to the latest version.
+
+00:26:30 Even actually, even before 2.something, like some of this stuff is all the way back from version one.
+
+00:26:35 Right, right.
+
+00:26:35 Like object.c.
+
+00:26:36 Yeah.
+
+00:26:37 Yeah, exactly.
+
+00:26:37 So some things haven't really changed since the first versions, but the vast majority of the code has been drastically rewritten.
+
+00:26:43 over the last 10 years.
+
+00:26:44 It makes me think of like a canvas that like a painter would paint on and it's been painted over and painted over, right?
+
+00:26:51 Yeah, exactly.
+
+00:26:52 Cool.
+
+00:26:52 All right.
+
+00:26:53 So the next major area was the modules folder and this is where the standard library C implementation goes, right?
+
+00:27:00 Yeah.
+
+00:27:01 So there we have the main.c, which is the Python interpreter main program, which is pretty cool.
+
+00:27:06 And also GC module and stuff like that, right?
+
+00:27:09 Like memory allocation and whatnot.
+
+00:27:11 Yeah.
+
+00:27:11 So one of the ones we dig into quite a lot is main.c.
+
+00:27:14 So this is some of the really high level APIs for initializing the Python application.
+
+00:27:20 So the binary that you would run.
+
+00:27:21 So there's different ways that you can run Python.
+
+00:27:25 One that you typically use is just by typing Python on the command line or Python.xe.
+
+00:27:30 And that basically goes through a sort of a high level binary.
+
+00:27:34 And then that either takes an argument, which is the name of the file you want to run or the library you want to run or the module.
+
+00:27:41 Or you can even do, you know, Python dash C, for example, and actually give it a string with some Python code.
+
+00:27:47 So all the wrappers around that are in both this main.c and also another file called pymain.
+
+00:27:54 And then also there's a Python API, which you can call at the C level.
+
+00:28:01 So the Python binary is actually just a wrapper for the Python C API.
+
+00:28:05 And the Python C API, you can also import and use from your own application.
+
+00:28:10 So you can actually write an application in C that has embedded Python.
+
+00:28:16 And it uses exactly the same code, compilation, parsing, everything that you get when you type Python at the command line.
+
+00:28:23 So there are some practical uses for that.
+
+00:28:26 So there's some big applications out there that have Python kind of like built into them.
+
+00:28:31 One would be like a 3D designer called Houdini, which is like a 3D graphics tool.
+
+00:28:37 This kind of uses Python like deeply integrated into it, you know, using the C APIs.
+
+00:28:43 Yeah, that's really cool.
+
+00:28:44 I don't think people do that maybe as much as they should, right?
+
+00:28:47 Because saying the way that you extend our application is not to go write tons of C code that you could forget to allocate something and crash the whole program.
+
+00:28:55 But here, just write a little simple Python code and it makes our main app go.
+
+00:28:59 I think the folks in the movie and 3D game space use that a lot in a lot of their tools and actually use Python to like kind of drive those pipelines, the automation of a lot of the tooling like you're talking about Houdini.
+
+00:29:10 Yeah, that's pretty cool.
+
+00:29:11 So you spend a whole lot of time in the article diving into those different things and how that works.
+
+00:29:15 That's pretty cool.
+
+00:29:16 And then I guess the last interesting, there's lots of interesting stuff, but there's the last one that I want to call out on the different sections of different directories is the whole Python one.
+
+00:29:26 And this is where the Python runtime lives as opposed to the standard library or maybe the stuff that starts up the processes or the builds.
+
+00:29:36 Like this is where the execution happens, right?
+
+00:29:39 So the Python directory in the source code is really the brain of the whole application.
+
+00:29:47 So it's basically how it does the evaluation of the top codes, which is the sort of low level assembly code that Python ends up building.
+
+00:29:57 The Python run.c, ceval.c.
+
+00:30:00 So these are highly optimized C files, which have been written in and changed over time that basically executes the Python code.
+
+00:30:10 For sure.
+
+00:30:10 And so ceval.c, this is the big one when it comes to execution.
+
+00:30:17 This portion of Talk Python to me is brought to you by the University of San Francisco.
+
+00:30:21 Learn how to use Python to analyze the digital economy in the new master's in applied economics at the University of San Francisco.
+
+00:30:28 Located at the epicenter of digital disruption, USF is the ideal launching pad for the next phase of your career.
+
+00:30:34 Their new STEM designated economics program doesn't just provide technical training in high demand skills like machine learning, causal inference, experimental design, and econometrics.
+
+00:30:45 It takes the next step, teaching you how to apply these techniques to understand the economics of platforms, auctions, pricing, and competitive business strategy in the world of big data.
+
+00:30:55 The program is open to beginner and to advanced coders looking to apply their skills in a new area.
+
+00:31:01 Applications are now open for the fall 2020 classes.
+
+00:31:05 To learn more and get an application fee waiver, go to talkpython.fm/USF.
+
+00:31:11 That's talkpython.fm/USF.
+
+00:31:13 Maybe talk about the process of going from Python source code, what we would think of as what we wrote, to getting to Python bytecode before we get to CofLC.
+
+00:31:27 Like, what's the high-level flow there?
+
+00:31:29 Okay, cool, cool.
+
+00:31:30 So, first things first.
+
+00:31:32 So, you've written some Python code in a file, I'm assuming.
+
+00:31:36 So, first of all, it has to read the file, which is actually non-trivial because you've got to think about encodings and all sorts of other fun things.
+
+00:31:44 Then, basically, the parser will go through and take the file apart and put it into something called an abstract syntax tree.
+
+00:31:52 So, there's basically, actually, before that, there's a step called tokenization, which is to split the application into components.
+
+00:32:00 Then it goes into an abstract syntax tree.
+
+00:32:02 You can use the AST module.
+
+00:32:04 And in the article, I talk about how to use the AST module.
+
+00:32:08 And I wrote a small web application called Instaviz, which you can download on GitHub.
+
+00:32:13 Nice.
+
+00:32:14 What does it do?
+
+00:32:14 It basically represents the Python syntax in a massive tree that you can explore, like an interactive tree.
+
+00:32:21 And you can write Python code and it will give you the abstract syntax tree in, like, web application, like an interactive D3 graph.
+
+00:32:29 So, you can kind of play around and see.
+
+00:32:31 So, it's a bit easier to see how that tree works with the syntax and understanding the difference between a new line and an indent and what a name is and things like that.
+
+00:32:42 So, yeah, the tokenizer will kind of look at the file and wrap it up into tokens.
+
+00:32:48 And then the next step will be to put that into an abstract syntax tree.
+
+00:32:53 Once it's got the abstract syntax tree, then it will essentially compile that by doing a depth-first search.
+
+00:33:01 And then it puts it into something called a concrete syntax tree.
+
+00:33:05 That is more of a sort of literal interpretation.
+
+00:33:08 So, an abstract syntax tree says that you've got an if statement and inside the if statement you're comparing two variables and you're checking that they equal each other.
+
+00:33:16 And then if that is successful, then you're going and doing these three extra lines of code, which you've nested with a tab, for example.
+
+00:33:24 So, that's what an abstract syntax tree would look like.
+
+00:33:27 The concrete syntax tree, the CST, is basically a bit more low level than that.
+
+00:33:32 So, it's actually saying at the lower level, like, here's the statements we need to execute.
+
+00:33:36 And then the compiler is another step, which basically takes the concrete syntax tree and converts it into a list of opcodes.
+
+00:33:46 And this is the Python bytecode, basically, which is no longer a byte.
+
+00:33:53 It's actually a word.
+
+00:33:54 But, yeah, there's a separate issue.
+
+00:33:56 They're long words.
+
+00:33:57 Yeah, they're long words.
+
+00:33:58 Yeah, yeah.
+
+00:33:59 So, I think that's interesting because a lot of folks think of Python as a scripting language.
+
+00:34:04 They think of it as, like, this thing that is not, like, one of the things that defines what Python is that it's not compiled.
+
+00:34:11 But you just said there's a compiler.
+
+00:34:12 Yes.
+
+00:34:13 So, it absolutely is compiled.
+
+00:34:15 It's compiled into an intermediate language.
+
+00:34:18 So, similar to .NET and Java.
+
+00:34:21 So, .NET and Java both have JITs.
+
+00:34:24 So, just-in-time compiles and execution.
+
+00:34:27 But Python is a bit different.
+
+00:34:29 CPython, that is.
+
+00:34:30 PyPy does have a JIT.
+
+00:34:31 But CPython compiles down to an intermediate language as well.
+
+00:34:36 It's kind of like Csharpen.net or like Java.
+
+00:34:39 But where it differs is what happens when you try to execute that, right?
+
+00:34:43 In, like, Java, it would JIT that to machine instructions.
+
+00:34:46 In Python, it takes this big bunch of these opcodes and feeds them off to ceval.c.
+
+00:34:53 Yeah.
+
+00:34:53 There's a switch statement.
+
+00:34:54 The opcodes end up getting cached in a PYC file or in newer versions in the Dunder PyCache folder.
+
+00:35:04 So, if you've ever noticed that when you've run a Python application, it creates this cache folder in your application directory.
+
+00:35:13 So, basically, it goes from the source code all the way through to almost like the compiled code.
+
+00:35:19 And then it puts that in a cache folder.
+
+00:35:21 So, it does actually do the compilation.
+
+00:35:23 And then the next step is to execute that.
+
+00:35:25 It's a literal list of statements that it works through.
+
+00:35:29 And it has a frame stack and a value stack, which I talked through in the article because it takes a bit of time to get your head around those.
+
+00:35:36 But in a nutshell, the frame stack is if you called a function inside your Python code, then you'd expect the local variables to be different, for example.
+
+00:35:45 And you couldn't just reference the stuff that you were using beforehand.
+
+00:35:49 So, there's essentially these frames.
+
+00:35:51 And then also there's a value stack, which is used by the opcode so that it doesn't really understand the different variables you have.
+
+00:35:58 They're just all on the pile.
+
+00:35:59 And you can add things on top of the pile and you can remove things from the pile.
+
+00:36:02 So, that's essentially how it works.
+
+00:36:05 Right.
+
+00:36:05 It might load three things onto the value stack and then call the function with that, right?
+
+00:36:11 Something to that effect.
+
+00:36:12 So, the opcodes are really low-level statements, essentially.
+
+00:36:15 So, they're sort of push and pop values from the stack, for example, or to initialize a new list or to initialize a new variable or to call a C function.
+
+00:36:27 That's cool.
+
+00:36:27 If you want to explore those, there's the disk module, right?
+
+00:36:31 And people can import, they can say, from disk, import disk, and then they can start taking a function and asking what bytecodes or opcodes make up this thing, right?
+
+00:36:39 Yeah.
+
+00:36:39 I've got a small snippet of code which will work in Python 3.7 and above.
+
+00:36:44 So, in 3.7 and above, you can actually do, in the sys module, there's a tracing flag, which you can enable.
+
+00:36:51 And you can run a piece of code and it'll actually print out where you are in the frame stack, what opcodes are being executed,
+
+00:36:59 and you can inspect the value stack as well.
+
+00:37:01 So, if you want to almost, like, play around with the runtime and see what's happening live when I run this piece of code,
+
+00:37:08 there's a snippet in the article, which we'll link to in the show notes as well, where you can basically see the frame stack live.
+
+00:37:15 That's pretty awesome.
+
+00:37:15 So, you can just get it to just dump, like, every bit of what it's up to, huh?
+
+00:37:19 Yeah, and I got it to nest as well, so that, you know, as you go deeper down in terms of the frame stack,
+
+00:37:23 it will pad things out further and further to the right, so you can see where you are in the tree as well.
+
+00:37:28 Yeah, that sounds like you'd almost have to have it or you'd just go crazy.
+
+00:37:31 That's cool, though.
+
+00:37:33 It sounds super useful if you're just trying to understand.
+
+00:37:35 Yeah, so then eventually it goes down to ceval.c, which is a very complicated piece of C code.
+
+00:37:44 It has a lot of macros as well, which makes it quite hard to follow.
+
+00:37:48 But essentially, it's a big loop.
+
+00:37:50 So, it's a big for loop, essentially, and it goes through each opcode in that frame and executes it.
+
+00:37:57 So, it's a big for loop, and inside the for loop, there's a massive switch statement, which says, you know,
+
+00:38:03 if it's this opcode, do this, if it's that opcode, do this.
+
+00:38:06 And then for each one, it typically calls a C function.
+
+00:38:10 So, you know, if you're going to load a variable onto the value stack, then it would fetch the variable and push it onto the stack.
+
+00:38:18 Like, there would be, you know, two or three lines of code for each opcode.
+
+00:38:22 Some of them are a bit more complicated.
+
+00:38:24 So, you can do, let's say, set add, for example, is a basic opcode.
+
+00:38:30 So, if you had set add, you're adding two sets together, then basically it would call py set add, which is a C API.
+
+00:38:37 So, most of the opcodes actually just call C functions.
+
+00:38:40 Right, they take the variables that are on this value stack and they just go call the C function with that.
+
+00:38:45 Yeah.
+
+00:38:46 Yeah, this is like a serious switch statement.
+
+00:38:49 It's, you know, people haven't looked at it yet.
+
+00:38:51 It's like three, four thousand lines long.
+
+00:38:54 I don't have it pulled up just right a second.
+
+00:38:56 Another thing that surprised me is there's some interesting flow control mechanisms in there.
+
+00:39:03 Like, go-to.
+
+00:39:04 There's a lot of go-tos.
+
+00:39:05 How did that, did you feel like when you saw that?
+
+00:39:08 Were you like, what is this?
+
+00:39:09 The go-tos make sense because basically there's some optimizations in here.
+
+00:39:14 So, sometimes you'll get opcodes that typically come in pairs.
+
+00:39:18 So, what they've done is over time they've said, okay, you know, if you're going to create a new list, then, you know, you're going to create a new name and initialize a new list.
+
+00:39:31 And those two opcodes are going to end up being next to each other.
+
+00:39:34 So, in the switch statement, it actually kind of has like shortcuts in the code so that it knows that if it's running this opcode, the chances are it's probably going to run that opcode next.
+
+00:39:45 So, it basically shortcuts a lot of the other inspections and a lot of the other checks.
+
+00:39:50 Also, there's a lot of go-tos in terms of yields.
+
+00:39:54 So, if you're yielding values back as well as doing errors.
+
+00:39:57 So, if you call a function and the function crashes or if you try and store an attribute but there's some sort of error at the low level, then it will go to like a generic error section which basically starts off the whole exception process.
+
+00:40:11 It makes sense because it's so highly optimized.
+
+00:40:14 Like, forget doing it the right way.
+
+00:40:17 If the go-to makes it a little bit faster, get in a go-to, right?
+
+00:40:20 Because this is the hot loop that runs every single thing that happens in the language.
+
+00:40:24 Yeah, this thing is going to run thousands and thousands and thousands of times.
+
+00:40:28 So, you want it to be as fast as possible.
+
+00:40:31 I'd say that in terms of micro-optimizations, I think they've pretty much done most of what they can.
+
+00:40:38 There was some stuff introduced in 3.7 to do with the fast method calls.
+
+00:40:42 Right, for methods without keywords, right?
+
+00:40:44 Yeah, so the fast method calls were to do with if you're calling a method in a class that doesn't have keyword arguments, then it's about 20% faster.
+
+00:40:52 And you can see in this loop, you can actually see that opcode and how it works as well.
+
+00:40:57 So, it's pretty cool.
+
+00:40:58 I would say if you are trying to understand how CPython executes code, the C eval C and the switch statement, this is the place to start, right?
+
+00:41:05 It's a good place to understand.
+
+00:41:07 I wouldn't say start here.
+
+00:41:09 I'd say get here.
+
+00:41:10 I'd say work your way towards it.
+
+00:41:13 If you just jump in, it's not going to make a whole lot of sense.
+
+00:41:16 Right, okay, fair enough.
+
+00:41:17 So, another thing that you spent a fair amount of time on and you tied it back to the underlying C API was memory management.
+
+00:41:23 Yeah, this is definitely one of my weaknesses in understanding.
+
+00:41:27 I thought I understood how memory management worked in CPython.
+
+00:41:30 But the more I looked into it, the more complicated it actually is.
+
+00:41:33 There's basically different types.
+
+00:41:35 There's different ways it allocates blocks and also arenas.
+
+00:41:39 And there's basically a Python version of, or a CPython version of Memalik.
+
+00:41:44 So, instead of calling Memalik directly from C, you're supposed to call the sort of CPython version, which has got more governance and also more cleanup.
+
+00:41:52 Yeah, and it also does a bunch of work to try to avoid fragmentation and stuff like that.
+
+00:41:56 So, I think it's interesting.
+
+00:41:57 I don't think people talk about memory management in Python very much.
+
+00:42:00 On one hand, like, who cares?
+
+00:42:01 Whatever.
+
+00:42:02 We don't have to worry about it.
+
+00:42:03 Hooray, right?
+
+00:42:04 That's, like, one of the reasons we like the language.
+
+00:42:06 Like, I'm so done with calling Malik and free.
+
+00:42:09 I just don't want to do that again.
+
+00:42:10 But on the other hand, just having a conceptual understanding of what is happening at a pretty good level helps you think through, this algorithm might be better than that.
+
+00:42:20 Or if we're having these memory problems, we might be able to, you know, do something slightly different in terms of how we're using, like, how we're defining our code.
+
+00:42:27 Like, you know, maybe to take advantage of not work against the way it works, but to work with it, right?
+
+00:42:31 Yeah, one of the biggest benefits to the CPython is that everything basically comes from PyObject.
+
+00:42:38 So, the core type of an object, which is used by integers and strings and lists and everything, including the objects that you define, everything kind of comes from the same type.
+
+00:42:50 So, the memory management is very optimized because basically everything inherits from something.
+
+00:42:56 So, you know that the structure at least has this fixed size.
+
+00:42:59 So, what they've done is they've built in these utilities for allocating sections of memory on your machine so that you can store objects easily and fetch them and reference them.
+
+00:43:12 So, that's something called the PyArena, which is referenced quite a lot in the code.
+
+00:43:16 And you'll see, you know, when you add objects to the arena, where that goes to.
+
+00:43:20 So, basically, it's a way of putting Python objects into memory.
+
+00:43:24 And also, that's where the PyArena malloc kind of comes from, which is to do with object memory allocation.
+
+00:43:30 So, that's the really sort of low-level memory allocation techniques that are used in size-seat Python, which are optimized around the size of the PyObject type and typically the types of memory that are requested and the way that they're used.
+
+00:43:46 But if you're using Python at the Python level, you'd never care about that sort of thing.
+
+00:43:51 You just expect that when you declare an object, it has its memory.
+
+00:43:56 Like, you know, it figures that out itself.
+
+00:43:59 But at the Python layer, you definitely do need to know about the reference counter and the garbage collector if you're writing applications which run for any long period of time.
+
+00:44:10 Yeah.
+
+00:44:10 Well, you talked about Java and .NET before.
+
+00:44:13 Those are both market sweep garbage collecting type of systems.
+
+00:44:17 If you go back to something like C or C++, it's manual.
+
+00:44:20 You know, maybe you could create a smart pointer in C++ and then that's kind of reference counting.
+
+00:44:25 But Python's interesting, I think, because it has this blend, right?
+
+00:44:28 It's like, well, we're going to do reference counting, which is pretty awesome and predictable and deterministic and fast.
+
+00:44:32 Except for when you have cycles.
+
+00:44:35 Like, that's the main weakness of reference counting, right?
+
+00:44:38 You cannot break a cycle because the reference count is never going to go below one.
+
+00:44:43 Or if you have two things that refer to each other, like, how do they become garbage, right?
+
+00:44:46 So we have this GC that also runs.
+
+00:44:49 But yeah, it's pretty interesting.
+
+00:44:50 And you could see some of that happening that you're exploring there.
+
+00:44:53 I'll go through the garbage collection module.
+
+00:44:56 So there's GC module.
+
+00:44:57 And you can actually put debugging in the GC module from the Python layer.
+
+00:45:02 So if you import GC and then run GC set debug, you can basically turn on debug statistics so that when you're even at the REPL, like if you want to assign variables and stuff like that, you can see like what's happening at the garbage collector and what the threshold is and when it runs.
+
+00:45:19 And you can also customize how many cycles the garbage collector runs at.
+
+00:45:23 Because basically the garbage collector, I've taken the easy analogy that it's like the trash trucks that come and pick up your garbage.
+
+00:45:31 Like it doesn't make sense for them to come every time you put something in the bin.
+
+00:45:36 They come once a week or once a fortnight.
+
+00:45:38 So you can basically customize that.
+
+00:45:40 So you can say how many cycles until it goes and checks which objects are no longer needed and which ones don't have any references anymore.
+
+00:45:47 And it'll go and clean those up.
+
+00:45:49 Another thing that's interesting, the two things that are interesting that you can write in Python code that are fun to play with to give you a better understanding is you can write some code.
+
+00:45:59 I think you've got to do some C imports, but you can basically ask how many references are there to this object ID.
+
+00:46:05 Right.
+
+00:46:06 And it'll tell you there's five or whatever and so on.
+
+00:46:09 The other one that you can do that's interesting is to play with the weak reference type to create a weak reference to a thing.
+
+00:46:15 Then see if it's still alive or not.
+
+00:46:18 Right.
+
+00:46:19 Because that doesn't still let you address that thing, but not actually keep it alive by holding a pointer to it.
+
+00:46:26 Right.
+
+00:46:26 The garbage collector's debug stats are a great way of doing that because it kind of dumps that information to the to the repo as well.
+
+00:46:32 So, yeah.
+
+00:46:33 Another thing you can do is implement the Dunderdell, I think.
+
+00:46:36 You can actually get it to print out when an object is finalized or deleted.
+
+00:46:41 Yeah.
+
+00:46:41 Dunderdell is really useful for doing any of the custom cleanup code.
+
+00:46:45 So it's almost like you have a constructor and Dunder in it and then you have a destructor as well.
+
+00:46:51 Yeah, exactly.
+
+00:46:52 So while we're on this memory stuff, let me just throw out this really quick, this article by Instagram.
+
+00:46:57 It's a little bit old.
+
+00:46:58 It's a couple of years old now, but it's called Dismissing Python Garbage Collection at Instagram.
+
+00:47:03 I think maybe I covered this on Python Bytes long, long ago, but it says because you can import GC and say GC.disable or GC.collect now.
+
+00:47:13 Right.
+
+00:47:14 You can take a little bit of control.
+
+00:47:15 Not necessarily that you should, but you can.
+
+00:47:18 And over at Instagram, they said they can run 10% more efficiently by disabling GC and reduce the memory footprint and improve the CPU LLC cache hit ratio on their Django servers.
+
+00:47:31 That's a very focused use case.
+
+00:47:33 But they happen to do that.
+
+00:47:34 I'll put a link to that in the show notes.
+
+00:47:36 So you can also see about playing around the GC, some over there and whatnot.
+
+00:47:39 Awesome.
+
+00:47:40 Yeah, pretty wild.
+
+00:47:41 All right.
+
+00:47:41 Oh, let's see.
+
+00:47:42 So another thing that I think will be fun to talk about, we've got just a little bit of time left, not much, is just objects in the Python data model.
+
+00:47:50 Right.
+
+00:47:51 So the objects folder is where all that stuff lives.
+
+00:47:54 And we talked a little bit about object C, but there's more stuff that defines the object, the data model, right?
+
+00:48:00 Like dunder iter, dunder enter, dunder exit, repper, all that kind of stuff, right?
+
+00:48:05 There's basically a list of these core in the Python data model.
+
+00:48:09 And actually, I referenced Luciano Romano's book, which if you want to understand.
+
+00:48:14 Yeah, it's a fluent Python.
+
+00:48:16 It's a great book.
+
+00:48:16 Yeah.
+
+00:48:17 Fantastic book.
+
+00:48:17 And if you want to understand the Python data model and how to really leverage it to write fluent Python, then I'd recommend checking out that book.
+
+00:48:25 It's available in pretty much every language now.
+
+00:48:27 So that's awesome.
+
+00:48:28 I think it's a must read for any Python programmer.
+
+00:48:31 But basically, if you are writing a custom type that was a sequence, so it was a sequence of items, then you'd have dunder len, for example.
+
+00:48:41 You can customize what the length is.
+
+00:48:43 You can say dunder contains or you can do slicing.
+
+00:48:47 You can do repeats, concatenation.
+
+00:48:49 So you can kind of override the behavior of these kind of core operators.
+
+00:48:54 But that stuff is actually built in to the object.
+
+00:48:58 So there's a list object.
+
+00:49:00 If I pick on a list as an example.
+
+00:49:01 And in the list object type, there is something called sequence methods, which is basically in the data model, the dunder methods that are in place for anything which is a sequence.
+
+00:49:13 So a byte array, for example, or a list.
+
+00:49:16 So you can go in there and just look at all the different parts or aspects of the core data model.
+
+00:49:20 It's spread across all these different classes, right?
+
+00:49:23 It's not just all jammed into object.c.
+
+00:49:25 Like you said, there's a list object.c and an iter object.c and so on.
+
+00:49:31 Yeah, so there's basically these core types.
+
+00:49:33 I think there's about 20 of them, the core types.
+
+00:49:38 So you'd recognize them, things like dictionaries and modules and methods, memory and long objects.
+
+00:49:44 So yeah, it's interesting to dig through them.
+
+00:49:47 If you want to look at them, I'd say don't jump into the Unicode object first because it's probably one of the most complicated.
+
+00:49:55 So the Unicode object is the string type.
+
+00:49:57 The old string type basically doesn't really exist anymore.
+
+00:50:01 You can do byte arrays.
+
+00:50:02 So there's a byte array object type now.
+
+00:50:05 But if you want to look at strings, the Unicode object is in there.
+
+00:50:08 But it's hugely complicated because it has to deal with all the encodings and all that magic.
+
+00:50:13 Yeah, wide character pointers and all that.
+
+00:50:16 Yeah, no thanks.
+
+00:50:17 I'll start somewhere else.
+
+00:50:18 So, you know, that about covers it for our guided tour through the actual source code.
+
+00:50:24 But maybe we could talk just really quickly about a couple of things before we're out of time.
+
+00:50:28 You talked about doing a lot of stuff with pytest and doing testing.
+
+00:50:31 What's the story around testing in Python, Python source code?
+
+00:50:34 In CPython, there's a huge test suite, which takes a lot of time to run.
+
+00:50:39 It's both.
+
+00:50:41 There's a all the tests are written in Python, which is great.
+
+00:50:44 They are written using unit tests.
+
+00:50:46 They're using the unit test module.
+
+00:50:48 And they run using concurrent processes as well.
+
+00:50:52 Because there are so many tests to run in the test suite.
+
+00:50:54 There's basically a it doesn't call unit test directly.
+
+00:50:57 It actually runs like this test runner, this custom test runner that they've built.
+
+00:51:02 So inside the test module for CPython, it'll test both the standard library module behaviors,
+
+00:51:09 as well as the parser, as well as the core runtime, as well as the APIs.
+
+00:51:14 So, yeah, like I said, there's a huge test suite.
+
+00:51:19 The simple ones to understand, I guess, are the tests which are focused on the standard
+
+00:51:23 library modules because it's Python code testing Python code, which is fairly simple.
+
+00:51:28 And then if you look at the C layer, then basically the way that you wrap C code and call it from
+
+00:51:34 Python, essentially using that from the test code to test different functionality.
+
+00:51:39 There's also documented somewhere is the sort of coverage for the different parts of Python.
+
+00:51:45 Some standard modules, standard library modules have a pretty low test coverage.
+
+00:51:50 So if you do want to get started somewhere, adding tests is always a great place to have a look.
+
+00:51:54 And you'll find some of the more obscure modules as well have little to no tests.
+
+00:51:59 Yeah. So you could write some potentially, right?
+
+00:52:01 Yeah, definitely. You could write some.
+
+00:52:02 And, you know, when you're writing tests, you might come across a few bugs that you want to fix as well,
+
+00:52:07 which is awesome. But the core runtime itself is heavily tested.
+
+00:52:10 I'm sure it's super, super heavily tested.
+
+00:52:13 The other thing that might be fun to talk about is, you know, now that CPython is over on GitHub,
+
+00:52:19 it's really easy to go look at the branches and how they're working at those.
+
+00:52:22 Maybe give people an overview of that.
+
+00:52:24 It looks like it's pretty much focused around releases and not like, say, feature branches or
+
+00:52:29 something like that.
+
+00:52:30 Yeah. So they have released branches.
+
+00:52:32 So if you were to go and look at CPython now, it would say Python 3.9, which might take some of you by surprise because 3.8 only came out a week ago.
+
+00:52:43 So actually what they do is they declare a sort of a feature freeze in the Python release cycle.
+
+00:52:50 So the feature freeze for 3.8 actually happened a few months ago.
+
+00:52:54 Basically when they go to beta, right?
+
+00:52:55 Yeah, basically. So any new enhancements or stuff like that would go into the next version,
+
+00:53:01 which is 3.9 and bug fixes would get merged back in.
+
+00:53:05 There's a series of bots in the GitHub repository that do merging back of bug fixes and stuff like that.
+
+00:53:12 So when you tag the issues or the PRs that you've raised with certain tags,
+
+00:53:18 there's some really cool bots that Marietta wrote that will actually go and merge that back into the appropriate releases,
+
+00:53:24 which is really cool.
+
+00:53:24 Yeah, that actually sounds super awesome.
+
+00:53:26 That's awesome. That's great.
+
+00:53:27 I suspect people who are core developers or making contributions, they might do feature branches, but not here in the main repo.
+
+00:53:33 Yeah. So basically most of the core developers have their own fork and they run feature branches on their own forks.
+
+00:53:41 So if you want to look at some of the proposed peps, then typically at the bottom of the pep, there'll be a link to example implementation.
+
+00:53:49 And that typically sits on a fork of the CPython repo on that core developer's copy.
+
+00:53:55 So you can actually see different experimental versions and different experimental features,
+
+00:54:00 like some of the work that Eric Snow was doing on subinterpreters, lived inside his fork, which is really interesting to explore.
+
+00:54:07 But it doesn't live in the main Python, CPython repository.
+
+00:54:11 Right. Not until it's officially accepted, part of it.
+
+00:54:13 Yeah. And then when it gets officially accepted, they typically rewrite it anyway and clean up the code.
+
+00:54:18 Yeah, I can imagine.
+
+00:54:19 Oh, very cool.
+
+00:54:20 And then I, you know, just it's worth throwing out that we're over on GitHub.com slash Python slash CPython.
+
+00:54:26 But if you step it up one level just to the Python organization, there's actually some other interesting projects there as well.
+
+00:54:33 Right. We've got the peps are over there.
+
+00:54:35 TypeShed, which are the stubs that define the static types for various Python things.
+
+00:54:40 Python.org is there.
+
+00:54:42 The dev guide that you referenced, a bunch of stuff to go play with, right?
+
+00:54:45 Yeah, there's heaps of stuff on there.
+
+00:54:46 Super cool.
+
+00:54:47 All right, Anthony.
+
+00:54:48 Well, this is really interesting.
+
+00:54:49 Thanks for doing all the research, writing this great article, and walking us all through it.
+
+00:54:54 It's going to be a good resource for years to come, I think.
+
+00:54:56 Yeah, I'm hoping that people read this and get some value out of it, get some knowledge,
+
+00:55:00 and hopefully fix some bugs, write some documentation, do some tests, or maybe even add a new feature and get it merged into CPython.
+
+00:55:08 Yeah, absolutely. You know, one really quick thing, you did mention that as you were writing this,
+
+00:55:12 the source code that you were referring back to was changing, and you didn't want it to get out
+
+00:55:16 of date. So you also did some cool extensions to keep the article up to date, didn't you?
+
+00:55:21 In the article, I reference some of the functions actually a lot of times. So like thousands of times,
+
+00:55:27 I reference a particular function or a particular file. And as I was writing the article,
+
+00:55:32 obviously the code is not static, it's changing all the time. So what I ended up having to do was
+
+00:55:37 actually write a markdown preprocessor in Python.
+
+00:55:41 Were you inspired by the C macros you were seeing all over the place?
+
+00:55:44 Yeah, I just saw so many macros. So I thought it'd be a good idea. So in the article,
+
+00:55:48 like if I reference a function, you can click on it, and it takes you to the GitHub source code,
+
+00:55:55 and it takes you straight to the line where that function is defined. But actually, that work was
+
+00:56:00 done using Python using a preprocessor, so that I can basically refresh the article with newer versions
+
+00:56:07 of newer versions of CPython as they come out, and it rewrites it for me.
+
+00:56:11 That's awesome. I love it. That's really, really a cool way to approach it.
+
+00:56:14 All right, so I think we have to leave it there for the guided tour. But I do have the two questions
+
+00:56:18 to ask you, of course, before I let you out of here. I'm going to write some Python code. Maybe let's
+
+00:56:23 change it. If we're going to work on this project, right, where it's got Python and C,
+
+00:56:28 what editor are you going to use on it?
+
+00:56:29 I use, thanks to the nice people, JetBrains. I've got access to PyCharm and CLion. CLion is the
+
+00:56:38 C version of PyCharm. So it's made by JetBrains. It's very similar. So I use CLion for really deep
+
+00:56:45 debugging and PyCharm for exploring some of the Python code. And then when I was writing on Windows,
+
+00:56:52 I would use Visual Studio 2019. So I'd recommend either of those two stacks. You can use VS Code
+
+00:56:59 in both environments as well. But for the deep debugging and stuff like that, then I found that
+
+00:57:04 CLion was pretty good.
+
+00:57:05 Yeah, that's cool. I was definitely considering CLion to explore this as well. But I'm not going
+
+00:57:09 to compile it. I just want to walk through it and kind of pull some stuff out. So VS Code.
+
+00:57:12 Super cool. All right. And then notable PyPI package. What have you run across lately that you're
+
+00:57:17 like, oh, this is sweet?
+
+00:57:18 That's a hard one, actually. I'm kind of working on a few at the moment.
+
+00:57:22 Yeah, at the moment, I'm working on pytest support for Azure Pipelines. So if you search
+
+00:57:30 for pytest as Azure Pipelines, if you're using Azure's new CICD service, and you're using pytest,
+
+00:57:36 then please check out the module. It basically automates how you run pytest and upload test results.
+
+00:57:42 And it gives you coverage automatically and stuff like that. So yeah, it's a really,
+
+00:57:46 really simple package that I put together. And it's ended up being referenced in the documentation.
+
+00:57:51 So it's become quite popular pretty quickly.
+
+00:57:53 That's super cool. So it's becoming officially part of the way to work over there, right?
+
+00:57:58 Yeah. And then there's also now a plugin for your GUI. So in the Azure GUI, if you install this plugin,
+
+00:58:05 you can actually get all the pytest information in the UI as well.
+
+00:58:09 Okay, that's awesome. People definitely have to check that out. All right, final call to action.
+
+00:58:13 People are excited about CPython. You gave them some ideas about going back,
+
+00:58:18 adding some documentation, adding some tests, looking for unsolved bugs, things like that.
+
+00:58:22 What are you telling them?
+
+00:58:23 Oh, yeah. Have fun as well. Like you can add silly features. You can do experiments.
+
+00:58:28 You know, don't feel like you have to do something that's, you know, might seem like a chore at first.
+
+00:58:34 Just experiment, see what you can break, see what you can change, and run your own custom fork.
+
+00:58:40 And just I think you'll learn a lot by just experimenting.
+
+00:58:43 Yeah, it's super easy to get started with the article you put together. So it's fun to experiment for sure.
+
+00:58:46 All right. Well, thanks. Bye.
+
+00:58:48 Thanks, Michael.
+
+00:58:50 This has been another episode of Talk Python to Me.
+
+00:58:52 Our guest on this episode was Anthony Shaw, and it's been brought to you by Linode and the University of San Francisco.
+
+00:58:58 Linode is your go-to hosting for whatever you're building with Python.
+
+00:59:03 Get four months free at talkpython.fm/linode. That's L-I-N-O-D-E.
+
+00:59:08 Learn how to use Python to analyze the digital economy in the Masters of Applied Economics at the University of San Francisco.
+
+00:59:16 Just go to talkpython.fm/USF to find out more.
+
+00:59:20 Want to level up your Python?
+
+00:59:23 If you're just getting started, try my Python Jumpstart by Building 10 Apps course.
+
+00:59:27 Or if you're looking for something more advanced, check out our new async course that digs into all the different types of async programming you can do in Python.
+
+00:59:36 And of course, if you're interested in more than one of these, be sure to check out our Everything Bundle.
+
+00:59:40 It's like a subscription that never expires.
+
+00:59:43 Be sure to subscribe to the show.
+
+00:59:44 Open your favorite podcatcher and search for Python.
+
+00:59:47 We should be right at the top.
+
+00:59:48 You can also find the iTunes feed at /itunes, the Google Play feed at /play, and the direct RSS feed at /rss on talkpython.fm.
+
+00:59:57 This is your host, Michael Kennedy.
+
+00:59:59 Thanks so much for listening.
+
+01:00:00 I really appreciate it.
+
+01:00:02 Now get out there and write some Python code.
+
+01:00:03 I really appreciate it.
+
