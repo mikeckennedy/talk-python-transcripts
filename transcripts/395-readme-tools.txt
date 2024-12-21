@@ -1992,7 +1992,7 @@
 
 00:56:46 do the language specifier in markdown, so the triple dot back tick, and then you just say the word
 
-00:56:52 Python or JavaScript or C Sharp or whatever, that'll tell the formatters, format it like,
+00:56:52 Python or JavaScript or C# or whatever, that'll tell the formatters, format it like,
 
 00:56:59 this, right? It's this type of syntax you should see. So if you do the Python one,
 
