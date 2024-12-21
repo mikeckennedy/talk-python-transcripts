@@ -1,0 +1,2192 @@
+WEBVTT
+
+00:00:00.001 --> 00:00:05.740
+What do web servers do most of the time? They wait. They wait on external systems while processing a
+
+00:00:05.740 --> 00:00:10.020
+request. Think about a standard web request to an e-commerce site where you're logged in.
+
+00:00:10.020 --> 00:00:15.220
+You send a session cookie and request to a URL. It pulls a bunch of items from the database,
+
+00:00:15.220 --> 00:00:20.840
+maybe a Redis cache, and even talks to an external API. And that is exactly the situation
+
+00:00:20.840 --> 00:00:25.880
+AsyncIO is built for. But to take advantage of it in the Python web frameworks, the framework
+
+00:00:25.880 --> 00:00:31.440
+itself has to support AsyncView methods. That's what SANEC was built to do. On this episode,
+
+00:00:31.440 --> 00:00:35.840
+you'll meet Adam Hopkins, who is leading the SANEC project. This is Talk Python to Me,
+
+00:00:35.840 --> 00:00:39.560
+episode 188, recorded November 27th, 2018.
+
+00:00:53.240 --> 00:00:58.500
+Welcome to Talk Python to Me, a weekly podcast on Python, the language, the libraries, the ecosystem,
+
+00:00:58.500 --> 00:01:03.180
+and the personalities. This is your host, Michael Kennedy. Follow me on Twitter where I'm at,
+
+00:01:03.180 --> 00:01:08.480
+mkennedy. Keep up with the show and listen to past episodes at talkpython.fm. And follow the show on
+
+00:01:08.480 --> 00:01:11.540
+Twitter via at Talk Python. Adam, welcome to Talk Python.
+
+00:01:11.540 --> 00:01:13.720
+Thank you for having me. I'm excited to be here.
+
+00:01:13.720 --> 00:01:18.360
+Yeah, I'm excited to have you here. I'm really excited to talk about asynchronous web frameworks
+
+00:01:18.360 --> 00:01:23.080
+with you, in particular, Sanic. But before we get to that story, let's start with yours. How'd you
+
+00:01:23.080 --> 00:01:23.980
+get into programming in Python?
+
+00:01:23.980 --> 00:01:30.720
+I started getting into programming mostly in high school, but I've sort of been around computers
+
+00:01:30.720 --> 00:01:38.220
+all my life. I mean, my dad had computers when I was a kid in the 80s, and I really remember not
+
+00:01:38.220 --> 00:01:42.740
+having computers. I've always been very comfortable, you know, tinking around and playing with them.
+
+00:01:42.840 --> 00:01:49.840
+But I think I really got started into programming mainly by, I wanted to build a website. I was
+
+00:01:49.840 --> 00:01:56.560
+interested in trying to put things online, and I started to build some stuff. And I mainly started
+
+00:01:56.560 --> 00:02:03.500
+out working with PHP, because at the time, that was sort of the big kingpin if you wanted to put
+
+00:02:03.500 --> 00:02:05.600
+something online, and it was easy to get started.
+
+00:02:05.600 --> 00:02:08.520
+Yeah, it's definitely, and it's still massive on the web.
+
+00:02:08.520 --> 00:02:16.880
+Yeah, it is. I think WordPress definitely helps get people started, and is a really good intro and a
+
+00:02:16.880 --> 00:02:24.500
+nice tool for people. And I kind of had my own, I don't want to call them problems, but I started,
+
+00:02:24.500 --> 00:02:29.580
+I felt like every time I was working in PHP, I sort of needed to keep one eye on the documentation,
+
+00:02:29.580 --> 00:02:31.240
+because I could never remember.
+
+00:02:31.240 --> 00:02:35.920
+Yeah. It wasn't obvious. It wasn't clear. It's just one of those languages, right?
+
+00:02:36.300 --> 00:02:40.720
+Exactly. You know, one time there's a function, and the parameters are needle and haystack,
+
+00:02:40.720 --> 00:02:46.760
+and the next time the search is haydl and e-stack, and I can never remember which way the namings
+
+00:02:46.760 --> 00:02:52.340
+convention. And so I started looking around to try to find something else.
+
+00:02:52.340 --> 00:02:56.260
+You're like, it's got to be better than this. Other people use other tools. What are we going to use?
+
+00:02:57.060 --> 00:03:04.060
+Exactly. And I did know a little bit about Python, and more, you know, just, I'm going to write a script
+
+00:03:04.060 --> 00:03:10.360
+and print out Hello World type stuff. I mean, nothing sophisticated at all. And at the time,
+
+00:03:10.360 --> 00:03:16.340
+this was just about when Django had been released. And Django had been released, and I think Ruby on
+
+00:03:16.340 --> 00:03:21.920
+Rails was out there. So it was a question of, like, here are these two different ways, and which way am I
+
+00:03:21.920 --> 00:03:27.960
+going to go? And I picked one, and I'm happy that I picked Django because it led me down a nice path,
+
+00:03:27.960 --> 00:03:28.320
+I think.
+
+00:03:28.320 --> 00:03:32.420
+Yeah. And I think that's, you know, that's a pretty, I don't know if it was luck or just good,
+
+00:03:32.420 --> 00:03:37.840
+but it was definitely a good choice that you went that way. I feel like Rails has definitely lost a
+
+00:03:37.840 --> 00:03:42.760
+lot of the favor that it had. I know there's a lot of projects out there that's still built on Rails,
+
+00:03:42.760 --> 00:03:47.560
+but it doesn't seem to have the shine that it did five years ago.
+
+00:03:47.560 --> 00:03:53.100
+No, and kudos to the Django team. I mean, I think what they're doing is pretty amazing that they continue
+
+00:03:53.100 --> 00:03:59.460
+to build a great product that's still very relevant and still hugely popular. I don't know, the framework's
+
+00:03:59.460 --> 00:04:02.740
+got to be, what, 15 years old maybe at this point? Maybe not quite.
+
+00:04:02.740 --> 00:04:06.960
+Yeah, but it's been around for a while, so that's pretty awesome. And did you practice law for a while?
+
+00:04:06.960 --> 00:04:07.920
+I did, I did.
+
+00:04:07.920 --> 00:04:11.000
+Tell us about that. That's far from programming, typically.
+
+00:04:11.640 --> 00:04:17.820
+Well, yeah, so I didn't go to school as, you know, I'm not a computer science major or anything like
+
+00:04:17.820 --> 00:04:22.060
+that. Everything that I know about programming is entirely self-taught. I went to school,
+
+00:04:22.060 --> 00:04:29.380
+I graduated from George Washington University in DC, and I went to law school after that. After
+
+00:04:29.380 --> 00:04:37.000
+law school, I practiced law for about five years. And all during that time, I didn't really ever lose
+
+00:04:37.000 --> 00:04:41.300
+touch with programming, but it was a hobby for me. Building things was,
+
+00:04:41.520 --> 00:04:50.200
+it was a hobby and was not my day-to-day job. But in 2014, my wife and I decided that, you know,
+
+00:04:50.200 --> 00:04:55.400
+we were living in Massachusetts at the time, and we decided that we were going to move across the world
+
+00:04:55.400 --> 00:05:02.660
+to Israel. And it was sort of as this life-changing time, and we decided, you know, we're going to make
+
+00:05:02.660 --> 00:05:08.760
+this move. And as part of that, we're going to assess our career paths. I felt very lucky that I sort of was
+
+00:05:08.760 --> 00:05:16.280
+able to take what had been my hobby and now turn it into a career. And I think that's a pretty fortunate
+
+00:05:16.280 --> 00:05:21.600
+thing. I think it's great. And I definitely think it's one of the real benefits of being in technology.
+
+00:05:21.600 --> 00:05:26.340
+We have so many ways of working that are just asynchronous already. Even when we're together,
+
+00:05:26.340 --> 00:05:32.360
+right? We all use GitHub and Slack or email or whatever. Right. And you could be 5,000 miles away
+
+00:05:32.360 --> 00:05:36.200
+and still do that, right? That's pretty awesome. Yeah. I mean, the team that I'm working on,
+
+00:05:36.200 --> 00:05:43.620
+working with right now, it's a pretty small group of guys. But, you know, I'm in Israel. There's a
+
+00:05:43.620 --> 00:05:51.500
+couple of guys in Ohio or North Carolina, Brazil. Like the team is, you know, we exist as a team. We
+
+00:05:51.500 --> 00:05:57.020
+function day to day as if we're a team and interact, you know, like it's, you know, the guy sitting right
+
+00:05:57.020 --> 00:06:02.460
+next door, but really he's literally halfway around the globe. Yeah. That's pretty awesome. So maybe
+
+00:06:02.460 --> 00:06:07.940
+that's a good segue into what you do day to day. Like, are you doing, what do you work on day to day?
+
+00:06:07.940 --> 00:06:16.580
+Sure. So my day job, I work with a company called Matrix Retail and their main product is geared towards
+
+00:06:16.580 --> 00:06:22.980
+retail companies that have a lot of different... Like Macy's or some Target or something like that.
+
+00:06:22.980 --> 00:06:29.380
+Exactly. The type of companies that exist in malls across the U.S. I mean, they're mostly U.S.-based.
+
+00:06:29.380 --> 00:06:36.360
+And the idea is they're constantly getting all this data, you know, how many sales they had,
+
+00:06:36.360 --> 00:06:42.280
+how many transactions, how many people are walking in and out of the store. And we sort of take all of
+
+00:06:42.280 --> 00:06:49.700
+that data and try to make a projection for what their sales are going to be. And then once we have
+
+00:06:49.700 --> 00:06:57.380
+that information, we can create a schedule for their staff. And so we determine you're predicting to have
+
+00:06:57.380 --> 00:07:03.340
+a thousand dollars worth of sales during this particular hour on this particular day. And
+
+00:07:03.340 --> 00:07:08.320
+how many people do you need to have in the store to be able to reach that thousand dollars of sales,
+
+00:07:08.460 --> 00:07:13.020
+but not have too many people that you're just paying for people to stand around doing nothing?
+
+00:07:13.020 --> 00:07:16.180
+Interesting. So you're kind of like load balancing, but for employment.
+
+00:07:16.180 --> 00:07:20.260
+That's actually a great way to put it. I like that.
+
+00:07:20.260 --> 00:07:21.500
+There you go.
+
+00:07:21.500 --> 00:07:26.800
+You know, I think one of the bigger complications in that is, you know, it's not just a matter of
+
+00:07:26.800 --> 00:07:31.760
+how do you slot people into the right place, but then you've got to deal with jurisdictional laws.
+
+00:07:31.880 --> 00:07:37.840
+So one place, you know, shift might need to be, can't be shorter than three hours. And another
+
+00:07:37.840 --> 00:07:43.480
+place, there can't be two shifts that are closer together and they need to have meal breaks and
+
+00:07:43.480 --> 00:07:47.820
+have to be a certain length. And so all these sort of validation rules we have to take into account.
+
+00:07:47.820 --> 00:07:50.560
+And it makes for a pretty complex puzzle.
+
+00:07:50.560 --> 00:07:55.760
+I'm sure it does actually. Anytime law gets involved, it's crazy as I'm sure you know, but it
+
+00:07:55.760 --> 00:07:57.020
+is this in Python?
+
+00:07:57.020 --> 00:08:01.880
+The application itself runs a pretty big stack of a bunch of different technologies.
+
+00:08:01.880 --> 00:08:03.640
+A lot of it is in Java.
+
+00:08:03.640 --> 00:08:04.480
+Like most places, right?
+
+00:08:04.480 --> 00:08:10.980
+Yeah, yeah, it's true. It's true. A lot of the stack is in Java, the earlier stuff. And
+
+00:08:10.980 --> 00:08:18.200
+what I've been working on is creating sort of a new API on top of what's currently existing to
+
+00:08:18.200 --> 00:08:24.200
+get some more features, get a little bit more performance. And actually that's a lot of how,
+
+00:08:24.200 --> 00:08:30.760
+how I came into, to using Sanic. We can get into that a little bit later, but all this new stuff that
+
+00:08:30.760 --> 00:08:39.060
+I'm adding is all in Python and load balanced across a pretty big cluster using Kubernetes and
+
+00:08:39.060 --> 00:08:41.200
+some other fun tools like that.
+
+00:08:41.200 --> 00:08:45.020
+It sounds like you're using a lot of cool technologies. And I think it's really cool using
+
+00:08:45.020 --> 00:08:54.080
+Sanic for that microservice bit. So you said we're switching to Python because it's for speed and to
+
+00:08:54.080 --> 00:08:58.720
+make it fast in addition to adding features, which I think is, you know, so many people who are not
+
+00:08:58.720 --> 00:09:02.740
+deeply involved in Python, like, oh, Python's slow and there's parallels and we can't do this and
+
+00:09:02.740 --> 00:09:07.060
+whatever. And here you are choosing it for it. And it's working out well, I would imagine.
+
+00:09:07.060 --> 00:09:12.940
+Yeah. I think, I think anybody that's, you know, sort of a Java developer out there is yelling at
+
+00:09:12.940 --> 00:09:18.220
+me saying, how could that possibly be true? But, but it is, I mean, you know, we're, we can benchmark
+
+00:09:18.220 --> 00:09:22.500
+some of the stuff that we've got in Java versus some of the stuff that we have running now.
+
+00:09:22.500 --> 00:09:27.800
+And we're definitely running a lot faster, a lot leaner. Our memory usage is, is a lot lower.
+
+00:09:27.800 --> 00:09:34.220
+So we're able to handle a lot more, a lot more connections and a lot more request response cycles
+
+00:09:34.220 --> 00:09:36.940
+a lot faster, which is, which is the most important thing at the end of the day.
+
+00:09:36.940 --> 00:09:42.900
+Yeah, absolutely. You know, it's so interesting. It's just, there are so many aspects to performance
+
+00:09:42.900 --> 00:09:47.640
+in Python. And I certainly want to go down that rabbit hole, but you've got like the concurrency,
+
+00:09:47.640 --> 00:09:52.760
+you've got like C and Cython implementations. You've just got all these things that, that are
+
+00:09:52.760 --> 00:09:57.440
+really interesting. And then you throw in the web app where web apps are mostly talking to external
+
+00:09:57.440 --> 00:10:02.740
+systems and are not themselves computationally heavy, but they're more orchestration in a sense,
+
+00:10:02.740 --> 00:10:06.620
+right? So there's just so many, many cool things in the, it sounds like you've got a cool
+
+00:10:06.820 --> 00:10:07.500
+architecture going there.
+
+00:10:07.500 --> 00:10:11.400
+What I was just going to say is on that point is, is it's, you know, to get that performance,
+
+00:10:11.400 --> 00:10:16.960
+it's sort of figuring out what are the right tools that you need to be able to, to achieve
+
+00:10:16.960 --> 00:10:21.980
+that. So we're using, we're using Sanic to sort of power our microservice architecture, but,
+
+00:10:21.980 --> 00:10:27.800
+you know, we're also pushing stuff off to, a queue, the task you're using salary.
+
+00:10:28.560 --> 00:10:33.220
+Uh, if you're familiar with that tool, it's, it's, it's basically, you know, we've got a server
+
+00:10:33.220 --> 00:10:38.080
+sitting somewhere else and we're just pushing messages off to it and letting it sort of handle
+
+00:10:38.080 --> 00:10:43.360
+all these background tasks. And, you know, instead of creating these big, large queries and running
+
+00:10:43.360 --> 00:10:48.360
+them on Postgres, we're caching a lot of stuff inside of Redis. That is, so it's sort of like a top to
+
+00:10:48.360 --> 00:10:53.800
+down, top to bottom, approach of, of where can we, where can we make things faster?
+
+00:10:53.800 --> 00:10:58.040
+Right. And using the right architecture, like asynchronous queues, for example, can just
+
+00:10:58.040 --> 00:11:02.640
+make all the difference. Yeah, absolutely. Yeah. So maybe this is a good, good place to start
+
+00:11:02.640 --> 00:11:07.420
+talking about, some of the web frameworks and some of these ideas. And before, you know,
+
+00:11:07.420 --> 00:11:13.380
+so Sanic is a web framework based on Python's async event loop, asyncio and the async and await
+
+00:11:13.380 --> 00:11:18.320
+keywords and all that. And we'll get into all those details, but before we dig in, like not everybody
+
+00:11:18.320 --> 00:11:22.800
+is using these, these newer features, right? Like asyncio only came out in three, four,
+
+00:11:22.800 --> 00:11:28.960
+and then really, I think properly in three, five with async and await. So maybe, maybe just tell us
+
+00:11:28.960 --> 00:11:34.260
+what is asyncio and why is it really good for web apps? Sure. Well, first I think, you know,
+
+00:11:34.260 --> 00:11:40.580
+everybody should be maybe using it. Maybe that's too broad of a statement, but, I really, I really,
+
+00:11:40.580 --> 00:11:49.860
+asyncio is a, is a great standard library module that was added to sort of be another answer to
+
+00:11:49.860 --> 00:11:57.400
+how can Python achieve concurrency. So we have some of the other modules that exist, including,
+
+00:11:57.400 --> 00:12:02.820
+uh, multi-processing and threading and stuff like that. And, and while this answers some of the same
+
+00:12:02.820 --> 00:12:07.060
+questions, it does it in a sort of different way. Yeah. When you think of these other, all the
+
+00:12:07.060 --> 00:12:12.400
+traditional ways we've got multi-processing, we've got threading, and then of course, you know, like
+
+00:12:12.400 --> 00:12:18.120
+APIs built on top of those like execution pools and whatnot, but all of those involve some sort of
+
+00:12:18.120 --> 00:12:24.480
+forking. But asyncio is inherently doesn't even necessarily use multiple threads or processes at
+
+00:12:24.480 --> 00:12:30.080
+all. Right. Yeah. It's sort of a simpler methodology and cleaner methodology in that, you know, you're
+
+00:12:30.080 --> 00:12:37.260
+still running everything on, on a single process, but you're basically just taking the idea of start
+
+00:12:37.260 --> 00:12:42.460
+working on something in our case in a web framework, it's a request and you start working on it and
+
+00:12:42.460 --> 00:12:47.520
+processing it. And you get to a point where you say, well, I need to go find some information
+
+00:12:47.520 --> 00:12:52.380
+somewhere else. So I'm going to pause here. And while I'm pausing here, let's go see what else needs
+
+00:12:52.380 --> 00:12:58.860
+to get done. And actually it's very much sort of like what we're, what I'm doing in my day-to-day job.
+
+00:12:58.860 --> 00:13:03.900
+And, you know, we're trying to figure out, you know, you've got an employee and he's coming in for
+
+00:13:03.900 --> 00:13:10.500
+a five hour shift and you want to figure out how do you keep your, your person employed during those
+
+00:13:10.500 --> 00:13:16.760
+five hours without having just standing around doing nothing, wasting time and money is, you know,
+
+00:13:16.760 --> 00:13:23.240
+there to do, to work. So let's figure out how to make your, your web workers produce the most you can
+
+00:13:23.240 --> 00:13:28.960
+get for them. Yeah, absolutely. So, you know, the whole IO bit of asyncio, right? It's right there
+
+00:13:28.960 --> 00:13:34.620
+in the name is what it's for, right? Like it doesn't help you for computational things at all,
+
+00:13:34.620 --> 00:13:38.420
+right? You really only have one thread and if you start doing computational stuff, you know,
+
+00:13:38.420 --> 00:13:43.500
+you're just cute. You're just doing them in order, right? Yeah. But for web apps, their main job is to
+
+00:13:43.500 --> 00:13:49.480
+talk to a database, talk to other microservices, talk to a queue, and then they just wait, right? And so
+
+00:13:49.480 --> 00:13:54.120
+it's the perfect time, perfect way to structure these web apps is to say all the time that you're
+
+00:13:54.120 --> 00:13:57.700
+waiting on these external systems, we're going to go do other work, right? Other requests. And that's
+
+00:13:57.700 --> 00:14:03.680
+basically the idea behind Santa, right? Absolutely. It's using async. It's not like a magic bolt.
+
+00:14:03.680 --> 00:14:08.240
+It's going to make things run faster. It's just, it's going to make things run more efficient. I think
+
+00:14:08.240 --> 00:14:12.760
+that's a better way to put it. Yeah. It's not going to be just idly waiting around. It's going to be
+
+00:14:12.760 --> 00:14:18.660
+working on something else. It's a really good multitasker, I guess. But I'll go back to this. All right.
+
+00:14:18.660 --> 00:14:24.980
+So what, so Sanic is one of these async Python web frameworks, but there are others. Like,
+
+00:14:24.980 --> 00:14:29.860
+what are some of the other ones that people might compare to if they're, if they're like shopping for
+
+00:14:29.860 --> 00:14:35.760
+this type of framework? The ones that first come to mind are AIO HTTP. That's another big one.
+
+00:14:35.760 --> 00:14:41.600
+Jepronto, you mentioned them. I think they've sort of stopped working on developing on that project.
+
+00:14:41.600 --> 00:14:46.860
+I don't know if that one's still with the status of that or not. Yeah. I remember coming out around the
+
+00:14:47.840 --> 00:14:53.620
+Sanic. I feel like it did stall out. I'll have a look. It's a really interesting project. And I think
+
+00:14:54.160 --> 00:14:59.380
+what they did with it, it's a great approach. And it's a little bit different than Sanic's approach,
+
+00:14:59.380 --> 00:15:06.320
+because I believe Jepronto is written a lot in C, which makes it extremely fast, but it also makes it a
+
+00:15:06.320 --> 00:15:12.600
+little bit more difficult for, I think, the everyday Python programmer to pick up and look under the hood
+
+00:15:12.600 --> 00:15:20.000
+and make some changes or where they might need to. Yeah. And looking at the repo, it's 50% C,
+
+00:15:20.000 --> 00:15:28.140
+50% Python, and it had a ton of contributions and work on it back up till April 2017. Then you're
+
+00:15:28.140 --> 00:15:29.700
+right. It kind of just went on pause.
+
+00:15:32.660 --> 00:15:38.660
+This portion of Talk Python to me is brought to you by us. Have you heard that Python is not good for
+
+00:15:38.660 --> 00:15:43.880
+concurrent programming problems? Whoever told you that is living in the past because it's prime time
+
+00:15:43.880 --> 00:15:49.580
+for Python's asynchronous features. With the widespread adoption of async methods and the async and await
+
+00:15:49.580 --> 00:15:55.220
+keywords, Python's ecosystem has a ton of new and exciting frameworks based on async and await.
+
+00:15:55.220 --> 00:16:00.320
+That's why we created a course for anyone who wants to learn all of Python's async capabilities,
+
+00:16:00.660 --> 00:16:08.800
+async techniques and examples in Python. Just visit talkpython.fm/async and watch the intro video to see if this course is for you.
+
+00:16:08.800 --> 00:16:14.940
+It's only $49 and you own it forever. No subscriptions. And there are discounts for teams as well.
+
+00:16:14.940 --> 00:16:19.940
+Any others that people might consider?
+
+00:16:19.940 --> 00:16:25.440
+Court is another one. I think you've talked with the guy that built Court on your show before.
+
+00:16:25.440 --> 00:16:27.940
+I have. Yeah. Court's really nice as well.
+
+00:16:27.940 --> 00:16:35.080
+And I've actually been in contact with him a little bit. He's given us some ideas on where we can add into some stuff.
+
+00:16:35.080 --> 00:16:38.080
+ASGI to send. We could talk a little bit about that later.
+
+00:16:38.080 --> 00:16:45.220
+But he's been a pretty helpful resource. And I think the one more that I want to mention that's out there.
+
+00:16:45.220 --> 00:16:49.220
+It's I think the newest on the scene is called Vibora.
+
+00:16:49.220 --> 00:16:53.360
+Vibora. Yes. Vibora looks very interesting as well. Although I haven't done anything with Vibora.
+
+00:16:53.360 --> 00:17:03.360
+Yeah. I haven't tried it out to see what it is. It does a little bit more than what I would personally like from a web framework, from a micro framework.
+
+00:17:03.360 --> 00:17:08.360
+I like to handle a lot of things like caching and templating and stuff like that myself.
+
+00:17:08.360 --> 00:17:12.600
+And it comes with a lot of that. So for a lot of people, that might be a might be a plus.
+
+00:17:12.600 --> 00:17:15.720
+So it's another another one to definitely put out there.
+
+00:17:15.720 --> 00:17:19.620
+Yeah, it's interesting. I tried to play with it a little bit. And for some reason, it kept crashing.
+
+00:17:19.620 --> 00:17:25.080
+Not in the sense like it said you're doing something wrong, but it would just like the process would die.
+
+00:17:25.080 --> 00:17:27.260
+And I was a little underwhelmed with it, I guess.
+
+00:17:27.260 --> 00:17:31.040
+But definitely looks like it has a lot of promise. It maybe just needs a little polish.
+
+00:17:31.540 --> 00:17:45.880
+So let's get back to Sanic, which to me seems like maybe along with Cort, one of these async modern Python web frameworks that you really can use and depend upon.
+
+00:17:45.880 --> 00:17:54.600
+You know, like I mentioned earlier, I'm using it now in production. It's definitely production worthy and operational and it's pretty reliable.
+
+00:17:54.600 --> 00:18:00.300
+I mean, itself is still a pretty new framework, but I mean, anything that's going to be in this field is going to be fairly new.
+
+00:18:00.320 --> 00:18:07.020
+Because like you said, in sync IO is hasn't been a part of the standard library since version 3.4.
+
+00:18:07.020 --> 00:18:13.200
+So yeah, and it's really 3.5 where it actually became, you know, has the proper keywords to make it easy.
+
+00:18:13.200 --> 00:18:13.820
+Yeah, exactly.
+
+00:18:13.820 --> 00:18:14.680
+Easy to program.
+
+00:18:14.680 --> 00:18:17.240
+So maybe just give us the quick flyover of Sanic.
+
+00:18:17.240 --> 00:18:23.300
+Sure. It's probably probably good to mention that is Sanic does use those those keywords.
+
+00:18:23.460 --> 00:18:26.300
+So it's place. It's Python 3.5 and up only.
+
+00:18:26.300 --> 00:18:33.380
+I know there are some asyncio tools that you can still use 3.4 with, but you're not gonna be able to do that with Sanic.
+
+00:18:33.380 --> 00:18:34.580
+So 3.5.
+
+00:18:34.580 --> 00:18:34.960
+Yeah.
+
+00:18:35.160 --> 00:18:38.540
+I think most things have 3.5 if they have 3.5 at all, all these days.
+
+00:18:38.540 --> 00:18:45.500
+How do you feel about this Python 2, Python 3 thing? Do you feel like we've kind of, we're downhill headed towards 3.3 and beyond?
+
+00:18:45.500 --> 00:18:48.880
+Yeah, it's done. It's over. Game set match.
+
+00:18:49.240 --> 00:18:55.360
+Yeah, I kind of feel the same way. So yeah, this framework here, for example, like you have to have not just 3, but 3.5.
+
+00:18:55.360 --> 00:18:59.000
+So cool. So it depends on that. It's a lot like Flask, right?
+
+00:18:59.000 --> 00:19:04.860
+It is. And I think the original idea behind it, and I'm not the guy that developed it.
+
+00:19:05.580 --> 00:19:19.840
+The person that developed it is a guy named Michael Hill, and he originally created the API, and it looks very much like Flask, where you've got decorators and these blueprints so that you can sort of nest your functionality.
+
+00:19:19.840 --> 00:19:26.340
+And it looks a lot like Flask, but obviously being asyncio, it operates differently.
+
+00:19:26.340 --> 00:19:33.100
+Yeah, absolutely. So for example, all of Vue methods can be async def instead of just def, right?
+
+00:19:33.560 --> 00:19:41.860
+And you can use a weight in them and so on. Do you have to use, does everything have to be async? Or can you do like blocking work in there as well?
+
+00:19:41.860 --> 00:19:49.200
+Well, you could, for example, create a function that is, you know, a regular def and doesn't have to be async.
+
+00:19:49.200 --> 00:19:57.540
+It certainly would be better too, because that's where you're going to be able to sort of see this performance benefits.
+
+00:19:57.760 --> 00:20:04.340
+Because by definition, just about everything that we do in Python is going to be some blocking involved.
+
+00:20:04.340 --> 00:20:13.440
+So you can't avoid blocking code at all. But by using a tool like asyncio, you're giving yourself an opportunity to alleviate.
+
+00:20:13.440 --> 00:20:19.800
+Yeah, exactly. So I'm guessing, what I was getting at is like, well, what if I'm using some library, and it doesn't support asyncio?
+
+00:20:20.060 --> 00:20:30.100
+Let's say, let's say Mongo Engine, for example, or something like that, I could still make those calls in there would just be taking less advantage of its async potential, right?
+
+00:20:30.280 --> 00:20:38.960
+Exactly, exactly. So, so if you're going to use an ORM, say SQLAlchemy or PeeWee or something like that, you could still use it and it'll still function.
+
+00:20:38.960 --> 00:20:45.440
+But what's going to happen is when you make that call, and it goes to make that network call to your server, it's going to block up your whole process.
+
+00:20:45.440 --> 00:20:49.180
+And you're not going to be able to start handling a new request during that timeframe.
+
+00:20:49.180 --> 00:20:55.720
+Now, there are ways that you can get around that and use some of these other tools that are async enabled.
+
+00:20:55.960 --> 00:21:05.320
+Right. So the primary thing that you would do, the first thing that you might do is like, say, I'm using library X to talk to, let's say, Redis.
+
+00:21:05.320 --> 00:21:13.240
+It would be to go out and say, is there a asyncio enabled variant or extension or something to that library, right?
+
+00:21:13.240 --> 00:21:14.040
+Absolutely.
+
+00:21:14.040 --> 00:21:16.140
+Maybe talk us through, yeah, talk us through that.
+
+00:21:16.140 --> 00:21:26.020
+Sure. I think one of the first things that I do when I need to do to answer that question is, are you familiar with these awesome lists that are, you know, kind of circle around GitHub?
+
+00:21:26.020 --> 00:21:29.180
+Yes. Awesome Python and whatnot, things like that.
+
+00:21:29.180 --> 00:21:31.200
+Exactly. I like to go take a look at those.
+
+00:21:31.300 --> 00:21:39.460
+There is one for asyncio stuff and it lists, you know, a number of different ORMs and stuff like that that are on there.
+
+00:21:39.460 --> 00:21:48.000
+I do a lot of work in Redis and there's two different packages in Redis that async enabled Redis that I like to use.
+
+00:21:48.540 --> 00:21:59.320
+One of them is called a Redis, where if you did pip install Redis, you get a very popular library that's out there to interact with Redis.
+
+00:21:59.320 --> 00:22:02.760
+And this pretty much mirrors the exact same API as that.
+
+00:22:02.760 --> 00:22:04.680
+You just put a Redis instead of Redis.
+
+00:22:04.680 --> 00:22:12.580
+And the second one is called a IO Redis, which also has an async enabled API to be able to access your Redis layer.
+
+00:22:12.760 --> 00:22:21.180
+Yeah. So I think many of the different packages people are out there using, there is some variant or some alternative that they can switch to.
+
+00:22:21.180 --> 00:22:31.780
+But I just bring it up because it's not like, you know, having an asynchronous method, view method is going to just magically make your SQLAlchemy call or your Mongo Engine call or whatever.
+
+00:22:31.780 --> 00:22:33.900
+Just start being concurrent, right?
+
+00:22:33.900 --> 00:22:41.260
+You're going to have to go and get a library that allows you to write, await this query, await that insert, et cetera.
+
+00:22:41.260 --> 00:22:55.240
+Yeah. And I think if you're going to get started in doing the work in a framework like Sanic or one of these other async enabled, one of the first things I think you should do is figure out how you're going to talk to your data layer and figure out which one of these tools works best for you.
+
+00:22:55.240 --> 00:22:58.040
+There's a number of them and they're growing every day.
+
+00:22:58.040 --> 00:23:01.340
+And I feel like I continually get to see new ones.
+
+00:23:01.340 --> 00:23:03.460
+And I think it's an exciting time for Python.
+
+00:23:03.460 --> 00:23:04.600
+I think it absolutely is.
+
+00:23:04.600 --> 00:23:08.180
+I think the async and await stuff is really unlocking a lot of the potential.
+
+00:23:08.540 --> 00:23:26.840
+I'm especially excited for Sanic and some of the similar projects because while we've had these cool keywords in this capability, it's not until you can actually create asynchronous web methods that you can actually really break that thing loose and use it where it makes a lot of sense.
+
+00:23:26.840 --> 00:23:27.540
+Yeah, absolutely.
+
+00:23:27.540 --> 00:23:29.880
+So, yeah, it's an exciting time for sure.
+
+00:23:30.280 --> 00:23:33.680
+So what are some of the ways that we might get around these dependencies?
+
+00:23:33.680 --> 00:23:42.340
+So step one, go and find another library that does the similar or same thing that you're doing but has coroutines and async methods and whatnot.
+
+00:23:42.340 --> 00:23:43.840
+That's option one.
+
+00:23:43.840 --> 00:23:50.440
+If for some reason that fails, is there a way it can use threading or multiprocessing or some kind of background queue or something?
+
+00:23:50.520 --> 00:23:57.620
+Is there something else I can do to not block up my web async I.O. loop and still work with them?
+
+00:23:57.620 --> 00:24:00.420
+The question is, could potentially get really messy?
+
+00:24:00.420 --> 00:24:07.380
+If you're going to take and start a new, say, a new thread inside of your loop.
+
+00:24:07.380 --> 00:24:08.300
+Could be done.
+
+00:24:08.300 --> 00:24:09.240
+Could be done.
+
+00:24:09.240 --> 00:24:10.040
+That's a different question.
+
+00:24:10.040 --> 00:24:10.660
+Yeah.
+
+00:24:10.660 --> 00:24:12.520
+I think that's probably...
+
+00:24:12.520 --> 00:24:18.680
+So you could have a background thread that's always running for each worker process and then a queue that you drop something off.
+
+00:24:18.680 --> 00:24:19.760
+An in-memory queue.
+
+00:24:19.760 --> 00:24:21.280
+You drop something off and it picks it up.
+
+00:24:21.280 --> 00:24:23.800
+Like, say, subscribe this person to a mailing list.
+
+00:24:23.800 --> 00:24:27.100
+For some reason, the API that does that doesn't support async I.O.
+
+00:24:27.100 --> 00:24:33.760
+And I think for the most part that would work, but it's definitely not super good, is it?
+
+00:24:33.760 --> 00:24:51.060
+If the goal is to do something like that, I would highly suggest upgrading to Python 3.7 and then you get to use async I.O. queues, which is a fairly new feature, which basically you could just start pushing off tasks to this async I.O. queue and let them handle it.
+
+00:24:51.060 --> 00:25:00.780
+And I think the great use case for that is I take a request, I'm processing it, I need to send out an email, push that off to this queue and be done with it.
+
+00:25:00.780 --> 00:25:13.220
+A little bit more involve method, like you said, you could do something with threading or use another package like celery, which is something that I've had good success using for a number of years.
+
+00:25:13.220 --> 00:25:20.700
+So I'm still using it inside my async I.O. stack because it really solves a good problem for me.
+
+00:25:20.880 --> 00:25:21.260
+Yeah, it does.
+
+00:25:21.260 --> 00:25:29.140
+So we've got our web code, we're writing our async methods, we're awaiting all these calls, everything's working pretty well.
+
+00:25:29.140 --> 00:25:34.000
+Beyond that, it looks quite a bit like Flask, which I think is really a good thing.
+
+00:25:34.000 --> 00:25:42.140
+There's a couple of things I'd like to maybe call out that are either less well known about Flask and is relevant here as well, or this enables.
+
+00:25:42.140 --> 00:25:43.760
+And one of them is blueprints.
+
+00:25:43.760 --> 00:25:50.800
+So typically when people say, I'm going to go create a Flask app, they all, they say, well, what you do is you create the app.py and you.
+
+00:25:50.800 --> 00:25:55.400
+You allocate the app and then you use app, you know, as a decorator app.route and you put it on these methods.
+
+00:25:55.400 --> 00:25:57.200
+Boom, you're done with Flask, right?
+
+00:25:57.200 --> 00:25:58.500
+And that's cool for a demo.
+
+00:25:58.500 --> 00:26:07.580
+But if you have hundreds of view methods broken up by categories of like, here's the store views and here's the user management views and here's the reporting.
+
+00:26:07.580 --> 00:26:09.720
+And you don't want to cram that all into one file.
+
+00:26:09.720 --> 00:26:17.020
+And so Flask and Sanic both have this idea of blueprints to help you partition your projects into different pieces.
+
+00:26:17.020 --> 00:26:17.920
+Do you want to talk about that?
+
+00:26:17.920 --> 00:26:18.200
+Sure.
+
+00:26:18.200 --> 00:26:25.140
+I think there's a big difference between, you know, looking at the tutorial, it's got 10 lines and here's how to get started.
+
+00:26:25.140 --> 00:26:25.640
+Wow.
+
+00:26:25.640 --> 00:26:26.200
+It's amazing.
+
+00:26:26.200 --> 00:26:27.840
+You know, hello world.
+
+00:26:27.840 --> 00:26:29.240
+It's such an easy thing.
+
+00:26:29.300 --> 00:26:32.620
+But then you get to the question of how do I actually build something?
+
+00:26:32.620 --> 00:26:34.840
+Like, how is this usable?
+
+00:26:34.840 --> 00:26:39.940
+How does it not become a giant mess of one huge app.py file, right?
+
+00:26:39.940 --> 00:26:40.820
+Yeah.
+
+00:26:40.820 --> 00:26:42.280
+Maybe you like one giant file.
+
+00:26:42.280 --> 00:26:44.300
+Maybe that's your...
+
+00:26:44.300 --> 00:26:45.720
+But, you know...
+
+00:26:45.720 --> 00:26:52.120
+But if you don't, then it becomes a bit of a challenge of juggling that app.route stuff around.
+
+00:26:52.120 --> 00:26:52.600
+Exactly.
+
+00:26:52.600 --> 00:26:57.040
+And I think it's, you know, something to do is, okay, you've decided you're going to do async.
+
+00:26:57.040 --> 00:27:02.160
+You've decided on your data access layer and, you know, which one of these tools you're going to use.
+
+00:27:02.160 --> 00:27:05.620
+And then the next question, I think, is how am I going to organize this?
+
+00:27:05.620 --> 00:27:10.320
+Am I going to have one Sanic server that's going to handle all my requests?
+
+00:27:10.820 --> 00:27:17.560
+Or maybe I need to have 10 different services and they're all going to be connected and they're all going to be responding to different things.
+
+00:27:17.560 --> 00:27:27.920
+And within each one of those things, maybe we need to have one little unique entity called a blueprint that's going to handle certain information.
+
+00:27:27.920 --> 00:27:30.560
+And maybe you need to have, you know, 10 of these.
+
+00:27:30.560 --> 00:27:34.980
+So, for example, maybe you're going to have authentication be one blueprint.
+
+00:27:34.980 --> 00:27:37.680
+And maybe you're going to have users be another blueprint.
+
+00:27:37.680 --> 00:27:42.000
+The idea is just to organize and structure your code.
+
+00:27:42.000 --> 00:27:49.820
+One thing that Sanic also has is what's called a blueprint group, which does exactly that.
+
+00:27:49.820 --> 00:27:52.400
+It just takes a bunch of blueprints and it groups them together.
+
+00:27:52.400 --> 00:27:56.480
+And one of the big benefits here is for routing purposes.
+
+00:27:56.480 --> 00:27:57.600
+Yeah, that's cool.
+
+00:27:57.600 --> 00:28:02.480
+So, basically, instead of saying app.route, you say blueprint.route.
+
+00:28:02.800 --> 00:28:04.260
+And you kind of reverse it.
+
+00:28:04.260 --> 00:28:14.480
+In your main startup file, you import all the blueprints and you register them with the app and say, here's a whole bunch of subparts of my web framework and their routes and their view methods.
+
+00:28:14.480 --> 00:28:16.580
+Put them all together here and then run it.
+
+00:28:16.580 --> 00:28:18.320
+The group sounds pretty interesting.
+
+00:28:18.320 --> 00:28:19.480
+I didn't know about that.
+
+00:28:19.480 --> 00:28:19.720
+Yeah.
+
+00:28:19.960 --> 00:28:27.560
+And one of the big other benefits you get with blueprints is you don't have to be passing around your app object all over the place.
+
+00:28:27.560 --> 00:28:28.560
+So, if you're going to have...
+
+00:28:28.560 --> 00:28:29.720
+Yeah, that gets really tricky.
+
+00:28:29.720 --> 00:28:30.260
+Yeah.
+
+00:28:30.260 --> 00:28:31.100
+Exactly.
+
+00:28:31.100 --> 00:28:37.100
+So, it gives you a way to sort of register these views to something.
+
+00:28:37.620 --> 00:28:41.840
+And then when you finally have your app and you're creating your app, they all get added on at that point.
+
+00:28:41.840 --> 00:28:46.160
+So, you don't need to create these crazy global variables or anything like that.
+
+00:28:46.160 --> 00:28:46.440
+Yeah.
+
+00:28:46.440 --> 00:28:54.460
+I think it's a really nice way to break apart different parts of Flask or Static apps into little sections that are more self-contained.
+
+00:28:54.460 --> 00:28:56.440
+And then you can import them into the main app.
+
+00:28:56.440 --> 00:28:58.060
+It's sort of a personal preference of mine.
+
+00:28:58.120 --> 00:29:01.520
+I don't know that I necessarily say this is the way you have to do it.
+
+00:29:01.520 --> 00:29:08.420
+But I like to have each one of my different endpoints sort of be like its own blueprint.
+
+00:29:08.420 --> 00:29:12.940
+And at max have two or three different methods that are attached to it.
+
+00:29:12.940 --> 00:29:16.600
+I like to try to keep things as organized as possible.
+
+00:29:16.600 --> 00:29:18.940
+And mainly that's for development purposes.
+
+00:29:18.940 --> 00:29:23.560
+It's when I've got an issue or I need to make an update or fix a bug or something like that.
+
+00:29:23.560 --> 00:29:29.960
+It's a lot easier for me to navigate when I've got everything very finely grained, broken up into different files.
+
+00:29:29.960 --> 00:29:31.280
+Yeah, that's the same way I do it.
+
+00:29:31.280 --> 00:29:32.300
+And I really like it.
+
+00:29:32.300 --> 00:29:37.800
+You know, if you're in this file, this is the type of stuff you're working on and just that.
+
+00:29:37.800 --> 00:29:42.800
+So, another thing that Static makes pretty easy is WebSockets.
+
+00:29:42.800 --> 00:29:48.340
+And that's been traditionally a little tricky in regular Python code, right?
+
+00:29:48.340 --> 00:29:49.500
+Because it'll just block up.
+
+00:29:50.080 --> 00:29:53.760
+How are you just going to wait on this bidirectional communication thing, right?
+
+00:29:53.760 --> 00:30:07.300
+Yeah, I think one of the great benefits that we get from AsyncIO, besides being able to have, you know, these non-blocking access to other services and stuff like that, is to be able to do stuff like WebSockets.
+
+00:30:07.300 --> 00:30:09.380
+And, you know, WebSockets are fun.
+
+00:30:09.380 --> 00:30:09.980
+Yeah.
+
+00:30:10.100 --> 00:30:16.300
+It's great when you're building, you know, a front-end application and you can have that bidirectional control between server and client.
+
+00:30:16.300 --> 00:30:23.400
+And the way that it's achieved right now inside of Sanic is by using another package that's called WebSockets.
+
+00:30:23.400 --> 00:30:25.600
+So, you could just do pip install WebSockets.
+
+00:30:25.840 --> 00:30:31.800
+And that gets you to the same bit of code that's running inside of Sanic.
+
+00:30:31.800 --> 00:30:39.520
+And Sanic is just basically putting on another routing layer on top of that to be able to get to your socket.
+
+00:30:39.520 --> 00:30:40.900
+Yeah, it's really cool.
+
+00:30:40.900 --> 00:30:41.460
+Really cool.
+
+00:30:41.460 --> 00:30:48.340
+Say that now, in coming next year, there may be some ideas on how we change that and make that a little bit better.
+
+00:30:48.840 --> 00:30:53.800
+And being able to handle different deployment strategies.
+
+00:30:53.800 --> 00:31:02.380
+And by that, I mean using ASGI, which is sort of the asynchronous response to WSGI.
+
+00:31:02.380 --> 00:31:03.100
+Right.
+
+00:31:03.100 --> 00:31:16.420
+WSGI is the web service gateway interface, which is how most things like Flask, Pyramid, Django, etc., plug into larger web servers like MicroWSGI or G Unicorn or something, right?
+
+00:31:16.420 --> 00:31:24.680
+But the fundamental problem with that API is it's a single function call per request that has no asynchronous concepts around it, right?
+
+00:31:24.680 --> 00:31:25.260
+Exactly.
+
+00:31:25.260 --> 00:31:31.720
+So, you're not really going to be able to run an asynchronous application off of WSGI.
+
+00:31:31.720 --> 00:31:44.400
+And this is a problem that the guys building Django channels, I believe, were the first ones that came up with the ASGI implementation or specification, whatever you want to call it.
+
+00:31:44.660 --> 00:31:51.320
+We're looking into it to adopting that, which will open up a greater deployment strategy for Sanic.
+
+00:31:51.320 --> 00:31:56.640
+Yeah, that would be really nice if there was the WSGI equivalent for all these different frameworks.
+
+00:31:56.640 --> 00:32:00.840
+That's really one of the key missing things to unlock a lot of it.
+
+00:32:00.840 --> 00:32:05.440
+But since you brought it up, maybe we should talk a little bit about deployment on this.
+
+00:32:05.440 --> 00:32:14.680
+So, what is different or how does deployment for regular web servers and web apps change if you're deploying something based on Sanic versus something on Flask?
+
+00:32:14.740 --> 00:32:24.880
+The biggest change is you could just do Python app.py and just run your application straight from inside Sanic.
+
+00:32:24.880 --> 00:32:30.260
+And Sanic has its own way to be able to operate as a web server and to interact.
+
+00:32:30.260 --> 00:32:34.160
+And so, you could just do that and you don't have to do anything more.
+
+00:32:34.580 --> 00:32:44.100
+There is some other deployment strategies where you could use G Unicorn and there's a worker layer that sort of enables G Unicorn to be able to run Sanic.
+
+00:32:44.100 --> 00:32:46.340
+So, we've got that in the documentation.
+
+00:32:46.340 --> 00:32:48.100
+So, you could do that.
+
+00:32:48.620 --> 00:32:59.860
+I think the best way to do it, and my personally preferred way right now, is to just allow Sanic to handle its own handle itself and create Docker containers.
+
+00:32:59.860 --> 00:33:05.080
+And the Docker container's job is to run Python.py, Python app.py.
+
+00:33:05.080 --> 00:33:15.120
+And then stick in front of that something like Nginx or another load balancer that handles the incoming request and just kind of spits out my traffic to one of my services.
+
+00:33:15.120 --> 00:33:16.560
+Yeah, that makes a lot of sense.
+
+00:33:16.560 --> 00:33:18.340
+You don't have to do it that way.
+
+00:33:19.220 --> 00:33:19.820
+Yeah, sure.
+
+00:33:19.820 --> 00:33:28.360
+Would you set it up as like a system daemon type thing, system control, and like a service unit to run the Sanic part?
+
+00:33:28.360 --> 00:33:29.300
+Or do you just do that?
+
+00:33:29.300 --> 00:33:33.660
+Like, if you're using Docker containers, maybe it's just you start the container and it does its thing.
+
+00:33:33.660 --> 00:33:34.820
+Yeah, you could do that.
+
+00:33:34.820 --> 00:33:38.680
+And this is, again, this is my own personal preference bleeding in here.
+
+00:33:38.680 --> 00:33:42.300
+But Docker is such a widely popular tool now.
+
+00:33:42.660 --> 00:33:55.120
+It makes it so easy to deploy and to take something from development on my machine and to stick it up on a staging server and then eventually stick it into production.
+
+00:33:55.540 --> 00:33:58.020
+I find Docker to be a very useful tool for that.
+
+00:33:58.020 --> 00:34:03.380
+And, you know, one step further is to use Kubernetes to sort of manage that whole process.
+
+00:34:03.700 --> 00:34:06.260
+But that may be a little bit too complex for a lot of people.
+
+00:34:06.260 --> 00:34:10.860
+And I don't necessarily want to say that that's the way that you have to do it.
+
+00:34:10.860 --> 00:34:11.180
+Right.
+
+00:34:11.600 --> 00:34:21.080
+And regardless of whether you're using Docker or you're just running it in a separate process, you still probably want something like Nginx, which is going to handle SSL.
+
+00:34:21.080 --> 00:34:24.180
+It's going to handle delegating back to that server.
+
+00:34:24.180 --> 00:34:28.580
+It's going to handle, would you serve the static files through there still through Nginx?
+
+00:34:28.580 --> 00:34:29.420
+Yeah, absolutely.
+
+00:34:29.420 --> 00:34:31.360
+I think that's another good point to make.
+
+00:34:31.360 --> 00:34:38.640
+And while you certainly could handle static files through Sanic, and Sanic does give you an API to be able to do that.
+
+00:34:38.880 --> 00:34:43.860
+Your best bet most of the time is going to be just let Nginx handle your static files.
+
+00:34:43.860 --> 00:34:46.980
+You're going to get the most performance by just serving those directly.
+
+00:34:46.980 --> 00:34:49.960
+You don't really need to let Python handle static stuff.
+
+00:34:49.960 --> 00:34:52.060
+You don't let that handle all your dynamic content.
+
+00:34:52.060 --> 00:34:53.040
+Yeah, that makes sense.
+
+00:34:53.040 --> 00:34:54.680
+That's the way I run my stuff as well.
+
+00:34:54.680 --> 00:34:56.480
+Let's talk about testing.
+
+00:34:56.480 --> 00:35:01.880
+So testing regular web apps is pretty straightforward.
+
+00:35:01.880 --> 00:35:07.440
+I mean, it still requires some tricks to know how to like create a dummy request and things like that.
+
+00:35:07.440 --> 00:35:09.820
+But then you just call it, and then you get the answer.
+
+00:35:09.820 --> 00:35:12.940
+And then you assert things about the answer.
+
+00:35:12.940 --> 00:35:15.740
+But with Sanic, what does testing look like?
+
+00:35:15.740 --> 00:35:20.040
+Because typically testing async I/O stuff means there has to be an event loop.
+
+00:35:20.040 --> 00:35:20.780
+It has to be running.
+
+00:35:20.780 --> 00:35:22.100
+You've got to wait for it to be done.
+
+00:35:22.100 --> 00:35:23.400
+There's like extra stuff.
+
+00:35:23.400 --> 00:35:25.720
+What does testing one of these web apps look like?
+
+00:35:25.780 --> 00:35:28.160
+Yeah, it's certainly not an easy thing to do.
+
+00:35:28.160 --> 00:35:37.900
+And I think this is sort of one of those other areas where maybe you've checked off all those boxes and you've kind of are now onto the stage of how do I start testing this stuff?
+
+00:35:37.900 --> 00:35:41.620
+And I would say don't try to invent the wheel yourself.
+
+00:35:41.620 --> 00:35:43.280
+Go see what else is already out there.
+
+00:35:44.280 --> 00:35:46.780
+And personally, I like to use pytest.
+
+00:35:46.780 --> 00:35:58.700
+There's a great plugin for Sanic called pytest Sanic, which solves a lot of these problems and makes it pretty similar to what you're used to doing with pytest, where you're creating your application.
+
+00:36:00.160 --> 00:36:06.740
+And it's a little bit different because you've got your async and await keywords in there, but it's going to handle creating the loop for you.
+
+00:36:06.740 --> 00:36:11.460
+And so you can just kind of go about your process the way you would expect.
+
+00:36:11.460 --> 00:36:12.860
+Yeah, it's pretty interesting.
+
+00:36:12.860 --> 00:36:13.860
+Some of the stuff that you do.
+
+00:36:13.860 --> 00:36:17.780
+So like your test method might be an async method, right?
+
+00:36:17.780 --> 00:36:24.780
+Async def test something, not just a regular test method, but the pytest Sanic knows how to run it and it's all good, right?
+
+00:36:24.780 --> 00:36:25.020
+Yeah.
+
+00:36:25.020 --> 00:36:27.820
+And there's also an asyncio pytest.
+
+00:36:27.920 --> 00:36:34.120
+I forget the name of the package that does sort of the same thing, just not in the confines of Sanic itself.
+
+00:36:34.120 --> 00:36:37.720
+But that's also definitely something to look out for.
+
+00:36:37.720 --> 00:36:40.380
+So the answer is, yeah, it's definitely possible.
+
+00:36:40.380 --> 00:36:44.720
+There's a little bit more complexity to it, but take a look to see what other people are doing.
+
+00:36:44.720 --> 00:36:48.400
+And I think it's a piece of the puzzle that's been solved.
+
+00:36:48.400 --> 00:36:51.160
+So may as well go take a look to see how other people have done it.
+
+00:36:51.160 --> 00:36:54.220
+And especially since there's a pytest plugin, it's pretty easy.
+
+00:36:54.700 --> 00:37:01.340
+So that was one of maybe, I don't know if you call it an extension exactly, but it's one of the things that is sort of in the category of extensions.
+
+00:37:01.340 --> 00:37:08.440
+But there's actually a whole bunch of different extensions, right?
+
+00:37:08.440 --> 00:37:09.220
+So that's kind of a lot of different cores and all that.
+
+00:37:09.220 --> 00:37:12.300
+Do you want to give us a quick flyover of some of the more important extensions?
+
+00:37:12.300 --> 00:37:12.960
+Sure.
+
+00:37:12.960 --> 00:37:22.060
+I think probably the most important extension that's out there is the pytest Sanic extension because it gives you the extension ability.
+
+00:37:22.580 --> 00:37:37.100
+Another one that is hugely popular is Sanic OpenAPI, which adds, I don't know if you're familiar with OpenAPI or not, but it's a specification for how do you define your API endpoints.
+
+00:37:37.100 --> 00:37:45.860
+And with this plugin, you basically just add some more decorators around your methods and it's going to create the output for you.
+
+00:37:45.860 --> 00:37:57.980
+That's going to meet your specification of what kind of methods does it accept and what kind of intake variables might need to get passed into the method.
+
+00:37:57.980 --> 00:37:59.880
+And eventually, what's the output?
+
+00:37:59.880 --> 00:38:01.360
+What does your endpoint give you?
+
+00:38:01.460 --> 00:38:02.000
+Yeah, that's really cool.
+
+00:38:02.000 --> 00:38:09.320
+So it defines the API and gives you some Swagger UI back as well so you can actually see what methods are available and things like that, right?
+
+00:38:09.320 --> 00:38:09.860
+Exactly.
+
+00:38:09.860 --> 00:38:21.580
+Another one, and this one's going to be a little bit of a self-plug because it's my extension, is an authentication Sanic JWT, which adds web tokens.
+
+00:38:21.580 --> 00:38:38.520
+And if you do pip install Sanic JWT, it gives you a blueprint that has all the authentication endpoints that you would need to log in, to create a token, to verify a token, to pass refresh tokens and all that kind of fun stuff.
+
+00:38:38.520 --> 00:38:39.380
+That's a good one.
+
+00:38:39.380 --> 00:38:43.040
+I see that it has Jinja 2 as one of the extensions.
+
+00:38:43.040 --> 00:38:47.040
+What is the default template engine in Sanic?
+
+00:38:47.040 --> 00:38:54.280
+Well, there isn't one, and this is sort of where it's a micro framework where it's not going to make a lot of the decisions for you.
+
+00:38:54.280 --> 00:38:59.600
+And so you can kind of create your own stack.
+
+00:39:00.180 --> 00:39:15.060
+And personally, I think while you can serve static files, I think sort of the place where frameworks like Sanic really shine is using them to power web APIs and web sockets and stuff like that.
+
+00:39:15.060 --> 00:39:18.680
+Personally, I don't use it to handle HTML well.
+
+00:39:18.680 --> 00:39:22.740
+It certainly is capable of providing HTML responses.
+
+00:39:23.300 --> 00:39:28.820
+Sanic is going to say, let's you figure out what's the best way that you want to be able to template those.
+
+00:39:28.820 --> 00:39:32.220
+And if it's Jinja 2, there's a plugin that you can use for that.
+
+00:39:32.220 --> 00:39:32.940
+Yeah, that makes sense.
+
+00:39:32.940 --> 00:39:36.680
+Are there any other template languages that you can use?
+
+00:39:36.680 --> 00:39:39.760
+You can use Django ones, you can use Chameleon, Mako?
+
+00:39:39.760 --> 00:39:42.180
+I don't know how it would work with Django ones.
+
+00:39:42.180 --> 00:39:46.040
+Anything that's going to work in Python, you can use that.
+
+00:39:46.040 --> 00:39:51.700
+Because at the end of the day, what you need to do to respond with Sanic is you just need to be able to pass it a string.
+
+00:39:51.700 --> 00:39:55.200
+So use whatever template engine you want.
+
+00:39:55.200 --> 00:39:55.480
+I see.
+
+00:39:55.480 --> 00:40:04.860
+So you would basically just create the thing and tell it to here's your template file, here's your model data, render it, and just have Sanic return the HTML.
+
+00:40:04.860 --> 00:40:06.420
+So you kind of plug in that layer.
+
+00:40:06.420 --> 00:40:07.140
+Exactly.
+
+00:40:07.140 --> 00:40:09.280
+So you could use whatever you needed to there.
+
+00:40:09.280 --> 00:40:10.260
+It would work.
+
+00:40:10.260 --> 00:40:18.120
+Yeah, it seems like one of the first things you'd want to do is create your own little decorator that takes a template file and then just automatically does that.
+
+00:40:18.120 --> 00:40:21.440
+You just wrap up your view methods, right?
+
+00:40:21.440 --> 00:40:23.240
+Yeah, don't do that more than twice.
+
+00:40:23.240 --> 00:40:29.200
+Creating decorators is a huge thing, I think, in frameworks like Sanic and Flask and stuff like that.
+
+00:40:29.200 --> 00:40:36.740
+And there is some information in tutorials on how you would go about that when you realize that you're going to need something like that.
+
+00:40:36.740 --> 00:40:37.020
+Right.
+
+00:40:37.020 --> 00:40:37.960
+Yeah, very, very cool.
+
+00:40:38.420 --> 00:40:50.420
+So one of the things that happened not too long ago, maybe a year ago, is Sanic moved from being this framework created by, you said Michael Hill?
+
+00:40:50.420 --> 00:40:50.960
+Yes.
+
+00:40:50.960 --> 00:40:56.040
+Yeah, created by Michael Hill and has now become more of a community project.
+
+00:40:56.040 --> 00:41:00.780
+Do you want to talk about that whole process, what that means for Sanic and why it was done?
+
+00:41:00.780 --> 00:41:01.160
+Sure.
+
+00:41:01.160 --> 00:41:04.640
+So I kind of got involved with Sanic.
+
+00:41:04.640 --> 00:41:09.640
+First, I got it mainly because it was something that I wanted to just check out.
+
+00:41:09.640 --> 00:41:16.300
+You know, one of the things I like to do in my spare time is see what else is out there that I don't know and try playing with it.
+
+00:41:16.700 --> 00:41:23.000
+And Sanic was kind of how I started playing around with these async enabled frameworks.
+
+00:41:23.000 --> 00:41:26.800
+I sort of realized that there was a missing hole.
+
+00:41:26.800 --> 00:41:31.140
+And this is before I was involved as one of the maintainers of the Sanic project.
+
+00:41:31.560 --> 00:41:33.960
+I saw where there was a hole for authentication.
+
+00:41:33.960 --> 00:41:36.440
+So I created the JWT extension.
+
+00:41:36.440 --> 00:41:43.160
+And then when I started using it for work, I sat down and I said to myself, OK, this is a pretty new framework.
+
+00:41:43.160 --> 00:41:51.740
+You know, one of the risks with something that's new is how long is it going to last and how long is people going to be maintaining it?
+
+00:41:51.740 --> 00:41:59.460
+That is really one of the concerns with any of the one of the frameworks that you mentioned at the beginning is they're also new, but web apps are often long lived, right?
+
+00:41:59.460 --> 00:42:06.800
+You don't want to build your thing on, you know, if you'd built it on Jepranta, you'd be really bummed that contributions stopped, you know, a year ago.
+
+00:42:06.800 --> 00:42:07.560
+Yeah, absolutely.
+
+00:42:07.560 --> 00:42:14.260
+When I go to GitHub to find some package, that's one of the first things I do is look to see how active it's been.
+
+00:42:14.260 --> 00:42:24.340
+Because if I'm going to integrate this into something that I'm putting into production, if it stops getting maintained, then I need to step up to the plate and start maintaining it if something breaks.
+
+00:42:24.340 --> 00:42:24.760
+Yeah.
+
+00:42:24.760 --> 00:42:26.180
+And do you want to do that, right?
+
+00:42:26.180 --> 00:42:27.740
+You don't want to do that for everything out there.
+
+00:42:27.740 --> 00:42:29.940
+Sometimes you just want to use something.
+
+00:42:29.940 --> 00:42:30.600
+Exactly.
+
+00:42:30.600 --> 00:42:37.960
+And when I was making that decision with Sanic, I said to myself, okay, you know, what happens if these guys stop maintaining it?
+
+00:42:37.960 --> 00:42:49.640
+And I looked at it and I said, okay, you know, I mean, if that happens, then, you know, I realize this is a risk and maybe I'll get myself, maybe then I'll just take it out of my own wing and just fork it and do what I need to with it.
+
+00:42:50.500 --> 00:43:03.780
+And lo and behold, you know, some time goes by and I start noticing that all these issues are piling up and there's pull requests that are piling up and, you know, the release cycle is a little bit slower than it had been at first.
+
+00:43:03.780 --> 00:43:11.840
+And I started talking with some other people that are, that I know that are users of Sanic and I noticed that they also had the same concerns.
+
+00:43:11.840 --> 00:43:15.620
+And so we're saying, okay, well, maybe this is a long-lived project or not.
+
+00:43:15.620 --> 00:43:30.440
+And so I started talking with these people and I started talking with the guys that were the maintainers of the project and everybody that had used the package and had worked on it, you know, really liked it and was enjoying doing it and nobody wanted to see it just go away.
+
+00:43:30.440 --> 00:43:38.060
+So we said, okay, well, then let's take this package that was on GitHub as a repository for just a single user.
+
+00:43:38.060 --> 00:43:45.540
+Let's turn it into a community package, a community organization and invite whoever wants to be involved.
+
+00:43:45.540 --> 00:43:50.440
+Let's get everybody together and start working on this together.
+
+00:43:50.440 --> 00:43:51.820
+Let's make decisions together.
+
+00:43:51.820 --> 00:43:56.340
+Let's not have just one person hold the key to this.
+
+00:43:56.940 --> 00:44:03.040
+And, you know, we're still in this process of figuring out what that means to be a community run organization.
+
+00:44:03.040 --> 00:44:11.920
+And it's not like we have this answered yet, but, you know, we've been doing this for, I guess, about, I don't know, five or six months now.
+
+00:44:11.920 --> 00:44:14.920
+And it's sort of been a fun ride so far.
+
+00:44:14.920 --> 00:44:17.280
+And I think we're headed in a good direction.
+
+00:44:17.280 --> 00:44:18.580
+It looks like a good move in it.
+
+00:44:18.580 --> 00:44:20.340
+You definitely have some folks involved there.
+
+00:44:20.340 --> 00:44:22.580
+So I think it's very positive.
+
+00:44:22.580 --> 00:44:26.840
+I also just checked out Vibora and it looks like it's stalled out as well.
+
+00:44:26.840 --> 00:44:34.240
+So it's looking more and more like Sanic is the one that still has the momentum of the ones that we've been talking about.
+
+00:44:34.240 --> 00:44:35.940
+I don't want to be the one to make that claim, but.
+
+00:44:35.940 --> 00:44:38.340
+No, you let me say it.
+
+00:44:38.340 --> 00:44:42.580
+But, I mean, I think Hort is still doing really well and AIoHDP as well.
+
+00:44:42.580 --> 00:44:49.060
+But like some of the other ones that came out at the same time, I kind of feel like, I don't know, they just, they had a lot of activity, but not so much.
+
+00:44:49.060 --> 00:45:00.020
+So it's good that you're taking these steps to try to solidify that base and, you know, not make it just dependent upon one person's interest in pursuing this sort of tweak of the Flask API, right?
+
+00:45:00.020 --> 00:45:00.580
+Yeah, absolutely.
+
+00:45:00.580 --> 00:45:12.240
+And that's, we've sort of tried to make sure that there's some people that are involved, that have been involved in the project for, since it's beginning early days, and some people that are just getting involved now.
+
+00:45:12.240 --> 00:45:16.380
+And we try to have a mix of as many voices as we can.
+
+00:45:16.380 --> 00:45:21.020
+So we have consistency and we're not breaking any backwards compatibility issues.
+
+00:45:21.020 --> 00:45:29.400
+But I'm pretty excited because there definitely has been a good response and been a lot of community action in pushing this project.
+
+00:45:29.400 --> 00:45:30.460
+Yeah, that's great.
+
+00:45:30.460 --> 00:45:33.100
+So what are some of the plans going forward?
+
+00:45:33.100 --> 00:45:39.740
+You guys decided to issue the zero versioning style and go with something different for versioning, right?
+
+00:45:39.740 --> 00:45:42.540
+The current version is 0.8.3.
+
+00:45:42.540 --> 00:45:46.900
+And that's going to be the last zero versioned release.
+
+00:45:46.900 --> 00:45:52.640
+And coming up in about another month, we're going to switch over to calendar versioning.
+
+00:45:52.640 --> 00:45:56.220
+And the idea behind this is we've got a fast framework.
+
+00:45:56.220 --> 00:45:59.980
+Let's make our development cycles, you know, somewhat fast as well.
+
+00:46:00.080 --> 00:46:01.940
+So we can respond to things quickly.
+
+00:46:01.940 --> 00:46:06.400
+And so we decided to go with four releases per year.
+
+00:46:06.400 --> 00:46:17.300
+We're going to do one in March, one in June, September and December with the idea that the December release will be a long-term support release, an LTS release.
+
+00:46:17.300 --> 00:46:17.920
+That's pretty cool.
+
+00:46:18.000 --> 00:46:22.820
+I think it makes things more clear because a lot of folks have been involved in open source for a long time.
+
+00:46:22.820 --> 00:46:25.200
+They see 0.12 and they're like, oh, great, that's fine.
+
+00:46:25.200 --> 00:46:33.760
+But many people, especially coming from like the enterprise-y space and the commercial space, they see 0.something and they're like, oh, it's not ready yet.
+
+00:46:33.760 --> 00:46:34.980
+It's in some kind of beta or something.
+
+00:46:34.980 --> 00:46:46.460
+That's sort of what we're trying to achieve with moving to a community organization and moving to having an LTS release is to make this known that this is a safe project to rely upon.
+
+00:46:46.460 --> 00:46:47.820
+And you can use this in production.
+
+00:46:47.820 --> 00:46:51.160
+It's not going anywhere and it's going to perform.
+
+00:46:51.160 --> 00:46:51.780
+That's cool.
+
+00:46:51.780 --> 00:46:54.640
+What does a version number look like in calendar versioning?
+
+00:46:54.640 --> 00:46:58.460
+Is it like 2018 dot or like, yeah, what are you doing there?
+
+00:46:58.460 --> 00:46:59.340
+You could do that.
+
+00:46:59.340 --> 00:47:01.700
+What we're going to do is it's going to be 18.12.
+
+00:47:01.700 --> 00:47:04.320
+So that's going to be the next release.
+
+00:47:04.460 --> 00:47:08.880
+And then after that, it'll be 19.3, 19.6, 19.9.
+
+00:47:08.880 --> 00:47:09.220
+Yeah.
+
+00:47:09.220 --> 00:47:12.740
+And then like little patches and stuff would be like dot something on the end.
+
+00:47:12.740 --> 00:47:13.200
+Exactly.
+
+00:47:13.200 --> 00:47:19.340
+So if we need to have inside that release cycle, then yeah, it'll be 18.12.1.
+
+00:47:19.340 --> 00:47:28.700
+I imagine that those type of patches, you'll see more of those with the LTS releases because the idea behind that is we're going to lock in the API.
+
+00:47:28.700 --> 00:47:32.260
+We're going to lock in the feature set in December of 2018.
+
+00:47:32.600 --> 00:47:35.660
+And that's going to be on its own branch inside of GitHub.
+
+00:47:36.080 --> 00:47:47.180
+And for the next year, if we see any security issues or bugs, we're going to go and we're going to fix those and we're going to push those out to the 18.12 package.
+
+00:47:47.360 --> 00:47:54.360
+But while we're doing that, we may move on to additional feature sets inside 19.3 and moving forward.
+
+00:47:54.360 --> 00:47:54.700
+Yeah.
+
+00:47:54.700 --> 00:47:57.160
+That wouldn't necessarily get put into that 18.12.
+
+00:47:57.160 --> 00:47:57.880
+That's really cool.
+
+00:47:57.880 --> 00:48:08.240
+And you know, one thing I definitely like about this is I can open up a requirements file or I can do a pip list on a virtual environment or something and just look and know, oh, that library is a year and a half old.
+
+00:48:08.640 --> 00:48:10.920
+Or that library is pretty new.
+
+00:48:10.920 --> 00:48:16.400
+Like if I do, you know, a pip list and I see requests is that I don't even know what it's at.
+
+00:48:16.400 --> 00:48:20.920
+Like, let's say I see pyramid at 1.8.7.
+
+00:48:20.920 --> 00:48:22.320
+Right.
+
+00:48:22.320 --> 00:48:23.700
+Like that's out of date.
+
+00:48:23.700 --> 00:48:25.120
+It should be 1.9.
+
+00:48:25.120 --> 00:48:25.540
+That's something.
+
+00:48:25.660 --> 00:48:27.580
+But how out of date, right?
+
+00:48:27.580 --> 00:48:29.400
+Like, was it just updated?
+
+00:48:29.400 --> 00:48:30.860
+You need to know the package.
+
+00:48:30.860 --> 00:48:40.020
+You need to be involved in the community and have an understanding of when all those releases are happening to know, you know, whether your version is out of date and by how much.
+
+00:48:40.020 --> 00:48:42.140
+With your model, it's super clear.
+
+00:48:42.140 --> 00:48:43.240
+Oh, that's six months old.
+
+00:48:43.240 --> 00:48:44.660
+We should probably consider upgrading that.
+
+00:48:44.660 --> 00:48:44.900
+Yeah.
+
+00:48:44.900 --> 00:48:46.540
+I mean, I don't want to say it's our model.
+
+00:48:46.540 --> 00:48:48.300
+Like it's a thing that's out there.
+
+00:48:48.300 --> 00:48:48.760
+Sorry, the model.
+
+00:48:48.760 --> 00:48:49.800
+Let me rephrase it.
+
+00:48:49.800 --> 00:48:50.740
+The model you've adopted.
+
+00:48:50.740 --> 00:48:51.540
+It lets me see that.
+
+00:48:51.540 --> 00:48:52.500
+Yeah, that's really nice.
+
+00:48:52.500 --> 00:48:55.880
+And I think pip is now on to that model as well.
+
+00:48:55.880 --> 00:48:56.780
+And there's some other.
+
+00:48:56.780 --> 00:49:04.180
+I've noticed a lot more repositories using calendar versioning, I'd say, in the last year than I had, you know, before that.
+
+00:49:04.180 --> 00:49:04.500
+It's cool.
+
+00:49:04.500 --> 00:49:05.580
+Well, I'm definitely a fan.
+
+00:49:05.580 --> 00:49:15.720
+Now, one of the things I saw looking through the documentation is you have on the various issues and items in GitHub is you have help wanted labels.
+
+00:49:15.720 --> 00:49:22.300
+And it sounds like you're looking for folks who would be willing to be contributors and participate, right?
+
+00:49:22.300 --> 00:49:25.800
+That's sort of the goal is this is a community built project.
+
+00:49:25.800 --> 00:49:29.360
+You know, let's get everybody involved that wants to be.
+
+00:49:29.360 --> 00:49:43.480
+And one of the things that, you know, I'm not the only one doing this, but one of the things that I do, you know, when I check GitHub and I see that there are new issues open, I try to, you know, make an assessment, you know, of how difficult would it be to implement this feature?
+
+00:49:43.620 --> 00:49:46.900
+Or, you know, is this a bug or whatever it is?
+
+00:49:46.900 --> 00:49:51.240
+And use GitHub to provide the context.
+
+00:49:51.240 --> 00:49:56.940
+If I have a project and I want to help out and say, you know, I don't really know, you know, where can my efforts go?
+
+00:49:56.940 --> 00:50:02.860
+It's a little bit easier for me to see, okay, well, you know, this is an easy task for me to handle.
+
+00:50:02.860 --> 00:50:08.780
+So let me try this one first, as opposed to trying to add an ASGI or something like that, which would be more difficult.
+
+00:50:08.960 --> 00:50:12.620
+Yeah, the community is still working on that one as a whole.
+
+00:50:12.620 --> 00:50:13.840
+That's cool.
+
+00:50:13.840 --> 00:50:22.020
+So, but if people are keen to do it, there's all sorts of stuff I'm sure they could pick up, like even triaging issues, working on documentation tutorials.
+
+00:50:22.020 --> 00:50:24.700
+There's being a relatively new web framework.
+
+00:50:24.700 --> 00:50:30.560
+There's probably not as hard or solidified as say something like Django to make changes.
+
+00:50:30.560 --> 00:50:31.080
+Absolutely.
+
+00:50:31.080 --> 00:50:45.700
+And I think, you know, the best thing there is if you have interest in it, the best way to get involved is to just go into GitHub or we have, we have, we just opened up a community forum using Discourse.
+
+00:50:45.700 --> 00:50:52.240
+And just look to see what else, what the conversations are and just start responding, you know, just put in some, some thoughts.
+
+00:50:52.240 --> 00:50:58.180
+You know, there's a conversation about something and, you know, something that strikes your interest, you know, put in your own thoughts.
+
+00:50:58.680 --> 00:51:03.780
+And it's sort of a good way to just get yourself involved in, in your face known.
+
+00:51:03.780 --> 00:51:12.940
+So you don't even, you don't necessarily need to get involved by making a pull request and, you know, solving, you know, you know, bug issue number one, two, three, four.
+
+00:51:12.940 --> 00:51:20.700
+It's, I think just making your presence known is, is a great way to contribute yourself in your, in your, in your thoughts.
+
+00:51:20.700 --> 00:51:21.580
+Yeah, it's cool.
+
+00:51:21.580 --> 00:51:27.740
+A lot of people are looking to get into their first open source project for one reason or another.
+
+00:51:27.740 --> 00:51:30.220
+And I always like to highlight opportunities to do that.
+
+00:51:30.220 --> 00:51:31.620
+So it sounds like this is a good one.
+
+00:51:31.620 --> 00:51:37.200
+Anyone's looking to contribute, you know, we're definitely, you know, we'd love to have help with documentation and testing.
+
+00:51:37.200 --> 00:51:45.700
+And I think one of the big things right now would be examples is, you know, I used Sanic to solve this problem and this is how I did it.
+
+00:51:45.700 --> 00:51:46.660
+That kind of stuff.
+
+00:51:46.660 --> 00:51:46.840
+Yeah.
+
+00:51:46.840 --> 00:51:47.980
+Cool.
+
+00:51:47.980 --> 00:51:48.820
+That sounds really great.
+
+00:51:49.200 --> 00:51:51.940
+So I guess we're probably about out of time.
+
+00:51:51.940 --> 00:51:53.820
+So we should leave it there for Sanic.
+
+00:51:53.820 --> 00:51:57.780
+Let me ask you the two questions I always ask my guests at the end of the show.
+
+00:51:57.780 --> 00:52:01.580
+If you're going to work on Sanic or any other Python code, what editor do you use?
+
+00:52:01.660 --> 00:52:02.800
+I'm a sublime text guy.
+
+00:52:02.800 --> 00:52:09.380
+I really like when I can open up my code editor and just see code and I don't like to have too many distractions.
+
+00:52:09.380 --> 00:52:11.060
+So I like simplicity.
+
+00:52:11.060 --> 00:52:11.960
+Yeah, that's cool.
+
+00:52:12.620 --> 00:52:17.960
+And notable package on PyPI, not necessarily the most popular, but you're like, oh, you should know about this.
+
+00:52:17.960 --> 00:52:20.460
+And I'll go and throw a pip install Sanic out there.
+
+00:52:20.460 --> 00:52:26.080
+So you don't have to say that one, but maybe something else like maybe an extension or something or async ORM.
+
+00:52:26.080 --> 00:52:35.640
+I'll leave, maybe I'll leave all that stuff for the listeners to go and explore and find, you know, maybe one of those awesome async lists or something.
+
+00:52:35.640 --> 00:52:38.560
+Maybe someone wants to create an awesome Sanic list.
+
+00:52:38.560 --> 00:52:40.500
+Maybe that's a good contribution.
+
+00:52:40.500 --> 00:52:41.200
+That would be cool.
+
+00:52:41.980 --> 00:52:49.520
+How about, but as another notable package, I've got another GUI that I don't think you guys have necessarily covered yet.
+
+00:52:49.520 --> 00:52:53.700
+We've been on a real kick, but we haven't hit them all, I'm sure.
+
+00:52:53.700 --> 00:52:56.700
+Well, how about pip install eel?
+
+00:52:56.700 --> 00:53:01.360
+I think that's another one that you can, it's a fun little project, which is.
+
+00:53:01.360 --> 00:53:02.180
+Eel's a good one.
+
+00:53:02.180 --> 00:53:08.220
+The idea is somewhat similar to what Electron is doing, but doing it with Python instead.
+
+00:53:08.440 --> 00:53:08.560
+Yeah.
+
+00:53:08.560 --> 00:53:19.040
+So Electron JS allows you to take and create what looks like a desktop application, but it's actually, you know, a hidden Chrome running HTML defined front end.
+
+00:53:19.040 --> 00:53:23.980
+Maybe it's something like Ember or Angular and then a Node JS backend for much of the logic.
+
+00:53:23.980 --> 00:53:24.280
+Right.
+
+00:53:24.360 --> 00:53:28.400
+And so eel does basically that, but for Python, right?
+
+00:53:28.400 --> 00:53:28.840
+Exactly.
+
+00:53:28.840 --> 00:53:39.120
+And one of the benefits besides giving you the entire Python ecosystem is it's a little bit less intensive than say Electron might be.
+
+00:53:39.120 --> 00:53:40.500
+It's also a little simpler, isn't it?
+
+00:53:40.500 --> 00:53:41.720
+If I remember looking through.
+
+00:53:41.720 --> 00:53:42.160
+Yeah.
+
+00:53:42.160 --> 00:53:43.580
+It's a fun, it's a fun little project.
+
+00:53:43.580 --> 00:53:43.900
+Nice.
+
+00:53:43.900 --> 00:53:44.060
+Yeah.
+
+00:53:44.060 --> 00:53:44.960
+People should check that out.
+
+00:53:44.960 --> 00:53:45.700
+All right.
+
+00:53:45.700 --> 00:53:45.980
+Awesome.
+
+00:53:46.140 --> 00:53:47.360
+So final call to action.
+
+00:53:47.360 --> 00:53:50.540
+People are excited about Sanic and Async Web frameworks.
+
+00:53:50.540 --> 00:53:51.920
+What would you say to them?
+
+00:53:51.920 --> 00:53:57.220
+What I'd like to most stress is get yourself involved in open source work however you can.
+
+00:53:57.600 --> 00:54:08.780
+I think especially for people that are maybe newer developers and just getting started out, open source is a great way to get experience and to get exposure and most importantly, start learning.
+
+00:54:08.780 --> 00:54:14.280
+And so I'd say come say hi to us over in the Sanic community.
+
+00:54:14.280 --> 00:54:15.140
+We'd love to have you.
+
+00:54:15.140 --> 00:54:21.020
+But if not, go find another community that you're passionate about and make yourself known.
+
+00:54:21.020 --> 00:54:25.580
+And this whole web framework, Async Web framework in Python, you think it's time?
+
+00:54:25.580 --> 00:54:26.300
+It's time to come?
+
+00:54:26.500 --> 00:54:35.140
+Don't quote me on this, but I believe eventually Django's planning on adding Async several release sites, a couple years, two years down the low.
+
+00:54:35.140 --> 00:54:36.640
+And it's coming.
+
+00:54:36.640 --> 00:54:38.120
+I mean, it's definitely the way to go.
+
+00:54:38.120 --> 00:54:39.940
+So the future is now.
+
+00:54:39.940 --> 00:54:40.400
+Yeah.
+
+00:54:40.400 --> 00:54:46.420
+You spoke about Django channels and I think it was Andrew Godin that wrote this.
+
+00:54:46.420 --> 00:54:46.920
+Right.
+
+00:54:46.920 --> 00:54:54.680
+Put together a cool thing called a Django Async roadmap that lays out their plans for basically doing something similar.
+
+00:54:54.680 --> 00:54:55.660
+It's a really great article.
+
+00:54:55.860 --> 00:54:59.040
+I'll throw it in the show notes for people who are on the Django side of the fence.
+
+00:54:59.040 --> 00:55:00.780
+But yeah, definitely.
+
+00:55:00.780 --> 00:55:01.760
+I agree with you.
+
+00:55:01.760 --> 00:55:03.480
+And thanks for being on the show, Adam.
+
+00:55:03.480 --> 00:55:04.460
+It was great to talk with you.
+
+00:55:04.460 --> 00:55:05.760
+And best of luck on Sanic.
+
+00:55:05.760 --> 00:55:06.360
+It's a cool project.
+
+00:55:06.360 --> 00:55:07.500
+Thank you very much.
+
+00:55:07.500 --> 00:55:07.860
+You bet.
+
+00:55:07.860 --> 00:55:08.080
+Bye.
+
+00:55:08.080 --> 00:55:08.480
+Take care.
+
+00:55:09.480 --> 00:55:12.060
+This has been another episode of Talk Python to Me.
+
+00:55:12.260 --> 00:55:14.700
+The guest on this episode was Adam Hopkins.
+
+00:55:14.700 --> 00:55:18.220
+And it's been brought to you by us over at Talk Python Training.
+
+00:55:19.000 --> 00:55:20.500
+Want to level up your Python?
+
+00:55:20.500 --> 00:55:25.300
+If you're just getting started, try my Python Jumpstart by Building 10 Apps course.
+
+00:55:25.300 --> 00:55:33.440
+Or if you're looking for something more advanced, check out our new Async course that digs into all the different types of Async programming you can do in Python.
+
+00:55:33.660 --> 00:55:38.120
+And of course, if you're interested in more than one of these, be sure to check out our Everything Bundle.
+
+00:55:38.120 --> 00:55:40.000
+It's like a subscription that never expires.
+
+00:55:40.000 --> 00:55:42.640
+Be sure to subscribe to the show.
+
+00:55:42.640 --> 00:55:45.060
+Open your favorite podcatcher and search for Python.
+
+00:55:45.060 --> 00:55:46.280
+We should be right at the top.
+
+00:55:46.280 --> 00:55:55.260
+You can also find the iTunes feed at /itunes, the Google Play feed at /play, and the direct RSS feed at /rss on talkpython.fm.
+
+00:55:55.840 --> 00:55:57.360
+This is your host, Michael Kennedy.
+
+00:55:57.360 --> 00:55:58.860
+Thanks so much for listening.
+
+00:55:58.860 --> 00:55:59.920
+I really appreciate it.
+
+00:55:59.920 --> 00:56:01.660
+Now get out there and write some Python code.
+
+00:56:01.660 --> 00:56:01.840
+Thank you.
+
+00:56:01.840 --> 00:56:21.700
+Thank you.
+
+00:56:21.700 --> 00:56:51.680
+Thank you.
+

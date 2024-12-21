@@ -1,0 +1,3167 @@
+WEBVTT
+
+00:00:00.001 --> 00:00:02.700
+Quick, name some ways to make your Python code faster.
+
+00:00:02.700 --> 00:00:06.140
+Did you think of PyPy, the JIT compiled version of Python?
+
+00:00:06.140 --> 00:00:08.840
+Maybe some async and await parallelism?
+
+00:00:08.840 --> 00:00:13.520
+How about Cython, where you write in a Python-esque language that compiles to machine instructions?
+
+00:00:13.520 --> 00:00:17.840
+Well, I'm here to add a new one to your vocabulary, Nutka.
+
+00:00:17.840 --> 00:00:24.440
+Nutka is like Cython in that your Python code is compiled into true machine instructions rather than interpreted.
+
+00:00:25.060 --> 00:00:31.580
+But, unlike Cython, you can take standard Python 3 that runs just in regular old Python, CPython,
+
+00:00:31.580 --> 00:00:36.160
+without changing the syntax at all, and still compile that to machine instructions.
+
+00:00:36.160 --> 00:00:42.920
+And Kai Haien is here to take us on the journey of Nutka, a project he's created and has been overseeing for some time.
+
+00:00:42.920 --> 00:00:48.520
+This is Talk Python to Me, episode 172, recorded July 16, 2018.
+
+00:00:48.520 --> 00:01:08.740
+Welcome to Talk Python to Me, a weekly podcast on Python, the language, the libraries, the ecosystem, and the personalities.
+
+00:01:08.740 --> 00:01:12.860
+This is your host, Michael Kennedy. Follow me on Twitter, where I'm @mkennedy.
+
+00:01:13.180 --> 00:01:19.340
+Keep up with the show and listen to past episodes at talkpython.fm, and follow the show on Twitter via at Talk Python.
+
+00:01:19.340 --> 00:01:23.600
+This episode is brought to you by Cox Automotive and Rollbar.
+
+00:01:23.600 --> 00:01:27.100
+Please check out what they're offering during their segments. It really helps support the show.
+
+00:01:27.100 --> 00:01:30.520
+Hey, everyone. Thanks for tuning in, like always.
+
+00:01:30.520 --> 00:01:33.780
+I have two things I want to share with you real quick before we get to the interview.
+
+00:01:33.780 --> 00:01:35.840
+First, I owe you an apology.
+
+00:01:35.840 --> 00:01:38.240
+You don't realize it yet, but you will pretty soon.
+
+00:01:38.340 --> 00:01:46.140
+When I recorded this, the microphone cable that connects my good microphone, the one I'm talking on now, to my computer, got bumped or something.
+
+00:01:46.140 --> 00:01:53.980
+And then the computer just dropped the microphone and fell back to something terrible, like my iPhone headphones or something like that.
+
+00:01:53.980 --> 00:01:57.480
+Anyway, the audio is not up to where I would like it.
+
+00:01:57.480 --> 00:02:00.360
+It's not terrible. It's somewhat like a lot of my guests, I guess.
+
+00:02:00.480 --> 00:02:04.700
+But it could be better, and I really work hard on that, as some of you know.
+
+00:02:04.700 --> 00:02:06.680
+And this one, it's not up to my standards.
+
+00:02:06.680 --> 00:02:08.580
+So hopefully you enjoy the conversation.
+
+00:02:08.580 --> 00:02:09.860
+You can still hear it just fine.
+
+00:02:09.860 --> 00:02:13.060
+It's just not as smooth and nice as this microphone.
+
+00:02:13.060 --> 00:02:14.520
+So please bear with me.
+
+00:02:14.520 --> 00:02:18.280
+It's still a great conversation and absolutely one worth listening to.
+
+00:02:18.280 --> 00:02:22.700
+Secondly, I just released a new course, and I'm really excited about it.
+
+00:02:22.760 --> 00:02:25.400
+This is one that's been in the works for a really long time.
+
+00:02:25.400 --> 00:02:29.180
+It's called Building Data-Driven Web Apps with Pyramid and SQLAlchemy.
+
+00:02:29.180 --> 00:02:38.660
+And we cover all sorts of cool stuff around building web apps, but also things like Alembic for migrations and unit testing web apps and deploying to Linux,
+
+00:02:38.660 --> 00:02:40.960
+and a whole bunch of things that I think you'll find useful.
+
+00:02:41.220 --> 00:02:46.940
+If that course sounds interesting to you, please check it out at talkpython.fm/pyramid.
+
+00:02:46.940 --> 00:02:51.600
+Have a look through the course page, watch the course intro video, and see what it's all about.
+
+00:02:51.600 --> 00:02:52.600
+Hopefully you love it.
+
+00:02:52.600 --> 00:02:56.140
+I really am glad that I got it out there for everyone who's been waiting for it.
+
+00:02:56.140 --> 00:02:57.160
+All right.
+
+00:02:57.160 --> 00:03:00.200
+Now, with that stuff out of the way, it's time to chat with Kai.
+
+00:03:00.200 --> 00:03:02.260
+Kai, welcome to Talk Python.
+
+00:03:02.260 --> 00:03:03.160
+Yes, hello, Michael.
+
+00:03:03.160 --> 00:03:04.420
+I'm glad to be here.
+
+00:03:04.420 --> 00:03:05.860
+Yeah, it's good to have you here.
+
+00:03:05.860 --> 00:03:07.600
+We've been trying for a while to set this up.
+
+00:03:07.600 --> 00:03:10.600
+We've both been on and off traveling and things like that.
+
+00:03:10.600 --> 00:03:11.920
+But it's great to have you here.
+
+00:03:11.920 --> 00:03:18.800
+And I'm really looking forward to speaking to you about your project and your efforts to make Python faster.
+
+00:03:18.800 --> 00:03:21.700
+Yeah, as you can imagine, I'm very excited.
+
+00:03:21.700 --> 00:03:25.520
+Yeah, it looks like you're having some really great success.
+
+00:03:25.520 --> 00:03:27.960
+So I'm excited to share that with everyone.
+
+00:03:27.960 --> 00:03:30.080
+Let's start, though, with your story.
+
+00:03:30.080 --> 00:03:31.460
+How did you get into programming in Python?
+
+00:03:31.460 --> 00:03:33.100
+Yeah, I started as a kid.
+
+00:03:33.100 --> 00:03:36.380
+I think that was a long time before the Internet.
+
+00:03:37.000 --> 00:03:43.520
+So when I was 11, the first thing I ever saw was C64, Commodore 64, my brother, we brought it home.
+
+00:03:43.520 --> 00:03:48.300
+And I had like one or two days of learning basic on it.
+
+00:03:48.300 --> 00:03:50.040
+And then you went away with it.
+
+00:03:50.040 --> 00:03:51.520
+And I didn't have a computer anymore.
+
+00:03:51.780 --> 00:03:54.860
+So what I did, I was programming on paper.
+
+00:03:54.860 --> 00:03:55.480
+Wow.
+
+00:03:55.480 --> 00:03:56.480
+That's a dedication.
+
+00:03:56.480 --> 00:03:57.660
+Programs in my mind.
+
+00:03:57.660 --> 00:03:57.900
+Yeah.
+
+00:03:57.900 --> 00:03:59.980
+That was bizarre.
+
+00:03:59.980 --> 00:04:00.700
+It was hard.
+
+00:04:00.700 --> 00:04:04.360
+But I suspect that that's actually really good training.
+
+00:04:04.360 --> 00:04:06.980
+Because a lot of people, especially with...
+
+00:04:06.980 --> 00:04:12.320
+The editors weren't that good, but paper is actually a lot more flexible.
+
+00:04:13.320 --> 00:04:14.860
+Yeah, that's probably true, actually.
+
+00:04:14.860 --> 00:04:19.560
+But, you know, just a lot of people, I feel like, kind of just poke at the program when they're new.
+
+00:04:19.560 --> 00:04:22.000
+You know, they'll write something that doesn't work.
+
+00:04:22.000 --> 00:04:23.840
+They're like, well, let me just change it and see if it works now.
+
+00:04:23.840 --> 00:04:25.060
+I'll change it a different way.
+
+00:04:25.060 --> 00:04:29.160
+Like, you don't actually, you know, so deeply, like, think through the work.
+
+00:04:29.160 --> 00:04:31.920
+And if you do it on paper, like, you've got to think it through.
+
+00:04:32.160 --> 00:04:35.340
+Yeah, and I didn't learn everything from my brother.
+
+00:04:35.340 --> 00:04:40.820
+So I wanted to write something, I think, Hangman, something like this.
+
+00:04:40.820 --> 00:04:45.020
+And I came up with that there should be something like a loop.
+
+00:04:45.020 --> 00:04:46.700
+But I didn't know what it is.
+
+00:04:46.700 --> 00:04:51.760
+And so on the schoolyard, I pestered all the kids who I knew were also programming.
+
+00:04:51.760 --> 00:04:55.240
+There were, like, maybe three other guys that I knew of.
+
+00:04:55.240 --> 00:04:57.380
+And I pestered them and asked them questions.
+
+00:04:57.380 --> 00:04:59.160
+And I learned about the Goto statement.
+
+00:04:59.160 --> 00:05:01.520
+These are, like, the early loops.
+
+00:05:01.680 --> 00:05:06.260
+The early unstructured wild days of programming before functions and things like that.
+
+00:05:06.260 --> 00:05:08.200
+It was, like, you were on an island.
+
+00:05:08.200 --> 00:05:10.120
+So the cursor was blinking.
+
+00:05:10.120 --> 00:05:15.080
+And you would figure out everything on your own.
+
+00:05:15.080 --> 00:05:16.900
+And there were barely people to talk to.
+
+00:05:16.900 --> 00:05:18.740
+I also, I grew up in a small village.
+
+00:05:18.740 --> 00:05:22.920
+Went to school in a small city, very small city, 6,000 people maybe.
+
+00:05:22.920 --> 00:05:31.360
+And, yeah, there was, I think in my village there was no other kid who had a computer that could
+
+00:05:31.360 --> 00:05:32.840
+actually do some programming.
+
+00:05:32.840 --> 00:05:36.220
+And I was, at least I wasn't aware.
+
+00:05:36.220 --> 00:05:37.880
+So I was very isolated.
+
+00:05:37.880 --> 00:05:43.840
+Yeah, I think that's one of the bigger differences now that you're connected, right?
+
+00:05:43.840 --> 00:05:46.280
+It also made me self.
+
+00:05:46.280 --> 00:05:47.680
+I don't know.
+
+00:05:47.680 --> 00:05:49.820
+I was autodidactic all my life.
+
+00:05:49.820 --> 00:05:53.060
+That's probably stemming from there.
+
+00:05:53.560 --> 00:05:56.740
+Because later I learned, like, stack overflow programming.
+
+00:05:56.740 --> 00:05:58.800
+You type what you want.
+
+00:05:58.800 --> 00:06:00.400
+You copy, paste your code.
+
+00:06:00.400 --> 00:06:00.840
+You're done.
+
+00:06:00.840 --> 00:06:03.140
+But initially it wasn't like that.
+
+00:06:03.140 --> 00:06:05.940
+So I also recall learning a sampler.
+
+00:06:05.940 --> 00:06:09.980
+So coming from basic, it had these line numbers.
+
+00:06:10.340 --> 00:06:13.520
+And I thought addresses were like line numbers.
+
+00:06:13.520 --> 00:06:15.360
+And I wrote down my program.
+
+00:06:15.360 --> 00:06:21.960
+And when I wanted to insert a statement, I just took a number between two addresses.
+
+00:06:21.960 --> 00:06:26.460
+And, yeah, if you know a sampler, you know that corrupts the program.
+
+00:06:26.900 --> 00:06:30.360
+I didn't get it for a long time, what this was all about.
+
+00:06:30.360 --> 00:06:31.720
+So, yeah.
+
+00:06:31.720 --> 00:06:32.980
+So learning a sampler.
+
+00:06:32.980 --> 00:06:37.420
+But eventually I learned the 68K series of processors.
+
+00:06:37.420 --> 00:06:39.440
+It was almost like a high-level language.
+
+00:06:39.440 --> 00:06:43.520
+The C64, it had no registers.
+
+00:06:43.520 --> 00:06:45.240
+You couldn't learn that.
+
+00:06:45.240 --> 00:06:46.780
+That was too crazy.
+
+00:06:46.780 --> 00:06:48.820
+I couldn't get anything done.
+
+00:06:49.700 --> 00:06:51.060
+I think it couldn't multiply.
+
+00:06:51.060 --> 00:06:53.580
+It was crazy.
+
+00:06:53.580 --> 00:06:56.340
+But this one was actually pretty good.
+
+00:06:56.340 --> 00:06:58.980
+And I learned a sampler in C.
+
+00:06:58.980 --> 00:07:02.640
+Later I did C++ for some real programs.
+
+00:07:02.640 --> 00:07:04.860
+Actually had a day job.
+
+00:07:04.860 --> 00:07:11.700
+And met again with my brother, who was studying mathematics and computer science.
+
+00:07:11.700 --> 00:07:13.920
+And he's pretty much older.
+
+00:07:13.920 --> 00:07:14.900
+He's 13 years older.
+
+00:07:14.900 --> 00:07:19.660
+He learned computers from these, what's it called, with the punch cards.
+
+00:07:19.660 --> 00:07:23.240
+And he told me, learn Pearl.
+
+00:07:23.240 --> 00:07:28.940
+If you know Pearl, you will always be the only guy who can do stuff.
+
+00:07:28.940 --> 00:07:30.540
+And he was right.
+
+00:07:30.540 --> 00:07:34.220
+So Pearl was really my absolutely first love.
+
+00:07:34.220 --> 00:07:37.080
+I had learned a lot of languages until then.
+
+00:07:37.080 --> 00:07:41.560
+But Pearl was, like, yeah, amazing.
+
+00:07:41.560 --> 00:07:46.180
+And I read the book of Larry Wall, who was a linguist, designing a language.
+
+00:07:46.180 --> 00:07:50.860
+And he wrote, or he designed the language in a way that it fits your mind.
+
+00:07:50.860 --> 00:07:54.560
+So you would write what you think, however unstructured that is.
+
+00:07:54.560 --> 00:08:05.140
+So unlike Python, where you are forced in a certain, yeah, outline of a code, you could write unless at the end of statements.
+
+00:08:05.520 --> 00:08:11.000
+You could basically write down as you think, and you would never have to go back.
+
+00:08:11.000 --> 00:08:13.160
+You could always just continue writing.
+
+00:08:13.160 --> 00:08:17.300
+That was, like, a really productive way of programming.
+
+00:08:17.300 --> 00:08:18.300
+Yeah, it's interesting.
+
+00:08:18.300 --> 00:08:21.260
+I haven't done much with Pearl, but that sounds quite interesting.
+
+00:08:21.480 --> 00:08:25.960
+Yeah, and Python was upcoming.
+
+00:08:25.960 --> 00:08:31.380
+But it was very weak in terms of, this is 2002 we're talking.
+
+00:08:31.380 --> 00:08:35.560
+It was very weak in terms of supported stuff.
+
+00:08:35.560 --> 00:08:39.660
+So with Pearl, you had modules for everything, much like with Python today.
+
+00:08:40.160 --> 00:08:42.360
+Nothing can compete with Python anymore.
+
+00:08:42.360 --> 00:08:47.400
+But back then, CPAN was like, if you want to do stuff, it's already there.
+
+00:08:47.400 --> 00:08:52.020
+So why bother with Python, which cannot even send an email?
+
+00:08:52.020 --> 00:08:54.620
+You couldn't get stuff done.
+
+00:08:54.620 --> 00:08:56.580
+But it was much more readable.
+
+00:08:56.580 --> 00:09:04.100
+And, yeah, 16 years ago, when I switched jobs, we were working on a product which had a lot of share scripts.
+
+00:09:05.100 --> 00:09:10.040
+And it was pretty ugly, and we wanted to improve on it.
+
+00:09:10.040 --> 00:09:12.660
+And Pearl was, of course, an idea.
+
+00:09:12.660 --> 00:09:14.440
+But a better idea was to use Python.
+
+00:09:14.440 --> 00:09:17.460
+So I switched to Pearl from that.
+
+00:09:17.460 --> 00:09:21.920
+I've since fallen a bit in love with Python, actually, a lot.
+
+00:09:21.920 --> 00:09:23.800
+But it's not my first love.
+
+00:09:23.800 --> 00:09:24.740
+It's never the same.
+
+00:09:24.740 --> 00:09:25.480
+Yeah, yeah.
+
+00:09:25.480 --> 00:09:32.040
+So Pearl was the first to enable me to do what people, I think, a lot of people perceive Python to be.
+
+00:09:32.040 --> 00:09:33.240
+Right, yeah, that's really cool.
+
+00:09:33.580 --> 00:09:36.560
+And for teamwork, it's absolutely much better.
+
+00:09:36.560 --> 00:09:37.600
+Yeah, for sure.
+
+00:09:37.600 --> 00:09:44.680
+And I think what's really interesting, you brought it up here, often people debate languages on the syntax.
+
+00:09:44.680 --> 00:09:48.260
+You know, like, this syntax is better than that syntax.
+
+00:09:48.260 --> 00:09:57.940
+And what most of the time rules the day is, yeah, but I have all these libraries that actually let me do stuff when I put the syntax in place.
+
+00:09:57.940 --> 00:09:58.180
+Right?
+
+00:09:58.180 --> 00:10:02.560
+And that's so important and often sort of forgotten in these language debates.
+
+00:10:02.800 --> 00:10:06.260
+Yeah, this is, I think Java also has this rich ecosystem.
+
+00:10:06.260 --> 00:10:11.040
+C++ sort of, but not as productive, I think.
+
+00:10:11.040 --> 00:10:11.640
+Yeah.
+
+00:10:11.640 --> 00:10:14.800
+Yeah, getting things done and being quick.
+
+00:10:14.800 --> 00:10:22.600
+That's, for many tasks, it was, with Pearl, I've done things for my J job that were just, yeah, beginning.
+
+00:10:22.600 --> 00:10:23.060
+Yeah, great.
+
+00:10:23.060 --> 00:10:23.060
+Yeah, great.
+
+00:10:23.060 --> 00:10:27.060
+It was like, and Python too.
+
+00:10:27.060 --> 00:10:28.980
+And I think now everybody knows this.
+
+00:10:28.980 --> 00:10:31.980
+Oh, everybody that's using Python, that's pretty much.
+
+00:10:31.980 --> 00:10:34.420
+That is a lot of people today.
+
+00:10:34.420 --> 00:10:35.560
+It's pretty amazing, the growth.
+
+00:10:36.400 --> 00:10:38.940
+So, speaking of your day job, what are you doing these days?
+
+00:10:38.940 --> 00:10:40.740
+Currently, I'm on parrots to leave.
+
+00:10:40.860 --> 00:10:43.780
+So, I have a one and a half years kid now.
+
+00:10:43.780 --> 00:10:51.720
+And there's this regulation in Germany which forces your employer to give you time off when you have kids.
+
+00:10:52.000 --> 00:10:57.580
+And you get paid by the state even for 14 months total, both of us.
+
+00:10:57.580 --> 00:10:58.960
+So, my wife took 12 of them.
+
+00:10:58.960 --> 00:11:00.180
+I took two of them.
+
+00:11:00.180 --> 00:11:02.000
+You get a reduced payment for that.
+
+00:11:02.660 --> 00:11:11.760
+And on top of that, I added four months of unpaid parent to leave so I could focus on newt car.
+
+00:11:11.760 --> 00:11:13.280
+That's what I currently do.
+
+00:11:13.280 --> 00:11:16.380
+I have three times two months to spend on newt car.
+
+00:11:16.380 --> 00:11:20.900
+And I'm at the start of a third chunk of that right now.
+
+00:11:20.900 --> 00:11:25.280
+In reality, that parent to leave, I mean, you're a parent.
+
+00:11:25.280 --> 00:11:28.800
+And, yeah, it's a lot of work to care for a small kid.
+
+00:11:28.800 --> 00:11:31.160
+And especially with my wife, she's a doctor.
+
+00:11:31.160 --> 00:11:40.000
+And I'm very emancipated because for roughly 10 days per month, she's not here for 24 hours.
+
+00:11:40.000 --> 00:11:45.600
+So, actually, I get a fair share of her work there.
+
+00:11:45.600 --> 00:11:51.140
+But when I will return, I will be what I've been for 16 years now.
+
+00:11:51.140 --> 00:11:53.880
+I will be an engineer for air traffic management software.
+
+00:11:53.880 --> 00:11:57.040
+Also did a bit of project management.
+
+00:11:57.040 --> 00:12:00.460
+But mostly, I've been an engineer on this time.
+
+00:12:00.460 --> 00:12:03.280
+That sounds like software that you have to be really careful with.
+
+00:12:03.280 --> 00:12:03.640
+Yes.
+
+00:12:03.640 --> 00:12:04.200
+Yes.
+
+00:12:04.200 --> 00:12:07.420
+That's actually, we review everything.
+
+00:12:07.420 --> 00:12:13.300
+And it's the requirements, the code, tests.
+
+00:12:13.440 --> 00:12:20.440
+Everything gets looked with at least four eyes and goes through several phases.
+
+00:12:20.440 --> 00:12:22.280
+And it's amazing.
+
+00:12:22.280 --> 00:12:27.920
+And I was very lucky that the project that I'm working on, it's very old.
+
+00:12:27.920 --> 00:12:29.100
+Now, is it 30 years now?
+
+00:12:29.100 --> 00:12:33.040
+I think it's getting 30 years old or is already 30 years old.
+
+00:12:33.040 --> 00:12:38.940
+And I was blessed with the opportunity to lead the project to replace the middleware because
+
+00:12:38.940 --> 00:12:40.460
+it was closed source software.
+
+00:12:40.460 --> 00:12:48.280
+And the idea was to be able to distribute it to parts of the world where we didn't or the
+
+00:12:48.280 --> 00:12:49.620
+owner didn't have a license for.
+
+00:12:49.860 --> 00:12:51.900
+And so I got to replace the middleware.
+
+00:12:51.900 --> 00:12:55.480
+And I got to introduce Python in the safety critical software.
+
+00:12:55.480 --> 00:12:59.900
+That was also an amazing experience and a huge success.
+
+00:12:59.900 --> 00:13:03.180
+And it's also a reason why a lot of my day job now is Python.
+
+00:13:03.880 --> 00:13:09.480
+So that's, I'm very proud of that because obviously that's not easy.
+
+00:13:09.480 --> 00:13:11.320
+Java can't go there.
+
+00:13:11.320 --> 00:13:12.480
+Yeah, that's cool.
+
+00:13:12.480 --> 00:13:18.300
+Because of the virtual machine doing its cleanups whenever it wants to.
+
+00:13:18.300 --> 00:13:20.840
+But for Python, we managed.
+
+00:13:20.840 --> 00:13:22.000
+Wow, that's really interesting.
+
+00:13:22.000 --> 00:13:25.280
+I definitely have heard that about the GC languages.
+
+00:13:25.280 --> 00:13:28.880
+The unpredictability of the pauses is just too much sometimes.
+
+00:13:28.880 --> 00:13:29.480
+Yeah.
+
+00:13:29.480 --> 00:13:30.020
+Interesting.
+
+00:13:30.020 --> 00:13:30.480
+Yeah.
+
+00:13:30.480 --> 00:13:33.840
+Python is much more predictable with its garbage collection.
+
+00:13:34.480 --> 00:13:37.700
+And budgeting is actually, can become a problem.
+
+00:13:37.700 --> 00:13:37.980
+Yeah.
+
+00:13:37.980 --> 00:13:40.960
+Threading is also something we're not allowed to do.
+
+00:13:40.960 --> 00:13:45.060
+And so we are using multiple processes.
+
+00:13:45.060 --> 00:13:49.220
+And that fits Python's weaknesses pretty well.
+
+00:13:49.220 --> 00:13:50.080
+That's right.
+
+00:13:50.080 --> 00:13:52.900
+So you have to do it the way that Python has to do it.
+
+00:13:52.900 --> 00:13:53.340
+Perfect.
+
+00:13:53.340 --> 00:13:54.500
+We'll use Python.
+
+00:13:54.500 --> 00:13:54.820
+Yeah.
+
+00:13:54.820 --> 00:13:58.900
+Because that's actually, threading is terrible.
+
+00:13:58.900 --> 00:14:00.900
+I recall writing an editor.
+
+00:14:01.880 --> 00:14:03.880
+And this editor was also a file system.
+
+00:14:03.880 --> 00:14:08.240
+So I would type in my editor and launch the compiler.
+
+00:14:08.240 --> 00:14:09.220
+There was no save.
+
+00:14:09.220 --> 00:14:10.400
+It wasn't necessary.
+
+00:14:10.400 --> 00:14:14.540
+I was just using the file system that was the editor and had a scripting language as well.
+
+00:14:14.940 --> 00:14:18.000
+And these are all working on the same data.
+
+00:14:18.000 --> 00:14:22.200
+And I learned an important lesson from there.
+
+00:14:22.200 --> 00:14:23.220
+You don't do threading.
+
+00:14:23.220 --> 00:14:24.640
+It's terrible.
+
+00:14:24.640 --> 00:14:25.200
+We're locking.
+
+00:14:25.200 --> 00:14:27.500
+And it's such a time killer.
+
+00:14:27.500 --> 00:14:31.600
+And yeah, I'm not a fan of threading.
+
+00:14:31.860 --> 00:14:32.940
+It sounds like it.
+
+00:14:32.940 --> 00:14:37.180
+You know, sometimes, I mean, with modern processors, sometimes it's necessary.
+
+00:14:37.180 --> 00:14:40.220
+But it's, yeah, it's maybe not the first thing to jump to.
+
+00:14:40.220 --> 00:14:40.380
+Yeah.
+
+00:14:40.380 --> 00:14:42.280
+Depending on your problem, you don't have a choice.
+
+00:14:42.280 --> 00:14:49.760
+But when it's about safety, I think a process and a thread is not much of a difference, depending
+
+00:14:49.760 --> 00:14:50.840
+on how you work with it.
+
+00:14:50.840 --> 00:14:52.800
+It's roughly the same.
+
+00:14:52.800 --> 00:14:54.940
+It's just more difficult.
+
+00:14:54.940 --> 00:15:00.260
+Because with threads, you get access easier, but also careless.
+
+00:15:00.340 --> 00:15:00.940
+Yeah, exactly.
+
+00:15:00.940 --> 00:15:06.400
+This portion of Talk Python to Me is brought to you by Cox Automotive.
+
+00:15:06.400 --> 00:15:11.080
+They're leading the way in cutting-edge, industry-changing technology that is transforming the way
+
+00:15:11.080 --> 00:15:13.240
+the world buys, sells, and owns cars.
+
+00:15:13.240 --> 00:15:17.860
+And they're looking for software engineers and technical leaders to help them do just that.
+
+00:15:17.860 --> 00:15:19.660
+Do you hate being stuck in one tech stack?
+
+00:15:19.660 --> 00:15:21.540
+Well, that's not a problem at Cox Automotive.
+
+00:15:21.540 --> 00:15:24.780
+Their developers work across multiple tech stacks and platforms.
+
+00:15:24.780 --> 00:15:27.520
+They give you the room you need to grow your career.
+
+00:15:27.880 --> 00:15:31.140
+Bring your technical skills and coding know-how to Cox Automotive.
+
+00:15:31.140 --> 00:15:36.280
+You'll create real-world solutions to today's business problems alongside some of the best
+
+00:15:36.280 --> 00:15:37.120
+and brightest minds.
+
+00:15:37.120 --> 00:15:41.300
+Are you ready to challenge today and transform tomorrow with Cox Automotive?
+
+00:15:41.300 --> 00:15:45.380
+Go to talkpython.fm/cox, C-O-X.
+
+00:15:45.380 --> 00:15:48.700
+And check out all the exciting positions they have open right now.
+
+00:15:50.260 --> 00:15:53.420
+Speaking of performance, let's talk about your project, Nutka.
+
+00:15:53.420 --> 00:16:01.100
+Yeah, so maybe let's just start with a really quick overview of what it is and then how you got started on it.
+
+00:16:01.100 --> 00:16:04.300
+The first thing is it's a fully compatible Python compiler.
+
+00:16:04.300 --> 00:16:07.540
+So it does everything and it's compatible.
+
+00:16:08.120 --> 00:16:16.200
+So the idea is if you run a program with the standard CPython interpreter or you run it with Nutka, it does the same thing.
+
+00:16:16.200 --> 00:16:25.920
+So that's basically only a clone of CPython that is capable of producing binaries just faster.
+
+00:16:26.460 --> 00:16:27.380
+Yeah, that's really neat.
+
+00:16:27.380 --> 00:16:32.380
+And one of the things that I thought was cool about it is you don't have a separate language, right?
+
+00:16:32.380 --> 00:16:37.980
+It's not like, say, Cython where you write a slight variation of Python that then can do this, right?
+
+00:16:37.980 --> 00:16:41.860
+It's like I could take something I wrote yesterday and just run it through you.
+
+00:16:41.860 --> 00:16:45.660
+That's exactly my point is like you have no lock-in.
+
+00:16:45.660 --> 00:16:55.640
+You can anytime something is behaving strange, you have these other implementations or the other Python implementations and you can switch to them.
+
+00:16:55.640 --> 00:17:00.940
+And it's a drop-in replacement for as long as it works.
+
+00:17:00.940 --> 00:17:03.160
+And when it doesn't, you can use something else.
+
+00:17:03.160 --> 00:17:03.960
+That's the point.
+
+00:17:03.960 --> 00:17:12.660
+And you can, and this is very important, you can drop a million lines of code on it and have it accelerated.
+
+00:17:12.660 --> 00:17:19.340
+That's the important point because for small programs, which you fully write on your own, you can accelerate them manually.
+
+00:17:19.340 --> 00:17:28.940
+But for libraries from third parties that you have no clue about, you cannot just live with any kind of limitations.
+
+00:17:28.940 --> 00:17:33.680
+So a big part of the problem was to get everything working.
+
+00:17:33.680 --> 00:17:34.940
+Yeah, to give people a sense.
+
+00:17:34.940 --> 00:17:43.080
+Like during your EuroPython talk, you showed compiling Mercurial, which is, is it over a million lines of Python?
+
+00:17:43.080 --> 00:17:43.700
+I don't know.
+
+00:17:43.700 --> 00:17:45.560
+It's large though.
+
+00:17:45.560 --> 00:17:49.600
+It's not a million line, I think, but it's a substantial project.
+
+00:17:49.600 --> 00:17:51.100
+I think a million lines and all this.
+
+00:17:51.100 --> 00:17:51.360
+Yeah.
+
+00:17:51.360 --> 00:17:53.080
+Python is not that bad.
+
+00:17:53.080 --> 00:17:54.240
+That's true.
+
+00:17:54.240 --> 00:17:54.900
+It's true.
+
+00:17:54.900 --> 00:17:55.480
+It should be less.
+
+00:17:55.480 --> 00:17:57.800
+But it's a seriously large project.
+
+00:17:57.800 --> 00:18:03.200
+It's not just like, oh, look, I can take this and I can write a calculator, a calculator app.
+
+00:18:03.200 --> 00:18:06.100
+To make no changes, no changes to Mercurial.
+
+00:18:06.100 --> 00:18:09.720
+And actually I was capable of doing this in 2012.
+
+00:18:09.720 --> 00:18:15.460
+This was my first demo when Nutka was more like a feasibility study.
+
+00:18:15.460 --> 00:18:21.060
+Back then I had, it was more like a templating from Python to C++.
+
+00:18:21.820 --> 00:18:25.540
+It was just going to demonstrate that this is achievable.
+
+00:18:25.540 --> 00:18:35.740
+And since then it has evolved into an actual real compiler under the hood, still capable of doing the same things and becoming more compatible.
+
+00:18:35.740 --> 00:18:41.020
+So yes, people are using this in real life for real programs.
+
+00:18:41.020 --> 00:18:44.200
+Obviously, some of the things are not working.
+
+00:18:44.880 --> 00:18:49.160
+But I get a lot of positive feedback on a level of compatibility.
+
+00:18:49.160 --> 00:18:49.500
+Yeah.
+
+00:18:49.500 --> 00:18:49.660
+Yeah.
+
+00:18:49.660 --> 00:19:00.680
+I was always thinking that for such a compiler to be acceptable, it needs to run foreign code and guaranteed to behave the same.
+
+00:19:00.680 --> 00:19:03.820
+And otherwise, you just cannot trust it.
+
+00:19:03.820 --> 00:19:08.020
+So how do you do, I'm probably getting things a little out of order here, but just a moment.
+
+00:19:08.120 --> 00:19:09.540
+How do you ensure compatibility?
+
+00:19:09.540 --> 00:19:14.340
+Like you run the tests that they run against CPython itself or things like that?
+
+00:19:14.340 --> 00:19:14.820
+Mm-hmm.
+
+00:19:14.820 --> 00:19:24.140
+I am taking the CPython test suite and, for example, also the Mercurial test suite and run it with compiled and uncompiled.
+
+00:19:24.140 --> 00:19:26.620
+And it must pass or fail the same way.
+
+00:19:26.620 --> 00:19:31.700
+Actually, the CPython test suite, for me, never really passes all the things.
+
+00:19:32.700 --> 00:19:37.960
+And then I run the CPython 3.6 test suite with 3.5.
+
+00:19:37.960 --> 00:19:39.820
+And then I get a lot of exceptions.
+
+00:19:39.820 --> 00:19:44.880
+So I get extra coverage for error cases and these things.
+
+00:19:44.880 --> 00:19:47.760
+So that's one way of doing it.
+
+00:19:47.760 --> 00:19:54.400
+Obviously, then users report me back with incompatible behaviors that they still encountered.
+
+00:19:54.400 --> 00:19:54.940
+Yeah.
+
+00:19:54.940 --> 00:19:57.500
+Maybe something that wasn't covered in the test, right?
+
+00:19:57.500 --> 00:19:58.000
+Yeah.
+
+00:19:58.000 --> 00:19:59.780
+Sometimes that happens.
+
+00:20:00.780 --> 00:20:07.360
+And often they describe the behavior of things in the test pretty well.
+
+00:20:07.360 --> 00:20:11.380
+And sometimes I just add another test to see what it is.
+
+00:20:11.380 --> 00:20:18.380
+But there's many times there are instances where, for example, running Mercurial tests would misbehave
+
+00:20:18.380 --> 00:20:23.320
+and I would trace it down to an incompatible behavior of NewtGuard.
+
+00:20:23.320 --> 00:20:23.460
+Yeah.
+
+00:20:23.460 --> 00:20:25.300
+This has happened in the past.
+
+00:20:25.300 --> 00:20:25.480
+Yeah.
+
+00:20:25.480 --> 00:20:28.200
+It's cool that you have these large programs that are open source.
+
+00:20:28.200 --> 00:20:30.020
+You can go and you just try them.
+
+00:20:30.380 --> 00:20:35.760
+Actually, I would like to go further because right now running the Mercurial test suite is something I do.
+
+00:20:35.760 --> 00:20:38.080
+And this is all a lot of CPU cycles.
+
+00:20:38.080 --> 00:20:46.680
+And I want to integrate with TOX or these kind of projects and get people to just switch on running their own tests with NewtGuard.
+
+00:20:46.680 --> 00:20:49.760
+And see if I pass as well.
+
+00:20:49.760 --> 00:20:53.940
+That's something I need to work on to get out and get even more coverage.
+
+00:20:54.160 --> 00:20:54.300
+Right.
+
+00:20:54.300 --> 00:21:01.860
+If you could get all these other projects with all of their continuous integration automatically running their tests through your stuff,
+
+00:21:01.860 --> 00:21:02.520
+that would be great.
+
+00:21:02.520 --> 00:21:05.800
+Maybe not automatically, but they have to enable that, I suppose.
+
+00:21:05.800 --> 00:21:08.200
+But they shouldn't just say much more.
+
+00:21:08.200 --> 00:21:12.560
+If you want to run your tests with PyPy, I think it's as simple as saying do it.
+
+00:21:13.280 --> 00:21:17.260
+I'll list PyPy in an enumeration and NewtGuard should also be there.
+
+00:21:17.260 --> 00:21:18.640
+But that's just the plan.
+
+00:21:18.640 --> 00:21:24.880
+Right now I rely on people doing things manually and reporting back.
+
+00:21:25.780 --> 00:21:29.820
+And some people run their test suits with compiled stuff.
+
+00:21:29.820 --> 00:21:40.140
+And I'm still pretty early with integration of pytests, running your tests, the compiled code, and then uncompiled tests with pytests.
+
+00:21:40.140 --> 00:21:45.140
+That's working with some tricks, but it's not documented yet.
+
+00:21:45.140 --> 00:21:46.920
+And it's not complete.
+
+00:21:46.920 --> 00:21:50.340
+There's another field where I want to get more exposure.
+
+00:21:50.340 --> 00:21:56.200
+There is Distoutils integration is something that people have started through pull requests on GitHub.
+
+00:21:56.200 --> 00:22:03.500
+And that's pretty awesome because you don't even have to know how NewtGuard works.
+
+00:22:03.500 --> 00:22:15.820
+You just install NewtGuard, enable a flag, and it outputs a wheel, which is a binary for a given platform instead of a no arch wheel.
+
+00:22:16.200 --> 00:22:21.980
+And that's ridiculously easy to use then for existing projects.
+
+00:22:21.980 --> 00:22:29.940
+Right now it's a manual rerun of what setuppy does that you have to specify on the command line.
+
+00:22:29.940 --> 00:22:33.900
+And that's another field of integration.
+
+00:22:33.900 --> 00:22:36.740
+So it should also be that simple to use.
+
+00:22:36.740 --> 00:22:37.740
+That's also my goal.
+
+00:22:37.740 --> 00:22:38.880
+Yeah, that's really great.
+
+00:22:38.880 --> 00:22:44.600
+The more you can just make it just another command you give things and you don't have to really understand it.
+
+00:22:44.600 --> 00:22:46.100
+That's super cool.
+
+00:22:46.100 --> 00:22:52.740
+So maybe we can start looking at what you built by comparing it against other things people might know.
+
+00:22:52.740 --> 00:22:54.240
+So people might know Cython.
+
+00:22:54.240 --> 00:22:56.540
+Let me see if I can summarize it.
+
+00:22:56.540 --> 00:23:06.000
+I think Cython is a lot more successful in terms of adoption because there are people willing to write this hybrid language code
+
+00:23:06.000 --> 00:23:10.060
+and get the optimization benefits of manual work.
+
+00:23:10.060 --> 00:23:12.360
+And it's useful a lot.
+
+00:23:12.360 --> 00:23:14.300
+And I know Stefan Benel.
+
+00:23:14.300 --> 00:23:16.940
+Actually, I worked with Cython for a while.
+
+00:23:16.940 --> 00:23:18.520
+I was listed as a contributor.
+
+00:23:19.520 --> 00:23:28.960
+But I asked them to remove it since initially I wanted to turn Cython into a compatible Python as well.
+
+00:23:28.960 --> 00:23:31.660
+But this didn't work out.
+
+00:23:32.320 --> 00:23:38.140
+I think it's a pretty good solution for what it does.
+
+00:23:38.140 --> 00:23:43.360
+But I think it's bad for the ecosystem for all the reasons that we said.
+
+00:23:43.360 --> 00:23:47.740
+The IDE integration, the lock-in, you cannot switch.
+
+00:23:47.740 --> 00:23:49.220
+So Cython has a bug.
+
+00:23:49.220 --> 00:23:53.480
+There's no way of comparing to anything else.
+
+00:23:53.480 --> 00:23:53.700
+Right.
+
+00:23:53.940 --> 00:23:54.840
+You're stuck with it.
+
+00:23:54.840 --> 00:23:56.920
+You've got to just work around it somehow.
+
+00:23:56.920 --> 00:23:57.360
+Yes.
+
+00:23:57.360 --> 00:24:01.060
+So I have a lot of respect for Cython.
+
+00:24:01.060 --> 00:24:01.700
+I have.
+
+00:24:01.700 --> 00:24:07.380
+I'm an even bigger fan of PyPy, which I also contributed a patch to.
+
+00:24:07.380 --> 00:24:10.600
+PyPy was our Python specifically.
+
+00:24:10.600 --> 00:24:17.280
+We reduced Python for something which I tried out to accelerate actual code of mine long, long time ago.
+
+00:24:17.280 --> 00:24:20.180
+And it's such an amazing project.
+
+00:24:20.180 --> 00:24:24.740
+And obviously there's very little commonality.
+
+00:24:24.740 --> 00:24:27.260
+It's a totally different approach.
+
+00:24:27.260 --> 00:24:30.280
+And it's a thought.
+
+00:24:30.280 --> 00:24:32.740
+So it's a very active project.
+
+00:24:32.740 --> 00:24:37.620
+I think they've been a lot more successful at getting funding.
+
+00:24:37.620 --> 00:24:40.560
+So I'm not getting that.
+
+00:24:40.560 --> 00:24:43.940
+But I think they got money from the European Union initially.
+
+00:24:43.940 --> 00:24:49.900
+And they also got fundraisers and PSF endorsement and all these things.
+
+00:24:49.900 --> 00:24:56.520
+And very huge benefit is many of the benefits that Newtka also has.
+
+00:24:56.520 --> 00:24:57.860
+It's a drop-in replacement.
+
+00:24:57.860 --> 00:24:59.020
+You don't do anything.
+
+00:24:59.020 --> 00:25:02.000
+It works when it works.
+
+00:25:02.000 --> 00:25:04.260
+I mean, sometimes it doesn't.
+
+00:25:04.260 --> 00:25:07.780
+It requires too much memory or can happen.
+
+00:25:07.780 --> 00:25:10.580
+I'm not so much using it.
+
+00:25:10.680 --> 00:25:18.680
+But I think it's a great alternative or maybe even, I don't know if Newtka does succeed.
+
+00:25:18.680 --> 00:25:19.920
+I think it's a great thing.
+
+00:25:19.920 --> 00:25:22.400
+But PyPy is here today.
+
+00:25:22.400 --> 00:25:24.300
+That's really cool.
+
+00:25:24.300 --> 00:25:31.500
+Yes, Cython to me feels a little bit like inline assembler used to be for C, C++.
+
+00:25:32.340 --> 00:25:35.020
+It's like I've got most of my code the way I like it.
+
+00:25:35.020 --> 00:25:37.660
+But this little part, we've got to make this a lot faster.
+
+00:25:37.660 --> 00:25:41.360
+Let's rewrite it sort of here to be a little bit faster.
+
+00:25:41.360 --> 00:25:43.220
+And so that's Cython.
+
+00:25:43.220 --> 00:25:46.100
+And then PyPy is P-Y-P-Y.
+
+00:25:46.100 --> 00:25:52.040
+The JIT compiled sort of CPython runtime.
+
+00:25:52.040 --> 00:25:55.660
+Mostly compatible alternative to Python.
+
+00:25:55.660 --> 00:25:57.360
+Which sometimes is faster.
+
+00:25:57.360 --> 00:25:59.040
+Sometimes it's not.
+
+00:25:59.040 --> 00:26:00.660
+Pretty interesting project.
+
+00:26:00.980 --> 00:26:03.680
+I think they've made progress with the extension modules.
+
+00:26:03.680 --> 00:26:07.940
+But this was a large holding back factor.
+
+00:26:07.940 --> 00:26:11.640
+I think they might maybe do now PyQt.
+
+00:26:11.640 --> 00:26:13.280
+I'm not so sure.
+
+00:26:13.280 --> 00:26:14.140
+Yeah, I think that's right.
+
+00:26:14.140 --> 00:26:14.700
+They did, yeah.
+
+00:26:14.700 --> 00:26:15.240
+Yeah.
+
+00:26:15.240 --> 00:26:16.540
+Yeah.
+
+00:26:16.540 --> 00:26:20.020
+But with Newtka, I could do all the extension modules.
+
+00:26:20.020 --> 00:26:22.160
+I think we can do some or all now.
+
+00:26:22.160 --> 00:26:24.660
+I'm not so sure what's the current state there.
+
+00:26:24.660 --> 00:26:26.520
+I don't follow it, actually.
+
+00:26:26.520 --> 00:26:30.560
+I've had mixed results with it as well.
+
+00:26:30.900 --> 00:26:34.020
+You know, like, I really think the project is awesome.
+
+00:26:34.020 --> 00:26:34.980
+I'm glad it exists.
+
+00:26:34.980 --> 00:26:37.860
+And I know in some places it makes things a lot faster.
+
+00:26:37.860 --> 00:26:41.940
+But I switched out one of my larger websites to run on top of it.
+
+00:26:41.940 --> 00:26:42.560
+And it did.
+
+00:26:42.560 --> 00:26:45.520
+But it was like two and a half times slower.
+
+00:26:45.520 --> 00:26:47.840
+And I thought, well, that's not helping me.
+
+00:26:47.840 --> 00:26:49.980
+So I guess I'll just switch back to CPython.
+
+00:26:50.360 --> 00:26:54.260
+And I think it was probably the C extensions and the data layer or something.
+
+00:26:54.260 --> 00:26:55.040
+I'm not entirely sure.
+
+00:26:55.040 --> 00:26:56.940
+But there was something compatibility.
+
+00:26:57.320 --> 00:26:57.800
+Yeah.
+
+00:26:57.800 --> 00:27:10.440
+If you're on Django or something, that's really something where I need to go is to get Newtka to work out of a box for Django projects, which have their own mess.
+
+00:27:10.440 --> 00:27:19.000
+It's for manage.py is doing all sorts of nasty things that you cannot know about at compile time.
+
+00:27:19.600 --> 00:27:26.780
+But I think the Django, accelerating Django, even by a bit, will be very welcome to many people.
+
+00:27:26.780 --> 00:27:31.460
+And that's also something somebody should go eventually.
+
+00:27:31.460 --> 00:27:33.540
+But I'm not focusing on that right now.
+
+00:27:34.140 --> 00:27:35.840
+I'm focusing on other optimization.
+
+00:27:35.840 --> 00:27:42.300
+So, I mean, for Newtka, I was like, I was observing the landscape for many years.
+
+00:27:42.300 --> 00:27:50.060
+And all this time, I was thinking, a compiler for Python, that's totally possible.
+
+00:27:50.060 --> 00:27:53.340
+And why is nobody doing it?
+
+00:27:53.340 --> 00:28:00.740
+And that was just, I think, a couple of years that I was observing it and wondering.
+
+00:28:00.740 --> 00:28:10.680
+And I think around the 2.5 timeframe, I thought, I'm going to make a prototype, make a proof of concept and show that it's possible.
+
+00:28:10.680 --> 00:28:18.200
+And that turned out to be pretty much the case because a Python design is very welcoming to be compiled, actually.
+
+00:28:18.200 --> 00:28:21.740
+I mean, it's a trivial, it's a non-trivial task.
+
+00:28:21.740 --> 00:28:22.760
+It's very hard.
+
+00:28:22.760 --> 00:28:25.440
+But you can do it for Python, if anything.
+
+00:28:25.440 --> 00:28:27.520
+So, I have this compiled function type.
+
+00:28:27.520 --> 00:28:31.760
+And there's the uncompiled function type in Python.
+
+00:28:31.760 --> 00:28:35.260
+And all I have to do is for them to behave the same.
+
+00:28:35.260 --> 00:28:36.800
+And then you're in.
+
+00:28:36.800 --> 00:28:38.460
+So, you can have a compiled function.
+
+00:28:38.460 --> 00:28:42.760
+That's basically a lot of how you get to work.
+
+00:28:42.760 --> 00:28:45.880
+And then you don't have bytecode, but you have C code behind it.
+
+00:28:45.880 --> 00:28:46.080
+Yeah.
+
+00:28:46.080 --> 00:28:49.840
+And when the C code compiles to machine instructions, and then you're off to the races.
+
+00:28:49.840 --> 00:28:50.640
+Yes.
+
+00:28:51.680 --> 00:28:55.240
+And the Python engine really doesn't care all that much.
+
+00:28:55.240 --> 00:28:59.100
+Because extension modules are first-class citizens.
+
+00:28:59.100 --> 00:28:59.560
+Right.
+
+00:28:59.560 --> 00:29:02.300
+So, let's talk about the architecture just a little bit.
+
+00:29:02.400 --> 00:29:06.820
+So, the way it works is we take regular straight Python code.
+
+00:29:06.820 --> 00:29:08.520
+We feed it to Nutka.
+
+00:29:08.520 --> 00:29:13.340
+Nutka translates that into, like, a reduced Python.
+
+00:29:13.340 --> 00:29:16.760
+The reduced Python is then translated into C.
+
+00:29:16.760 --> 00:29:19.880
+The C is compiled, basically, to a C extension.
+
+00:29:20.880 --> 00:29:23.500
+And that runs on top of CPython.
+
+00:29:23.500 --> 00:29:27.780
+So, Nutka is not its own special runtime, like, say, PyPy is.
+
+00:29:27.780 --> 00:29:29.500
+It's a thing that...
+
+00:29:29.500 --> 00:29:29.560
+No.
+
+00:29:29.560 --> 00:29:29.820
+No, no.
+
+00:29:29.820 --> 00:29:30.500
+It's a thing that...
+
+00:29:30.500 --> 00:29:30.560
+No.
+
+00:29:30.560 --> 00:29:31.500
+No, no.
+
+00:29:31.500 --> 00:29:31.500
+It's a thing that...
+
+00:29:31.500 --> 00:29:33.460
+Do you have to install the runtime for it?
+
+00:29:33.460 --> 00:29:34.620
+Or does it just create...
+
+00:29:34.620 --> 00:29:37.560
+Like, do you have to install CPython, like, 3.5 in order to run it?
+
+00:29:37.560 --> 00:29:38.120
+How...
+
+00:29:38.120 --> 00:29:38.880
+Has it put together?
+
+00:29:39.000 --> 00:29:39.740
+There's two modes.
+
+00:29:39.740 --> 00:29:45.360
+There's a standalone mode, where you create something which will be self-contained, and then contains Python runtime.
+
+00:29:45.360 --> 00:29:58.100
+And there's also this accelerated mode, and then it just links against a Python installation and loads libPython, like every program that embeds Python needs to do.
+
+00:29:58.100 --> 00:30:02.040
+And that's how it goes.
+
+00:30:02.040 --> 00:30:07.140
+And I try to avoid the C runtime, the Python runtime as much as possible.
+
+00:30:07.140 --> 00:30:09.580
+And that's how I curlerate things.
+
+00:30:09.580 --> 00:30:21.680
+So, not having bytecode, and then having knowledge or static optimizations, trying to avoid to go as much into the Python runtime as possible.
+
+00:30:21.680 --> 00:30:24.140
+It's basically the acceleration.
+
+00:30:24.140 --> 00:30:26.320
+Yeah, but you are still...
+
+00:30:26.320 --> 00:30:35.040
+Like, that C code I talked about being generated in the architecture, that still uses, like, the Py object types and stuff like that, right?
+
+00:30:35.040 --> 00:30:36.140
+It's as if you're basically...
+
+00:30:36.140 --> 00:30:40.300
+Your compiler is writing a C extension from our Python code.
+
+00:30:40.300 --> 00:30:40.680
+Yes.
+
+00:30:40.680 --> 00:30:42.860
+That's true, except for...
+
+00:30:42.860 --> 00:30:43.900
+Did you say our Python?
+
+00:30:43.900 --> 00:30:45.140
+The PyPy...
+
+00:30:45.140 --> 00:30:45.540
+It's not...
+
+00:30:45.540 --> 00:30:45.780
+No, no.
+
+00:30:45.780 --> 00:30:46.400
+Our Python.
+
+00:30:46.400 --> 00:30:48.460
+Like, the Python that I write, I give to Nuka.
+
+00:30:48.460 --> 00:30:49.780
+You write...
+
+00:30:49.780 --> 00:30:50.020
+Yes.
+
+00:30:50.020 --> 00:30:50.480
+Yeah, yeah, yeah.
+
+00:30:50.480 --> 00:30:50.700
+Exactly.
+
+00:30:50.700 --> 00:30:51.740
+Yeah, sorry.
+
+00:30:51.740 --> 00:30:53.260
+Sounds the same, of course.
+
+00:30:53.260 --> 00:30:55.860
+No, our Python would be reduced.
+
+00:30:55.860 --> 00:30:56.900
+Yes, exactly.
+
+00:30:56.900 --> 00:31:02.240
+It takes your Python and turns it into an extension module, and then a very hacky one.
+
+00:31:02.240 --> 00:31:04.540
+It's really nasty.
+
+00:31:04.540 --> 00:31:08.640
+I'm really big friend with the dictionary implementation.
+
+00:31:08.640 --> 00:31:14.060
+I take advantage of all the internal knowledges that I'm not supposed to use.
+
+00:31:14.060 --> 00:31:15.080
+Nice.
+
+00:31:15.080 --> 00:31:17.300
+But that's what a compiler is supposed to do, right?
+
+00:31:17.300 --> 00:31:17.800
+Yes.
+
+00:31:19.080 --> 00:31:24.020
+It's responsibility to do all these nasty things, and yeah.
+
+00:31:24.020 --> 00:31:27.280
+And if you order the Python version, the safer it is.
+
+00:31:27.280 --> 00:31:29.700
+So 2.7 is not going to change a lot.
+
+00:31:29.700 --> 00:31:30.160
+Yeah.
+
+00:31:30.160 --> 00:31:31.280
+So we can...
+
+00:31:31.280 --> 00:31:32.680
+You can be shorter on that, yeah.
+
+00:31:36.800 --> 00:31:39.820
+This portion of Talk Python to Me has been brought to you by Rollbar.
+
+00:31:39.820 --> 00:31:43.500
+One of the frustrating things about being a developer is dealing with errors.
+
+00:31:43.500 --> 00:31:43.980
+Ugh.
+
+00:31:43.980 --> 00:31:49.420
+Relying on users to report errors, digging through log files, trying to debug issues, or getting
+
+00:31:49.420 --> 00:31:52.520
+millions of alerts just flooding your inbox and ruining your day.
+
+00:31:52.520 --> 00:31:57.280
+With Rollbar's full-stack error monitoring, you get the context, insight, and control you
+
+00:31:57.280 --> 00:31:59.260
+need to find and fix bugs faster.
+
+00:31:59.720 --> 00:32:03.260
+Adding Rollbar to your Python app is as easy as pip install Rollbar.
+
+00:32:03.260 --> 00:32:07.480
+You can start tracking production errors and deployments in eight minutes or less.
+
+00:32:07.480 --> 00:32:11.660
+Are you considering self-hosting tools for security or compliance reasons?
+
+00:32:11.660 --> 00:32:15.240
+Then you should really check out Rollbar's compliant SaaS option.
+
+00:32:15.240 --> 00:32:20.400
+Get advanced security features and meet compliance without the hassle of self-hosting, including
+
+00:32:20.400 --> 00:32:24.620
+HIPAA, ISO 27001, Privacy Shield, and more.
+
+00:32:24.620 --> 00:32:26.000
+They'd love to give you a demo.
+
+00:32:26.000 --> 00:32:27.700
+Give Rollbar a try today.
+
+00:32:28.000 --> 00:32:31.360
+Go to talkpython.fm/rollbar and check them out.
+
+00:32:31.360 --> 00:32:33.780
+This is Vitar Askin.
+
+00:32:33.780 --> 00:32:36.520
+So let's talk about compatibility a little bit.
+
+00:32:36.520 --> 00:32:39.120
+So it works on Windows, Linux, and macOS.
+
+00:32:39.120 --> 00:32:41.280
+It works on not just that.
+
+00:32:41.280 --> 00:32:45.560
+It's because it's creating C code.
+
+00:32:45.560 --> 00:32:50.360
+I think it will work on anything that you can work with Python on.
+
+00:32:50.360 --> 00:32:51.840
+That's the idea.
+
+00:32:51.840 --> 00:32:54.320
+I obviously can only test Windows and Linux.
+
+00:32:54.320 --> 00:32:58.920
+It works on Windows and MacOS is working because other people are using it.
+
+00:32:58.920 --> 00:33:02.080
+And sometimes I fix something, but I don't have a macOS machine.
+
+00:33:02.080 --> 00:33:06.120
+And yeah, you made an interesting point around that as well.
+
+00:33:06.120 --> 00:33:10.520
+Like, well, I think iOS and Android probably are also candidates here.
+
+00:33:10.880 --> 00:33:11.840
+Yes, Android.
+
+00:33:11.840 --> 00:33:13.740
+I think people have done Android.
+
+00:33:13.740 --> 00:33:17.460
+Obviously, it has been done.
+
+00:33:17.460 --> 00:33:21.220
+And I think I have even done myself.
+
+00:33:21.220 --> 00:33:25.660
+There's a cross-platform toolkit for...
+
+00:33:25.660 --> 00:33:28.540
+I've done some Android compilations myself.
+
+00:33:28.540 --> 00:33:30.200
+It's an ARM-based Linux.
+
+00:33:30.340 --> 00:33:32.340
+It has a Python and you can...
+
+00:33:32.340 --> 00:33:35.380
+Obviously, the compiling machine might be too slow.
+
+00:33:35.380 --> 00:33:37.420
+That's the limitation there.
+
+00:33:37.420 --> 00:33:41.660
+But in principle, there's nothing which prevents it from working.
+
+00:33:41.660 --> 00:33:44.840
+And I think it has been done occasionally on and off.
+
+00:33:44.840 --> 00:33:48.020
+The practicality is currently just not there.
+
+00:33:48.020 --> 00:33:56.000
+But I think once the speed-ups are increasing, I would expect that people...
+
+00:33:56.000 --> 00:33:58.380
+There's a lot of people currently doing games in Python.
+
+00:33:58.380 --> 00:33:59.960
+I met a couple of those.
+
+00:33:59.960 --> 00:34:05.040
+It's very interesting to have something like NewtGov for these use cases.
+
+00:34:05.040 --> 00:34:05.360
+Right.
+
+00:34:05.440 --> 00:34:11.340
+You mentioned the PyPy folks getting the 2D stuff accelerated and working faster.
+
+00:34:11.340 --> 00:34:12.600
+And that was pretty cool.
+
+00:34:12.600 --> 00:34:13.460
+So...
+
+00:34:13.460 --> 00:34:18.680
+But your project is really right in there as well for making these things go faster.
+
+00:34:18.680 --> 00:34:19.260
+Yes.
+
+00:34:19.260 --> 00:34:23.580
+But it's not happening this year.
+
+00:34:23.580 --> 00:34:23.720
+Yeah.
+
+00:34:23.720 --> 00:34:25.360
+So lots of OSs.
+
+00:34:25.360 --> 00:34:27.140
+Python 2 and Python 3 both?
+
+00:34:27.140 --> 00:34:27.660
+Yes.
+
+00:34:27.660 --> 00:34:29.280
+3.7 actually.
+
+00:34:29.280 --> 00:34:32.900
+At the time you're releasing this, it will be working.
+
+00:34:34.080 --> 00:34:41.120
+And 3.2, I just discontinued support for that, mostly because it's impossible to get it running.
+
+00:34:41.120 --> 00:34:47.060
+And 3.3.2, 3.7, and 2.6, 2.7, they all work.
+
+00:34:47.060 --> 00:34:50.620
+In my design, I have what I call these reformulations.
+
+00:34:50.620 --> 00:34:58.660
+I think you can put up a link to these language conversions to make things simpler from my developer menu,
+
+00:34:58.660 --> 00:35:01.860
+which is very instructive, and it explains a lot of things.
+
+00:35:02.600 --> 00:35:11.020
+Actually, to me, this is a baby Python or this commonality Python internal that I'm using.
+
+00:35:11.020 --> 00:35:18.360
+And the with statement, for instance, it's translated into many statements, actually.
+
+00:35:19.400 --> 00:35:27.540
+Or a third statement is just if not condition, race, assertion error with my arguments, these kind of things.
+
+00:35:28.180 --> 00:35:36.680
+And that means that most of the time, the Python versions do not make as much difference as you would think they do.
+
+00:35:36.680 --> 00:35:36.980
+Right.
+
+00:35:37.060 --> 00:35:44.600
+You've got some step that goes, oh, I look at a with statement, I'm going to translate that to something else, regardless of which level.
+
+00:35:44.600 --> 00:35:53.300
+So there's a huge chunk of code dedicated to reformulating the with statement into a series of try-accept-finally stuff,
+
+00:35:53.300 --> 00:36:03.880
+doing lookups of enter and exit, implementing the Python mechanics in explicit terms with temporary variables and so on,
+
+00:36:04.020 --> 00:36:08.120
+which then can be optimized at compile time.
+
+00:36:08.120 --> 00:36:14.140
+Maybe sometimes we know that it's not going to raise an exception and then we can drop this.
+
+00:36:14.140 --> 00:36:21.640
+That's basically the reason why the language versions are not that much of a problem.
+
+00:36:21.640 --> 00:36:22.160
+Yeah.
+
+00:36:22.160 --> 00:36:25.180
+I suspect that the async stuff was more interesting.
+
+00:36:25.180 --> 00:36:26.440
+Oh, this was terrible.
+
+00:36:26.440 --> 00:36:30.900
+And especially imagine our coroutines and async jams.
+
+00:36:30.900 --> 00:36:33.600
+Like, I've seen this being used.
+
+00:36:33.600 --> 00:36:37.020
+I personally never knew why I would use it.
+
+00:36:37.020 --> 00:36:39.720
+Well, so I don't use it.
+
+00:36:40.180 --> 00:36:45.200
+And because it's like you get a lot of disadvantages of reading without the advantages.
+
+00:36:45.200 --> 00:36:47.080
+I'm not so sure why it is good.
+
+00:36:47.080 --> 00:36:56.680
+Well, I was just thinking of you, how difficult that must be to implement in this scenario and your comments in the beginning, how you don't really like them.
+
+00:36:56.680 --> 00:36:59.180
+I had no idea what it is about.
+
+00:36:59.180 --> 00:37:08.180
+It's like I'm trying to find out what it does and use it and the semantics and especially the coroutines, for example,
+
+00:37:08.180 --> 00:37:13.420
+in a minor release, 3.5.2, they changed their mind how they work.
+
+00:37:13.420 --> 00:37:17.100
+And they introduced a compatibility layer.
+
+00:37:17.100 --> 00:37:26.380
+And then in 3.5.2, yeah, it was like a totally new implementation compatible with another one, which is a total mess.
+
+00:37:26.620 --> 00:37:29.960
+And the async generators are taking it to the extreme.
+
+00:37:29.960 --> 00:37:35.540
+And like, you know, when I started Nutka, there was a yield statement.
+
+00:37:35.540 --> 00:37:39.740
+So a generator could yield the execution.
+
+00:37:39.740 --> 00:37:40.940
+There was no return value.
+
+00:37:40.940 --> 00:37:43.380
+And then this got added.
+
+00:37:43.380 --> 00:37:47.960
+Actually, it was through Nutka that I learned that this changed at all.
+
+00:37:48.960 --> 00:37:54.000
+So you can imagine that what happened there is it's amazing.
+
+00:37:54.000 --> 00:37:59.400
+And they have a full team of people implementing this stuff and throwing out a new release.
+
+00:37:59.400 --> 00:38:01.220
+And I get to replicate that.
+
+00:38:01.600 --> 00:38:04.080
+That's basically what happens.
+
+00:38:04.080 --> 00:38:07.700
+And that's one guy against the whole team.
+
+00:38:07.700 --> 00:38:11.400
+And then you try to be faster with your implementation.
+
+00:38:11.400 --> 00:38:14.460
+That's actually ridiculous.
+
+00:38:14.460 --> 00:38:17.420
+But the last release wasn't so bad.
+
+00:38:17.420 --> 00:38:20.780
+It's actually I didn't encounter anything crazy.
+
+00:38:20.840 --> 00:38:21.240
+That's cool.
+
+00:38:21.240 --> 00:38:27.040
+I'm pretty impressed that you got 3.7 going already because that just came out a couple weeks ago.
+
+00:38:27.040 --> 00:38:28.340
+Yeah, yeah.
+
+00:38:28.340 --> 00:38:31.700
+Actually, with 3.6, I was reporting bugs.
+
+00:38:31.700 --> 00:38:35.940
+So I did with the 3.7.0 some bug report now about dictionaries.
+
+00:38:35.940 --> 00:38:41.260
+I was using release candidates and reporting my findings.
+
+00:38:41.260 --> 00:38:48.060
+So I have a couple of tests which demonstrate that Nutka is not misoptimizing certain things badly.
+
+00:38:48.580 --> 00:38:53.200
+And I found out CPython was so Nutka wasn't, but CPython was.
+
+00:38:53.200 --> 00:38:54.680
+And I could turn this into reports.
+
+00:38:54.680 --> 00:38:58.580
+And 3.6 was already pretty good at the time it was released.
+
+00:38:58.580 --> 00:39:03.580
+Therefore, but for 3.7, they made a huge change to exception handling.
+
+00:39:03.580 --> 00:39:06.720
+Exception handling is also absolutely terrible.
+
+00:39:06.720 --> 00:39:14.960
+I think in Python 2, it had pretty crazy semantics where a frame had an exception and restored it.
+
+00:39:14.960 --> 00:39:18.860
+And it was terrible in Python 3, they changed it again.
+
+00:39:18.860 --> 00:39:26.740
+And now in 3.7, they changed it yet again, but mostly on the implementation side.
+
+00:39:26.740 --> 00:39:30.520
+So the structures internally, where you store it and so on.
+
+00:39:30.520 --> 00:39:31.100
+This changed.
+
+00:39:31.100 --> 00:39:35.940
+And this prevented me from, without a lot of changes, to compile with Nutka in 3.7.
+
+00:39:36.100 --> 00:39:37.980
+So I'm a bit late, actually.
+
+00:39:37.980 --> 00:39:50.580
+But I normally try to be quick with this because the early adopters will pester me about lack of support for the latest, greatest Python release.
+
+00:39:50.580 --> 00:39:52.680
+Yeah, it sounds like you're pretty much on top of it.
+
+00:39:52.680 --> 00:39:53.400
+That's really good.
+
+00:39:53.820 --> 00:40:03.300
+So one thing that I was thinking about as I was looking at this is what basically can be the output of Nutka is it's like a C extension, right?
+
+00:40:03.300 --> 00:40:04.340
+A compiled C extension.
+
+00:40:04.340 --> 00:40:05.740
+That's one of them.
+
+00:40:05.740 --> 00:40:06.080
+Yeah.
+
+00:40:06.080 --> 00:40:20.960
+So if I have regular Python code that I just want to run, not compiled or anything, just standard, but there's part of my program that I would like to make faster and optimize with what you're doing, I can put those two things together, right?
+
+00:40:21.220 --> 00:40:21.900
+Yes, you can.
+
+00:40:21.900 --> 00:40:23.380
+That's absolutely true.
+
+00:40:23.380 --> 00:40:31.340
+And actually, one of the things I'm aiming at is making bindings an easy task.
+
+00:40:31.340 --> 00:40:36.400
+So my vision of bindings is for you to use C types or something.
+
+00:40:36.400 --> 00:40:39.760
+For the middleware, we use C types to make bindings.
+
+00:40:39.760 --> 00:40:43.040
+So it's implemented in ADA, but you can think of C code.
+
+00:40:43.040 --> 00:40:46.740
+And that's a pretty neat way of doing the bindings.
+
+00:40:46.740 --> 00:40:58.780
+And my idea of this for Nutka to optimize that way and not use C types, but to directly C codes and do bindings like this in a comparable fashion.
+
+00:40:59.660 --> 00:41:05.340
+And what I also want to achieve is that Nutka makes available the original code.
+
+00:41:05.340 --> 00:41:19.080
+So if I use that binding extension then and try to compile a program, I would like for the compilation process to be able to go and inline code from there.
+
+00:41:19.620 --> 00:41:22.860
+So I'm not so sure if I was clear or not.
+
+00:41:22.860 --> 00:41:26.300
+But the idea was right now there's a barrier.
+
+00:41:26.300 --> 00:41:30.100
+So if it's an extension module, it's an extension module.
+
+00:41:30.100 --> 00:41:34.780
+I can't look into PyQt at all if it's created with zip.
+
+00:41:35.280 --> 00:41:45.300
+And I want to replace this with the ability to make a call into a bound C function in my main program.
+
+00:41:45.300 --> 00:41:50.160
+And normally I would use this compiled extension module, compiled with Nutka.
+
+00:41:50.160 --> 00:41:55.800
+And if I compile the program, it would be able to inline that extension module's call.
+
+00:41:55.800 --> 00:41:56.240
+Right.
+
+00:41:56.240 --> 00:42:01.560
+So not just optimizing the Python code you feed it, but actually optimizing the underlying C code that's being used.
+
+00:42:01.560 --> 00:42:04.380
+Because ultimately it gets down to like C on C.
+
+00:42:04.580 --> 00:42:08.280
+Yeah, generate C code for the compile program again.
+
+00:42:08.280 --> 00:42:15.820
+And I think the ecosystem would benefit from having these dual mode codes.
+
+00:42:15.820 --> 00:42:21.500
+Like you have this original Python binding and you have the compiled extension.
+
+00:42:21.500 --> 00:42:24.660
+You can use the compiled extensions where you want.
+
+00:42:24.660 --> 00:42:27.500
+And you can also use the original code if you compile.
+
+00:42:27.500 --> 00:42:29.660
+So that's my vision.
+
+00:42:29.660 --> 00:42:32.660
+And I think that would be healthy for the ecosystem.
+
+00:42:33.180 --> 00:42:36.220
+And that's something that Cython doesn't do.
+
+00:42:36.220 --> 00:42:42.700
+And then it would, I think, be much more attractive to do bindings in pure Python.
+
+00:42:42.700 --> 00:42:44.420
+Yeah, I think that sounds really great.
+
+00:42:44.420 --> 00:42:45.180
+That's awesome.
+
+00:42:45.180 --> 00:42:45.940
+That's my vision.
+
+00:42:47.040 --> 00:42:49.980
+And I think I will be getting there.
+
+00:42:49.980 --> 00:42:51.200
+Yeah, I think you will as well.
+
+00:42:51.200 --> 00:42:53.780
+You definitely got some impressive stuff already working.
+
+00:42:53.780 --> 00:42:55.460
+Let's talk about some of the optimizations.
+
+00:42:55.460 --> 00:43:01.460
+It sounds to me like one of the most important things that you could do in Python is to inline functions.
+
+00:43:01.460 --> 00:43:05.600
+Because functions in Python are almost, I want to say, unreasonably slow.
+
+00:43:05.600 --> 00:43:11.560
+They're like quite, it's actually quite a high penalty to call a function in Python.
+
+00:43:12.060 --> 00:43:19.220
+Just that mechanics of setting up that stack and call and whatever compared to, say, other languages where it's slow.
+
+00:43:19.220 --> 00:43:23.440
+It has an effect, but it's not like, you know, super significant.
+
+00:43:23.440 --> 00:43:27.320
+Yeah, it did a lot of hacks to accelerate functional method codes, actually.
+
+00:43:27.320 --> 00:43:38.620
+And a lot of the acceleration in Utica is coming from being willing to do all kinds of nasty tricks to call functions in a faster way.
+
+00:43:39.480 --> 00:43:45.580
+That's a huge overhead and this inlining that will, of course, make all the difference.
+
+00:43:45.580 --> 00:43:48.600
+But it requires whole program optimization.
+
+00:43:48.600 --> 00:43:51.660
+That's a rather difficult task.
+
+00:43:51.660 --> 00:43:56.940
+So as you know, with Python code, it can change everything behind my back without me noticing.
+
+00:43:56.940 --> 00:43:57.540
+Right.
+
+00:43:57.540 --> 00:44:01.500
+I will always have to do both the things.
+
+00:44:01.500 --> 00:44:06.080
+So I will have to check that it's actually what I'm thinking it is.
+
+00:44:06.520 --> 00:44:12.260
+Much like the PyPy JIT is having guards, like, is it really the same as last time?
+
+00:44:12.260 --> 00:44:16.280
+And is it really what I expect it to be?
+
+00:44:16.280 --> 00:44:22.540
+And then I can be super fast or I need to fall back because something crazy happened behind my back.
+
+00:44:22.540 --> 00:44:22.860
+Right.
+
+00:44:22.860 --> 00:44:25.480
+Like a unit test patch, for example.
+
+00:44:25.480 --> 00:44:26.020
+Yes.
+
+00:44:26.020 --> 00:44:28.300
+That kind of thing will have to work.
+
+00:44:28.300 --> 00:44:31.400
+And then, but that's this duality.
+
+00:44:31.400 --> 00:44:36.880
+It's my vision of how things will then eventually work.
+
+00:44:36.880 --> 00:44:40.980
+But inlining code will definitely do a lot of things.
+
+00:44:40.980 --> 00:44:47.440
+I'm currently working on classes and optimizing the classes and the dictionaries and tracing the values in there.
+
+00:44:47.440 --> 00:45:01.000
+And NUTCA and I hope the next release will be capable of statically optimizing most classes into a simple call to type with a static dictionary.
+
+00:45:01.180 --> 00:45:02.180
+Of stuff.
+
+00:45:02.180 --> 00:45:02.860
+Of stuff.
+
+00:45:02.860 --> 00:45:11.900
+That's the first step, obviously, to understanding types fully, because I will be able to precisely know the dictionaries.
+
+00:45:11.900 --> 00:45:19.380
+Then I have to see through the meta class mechanics and see that they are actually mostly harmless most of the times.
+
+00:45:19.380 --> 00:45:22.980
+And from there, I take it from there.
+
+00:45:22.980 --> 00:45:25.600
+This is a, I think it's a huge undertaking.
+
+00:45:25.600 --> 00:45:28.720
+It's one of the directions that I want to go.
+
+00:45:28.840 --> 00:45:31.720
+So these global program optimizations are one thing.
+
+00:45:31.720 --> 00:45:45.500
+And then locally, for cases where I do know that something is an integer, I want to get to using alternative integers and Python integers or just the C type where possible.
+
+00:45:45.840 --> 00:45:49.560
+That's the direction I intend to work on the next two months.
+
+00:45:49.680 --> 00:46:03.960
+Basically, that is the magic sauce that makes Cython fast is that you explicitly type your stuff and it lets, you know, it just be four bytes on the stack in C rather than all the indirect stuff.
+
+00:46:03.960 --> 00:46:06.000
+Like, well, it could be this reference type.
+
+00:46:06.000 --> 00:46:07.540
+Like, we don't really know what it is.
+
+00:46:07.540 --> 00:46:10.040
+You know, treat it as a full on pie object.
+
+00:46:10.040 --> 00:46:10.540
+Yes.
+
+00:46:10.680 --> 00:46:11.660
+You're working on this as well.
+
+00:46:11.660 --> 00:46:11.920
+Yes.
+
+00:46:11.920 --> 00:46:12.620
+That's crazy.
+
+00:46:12.620 --> 00:46:16.700
+And this is where I think C level performance is possible.
+
+00:46:16.700 --> 00:46:28.540
+And then I have the idea that unlike Cython, I want to make type annotations to that are actually behaving in Python at runtime too.
+
+00:46:28.540 --> 00:46:36.460
+So I would like you to declare that the function takes integer arguments and will raise an exception if it isn't integers.
+
+00:46:37.060 --> 00:46:54.680
+And then I want to have Newt Cassie through that, take these assertions and generate specialized code from there, much like Cython does, but in a lot more complex way and with the benefit of actually enforcing these things at runtime.
+
+00:46:54.680 --> 00:46:59.100
+That's the vision there, which is also a lot of work.
+
+00:46:59.100 --> 00:47:03.940
+You would have to write some decorators, but I think other people can do this.
+
+00:47:04.260 --> 00:47:08.720
+Just today I asked somebody who offered to volunteer if he could do it.
+
+00:47:08.720 --> 00:47:15.020
+That would be great if people joined such efforts because that's all only about CPython, right?
+
+00:47:15.020 --> 00:47:19.000
+You can write this without any knowledge of Newt Cassie.
+
+00:47:19.000 --> 00:47:24.580
+It's just, I want to have a decorator which says, I have to clear this class and now it's frozen.
+
+00:47:25.120 --> 00:47:30.940
+You will not be able to change anything after the fact about this or else you get an exception.
+
+00:47:30.940 --> 00:47:37.000
+And that's a hint to the compiler to take advantage of that for static optimization.
+
+00:47:37.000 --> 00:47:37.620
+Yeah.
+
+00:47:37.620 --> 00:47:39.200
+A little like slots, right?
+
+00:47:39.200 --> 00:47:40.500
+Yeah, exactly.
+
+00:47:40.500 --> 00:47:41.100
+Like slots.
+
+00:47:41.100 --> 00:47:47.620
+But in a more general fashion and enforcing these things.
+
+00:47:47.620 --> 00:47:52.040
+And these kinds of decorators, I think, make all sense.
+
+00:47:52.040 --> 00:48:02.200
+And yeah, this is another avenue where I think Newtcar will also be beneficial to the ecosystem of making it viable.
+
+00:48:02.200 --> 00:48:13.700
+Because what it will do is you slow down your program terribly because it will do all these checks that typically are not useful at runtime if you do with the Python decorators.
+
+00:48:13.700 --> 00:48:18.120
+But then when you accelerate some, it's actually better.
+
+00:48:18.120 --> 00:48:20.040
+And that's the idea.
+
+00:48:20.040 --> 00:48:22.360
+Well, that'll let you claim a much higher performance boost.
+
+00:48:22.360 --> 00:48:23.440
+Look, I ran it on her Newtcar.
+
+00:48:23.440 --> 00:48:24.580
+It was 20 times faster.
+
+00:48:25.860 --> 00:48:27.780
+Just kidding, because it would be slower, right?
+
+00:48:27.780 --> 00:48:28.080
+Yeah.
+
+00:48:28.080 --> 00:48:33.680
+So I don't know if you're getting this, but Newtcar is a crazy compromise-free project.
+
+00:48:33.680 --> 00:48:38.580
+And if it fails, which it probably will, that's why.
+
+00:48:38.580 --> 00:48:42.040
+It's all about trying to do the best thing possible.
+
+00:48:42.040 --> 00:48:46.460
+Yeah, the compromise-free part is what makes it so challenging, right?
+
+00:48:46.460 --> 00:48:50.840
+Yes, it's so challenging, but it's also, yeah, it's rewarding.
+
+00:48:50.840 --> 00:48:59.860
+And everything I've achieved challenge-free from when in 2003 to I made these public releases of Newtcar, it was usable.
+
+00:48:59.860 --> 00:49:01.860
+It was usable from day one.
+
+00:49:01.860 --> 00:49:05.420
+And it has remained usable all this time.
+
+00:49:05.420 --> 00:49:09.140
+And it only became ever usable, more usable.
+
+00:49:09.140 --> 00:49:13.960
+What it didn't become in, I think, like at least two years, it didn't become faster.
+
+00:49:14.380 --> 00:49:27.540
+Because I'm doing these big transformations of internals where, for example, the local dictionary work that I'm doing on classes, class declarations aren't performance critical at all.
+
+00:49:27.540 --> 00:49:29.060
+You run that code once.
+
+00:49:29.060 --> 00:49:30.540
+It's not in a loop.
+
+00:49:30.540 --> 00:49:43.660
+But for scalability, it's hugely important to get this, because if you compile this million line of code and you optimize it better, it's much less code.
+
+00:49:43.660 --> 00:49:51.240
+And for these plans, we really need to understand the global picture there.
+
+00:49:51.560 --> 00:49:58.940
+So I'm spending a lot of time on stuff that doesn't actually improve performance at all most of the time.
+
+00:49:58.940 --> 00:50:09.280
+And I really look forward to finally having fun running benchmarks again, because I really don't enjoy running benchmarks if the numbers are all stacked.
+
+00:50:09.280 --> 00:50:10.420
+Yes.
+
+00:50:10.560 --> 00:50:12.280
+It's sad.
+
+00:50:12.280 --> 00:50:12.940
+It's crazy.
+
+00:50:12.940 --> 00:50:18.300
+And it's totally anti what everybody else has done in the field so far.
+
+00:50:18.300 --> 00:50:21.360
+So there has been compilers from Google.
+
+00:50:21.360 --> 00:50:23.320
+I forgot the name now.
+
+00:50:23.320 --> 00:50:25.720
+But they had their own project.
+
+00:50:25.720 --> 00:50:30.380
+And the first thing they had is incredibly well-numbered benchmarks.
+
+00:50:31.700 --> 00:50:35.880
+And, yeah, but it wasn't doing what it should be doing.
+
+00:50:35.880 --> 00:50:38.120
+I think the unladen swallow.
+
+00:50:38.120 --> 00:50:40.100
+Yeah, yeah, I think you're right.
+
+00:50:40.100 --> 00:50:41.400
+Unladen swallow, I think.
+
+00:50:41.400 --> 00:50:42.200
+It just went away.
+
+00:50:42.200 --> 00:50:47.320
+And it's not sustainable because you can't use it for anything but benchmarks.
+
+00:50:47.320 --> 00:50:47.960
+Right.
+
+00:50:47.960 --> 00:50:50.220
+That's basically the idea.
+
+00:50:50.220 --> 00:50:52.980
+And I'm doing something which can be used outside of benchmarks.
+
+00:50:52.980 --> 00:50:58.840
+But there will always be code which is currently slower and new to curve because I didn't look at it.
+
+00:50:58.840 --> 00:51:01.400
+Or actually CPython has a lot of tricks.
+
+00:51:01.400 --> 00:51:09.460
+I recall that it took me a long time until I was at the point to emulate their in-place assignment tricks.
+
+00:51:09.460 --> 00:51:20.580
+So if you do an in-place assignment to a string, they did some things to avoid allocating a new object unless a reference was held on the outside.
+
+00:51:20.580 --> 00:51:27.260
+Which in many instances makes it incredibly, like infinitely faster than Newtco was.
+
+00:51:27.260 --> 00:51:31.880
+And so I'm behind in some optimizations even.
+
+00:51:31.880 --> 00:51:35.280
+And that's pretty tough.
+
+00:51:35.280 --> 00:51:39.280
+And obviously I would like to have also cool benchmarks.
+
+00:51:39.280 --> 00:51:46.020
+But what I would like to have is also the ability to say, and you can have it too in your program.
+
+00:51:46.020 --> 00:51:48.760
+That's obviously, I don't know.
+
+00:51:48.760 --> 00:51:54.460
+And forever it has felt like it's right around the corner that I can do this now.
+
+00:51:54.460 --> 00:51:58.540
+And then I discover something else that I need to do first.
+
+00:51:58.540 --> 00:52:00.600
+Yeah, that's why I brought up Mercurial.
+
+00:52:00.600 --> 00:52:05.260
+Because that's a pretty serious application to process.
+
+00:52:05.260 --> 00:52:07.660
+Yeah, and just carrying the full weight.
+
+00:52:07.660 --> 00:52:09.660
+So doing all these refactorings.
+
+00:52:10.440 --> 00:52:13.720
+And I'm always doing these refactorings in a non-breaking way.
+
+00:52:13.720 --> 00:52:22.540
+So I try to not strive too far away from a working state in all the changes that I made.
+
+00:52:22.540 --> 00:52:23.920
+So I made gradual changes.
+
+00:52:23.920 --> 00:52:28.020
+Like I said, initially it was more like a templating language.
+
+00:52:28.360 --> 00:52:35.240
+And I turned it into a single state assignment form compiler gradually.
+
+00:52:35.240 --> 00:52:37.280
+One by one, bit by bit.
+
+00:52:37.280 --> 00:52:41.000
+And trusted more here and there.
+
+00:52:41.420 --> 00:52:45.880
+Right now this value tracing is very reliable.
+
+00:52:45.880 --> 00:52:49.620
+But still not used for everything.
+
+00:52:49.620 --> 00:52:56.480
+I think right now the major fact that I'm using it is do I need to check if the value is assigned or not.
+
+00:52:57.480 --> 00:52:59.840
+And that's mostly what it's being used for.
+
+00:52:59.840 --> 00:53:01.580
+And for static optimization.
+
+00:53:01.580 --> 00:53:04.720
+And that's working bug free.
+
+00:53:04.720 --> 00:53:07.660
+But I'm always expanding this.
+
+00:53:07.660 --> 00:53:11.580
+And then I find something which is not yet working.
+
+00:53:11.580 --> 00:53:13.400
+That's the crux of it.
+
+00:53:13.400 --> 00:53:13.800
+Yeah.
+
+00:53:13.800 --> 00:53:15.760
+Well, it sounds like it's getting better and better.
+
+00:53:15.760 --> 00:53:19.420
+And there's a lot of things that you could unlock with it.
+
+00:53:19.420 --> 00:53:23.680
+So speaking of stuff that's faster, stuff that's slower.
+
+00:53:23.680 --> 00:53:26.540
+When should I use this?
+
+00:53:26.640 --> 00:53:28.660
+And maybe when shouldn't I use it?
+
+00:53:28.660 --> 00:53:31.880
+Oh, you shouldn't use it if you don't care about performance.
+
+00:53:31.880 --> 00:53:32.440
+Yeah.
+
+00:53:32.440 --> 00:53:35.360
+Compatibility is just like mostly what you care about.
+
+00:53:35.360 --> 00:53:35.600
+Yeah.
+
+00:53:35.600 --> 00:53:41.280
+Actually, I have this secret pipe dream of being better than PyLint.
+
+00:53:41.280 --> 00:53:42.480
+But that's not.
+
+00:53:42.480 --> 00:53:44.500
+That's a whole other issue.
+
+00:53:44.500 --> 00:53:49.280
+Because my static analysis may uncover things that PyLint wouldn't.
+
+00:53:49.280 --> 00:53:51.820
+The program analysis.
+
+00:53:51.820 --> 00:53:54.460
+And if you don't care about performance.
+
+00:53:54.520 --> 00:53:57.760
+And I think that's roughly 99% of all the people.
+
+00:53:57.760 --> 00:54:04.120
+And you should use it if you are into NumPy and these things.
+
+00:54:04.120 --> 00:54:07.680
+Although I wasn't having discussions with a university.
+
+00:54:08.400 --> 00:54:14.120
+It would take somebody to work on specializing code generation for NumPy.
+
+00:54:14.120 --> 00:54:22.940
+So NumPy is a hugely great scientific library where you would just provide very little Python code on your own.
+
+00:54:22.940 --> 00:54:27.880
+And for you to do something for each cell, for example, that would be bytecode.
+
+00:54:27.880 --> 00:54:33.700
+And it would be massively cool if we could have this little bit compiled.
+
+00:54:33.700 --> 00:54:33.960
+Yeah.
+
+00:54:34.360 --> 00:54:36.360
+And still run it.
+
+00:54:36.360 --> 00:54:45.260
+And I think NumPy would be then practically not entering the Python runtime a lot.
+
+00:54:45.260 --> 00:54:47.900
+And that would be something.
+
+00:54:47.900 --> 00:54:52.680
+But I didn't quite manage to get some university or something involved.
+
+00:54:52.840 --> 00:55:02.440
+So scientific applications and financial applications are also like where you want to do financial stocks, something.
+
+00:55:02.440 --> 00:55:09.200
+You want to buy as fast as possible, make your decisions as fast as possible, real-time applications in Python.
+
+00:55:09.200 --> 00:55:10.680
+All the algorithmic trading stuff, yeah.
+
+00:55:10.680 --> 00:55:14.620
+Some people are crazy enough to do this in Python because of the development turnaround.
+
+00:55:14.620 --> 00:55:20.300
+And then they want to throw something easy on it to get it accelerated.
+
+00:55:20.300 --> 00:55:25.780
+And on another day, they want to change the algorithm simply.
+
+00:55:25.780 --> 00:55:28.300
+And that's the kind of uses.
+
+00:55:28.300 --> 00:55:36.420
+I think to most people that do not care that much about acceleration, some people care about deployment.
+
+00:55:36.420 --> 00:55:40.360
+And there's a standalone mode, especially on Windows.
+
+00:55:40.360 --> 00:55:50.260
+where you do not normally have any Python on an arbitrary user machine and definitely not the version you want to have and definitely not the modules.
+
+00:55:50.260 --> 00:56:01.460
+You can run a newtker and use it to create this distribution folder and send that to people's way and have things work.
+
+00:56:01.460 --> 00:56:04.080
+That's, I think, what a lot of people use it for.
+
+00:56:04.080 --> 00:56:05.620
+I think that it's really excellent.
+
+00:56:05.820 --> 00:56:11.180
+And so basically you compile it down to an exe that does not depend on CPython.
+
+00:56:11.180 --> 00:56:14.740
+It bundles it up to contain that within itself, right?
+
+00:56:14.740 --> 00:56:15.900
+Not on an installation.
+
+00:56:15.900 --> 00:56:17.000
+Yeah.
+
+00:56:17.100 --> 00:56:17.600
+Yes.
+
+00:56:17.600 --> 00:56:22.940
+And yeah, although you could use anaconda python for that too.
+
+00:56:22.940 --> 00:56:26.480
+It's, I think, a convenient package.
+
+00:56:26.480 --> 00:56:32.020
+I think that also a lot of people are using it to hide their source code from people.
+
+00:56:32.600 --> 00:56:37.940
+And that's actually something which I'm, well, that's what compilers allow for.
+
+00:56:37.940 --> 00:56:46.040
+It's not my, it's not my daily joy of being part of depriving people of the ability to change source code.
+
+00:56:46.760 --> 00:56:50.660
+But yeah, that's people's people own their source code.
+
+00:56:50.660 --> 00:56:55.220
+So we can do, they can give it to you or they can't in favor of that.
+
+00:56:55.220 --> 00:57:03.600
+But yeah, that's one other mode of operation, which I think is unfortunately the majority of users, I guess.
+
+00:57:04.320 --> 00:57:10.960
+And it's also causing a lot of trouble because extension modules often do imports of stuff which they don't tell me about.
+
+00:57:10.960 --> 00:57:13.740
+And then they crash when it's not present.
+
+00:57:13.740 --> 00:57:15.980
+And it's sometimes very nice.
+
+00:57:15.980 --> 00:57:16.840
+Yeah, I can imagine.
+
+00:57:16.840 --> 00:57:17.280
+It's tricky.
+
+00:57:17.280 --> 00:57:23.300
+So if I'm using external packages off of PyPI, that's no problem, right?
+
+00:57:23.300 --> 00:57:24.280
+You can deal with that.
+
+00:57:24.280 --> 00:57:28.260
+So if I work with requests, SQLAlchemy, whatever, I can run that through Nuka?
+
+00:57:28.260 --> 00:57:29.640
+That's awesome.
+
+00:57:29.840 --> 00:57:30.520
+Yes, yes.
+
+00:57:30.520 --> 00:57:32.460
+Actually, yeah.
+
+00:57:32.460 --> 00:57:34.340
+It's the out-of-the-box experience.
+
+00:57:34.340 --> 00:57:36.640
+You just arbitrary code.
+
+00:57:36.640 --> 00:57:38.300
+It's supposed to work.
+
+00:57:38.300 --> 00:57:47.860
+I think Django is, if it's some of the really dynamic, crazy stuff, would need a plugin to be created to pass it.
+
+00:57:47.860 --> 00:57:51.740
+Because I think Django does some dynamic imports of stuff.
+
+00:57:51.740 --> 00:57:54.400
+Some people are getting it to work.
+
+00:57:54.400 --> 00:57:55.820
+I don't know.
+
+00:57:55.820 --> 00:57:58.160
+But that takes some modifications.
+
+00:57:58.160 --> 00:57:59.140
+Yeah, sure, sure.
+
+00:57:59.900 --> 00:58:00.300
+Interesting.
+
+00:58:00.300 --> 00:58:03.660
+So this, yeah, the standalone mode is pretty interesting as well.
+
+00:58:03.660 --> 00:58:07.000
+So I think we're getting kind of near the end of our time.
+
+00:58:07.000 --> 00:58:13.280
+So one thing I did want to highlight, I think, it sounds like you're looking for contributors.
+
+00:58:13.280 --> 00:58:16.340
+And there's a lot of places that people can contribute.
+
+00:58:16.340 --> 00:58:20.780
+You talked about writing some standard Python code that then Nuka could use.
+
+00:58:21.000 --> 00:58:25.780
+I'm sure if there was a long list of these are all the optimizations we're looking for.
+
+00:58:25.780 --> 00:58:28.700
+Could anybody who's good at this kind of stuff and see?
+
+00:58:28.700 --> 00:58:29.740
+Could you help here?
+
+00:58:29.740 --> 00:58:31.160
+Things like that.
+
+00:58:31.160 --> 00:58:33.000
+Are you looking for contributors along those lines?
+
+00:58:33.160 --> 00:58:34.460
+Yes, of course I am.
+
+00:58:34.460 --> 00:58:45.680
+I actually have to think if I did, I should have a list of issues on GitHub that are marked as help wanted.
+
+00:58:46.520 --> 00:58:49.000
+And there's a lot of these things.
+
+00:58:50.000 --> 00:58:59.720
+And obviously I could and should create a couple more from these ideas that I just told you about.
+
+00:58:59.720 --> 00:59:02.880
+And that's totally something I should do.
+
+00:59:02.880 --> 00:59:10.260
+I have relatively bad experience with people joining the project because it's tough to get progress.
+
+00:59:10.260 --> 00:59:16.840
+It's also a complex design, not easy to get into.
+
+00:59:16.840 --> 00:59:18.900
+It takes a lot of skill and privacy.
+
+00:59:18.900 --> 00:59:23.200
+And occasionally I get contributors.
+
+00:59:23.920 --> 00:59:30.320
+But I think it's not rewarding enough, I think, for many people, unfortunately.
+
+00:59:30.320 --> 00:59:32.900
+Yeah, it takes a lot of effort to see the rewards through, right?
+
+00:59:32.900 --> 00:59:41.800
+I'm just thinking that there must be many people who are working on compilers and stuff who just left university and are looking for some kind of project.
+
+00:59:41.800 --> 00:59:44.200
+You know, maybe they could jump in, right?
+
+00:59:44.200 --> 00:59:45.620
+Yes, I welcome everybody.
+
+00:59:45.620 --> 00:59:47.620
+But I have to be honest with you.
+
+00:59:47.620 --> 00:59:51.820
+I also don't have time to actually mentor much.
+
+00:59:52.460 --> 00:59:59.480
+I can't guide people through doing things and then they lose interest.
+
+00:59:59.480 --> 01:00:01.800
+That's happened a couple of times.
+
+01:00:01.800 --> 01:00:07.080
+So there's a lot of people who want to find out if this is something they would be willing to do.
+
+01:00:07.080 --> 01:00:12.700
+And yeah, I have a family, I have a day job, and this is my spare time.
+
+01:00:12.700 --> 01:00:13.760
+Right, absolutely.
+
+01:00:13.760 --> 01:00:15.240
+It needs a lot of work.
+
+01:00:15.240 --> 01:00:21.700
+Communication often takes second place after coding myself.
+
+01:00:21.700 --> 01:00:25.680
+Yeah, that's the challenge of doing this as a part-time project, right?
+
+01:00:25.680 --> 01:00:28.780
+Yeah, it's totally impossible to keep up with.
+
+01:00:28.780 --> 01:00:37.760
+So suppose somebody really wants to get into this and yeah, I cannot respond quick enough sometimes.
+
+01:00:37.760 --> 01:00:39.960
+And that's already frustrating.
+
+01:00:40.720 --> 01:00:41.240
+Sure.
+
+01:00:41.240 --> 01:00:46.220
+I guess people could probably start by watching your EuroPython presentations and then go from there.
+
+01:00:46.220 --> 01:00:47.080
+Yeah, yeah.
+
+01:00:47.080 --> 01:00:56.860
+Yeah, but also I think what I really would need is somebody with community skills who would be capable of doing a fundraiser for me.
+
+01:00:56.860 --> 01:01:01.940
+It's a long-term project and a lot of people have short-term needs.
+
+01:01:02.940 --> 01:01:13.020
+I need to get Newtka to a point where people with short-term needs will feel that investing their time into Newtka is worthwhile.
+
+01:01:13.020 --> 01:01:15.160
+And then it will be a different story.
+
+01:01:15.160 --> 01:01:18.640
+Yeah, but coming back to what I would like to have.
+
+01:01:18.720 --> 01:01:27.680
+I would like to have somebody who organizes some fundraiser and does this so I could get time off my day job.
+
+01:01:28.180 --> 01:01:32.700
+I work on Newtka and I've invested my own money right now.
+
+01:01:32.700 --> 01:01:36.860
+Four months unpaid is a lot of effort.
+
+01:01:36.860 --> 01:01:38.620
+I'm buying hardware and so on.
+
+01:01:38.620 --> 01:01:43.520
+I'm getting some donations, but it's not enough to buy the hardware that I buy for Newtka.
+
+01:01:43.520 --> 01:01:50.840
+And that's also something people could do is to send donations my way.
+
+01:01:51.000 --> 01:02:05.760
+But I think a concerted effort that would gain visibility and with a raising goal and me being able to put a couple of months again into Newtka and pushing really forward, that would be great.
+
+01:02:05.760 --> 01:02:10.280
+Probably that's something more than I need than actual contributors.
+
+01:02:10.600 --> 01:02:22.260
+Because I think I need to reach a breaking point where I have something that is attractive enough for people who have actual problems to just add the bits that they are missing.
+
+01:02:22.260 --> 01:02:32.080
+Like at the point where they have a lot of optimization and then they run into some construct which is not properly optimized and then they can hack it.
+
+01:02:32.080 --> 01:02:33.460
+And then it is.
+
+01:02:33.460 --> 01:02:34.740
+That's a thing for them then.
+
+01:02:34.740 --> 01:02:36.760
+Right now, that's not the case.
+
+01:02:36.760 --> 01:02:44.780
+Right now, you would have to be somebody with a long term vision and no concrete other problems that require your attention.
+
+01:02:44.780 --> 01:02:46.820
+So that's it.
+
+01:02:46.820 --> 01:02:50.600
+I think the couple of months sprint really would make a big difference.
+
+01:02:50.600 --> 01:02:56.060
+I've seen that make a difference in other projects more than donations or other things as well.
+
+01:02:56.060 --> 01:02:57.940
+So certainly that sounds like a good thing.
+
+01:02:57.940 --> 01:02:58.620
+All right.
+
+01:02:58.620 --> 01:03:01.880
+Kai, before we get out of here, let me ask you the final two questions.
+
+01:03:01.880 --> 01:03:05.380
+If you're going to write some Python code, what editor do you use?
+
+01:03:05.480 --> 01:03:08.080
+I'm using Eclipse and PyDef specifically.
+
+01:03:08.080 --> 01:03:15.280
+I occasionally use VI on the command line just for quickness, but Eclipse and PyDef it is.
+
+01:03:15.280 --> 01:03:16.360
+Right on.
+
+01:03:16.360 --> 01:03:19.360
+And then just some notable PyPI packages.
+
+01:03:19.360 --> 01:03:23.500
+Maybe people haven't heard of them or aren't using them yet.
+
+01:03:23.500 --> 01:03:31.860
+Obviously, I have a lot of machines running and I'm using Ansible, which somebody introduced me on a Debian conference.
+
+01:03:31.860 --> 01:03:34.980
+I'm forever grateful for the tutorial I got there.
+
+01:03:34.980 --> 01:03:41.620
+It's very useful tools like salt, if you know that, Ansible written in Python.
+
+01:03:41.620 --> 01:03:47.440
+And you just can easily deploy all your machines in a similar fashion.
+
+01:03:47.440 --> 01:03:48.940
+And that's great.
+
+01:03:49.500 --> 01:03:53.320
+Nicola is something I'm actually, I forgot my contributor number.
+
+01:03:53.320 --> 01:03:57.680
+I might be contributor number five or something or static website generation.
+
+01:03:57.680 --> 01:04:01.800
+That's what people are using a lot these days.
+
+01:04:01.800 --> 01:04:06.480
+And I really liked the idea and I joined that and I'm using it for my website.
+
+01:04:06.480 --> 01:04:08.040
+And it's great.
+
+01:04:08.040 --> 01:04:12.720
+And obviously, BuildBot is also a tool I heavily rely on.
+
+01:04:12.720 --> 01:04:16.640
+I absolutely despise Jenkins, which I have to use at work.
+
+01:04:16.640 --> 01:04:21.500
+The BuildBot is great because you get to write your configuration as Python code.
+
+01:04:22.240 --> 01:04:26.800
+Actually, there's no web interface needed to configure stuff.
+
+01:04:26.800 --> 01:04:30.300
+You just do your for loops and stuff and everything is consistent, which is great.
+
+01:04:30.300 --> 01:04:44.560
+And I think something which should get more exposure is pip-env, which combines the virtues of virtual environments and pip install, making it easy to run stuff.
+
+01:04:44.560 --> 01:04:49.660
+I'm not using that myself a lot, but I think it's very notable.
+
+01:04:49.660 --> 01:04:50.440
+Yeah, absolutely.
+
+01:04:50.440 --> 01:04:51.000
+Absolutely.
+
+01:04:51.000 --> 01:04:53.840
+All right, Kai, thank you for being on the show.
+
+01:04:53.840 --> 01:04:57.680
+This was a really interesting project that you've been working on a long time.
+
+01:04:57.680 --> 01:05:02.200
+And it's definitely a cool exploration of this compiled space.
+
+01:05:02.200 --> 01:05:03.400
+And it's its own take.
+
+01:05:03.400 --> 01:05:08.280
+And I would like to thank you for hosting me and giving me your opportunity.
+
+01:05:08.280 --> 01:05:10.580
+And I hope it wasn't rambling too much.
+
+01:05:10.580 --> 01:05:12.280
+It was some interesting stories.
+
+01:05:12.280 --> 01:05:12.740
+Thank you.
+
+01:05:12.740 --> 01:05:14.540
+And yeah, take care.
+
+01:05:14.760 --> 01:05:15.580
+Okay, bye-bye.
+
+01:05:15.580 --> 01:05:19.440
+This has been another episode of Talk Python to Me.
+
+01:05:19.440 --> 01:05:24.960
+Our guest for this episode is Kai Haian, and it's been brought to you by Cox Automotive and Rollbar.
+
+01:05:24.960 --> 01:05:31.200
+Join Cox Automotive and use your technical skills to transform the way the world buys, sells, and owns cars.
+
+01:05:31.200 --> 01:05:37.720
+Find an exciting technical position that's right for you at talkpython.fm/cox, C-O-X.
+
+01:05:37.720 --> 01:05:40.740
+Rollbar takes the pain out of errors.
+
+01:05:40.740 --> 01:05:48.440
+They give you the context and insight you need to quickly locate and fix errors that might have gone unnoticed until your users complain, of course.
+
+01:05:48.440 --> 01:05:55.600
+As Talk Python to Me listeners, track a ridiculous number of errors for free at rollbar.com slash Talk Python to Me.
+
+01:05:56.140 --> 01:05:57.360
+Want to level up your Python?
+
+01:05:57.360 --> 01:06:04.420
+If you're just getting started, try my Python jumpstart by building 10 apps or our brand new 100 days of code in Python.
+
+01:06:04.420 --> 01:06:08.220
+And if you're interested in more than one course, be sure to check out the Everything Bundle.
+
+01:06:08.480 --> 01:06:10.460
+It's like a subscription that never expires.
+
+01:06:10.460 --> 01:06:12.660
+Be sure to subscribe to the show.
+
+01:06:12.660 --> 01:06:14.860
+Open your favorite podcatcher and search for Python.
+
+01:06:14.860 --> 01:06:16.100
+We should be right at the top.
+
+01:06:16.100 --> 01:06:25.420
+You can also find the iTunes feed at /itunes, Google Play feed at /play, and direct RSS feed at /rss on talkpython.fm.
+
+01:06:25.420 --> 01:06:27.300
+This is your host, Michael Kennedy.
+
+01:06:27.300 --> 01:06:28.660
+Thanks so much for listening.
+
+01:06:28.660 --> 01:06:29.720
+I really appreciate it.
+
+01:06:29.720 --> 01:06:31.660
+Now get out there and write some Python code.
+
+01:06:31.660 --> 01:06:52.400
+I really appreciate it.
+

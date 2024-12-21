@@ -1,561 +1,1884 @@
-00:00:00 Pydantic has become a core building block for many Python projects. After five years, it's time for a remake with version two. The plan is to rebuild the internals with benchmarks already showing a 17 times performance improvement and cleanup of the API. This sounds great, but what does it mean for us? Well, Samuel, the creator of Pydantic, is here to share his plan for Pydantic version two. This is Talk Python to Me episode 376 recorded August 4, 2022. Welcome to Talk Python to Me, a weekly podcast on Python. This is your host, Michael Kennedy. Follow me on Twitter where I'm @mkennedy and keep up with the show and listen to past episodes at Talkpython.fm and follow the show on Twitter via @talkpython. We've started streaming most of our episodes live on YouTube. Subscribe to our YouTube channel over at Talkpython.fm/YouTube to get notified about upcoming shows and be part of that episode.
+00:00:00 Pydantic has become a core building block for many Python projects.
 
-00:01:10 This episode of Talk Python to Me is brought to you by Compiler from Red Hat. Listen to an episode of their podcast to demystify the tech industry over at talkpython.fm/compiler and it's brought to you by Microsoft for startups founders hub. Get early stage support for your startup and build that startup you've been dreaming about. Visit Talkpython.fm/foundershub to apply for free.
+00:00:03 After five years, it's time for a remake.
 
-00:01:34 Transcripts for this and all of our episodes are brought to you by AssemblyAI. Do you need a great automatic speech to text API? Get human level accuracy in just a few lines of code. Visit talkython.fm/assemblyai. Samuel welcome back to Talk Python to me.
+00:00:06 With version 2, the plan is to rebuild the internals, with benchmarks already showing a 17 times performance improvement,
 
-00:01:49 It's great to be back. When was it was in Covid, wasn't it?
+00:00:14 and cleanup of the API.
 
-00:01:52 I seem to remember it was just 15 months ago.
+00:00:16 This sounds great, but what does it mean for us?
 
-00:01:59 Yeah, I was in my attic.
+00:00:18 Well, Samuel Colvin, the creator of Pydantic, is here to share his plan for Pydantic version 2.
 
-00:02:01 I'm now in the office.
+00:00:24 This is Talk Python to Me, episode 376, recorded August 4th, 2022.
 
-00:02:04 Exactly. Locked down in the house. And it's great to have you back. We talked about Pydantic back then. Obviously we're talking about Pydantic now as well. I would say it's grown tremendously since then. It was already quite popular then.
+00:00:30 Welcome to Talk Python to Me, a weekly podcast on Python.
 
-00:02:18 Yeah, I think I don't have right now, on top of my head, good metrics on in so far as we can quantify the growth of these things. I think it's going to a lot, but I think the feeling for me is it's become a lot more companies and lot more people have started to rely on it and it's become a kind of core tool that they expect to work in the way you expect Pytest or Django to work. Not quite perhaps at those levels, but moving in that direction.
+00:00:47 This is your host, Michael Kennedy.
 
-00:02:43 I guess I'm probably jumping the gun, but at the beginning of this year I was thinking about it and I was obviously super proud of how many people were using Pydantic and how useful it was being, but I wasn't quite so proud of its internals, which is why I started thinking about what it would look like to kind of start again. Because obviously V2 was an opportunity to break stuff. Not that we haven't broken things in minor releases when we shouldn't have done, but to formally break things and do it right where it was obviously, I guess, wrong from the beginning.
+00:00:49 Follow me on Twitter, where I'm @mkennedy, and keep up with the show and listen to past episodes at talkpython.fm.
 
-00:03:10 The goal, I'm sure, is not to go out and break things, but sometimes in order to take years of learning and experience and usage and turn that into the way you think it should be, some things may have to break, right?
+00:00:55 And follow the show on Twitter via at talkpython.
 
-00:03:22 Yeah. I think that when I first released Pydantic, I subsequently built projects I thought were going to be really popular and there's been varied in their success. But I literally built Pydantic for me and put it on Pypy and then put it on Hacker News to see what would happen. But because of that, I thought about there were some esoteric design decisions that were the stuff I wanted, but on reflection, they're not right for a popular library used by lots of people, strictness being, I guess, the most obvious example, but a bunch of other stuff we'll talk about strictness.
+00:00:58 We've started streaming most of our episodes live on YouTube.
 
-00:03:52 Let's talk about a lot of these changes. But why do you think it was popular?
+00:01:02 Subscribe to our YouTube channel over at talkpython.fm/youtube to get notified about upcoming shows and be part of that episode.
 
-00:03:55 I think it came along at the right time. I think it came along when type hints were just getting popular in Python. They had been around in some guys for, like, ever, right. You could do something with them in 2007, but they were just beginning to become a thing.
+00:01:10 This episode of Talk Python to Me is brought to you by Compiler from Red Hat.
 
-00:04:08 mypy was coming out, but I suppose I was not the only person who's who was frustrated by the idea that they didn't have teeth, that they were there. But it seemed kind of weird, right, if you came from a Rust or a C++ or a C background types of everything, and the idea that they were there but they meant nothing was a bit of an anathema to me. And I just started off with, can I make them work a bit? And that was five years ago, and here we are.
+00:01:14 Listen to an episode of their podcast to demystify the tech industry over at talkpython.fm/compiler.
 
-00:04:32 Yeah. I agree that coming along at the right time was probably part of the magic. I think there was just some libraries and some frameworks who decided these types should have meaning. Like you said, there was a couple of web frameworks, obviously, most notably FastAPI, but there were other ones as well who are taking the ideas of here's some type definitions and Python.
+00:01:21 And it's brought to you by Microsoft for Startups Founders Hub.
 
-00:04:57 What can we do with that? Can we actually make that mean something to help the developer experience?
+00:01:25 Get early stage support for your startup and build that startup you've been dreaming about.
 
-00:05:01 I think that's true. And I guess I got some stuff right in doing documentation quite well, quite early on. I know that it wasn't perfect, but it did the job at the time. FastAPI and Sebastian's. Sebastian is amazing in a lot of things, but his capacity to write documentation that is almost a story that almost leads you, is enjoyable to read in the way that documentation normally isn't.
+00:01:29 Visit talkpython.fm/foundershub to apply for free.
 
-00:05:21 Obviously, being adopted by FastAPI like strapped rockets to Pydantic. But I think the other thing that made an enormous difference is that I came to Pydantic as a developer, not a typing academic. And I know there's a lot of debate about whether or not the typing world of Python get moves too far into the world of the theoretical. But I always wanted to be it was always obvious that a string of one two three should be coerced to an int. And there's a lot of people who will say that's not useful, and then there's a million different ways in which they use it and they don't even realize, because you think it's really obvious when you have ID equals one two three in the URL that one two three is an integer. But obviously when you're passing a URL, there's no way to say that is actually definitely an int. So some of the lack of staff, the coercion, I think has been the thing that sets Pydantic apart from some of the other libraries that were perhaps more formally correct, but I would argue less useful in lots of contexts.
+00:01:34 Transcripts for this and all of our episodes are brought to you by Assembly AI.
 
-00:06:17 Well, I also think the more that you work on the web where what you're accepting is out of your control, you want more help and you want more validation and you want more guardrails. People are posting JSON documents of who knows what to you.
+00:01:37 Do you need a great automatic speech-to-text API?
 
-00:06:31 There's the query strings and the URL parameters that are always strings no matter what they're supposed to be and stuff. So yeah, I think Pydantic especially fit well in the API side of things.
+00:01:40 Get human-level accuracy in just a few lines of code.
 
-00:06:41 I also think there's the risk of getting a bit kind of fuzzy and called philosophy about this. There's a value in remembering what it was like to not be that good a developer and making it easy to use for beginners. And there's definitely a world of developers whose primary interest, it feels, is proving how much they know rather than making it easy for people. And Sebastian is even better at this than I am, but I think Pydantic does a good job of it, of being easy to use. And if you're new to developing, you and I know bytes and string and obviously we would laugh to our nose to anyone who got them confused. But the fact is that when you're new, they look like two identical things and one's got to be at the beginning and the other one's got an F at the beginning. And what does any of that mean? Right.
+00:01:43 Visit talkpython.fm/assemblyai.
 
-00:07:27 The fact that you can pass bytes to a string field saves people a lot of head scratching.
+00:01:45 Samuel, welcome back to Talk Python to Me.
 
-00:07:33 Yeah, it certainly has taken on quite a life in the Python space and many different frameworks and libraries are dependent upon it, which is great. Some stats that you put in this article, we're going to talk this plan that we're going to talk about 72,000 public repos that I'm guessing are expressing some kind of dependency on Pydantic and then 10,000 get upstairs. Yeah, that's coming up on eleven. That's pretty amazing.
+00:01:49 It's great to be back.
 
-00:08:00 Yeah. And the download count, I think it was 24,000 a month. Sorry, 24 million a month when I last looked from PyPy. And that doesn't include distributions. I don't think it's distributed with, I think every major Linux distribution. So downloads in those contexts won't be included in that. So, yeah, it's widely adopted and it seems to be getting more widely adopted as time goes on.
+00:01:50 It was, when was it?
 
-00:08:23 Just to back up what you're saying to an army captain out there, it says Pydantic is very easy to onboard. Yeah. Just because it does what you would expect it to, what you would want it to do. So, let's see, one thing I wanted to sort of touch on a little bit before we got into the plan officially is let's just highlight some of the frameworks that are making core use of Pydantic. Obviously, we talked about FastAPI, right? For people who don't know, maybe tell them real quick, what is FastAPI?
+00:01:51 It was in the middle of, it was in COVID, wasn't it?
 
-00:08:52 FastAPI is a amazing web framework that allows you to I think if you scroll down, I think that probably pictures will be better than words, use pydantic and types generally to define what data people can pass to your end points, primarily as per the name for designing for developing APIs and makes it super simple. I think there's an example down somewhere, a bit further down on the home page, maybe there isn't, maybe it's on Getting started. But there we are. Yeah. You see here, whether it be URL parameters like item ID or query parameters, or obviously the body, they're all validated with Pydantic, which cuts out enormous amount of the work of building APIs.
+00:01:52 I seem to remember.
 
-00:09:34 Absolutely. And then there's a couple of things interesting. You have Pydantic models which are Python classes with type A field colon type. So you express the type information about it. And then you can say this API function just takes one of these and it'll automatically pull that data in and validate it using Pydantic through the body. But then also you can express that is the response model or the input model, and it will use open API to actually generate the documentation. So there's all these different ways in which I made better. Yeah.
+00:01:53 It was core COVID, yes.
 
-00:10:06 So the powerful thing about FastAPI is that by defining a relatively small amount here we just defined it as a three line function to define our endpoint. We get JSON schema for the input, so then we get docs build off that and we get obviously docs on the return type. If we annotated it with what's returned, obviously the value. And I can see from your tabs where you're going to go next. You define something in one place and you can then use it for your input and for your return type and then in your database.
+00:01:55 It was just 15 months ago.
 
-00:10:41 Yeah. So this is the most well known example for using it on the API layer, the web layer. But there's also some cool examples of databases, as you pointed out there, right?
+00:01:57 Yeah.
 
-00:10:52 Yeah.
+00:01:58 Yeah, I think it was sometime last year.
 
-00:10:53 It did surprise you when you saw these. You probably have the API stuff in mind, but did the database surprise you?
+00:01:59 Yeah, I was in my attic in the, yeah, I'm now in the office.
 
-00:10:58 It did a bit. I mean, I haven't looked at lots of detail, but it's amazing that these things are coming along and being built and leveraging what Pydantic it can do.
+00:02:02 It's a representative.
 
-00:11:11 I'm not a big Om fan myself, I'm a bit old fashioned. I like to write my sql sorry, I like to write SQL, not my sql.
+00:02:03 Exactly.
 
-00:11:22 So I haven't actually used them, I have to say. But FastAPI use a lot and I've found absolutely amazing. But I can't talk about Beanie or SQL model beyond having had a quick look. Yeah.
+00:02:05 Locked down in the house.
 
-00:11:36 So I just want to give a quick sort of awareness. Shout out to Beanie, which is an Async ODM object document mapper from MongoDB, like an ORM, but there's no R, so B for document based on Motor. So it's pretty cool. It takes the Asynchronous driver from MongoDB. And then Pydantic. You just express your models, your documents as Pydantic models, which map really well because you can have hierarchies of Pydantic classes and models which maps perfectly to document databases. Yeah, this is actually what talk Python Bytes websites are built on, which has been really nice. And then obviously Sebastian Ramirez created SQL model, which is the same idea, but for SQL. Right. It's built on top of SQLAlchemy, but you actually define your classes as Pydantical models and then that finds a way to sort of work with SQLAlchemy to still do the same stuff that it traditionally has done.
+00:02:06 And it's great to have you back.
 
-00:12:29 Yeah, I think it was one of the complaints people had was that they were having to define their data twice. They would have a Pydantical model and then they would have a SQLAlchemy model. And so it's not very surprising in a way that we found a way to combine them into one. Again, I'm not an expert on the internals of SQL model, but the two things look similar enough that at the first pass you would think it would make kind of sense to squish them together.
+00:02:08 We talked about Pydantic back then.
 
-00:12:52 And one interesting thought about this is if you're going to work in SQL model or you're going to work in Beanie or something like that, and you decide, no, I actually want to switch to a relational database, or I want to switch from a relational database over to MongoDB or something like that, if it's all expressed as Pydantic models, how close are you? You know what I mean? It's very little work to sort of make that transition. So it's cool that Pydantic is this.
+00:02:10 Obviously, we're talking about Pydantic now as well.
 
-00:13:15 Kind of like there's a cool project that I was discussing with Adrian, I think it's Garcia yesterday, which is using Pydantic models to define data coming in from already Google, Pub Sub and from AWS SQS and potentially from Redis. So again, it's the same idea that once you define your models in Python, it wouldn't be that hard to switch from AWS to Google or even to like a database type tool like Redis.
+00:02:13 I would say it's grown tremendously since then.
 
-00:13:47 Teddy out in the audience says, we use Data model code generator to generate a Pydantic models from JSON schemas. Are you familiar with that?
+00:02:16 It was already quite popular then.
 
-00:13:54 Yeah.
+00:02:18 Yeah, I think it's, I don't have right now off the top of my head, good metrics on, you
 
-00:13:55 So obviously, just as you can generate a JSON schema from a Pydantic model, there's a third party tool that lets you go the other way and generate Pydantical models. I obviously won't do everything for you, validated and stuff, but it gives you the first start.
+00:02:22 know, insofar as you can quantify the growth of these things.
 
-00:14:09 Let me throw one more out there before we dive into the plan, which is where it goes. How about JSON to Pydantic converter? Have you seen the website?
+00:02:25 I think it, yeah, it's grown a lot, but I think the feeling for me is it's become a lot of,
 
-00:14:18 I did not know that existed until now, but I guess it's using that same tool under the hood. Is it?
+00:02:30 a lot more companies and a lot more people have started to rely on it.
 
-00:14:26 Maybe, I'm not actually sure, I haven't seen it, mentioned it, but it doesn't really say.
+00:02:32 And it's become a kind of core tool that they expect to work in the way you expect pytest
 
-00:14:31 I'd say not because that's not Jason's people, right?
+00:02:37 or Django to work.
 
-00:14:34 No, what you do is you give it an example.
+00:02:38 Not quite perhaps at those levels, but moving in that direction.
 
-00:14:37 That's very cool.
+00:02:41 And yeah, I guess I'm probably jumping the gun, but at the beginning of this year, I was
 
-00:14:38 You give it an example. JSON document till 27. So you give it a JSON document and it will actually, when I first heard about this, well, Hydrantic will already generate JSON. No, the other way, you give it a JSON result and it will generate the data model by looking at and actually, even if you have hierarchical stuff, it will create multiple base model drive classes and all sorts.
+00:02:46 thinking about it and I was obviously super proud of what, of how many people were using
 
-00:15:03 This is pretty sweet right here, this.
+00:02:50 Pydantic and how useful it was being, but I wasn't quite so proud of its internals, which
 
-00:15:04 Thing that's pretty powerful queued whoever built it, I hadn't heard of it.
+00:02:54 is why I started thinking about what it would look like to, to kind of start again.
 
-00:15:08 Yes, and I've thrown massively complicated JSON documents at it and it says like, well, it's going to take eight classes, but here you go and it just writes them all. It's fantastic.
+00:02:59 Cause obviously V2 was an opportunity to, to break stuff.
 
-00:15:20 This portion of Talk Python to Me is brought to you by the compiler podcast from Red Hat. Just like you, I'm a big fan of podcasts and I'm happy to share a new one from a highly respected and open source company, compiler, an original podcast from Red Hat. With more and more of us working from home, it's important to keep our human connection with technology. With compiler, you'll do just that. The compiler podcast unravels industry topics, trends and things you've always wanted to know about tech through interviews with people who know it best. These conversations include answering big questions like what is technical debt? What are hiring managers actually looking for? And do you have to know how to code to get started in open source? I was a guest on Red Hat's previous podcast, command Line Heroes and Compiler follows along in that excellent and polished style we came to expect from that show. I just listened to episode twelve of Compiler how should we handle failure? I really valued their conversation about making space for developers to fail, so that they can learn and grow without fear of making mistakes or taking down the production website. It's a conversation we can all relate to, I'm sure. Listen to an episode of compiler by visiting Talkpython.fm/compiler. The link is in your podcast player's show Notes. You can listen to compiler on Apple podcast, overcast Spotify podcast, or anywhere you listen to your podcast. And yes, of course you could subscribe by just searching for it in your podcast player, but do so by following Talk Python dot FM compiler so that they know that you came from Talk Python to me. My thanks to the compiler podcast for keeping this podcast going strong.
+00:03:02 Not that we haven't broken things in minor releases when we shouldn't have done, but like to formally
 
-00:16:59 Let's talk about the plan. First of all, before we get into the plan, I just want to say well done on this. We covered this on the Python Bytes podcast three or four weeks ago, something like that, and the response was, oh my gosh, this is incredibly detailed, incredibly well thought out. I think somebody audience commented like there are companies that have been created and founded with less thought about the future than that. So yeah, nicely done.
+00:03:06 break things and do it right where it was obviously, I guess, wrong from the beginning.
 
-00:17:25 Thank you. Yeah, I spent a lot of time, quite a python talking about this to people and say talking about little bits of it. There's a lot of it in my brain and Sebastian, who is kind enough to sponsor me, but also obviously is maintaining FastAPI, is kind of asking me what it was going to do and I kept being like, oh, it'll do that thing and it'll do this thing. And I got to the point of realizing, and probably about 70% of issues on Pydantic issue tracker, I reply with don't worry, it'll work in V2. And I realized I got to the point where I really owed the community and answer to some of these questions. In fact, the first bit of feedback I got from it was I'm Dyslexic and I'm quite slow reading and those red time notes never make any sense to me. So I just put ten minutes in at the very beginning and then forgot about it as I extended it and extended it and the first feedback was, great article, but how the hell is anyone reading that in ten minutes? And so I pulled a new number out there.
+00:03:10 The goal I'm sure is not to go out and break things, but sometimes in order to take years
 
-00:18:19 Yeah, it's a 25 minutes reading time, which I think is actually fairly accurate, depending on how thoughtful you think about these various things.
+00:03:15 of, of learning and experience and usage and turn that into the way you think it should
 
-00:18:26 Someone had to have a shout out to one joke on Twitter, someone was like when it said ten minutes, they were like ten minutes to pause, two days to validate, which I thought, oh.
+00:03:20 be, some things may have to break, right?
 
-00:18:36 Yes, well done, very identical. Okay, why do we need this plan? Let's start, I think, stepping back a.
+00:03:22 Yeah. I think that when I first released Pydantic, it wasn't, I've subsequently built projects.
 
-00:18:46 Bit, most projects, once they are and in widespread use, people don't sit down and tear them to pieces, right? They mostly stick with the same kind of wart. Some people polish the edges, but there's not like from scratch rebuilds. And often when there is from scratch rebuilds, it offends a lot of people because they don't know what's happening, and the cost of migrating is quite high and they're turned off. But I thought that there was enough wrong with the internals of Python and there was enough opportunity to do stuff way better, and there was enough reason to do that, because there are enough people using it that it was worth me sitting down and spending six months. But we've passed six months building it. Right.
+00:03:26 I thought we're going to be really popular and there's be, you know, varied in their success,
 
-00:19:27 And like I said, there was one of the not stats, but one of my observations was looking at. So there was a stack overflow survey of what technology people are using and FastAPI had I don't know what percentage, but like 6% market share, right. And then below it they were talking about clouds and which clouds have what market share. Now. If you assume the same number of people are using web frameworks as you use in clouds. Which is an approximation but not a mad approximation. Then you would say the FastAPI and therefore Pydantic have a bigger market share than Oracle and IBM combined in slightly different markets and obviously without the revenue to go with it. But it makes you realize that getting this right has a massive effect on lots of people. And secondly, that I don't have a clue how many times Pydantic validates data a day between Netflix and Facebook and Amazon and Microsoft and everyone else, but it's a high number. Right. And so the environmental impact of making Pydantic ten times faster and therefore consume ten times less CO2 to do a validation, I suspect, not trivial, it's virtually impossible to get an accurate number, but something real.
+00:03:30 but I literally built Pydantic for me and put it on, you know, put it on PyPy and then put it on
 
-00:20:40 That's a really interesting way to think of it with almost having a responsibility to lessen the compute load. And when you're running your own website and it does a couple of users an hour or whatever, like, who cares, right. But when you're talking a million requests a second or whatever it is across all the different people using all the different frameworks across right.
+00:03:36 Hacker News to see what would happen. But because of that, I thought about the work, there was some
 
-00:21:01 That actually, I suspect, think about a web server. Assuming your database is doing all of the heavy lifting that it should be doing, what's the next biggest thing? Well, there's TLS termination, that's expensive, but again, that's done by some optimized C Nginx or probably outside your code completely if you're using a platform provider. What's the next biggest thing that your code is doing CPU wise? Well, it's data validation, basically.
+00:03:40 esoteric design decisions that were the stuff I wanted, but in reflect on reflection, they're not
 
-00:21:28 Yeah. Conversion, serialization deserialization validation and all that lives in the Pydantic realm. Also, I talked about two frameworks, and I know there are others like Pydastic for Elasticsearch, where the validation and the data exchange is the database exchange as well. Right.
+00:03:45 right for a popular library used by lots of people. strictness being, I guess, the most obvious
 
-00:21:48 That could be very important if you make this much faster. I don't know the numbers for Beanie precisely, but I know that a lot of those ORM ODMs if you go and query and get 10,000 rows back, the vast majority of that time is, how do I construct and fill out 10,000 objects in memory? Right. And if you make Pydantic faster and Pydantic is that object well, there's huge.
+00:03:49 example, but a bunch of other stuff. talk about strictness. We'll talk about a lot of these
 
-00:22:13 More than just and I think the other thing to say is we've talked about web applications from FastAPI being the kind of most high profile user of Pydantic. We talk about that a lot. But a lot of It's usage, if you look at stuff that explosion AI are doing, it's in data science and AI, and it's exactly that. It's like data sanitization into and out of models or into and out of databases. And there you are talking about really massive amounts of data.
+00:03:53 changes, but why do you think it was popular? I think it came along at the right time.
 
-00:22:40 Absolutely. All right, let's get into it. So we talked about the plan.
+00:03:58 I think it came along when tight pins were just getting popular in Python. They had been around
 
-00:22:45 How about the roadmap, the timeline, things like that.
+00:04:02 in some guys for like ever, right? You could do something with them in two seven, but they were
 
-00:22:48 So we're behind a bit, but we're not too far behind. I released version 0.1 of Pydantic Core yesterday, so that I'll come to what that means in a minute. But that's the first step of the plan, I think. I've either closed or merged 25 PR today, trying to get through Pydantic and get V1.10, so I'm not halfway through some bit of the way through two, to be precise. Right.
+00:04:06 just beginning to become a thing. my pie was coming out, but I suppose I was not the only person
 
-00:23:16 What are you talking about in the plan? As you said, there's a bunch of open prs a bunch of open issues. Let's merge in as much of that as possible to sort of capture it and then move forward in this rewrite that we'll talk about.
+00:04:11 who, who was frustrated by the idea that they didn't have teeth that they were there, but,
 
-00:23:30 Right, yeah, exactly. So get 1.10 out, which is the same basic code base with a bunch more stuff added. Because I had a job and was really busy earlier in the year, I kind of dropped the ball on reviewing those PRS and they kind of got out of control.
+00:04:15 but it seemed kind of weird, right? If you came from a, a rust or a C++ or a C background,
 
-00:23:44 Get them dealt with and then get to a kind of clean slate and then make the big move from the v1.10 to v2.
+00:04:22 you know, types are everything. And the idea that they were there, but they meant nothing
 
-00:23:54 You do talk about there being breaking changes. We'll get into some specific details there. But probably the most relevant to this entire rewrite is this thing you're calling the Pydantic dash core.
+00:04:25 was a bit of an anathema to me. And I just started off with a, can I, can I make them work a bit? And
 
-00:24:05 Yeah. So this started off as a kind of small experiment with me saying what would kind of thought experiment, what would Pydantic look like if it was implemented in Rust? What would its internals look like if they were implemented in Rust? And that experiment effectively worked. And sure enough, Pydantic Core is written in Rust and does all of the core data validation and it will do a lot of serialization I haven't built that yet, but that I intend to build into Rust. So there's an awful lot that will stay in Python.
+00:04:30 that was five years ago and here we are.
 
-00:24:37 But yeah, Pydantic Core is written in Rust and uses the amazing PyO3 library to bindings to write Rust code that's pullable from Python, maybe tell
+00:04:32 Yeah. I agree that coming along at the right time was probably part of the magic. I think
 
-00:24:50 To people about PyO3 real quick because this is how you write the code in Rust but then expose it to the Rust of the Python aspects.
+00:04:37 there was just some, some libraries and some frameworks who decided these types should have
 
-00:24:59 Of right, yeah, PyO3. I'm not a good C developer and I'm going to use the wrong terminology, I didn't be shouted out. But it takes the Python Api for C. So how you would write C codes to be used from Python and effectively makes that available in Rust. Rust has great interrupt with C and so it basically takes all those types and exposes them all in a type safe way that you can then consume. So if we stop here and we look at summer's string right, where PyO3 is taking care of all the hard work of you passing two INTs from Python into this function, converting them to Usize then the logic inside is pure Rust is adding to Usizes and converting the result to a string. And then again, PyO3 is taking care of returning it, and in particular using this Py result type in Rust without going too far down the rabbit hole of how Rust works. Rust has an amazing model for how to deal with errors that basically stops you from ever ignoring an exception or what they call an error. And that is these results which are basically they would call it an enum. But from Python world, think of it like a union, which is either okay, it went well, or error, it was an error. And so you have to return an okay or you have to return an error. And when you consume that in Rust, you have to have to deal with the error case. It won't let you ignore it.
+00:04:44 meaning. Like you said, there was a couple of web frameworks, obviously most notably FastAPI,
 
-00:26:23 But that maps really nicely into Python exceptions. So here we're returning okay, so we'll get a result, but if we use Py error and return that, then you would get an exception when you call the function interesting. So the powerful thing about Rust, obviously it's faster. Everyone knows that. And it does mean the Pydantic core is much faster than Pydantic and Pydantic Two will be much faster than Pydantic One. I think it's probably quite rare to see a library in a version update get significantly faster, let alone like ten to 50 times faster as Pydantic 2 will be. So that's been achieved. But there are other advantages that you get which are perhaps less obvious.
+00:04:49 but there were other ones as well who are taking the ideas of here's some type definitions and Python.
 
-00:27:02 One of them is like recursion without a performance penalty. That means that Pydantic core data validation is truly recursive all the way down and allows you to build effectively any crazy combination of different validators into each other. Because validators are just basically pile of think of them as classes in Python. They're not classes in Rust, but that call each other recursively all the way down.
+00:04:56 And what could we, what could we do with that? Can we actually make that mean something to help
 
-00:27:29 And one of the other advantages is like tiny functions which. Allow you to split code up and make it easier to edit one thing.
+00:05:00 the developer experience? I think that's true. And I, you know, I guess I got some stuff right in doing,
 
-00:27:36 Without breaking other things, because it's not entirely obvious to people coming from languages like C, C#, Rust and so on, that just calling a function itself is pretty expensive, relatively speaking, in Python.
+00:05:04 doing documentation quite well, quite early on. I know that like it wasn't perfect, but you know,
 
-00:27:49 Yeah, I'm on the wing of people who would say, if you're worrying about the overhead of calling a function, you're probably not writing the right language most of the time. Right? Yes, it's a big number, but it's a tiny number in most contexts. But I think there's definitely a world in which end users, people building web apps in Python, definitely for companies should and will be using Python, but the libraries that underpin that, that they use big value. Value is a complex term, open source in itself, but let's use the word value and ignore what it might mean in implementing those libraries. The second step down. So the Pydantic, the http framework in Rust, or I think in Rust basically, because there are three libraries that have real bindings for Python, C. I don't want to be writing lots of C, and I don't think many people do.
+00:05:09 it did the job at the time FastAPI and Sebastian's, you know, Sebastian's amazing in lots of things,
 
-00:28:44 Well, I'll say that rust, obviously. And then there's C++ and boost. And I think the developers of Pi o Three came from using Boost and they basically built PyO3 to be better.
+00:05:14 but his, his capacity to write documentation that is almost a story that almost leads you,
 
-00:28:57 I've used Boost a bit, but I found PyO3 to be really impressive.
+00:05:18 you know, it's enjoyable to read in the way that documentation normally isn't, obviously
 
-00:29:00 I think your comment about should you be worrying about those loops is super relevant. There's certain libraries where Pydantic is certainly among them, it's used so much that these little tiny portions, probably just a very small slice of the code that is applicable, is actually a pretty significant hit in terms of overall performance. You think, like SQLAlchemy and the serialization deserialization bit. Right. That's a small part of the library, but that's something that just is omnipresent. Right. And this internal validation and stuff that you're thinking about doing in PyO3, or combine it with PyO3, it makes a big difference, even if it's only a small, relatively small portion of the part that people perceive it to be.
+00:05:22 yeah. Being adopted by FastAPI, like strapped rockets to Pydantic. But I think the other thing that
 
-00:29:41 Exactly. And coming back to my environmental point, the environment doesn't care if you take a flight or I take a flight or I miss a flight, but obviously the environment does care if we can reduce the number of flights taken worldwide by 10%. And because of Pydantic widespread use. That's why I'm saying getting Pydantic to be 10% faster, you probably won't notice, but overall we will hopefully make computation in the cloud a tiny bit faster.
+00:05:27 made an enormous difference is that I came to Pydantic as a developer, not a, not a typing
 
-00:30:07 Absolutely. Question from the audience. Magnus says, will you be able to write data validators in Rust for Pydantic too?
+00:05:34 academic. And I know there's a lot of debate about whether or not the typing world of Python get moves
 
-00:30:14 That is a difficult and complex question. There is an open issue on Python, calls issue tracker about it, and I have proposed a way that it might be possible.
+00:05:38 too far into the world of, of like the theoretical, but I always wanted it for me, it was always obvious
 
-00:30:27 The story of shared libraries DLLs in Rust is not quite as pretty as it could be. And I really don't want to build basically another PyPy of sharing dependencies beyond PyPy, where you're like, okay, you need to install Pydantic from PyPI, and then you need to install this other package, perhaps from PyPi, and then you need to use this other code to link the DLL so that we can do dynamically link those libraries. That sounds like an enormous maintenance overhead for me and for people doing it, because people find it hard enough to share code and use code from PyPI.
+00:05:45 that a string of one, two, three should be coerced to an int. And there's a lot of people who will say
 
-00:31:02 Yeah. How do you deploy that and how do you get it compiled?
+00:05:50 that's not useful. And then there's a million different ways in which they use it. And they don't even
 
-00:31:06 So, very briefly, my theory for an answer is actually, I'm not going to go down that rabbit hole right now, but there's an issue that I think explains it and I'm happy to talk about it there.
+00:05:54 realize because you think it's really obvious when you have ID equals one, two, three in a URL,
 
-00:31:16 Now you don't have to live with the consequences of choosing.
+00:05:58 that that one, two, three is, is an integer. But obviously when you're passing a URL, there's,
 
-00:31:19 That's the other thing, right. That like someone comes along and has a really bright idea and in ten years'time, I'm still answering questions about how to make it work.
+00:06:02 there's no, no way to say that is actually definitely an int. So some of the, some of the lax stuff,
 
-00:31:26 Yes, exactly. Okay. You already mentioned the performance, but just working away through the plan here, the next step is to say, hey, the benchmarks indicated as four to 50 times faster, and in general, 17 x is kind of what you're guessing for something reasonable.
+00:06:08 the coercion, I think has been the thing that sets Pydantic apart from some of the other libraries that
 
-00:31:41 Not guessing as in just the benchmarks on Pydantic Core that are run on every commit. A lot of them have alternate equivalents in 1.9%. And so that's the speed up that we're seeing.
+00:06:12 were perhaps more formally correct, but I would argue less useful in lots of contexts.
 
-00:31:57 There are a few more optimizations. I can make it'll get a tiny bit there, I guess, where it's wrapped in Pydantic in Python, but a tiny amount. So, yeah, I think those are realistic numbers.
+00:06:17 Well, I also think the more that you work on the web, where what you're accepting is out of your
 
-00:32:09 Yeah, that's a huge difference. Now, you say when validating a model, how does that performance compared to creating a Pydantic class instance?
+00:06:23 control, you want more help and you want more validation and you want more guardrails.
 
-00:32:20 How much faster does like using it in Python get versus 17 times faster doing the validation?
+00:06:27 People are posting JSON documents of who knows what to you there. There's the query strings and the URL
 
-00:32:27 You should get your model back. So that is going from a Python object, a Python dict, let's say, of your input data to an instantiated class instance of your model.
+00:06:33 parameters that are always strings, no matter what they're supposed to be and stuff. So yeah, I think
 
-00:32:40 Next up is strict mode. One of the things I really like about Pydantic is how it will take data. That could be the right thing, but it's not actually the right thing. Like you said, the string, one, two, three. But you really want an integer, the actual number one, two, three. And it just says, this is what we would do if I had to do it myself, I would parse the string and convert it over and so on. That just happens. But some people don't want this clever behavior, right?
+00:06:38 Pydantic especially fit well in the API side of things.
 
-00:33:09 Yeah, exactly. I think that there are legitimate cases for that. I think there are some people who are wanting these cases. I don't think the mentality is just a bit, but I totally get why in some context, it's valuable and so it's built in.
+00:06:41 I also think there's a, there's the risk of getting a bit kind of like fuzzy and cod philosophy about this.
 
-00:33:23 You have that switch from the word go. One of the really cool things that this solves, not by mistake but as a side effect is validating unions. We basically run through every member of the union in strict mode first and try and validate in strict mode and then validate in lax mode.
+00:06:47 There's a like, there's a value in remembering what it was like to not be that good a developer and
 
-00:33:44 And therefore, for example, if you had a union of int and string and then you passed it the string one two, three, it wouldn't get converted to int as it would do historically in Pydantic.
+00:06:52 making it easy to use for beginners. And there's definitely a world of developers who,
 
-00:33:59 Pydantic now has smart union but it's not perfect. But this solves some edge cases like that and some much more confusing ones than that.
+00:06:58 who want to, whose primary interest it feels is proving how much they know rather than making it
 
-00:34:07 Nice. Related to that is I would say is this conversion table that you're putting out, right?
+00:07:04 easy for people. And Sebastian is even better at this than I am, but I think Pydantic does a good job
 
-00:34:12 Yeah. So there's two things. There's this like, I kind of call it cod philosophy the other day, this rule for when you would convert something and when you wouldn't. And actually it's come out to be really useful in us thinking about when we shouldn't convert things because to take an example, we have been in Pydantic V1, you can coerce a set to a list and that mostly seems to make sense and it's something that you might want to do in lots of context but actually you go up a bit. The single and intuitive means we can't convert a set to a list because you don't always get the same output when you convert to a list because the order of things can change. And so using this rule has been helpful in trying to be more consistent about what we convert. But I'm the first to put my hand up and say this rule is not perfect, there are always going to have to be exceptions to it and at the bottom of this blog post, but then properly on the docs completed will be full on table of everything and what gets converted and what doesn't in max mode. So you can look it up rather than having to guess.
+00:07:09 of it, of being easy to use. And if you're new to developing, you know, you and I know that I've seen
 
-00:35:17 This portion of talk python to me is brought to you by Microsoft for Startups Founders Hub, starting a business is hard. By some estimates, over 90% of startups will go out of business in just their first year. With that in mind, Microsoft for Startups set out to understand what startups need to be successful and to create a digital platform to help them overcome those challenges. Microsoft for startups founders. Hub was born. Founders Hub provides all founders at any stage with free resources to solve their startup challenges. The platform provides technology benefits, access to expert guidance and skilled resources, mentorship and networking connections and much more. Unlike others in the industry, Microsoft for Startups Founders Hub doesn't require startups to be investor backed or third party validated to participate. Founders Hub is truly open to all. So what do you get if you join them? You speed up your development with free access to GitHub and Microsoft cloud computing resources, and the ability to unlock more credits over time. To help your startup innovate, founders, hub is partnering with innovative companies like OpenAI, a global leader in AI research and development, to provide exclusive benefits and discounts through Microsoft. For startups founders, hub becoming a founder is no longer about who you know. You'll have access to their mentorship network, giving you a pool of hundreds of mentors across a range of disciplines and areas like idea validation, fundraising, management and coaching, sales and marketing, as well as specific technical stress points. You'll be able to book a one on one meeting with the mentors, many of whom are former founders themselves. Make your idea a reality today with a critical support you'll get from founder Hub. To join the program, just visit talkpython.FM/foundershub all one word the links in your show notes. Thank you to Microsoft for supporting the show.
+00:07:12 bytes and string, and obviously we would, you know, laugh through our nose at anyone who got them
 
-00:37:07 Before we move off strict mode, let's just have some kind things to say about Pydantics, as it's one of the most useful packages ever. Congrats. That's really cool. Magnus.
+00:07:16 confused. But the fact is that when you're new, they look like two identical things and one's got a B at the
 
-00:37:18 Magnus, is strict mode a global or a per model setting or a usage? When you actually do the parsing, where do you get this?
+00:07:21 beginning and the other one's got an F at the beginning. And what's the, what does any of that
 
-00:37:27 It's actually more powerful than that. It is either on a field or on an entire model, and you can set it at validation time, so you can configure it in config and configure it on a particular field, and then you can override it when you're effectively calling the validator.
+00:07:24 mean? Right? Like, yeah. And so, ignore that part. Yeah.
 
-00:37:45 I see. Maybe there's some situation where you're loading old bad data or something and you want to say, go ahead and do this, but in the future we're not accepting it. Something like that.
+00:07:26 Right. And so the fact that, that you can pass bytes to us, to a string field saves people a lot of
 
-00:37:54 Right. And actually one of the reasons I build up was to use it in the union because we go through the validations the first time at validation time, insisting on strict mode. But yes, one of the other cases which will come up somewhere down here is we now have instance, or like sudo is instance method, which confirms whether data matches our model, and there we automatically use strict mode, because for me, it's kind of obvious that if you're doing his instance, you want that to be checking out, to be straight.
+00:07:32 head scratching.
 
-00:38:22 Moving on to the next part of the plan is built in JSON support.
+00:07:32 Yeah. It certainly has taken on a life, quite, quite a life in the Python space and many,
 
-00:38:27 Yes.
+00:07:38 many different frameworks and libraries are depending upon it, which is great. Some stats
 
-00:38:27 What are we talking about here?
+00:07:43 that you put in this article, we're going to talk, or this plan that we're going to talk about,
 
-00:38:28 Yeah, so we're talking about parsing JSON in rust and passing that JSON object straight internally within the library to the validation to then do the validation. One of the big advantages that has is it solves the strict mode problem. So if you looked above, let's say we have the string of a date, let's say an ISO 8601 date of month day in JSON, it's obvious that that should be validated as a date. But if you pass that in from a Python object, it's not valid in strict mode. Right. That doesn't look anything like a date. The problem if we had Strict Mode before, without the built in JSON validation, is you can't pass JSON with a date in it because there's no data.
+00:07:47 it's for 72,000 public repos that I'm guessing are expressing some kind of dependency on.
 
-00:39:10 There'S no scenario where directly going from JSON works. Because JSON, for odd reasons, has no concept.
+00:07:53 Yeah.
 
-00:39:17 It doesn't have that, but it also doesn't have sets or bites or loads of stuff that you want to use in price.
+00:07:54 And then 10,000 GitHub stars. Yeah. That's coming up on 11. That's, that's pretty amazing.
 
-00:39:22 One of the things that built in Json Sport gives us, as well as obviously a performance premium, is that we can be sensible and say ISO 8601 date is a valid date in Strict Mode if it's coming from Jason, but not from Python.
+00:07:59 And the, yeah. And the download count, I think it was 24,000 when I, a month to, sorry,
 
-00:39:39 Okay?
+00:08:04 24 million a month when I last looked from, from PyPy. And that doesn't include distributions.
 
-00:39:40 Yeah.
+00:08:09 Pydantic is distributed with, I think every major Linux distribution. So downloads in those contexts
 
-00:39:40 And also it just makes it faster, right? Because probably parsing JSON and Rust is pretty quick.
+00:08:16 won't, won't be included in that. So yeah, it's, it's like, it's being, it's widely adopted and it
 
-00:39:46 It's fast.
+00:08:21 seems to be getting more widely adopted as, as time goes on.
 
-00:39:48 But also we don't have to create a python dict and a python list and all those python types. Creating Python strings has some significant overhead compared to creating a string in Rust.
+00:08:23 Just to back up what you're saying to an army captain out there says, Pydantic is very easy
 
-00:40:02 And in future, once I've got V2 out, I intend to build a custom JSON parser, which is even faster and will give us line numbers in errors, which will be really nice because we don't have that now. And we can't do that in V2 because Json, which I'm using, doesn't provide line numbers, but I hope in V 2.1 or something, we will be able to add that.
+00:08:28 to onboard. Yeah. It's just because it, it does what you would expect it to do, what you would want
 
-00:40:21 Amazing. Really quick on the Strict stuff as well. Minaj asks, what about strict? And as a type, is it going to be still around?
+00:08:32 it to do. So let's see. One thing I wanted to sort of touch on a little bit before we got into the plan
 
-00:40:29 That can stay around, because that'll be effectively so it's probably worth this stage for people if you could just go to Pydantic Repo and we'll have a really brief look at what it looks like.
+00:08:41 officially is let's just highlight some of the frameworks that are making core use of Pydantic.
 
-00:40:43 Yes. And then just in the README, you'll see an example. So you see here, right?
+00:08:46 Obviously we talked about FastAPI, right? For people who don't know, maybe tell them real quick,
 
-00:40:51 You don't need to go into all the details of it, but the way that we define the model in Pydantic Core is with this kind of like, micro schema, which is defining, in this case, a type dictator with a bunch of fields in it. And here on a particular field, we could say Strict true. So let's say on the Int field, we could say Strict true, and that field will be Strict while the rest isn't. So, obviously, what Strict Int, the Pydantic type, will do when it becomes a schema, it will set straight through on that particular field.
+00:08:51 what is FastAPI? FastAPI is a amazing web framework that allows you to, I think if you
 
-00:41:20 Got it. Effectively is a synonym for the more general way to say, use Strict Mode, but only on this field, right?
+00:08:56 scroll down, I think that probably pictures will be better than words. you use Pydantic and,
 
-00:41:27 Yeah, exactly. It's just a market effectively set Strict.
+00:09:02 and types generally to define what, what data people can pass to your, to your endpoints primarily as
 
-00:41:31 Yeah, exactly. So in Pydantic, you can say, I have an age, which is an int, and you can set it to a default value, like zero, or you could say it's optional, set it to none. But you can also set it to a field, right, where you have additional information. Is that how you set Strict mode? You set it to a field and say Strict mode equals True or something like that?
+00:09:07 per the name for designing, for developing APIs. and yeah, it makes it super simple. I think there's
 
-00:41:50 It's not built yet, so it's up for debate. But yeah, effectively, Strict will be assessing on field and obviously on config as well. And there will be these types which basically contain some extra information, like Strict int. We'll just set that straight to True for that field.
+00:09:12 an example down, down somewhere a bit further down on the, on the homepage. maybe there isn't,
 
-00:42:04 Right? Exactly. And for people who are not aware, config is an inner class of the Pydantic model that has a bunch of settings you can set, right?
+00:09:16 maybe it's on getting started, but, there we are. yeah, you see here, whether it be URL
 
-00:42:12 Yes. And people do some unholy stuff of, like, modifying the base version of Config and therefore doing global stuff, which I've never done. People seem to make it work. I don't know. It'll work in V2? I don't promise it will.
+00:09:21 parameters like, item ID, or query parameters, or obviously the body, they're all
 
-00:42:23 Yeah, absolutely.
+00:09:28 validated with, with Pydantic, which like cuts out enormous amount of the work of building, building
 
-00:42:25 One of the things that's interesting with this Pydantic core is now this is a dependency of Pydantic. Right. And people could use it directly if they wanted. Right. Like validating without a model, you don't have to define a class or any of those things 100%.
+00:09:33 APIs. Absolutely. And then there's a couple of things that are interesting. You have Pydantic
 
-00:42:38 You don't have to find the class. If we look at the example we were using that we didn't have a class, we were just validating to a type DICT so we would get back a DICT, which obviously means we have full support for typing type DICT type. It's also a little bit faster than creating a model because we don't have to create the class instance, we just create the DICT that goes inside it.
+00:09:37 models, which are Python classes with type, you know, a field colon type. So you express the type
 
-00:43:02 Yeah, people could use it without the only concern, obviously, is whether or not obviously, it's now compiled. And you have to be able to run that Rust code to be able to use Pydantic. With the 0.1 release of Pydantic Core yesterday, we have, I think off the top of my head, 56 different binaries that we release for different environments.
+00:09:42 information about it. And then you can say this API function just takes one of these and it'll
 
-00:43:23 The team of the guys at PyO3 and Matrin, which is their way of building, have been super helpful, and we'll continue to support, so it doesn't worry me. We already have a full Pydantic core set of unit tests running in the browser via WebAssembly. So, obviously, Python moving into the browser with Web assembly is like the big new thing. I'm really excited about it. I wanted Python to work. And so Hood, who's one of the Pyodide maintainers I met a PyCon, he's been super helpful, actually, with Pythonic core in general, but particularly with getting it to work. And at the risk of running a live demo, if you just go back to Pydantic core, I know it's slightly changing subject, but I have to show you that because it makes me really excited. We go up and you go into WASM Preview, which is one of the directories preview. Okay.
+00:09:48 automatically pull that data in and validate it using Pydantic through like the body. But then also
 
-00:44:14 Index no, if you click here, which just basically renders that index file. I hope it works.
+00:09:53 you can express that that is the response model or the input model, and it'll use open API to actually
 
-00:44:22 It's got to work.
+00:10:01 generate the documentation. So there's all these different ways in which FastAPIs made better.
 
-00:44:24 Is it downloading the binary, downloading all the units sets, extracting them in Python and running the full test suite in the browser.
+00:10:05 Yeah. So the powerful thing about FastAPI is that by defining a relatively small amount here,
 
-00:44:33 Let me try it one more time. Do it a second time.
+00:10:12 we just defined it as like three line function to define our, our endpoint, we get JSON schema for,
 
-00:44:35 Yeah.
+00:10:17 for the input we get, so then we get docs built off, off that. when we get obviously docs on the
 
-00:44:36 So what we're seeing, if you click on this link, which I'll put in the show notes, is it downloads the CPython runtime and WebAssembly based on Piodide, I'm guessing.
+00:10:23 return type, if we, if we annotated it with, with what's returned. so yeah, from,
 
-00:44:47 Then it downloads the archive, zip sends that to Python. Obviously, we're running full CPython in the browser, so we can use the Zip package to extract Zip, extract that into the virtual file system that inscription gives us. Then we install the WASM 32 wheel. We basically do pip install while micropip, which is the way of installing stuff. And then we just call Py tests and off it goes and it runs the test.
+00:10:29 and obviously the value and I can see from your, from your tabs where you're going to go next,
 
-00:45:15 See the test come by standard colorize. Py test output 1465. Test pass in 5 seconds. Pretty fantastic.
+00:10:34 it's like you define something in one place and you can then use it for your input and for your
 
-00:45:24 So it is a bit slower this than full CPython, but I'm still really stoked for what this is going to mean to the future of Python and particularly to stuff like the context where you might use pydantic of data processing and stuff. I don't think Python is going to replace React, and I think it's a bit daft of people to suggest it will, because that's just going to lead to disappointment. But in context like this, it's going to be super valuable. One of the things I'm really looking forward to is Pydantic 2 documentation. Every single example is going to be executable. So you can edit it and you can press run right inside the browser, which I think should help a lot.
+00:10:38 return type and then in your database. Yeah. And so yeah, here's the, this is the most well-known
 
-00:45:58 Have you been tracking pyscript?
+00:10:44 example for using it on the API layer, the web layer, but there's also some cool examples of databases
 
-00:46:00 Yeah, I have been tracking pyscript.
+00:10:50 as you pointed out there, right? Yeah. So did this surprise you when you saw these? I mean,
 
-00:46:03 It's very cool. It's wrapping Pyodide, which is where all genius work is going on. I'm using Pyodide directly and I think I can continue to do that. But yeah, it's providing a bit of a super helpful wrapper for those who need a bit more help and simple as a script tag.
+00:10:55 you probably had the API stuff in mind, but did the database surprise you? It did a bit. I mean,
 
-00:46:22 Question from David out in the audience asks, with at least two year projects switching to Rust, Pydantic and Watch files, do you see it as a general trend in the Python ecosystem? In things like Py Script, which I just pulled up?
+00:10:59 I, I like, I haven't looked at Beanie in lots of detail, but like, yeah, it's, it's, it's like,
 
-00:46:34 I have a third one actually, RTML, which is a wrapper around the Rust Taml library, which is a bit less necessary now when there is better tumble support in Python. But a couple of years ago, when the main tunnel package was not working for me, I wrapped that. Yes, I do.
+00:11:04 yeah, it's amazing that these things are coming along and being built and, leveraging, like,
 
-00:46:48 I was saying earlier that I think lots of the low level tools should be written in Rust. There is a massive space for someone to go out and build a raging fast ASGI framework in Rust and obviously use a Rust web framework and just provide ASGI interface. I'm looking forward to someone doing that to replace the likes of your vehicle. Not that new vehicle is great, it uses watch files and facts, not to criticize them, but there are a bunch of low level stuff that my performance matters, which totally and I think should and will end up being more in Rust.
+00:11:09 yeah, leveraging what Pydantic can do. I'm not a big ORM fan myself. I'm a bit old fashioned.
 
-00:47:25 You're suggesting something like what you have for Flask, but everything is Rust except for just your view methods happen to be Python. And click that together with PyO3.
+00:11:15 I like to write my SQL. not, sorry. I like to write SQL, not my SQL.
 
-00:47:35 Or something like that, that's the ultimate place to go to. I think that the place to start would be. So we have WSGI, which many of you will hear of, which Flask and Django run on. We have ASGI, which is the Async equivalent, which is basically it's great because it means that to build a web framework, you don't have to deal with Http, you deal with A dict, which is basically got fields and body and stuff like that. Right. And some function to get the rest of the body in the Async case. And that's what we have now. And we have Starlette and new vehicles which are both built by Encode and they're both great, but they have a separation by using this consistent protocol in between and that allows really cool innovation on both sides. My suggestion is we don't have to get rid of rid of the style It or the FastAPI or that level, but we could do lots of the low level Http passing in Rust before I get shouted down. I'm sure that your vehicle and other such libraries are in turn using some optimized for passing some of the Http requests. So I don't have a number for the speed up.
+00:11:22 so I haven't actually used, used them. I have to say, but FastAPI I've used a lot and I've,
 
-00:48:39 Right, okay. But yeah, that's a very interesting idea. One thing I did want to sort of touch on here is you talk about how there's not going to be a pure Python implementation of the Pydantic core because it's already this complex specialized thing in Rust and why do it again in Python just so there might be some edge case of where it'll run.
+00:11:26 I've found absolutely amazing, but I, I, I won't, can't talk about, Beanie or SQL model beyond,
 
-00:49:00 Talk about me. The platforms really quick that's supported for the WebAssembly one we just spoke about, which is fantastic, and I think that's going to open up a lot of possibilities the more stuff we have in a WebAssembly. But there shouldn't be a big problem with this. Right.
+00:11:32 beyond having had a quick, quick look. Yeah. So I just want to give a quick sort of,
 
-00:49:12 I think with what we have there, we've covered the 99% we're probably into the 99.9% of platforms covered where people actually want to use this. The only place where I know that there's a slight challenge is on Raspberry Pi, where the normal install of Raspberry or whatever it's called, uses their own wheelhouse effectively for installing wheels which doesn't yet support build of Rust. Sure it will one day, and you can just tell it to use PyPI and it will work again. This is the kind of thing where having built watch files and distributed that I've worked through a lot of these problems and I'm pretty confident we're not going to find some really important framework. So really important environment where it's just not going to work. And again, as more packages adopt Rust, we'll smooth out those problems, we'll learn from them, and we'll be able to fix the edge cases.
+00:11:38 awareness shout out to Beanie, which is an async ODM object document mapper from MongoDB,
 
-00:50:02 One benefit of that is previously Pydantic itself had some Cython and other things where it needed to be faster. But because now it can just use the pydantic core, what's left over is Pure Python, right?
+00:11:44 like an ORM, but there's no R. So B for document based on, on motor. So it's pretty cool. It takes
 
-00:50:16 Right. And one of the big problems, well, there were two problems with that. It made the development process a bit slow because we basically took vanilla Python, we compiled it with Cython and we got a kind of 50% speed up and we have to do some slightly weird things. So occasionally you have to return union of just string to prevent Cython from casting that string to a later string and losing substrings, stuff like that. Some weird edge cases that bite people occasionally.
+00:11:49 the asynchronous driver from MongoDB and then Pydantic. You just express your models,
 
-00:50:40 But the biggest problem is that that means that the Pydantic binaries are massive. Because Cython compiled versions of Python codes get really big. And obviously moving the performance critical bit into Pydantic core gets rid of that concern and financing itself becomes a Pure Python package. Easier to hack on, CI will run faster, whole process should be sped up and it will be much smaller.
+00:11:55 your documents as Pydantic models, which map really well because you can have hierarchies of
 
-00:51:03 Let's go. I jumped around because I didn't want to talk about this compiled stuff, right. You'll just get that as a wheel.
+00:12:01 Pydantic classes and models, which maps perfectly to document databases. So yeah, this is actually
 
-00:51:09 Almost everybody, they won't really know or care, right? They just pip install it. It doesn't matter that it's Rust, it just downloads as a binary, right?
+00:12:06 what Talk Python, the Python Bytes websites are built on, which has been really nice. And then
+
+00:12:11 obviously Sebastian Ramirez created SQL model, which is the same idea, but for SQL, right? It's built on
+
+00:12:18 top of SQLAlchemy, but you actually define your classes as Pydantic models. And then that finds a
+
+00:12:24 way to sort of work with SQLAlchemy to still do the same stuff that it traditionally has done. So.
+
+00:12:29 Yeah. I think there was one of the complaint, one of the complaints people had was that I,
+
+00:12:32 they were having to define their data twice. They would have a Pydantic model and then they would
+
+00:12:35 have a SQLAlchemy model. And so, yeah, it's, it's not very surprising in a way that we found a way to,
+
+00:12:40 to combine them into one. again, I, I'm not, I'm not an expert on the internals of SQL model,
+
+00:12:45 but it, yeah, the two things look similar enough that like at a, at a first pass, you would think
+
+00:12:49 it would make kind of sense to squish them together.
+
+00:12:51 And one interesting thought about this is if you're going to work in SQL model, or you're
+
+00:12:57 going to work in Beanie or something like that, and you decide, no, I actually want to switch to a
+
+00:13:01 relational database, or I want to switch from a relational database over to MongoDB or something
+
+00:13:06 like that. If it's all expressed as Pydantic models, like how close are you? You know what I mean? Like
+
+00:13:11 it's, it's, it's very little work to sort of make that transition. So it's, it's cool that Pydantic
+
+00:13:15 is this kind of like, and there's a, that's a cool project. There's a cool project that I was
+
+00:13:19 discussing with, Adrian, I think it's Garcia yesterday, which is using Pydantic models to define,
+
+00:13:25 data coming in from already, Google, Google PubSub and from AWS SQS and potentially from
+
+00:13:36 Redis. So again, it's the same idea that like, once you define your models in Python, it wouldn't be that
+
+00:13:41 hard to switch from AWS to, to Google or even to like a database type, tool like Redis.
+
+00:13:47 Teddy out in the audience says, we use data model code generator to generate our Pydantic models from
+
+00:13:52 JSON schemas. Are you familiar with that?
+
+00:13:54 Yeah. Yeah. So, so obviously just as you can generate a JSON schema from, from a Pydantic model,
+
+00:14:00 there's a third party tool that lets you, you go the other way and generate Pydantic models. I
+
+00:14:05 obviously won't do everything for you, validators and stuff, but it gives you the first, first start.
+
+00:14:09 Let me throw one more out there before we dive into the plan, which is where we're going. How about
+
+00:14:14 JSON to Pydantic converter? Have you seen this website?
+
+00:14:17 I had, I, I did not know that existed, until now, but, but I guess it's using that same tool under
+
+00:14:23 the hood, is it? Or we'll watch it. Maybe it's not. It may, it may be, I'm not actually sure. I
+
+00:14:28 haven't seen it mentioned it, but it doesn't really say so. I'd say not because it doesn't, that's not
+
+00:14:32 JSON schema, right? That's just, no, what you do is you give it an example. that's very cool.
+
+00:14:38 You give it an example, JSON document. I'm a, till 27. So you give it a JSON document and it will
+
+00:14:44 actually, when I first heard about this, well, Pydantic will already generate JSON. Like, no,
+
+00:14:48 no, no, no. The other way you give it a JSON result and it will generate the, the data model
+
+00:14:54 by looking at, and it actually, even if you have like hierarchical stuff, it'll create multiple
+
+00:14:59 base model derived classes and all sorts. This thing is, this is, this is pretty sweet right here.
+
+00:15:04 This thing.
+
+00:15:05 That's pretty powerful. Kudos to whoever built it. Yeah. I hadn't heard of it, but.
+
+00:15:08 Yeah. And I've thrown massively complicated JSON documents at it. And it says like, well,
+
+00:15:12 it's going to take eight classes, but here you go. And it just writes them all. It's, it's fantastic.
+
+00:15:17 This portion of Talk Python to Me is brought to you by the compiler podcast from Red Hat.
+
+00:15:24 Just like you, I'm a big fan of podcasts and I'm happy to share a new one from a highly respected
+
+00:15:31 and open source company compiler, an original podcast from Red Hat with more and more of us
+
+00:15:37 working from home. It's important to keep our human connection with technology with compiler.
+
+00:15:42 You'll do just that. The compiler podcast unravels industry topics, trends, and things you've
+
+00:15:47 always wanted to know about tech through interviews with people who know it best. These conversations
+
+00:15:52 include answering big questions like what is technical debt? What are hiring managers actually
+
+00:15:57 looking for? And do you have to know how to code to get started in open source? I was a guest on Red
+
+00:16:03 Hat's previous podcast, command line heroes in compiler follows along in that excellent and polished
+
+00:16:08 style. We came to expect from that show. I just listened to episode 12 of compiler. How should we handle
+
+00:16:14 failure? I really valued their conversation about making space for developers to fail so that they
+
+00:16:19 can learn and grow without fear of making mistakes or taking down the production website. It's a
+
+00:16:25 conversation we can all relate to. I'm sure. Listen to an episode of compiler by visiting talkpython.fm
+
+00:16:31 slash compiler. The link is in your podcast player show notes. You can listen to compiler on Apple
+
+00:16:36 podcasts, overcast, Spotify, pocket gas, or anywhere you listen to your podcasts. And yes, of course,
+
+00:16:42 you could subscribe by just searching for it in your podcast player, but do so by following
+
+00:16:46 talkpython.fm/compiler so that they know that you came from talkpython to me. My thanks to the
+
+00:16:53 compiler podcast for keeping this podcast going strong. Let's talk about the plan. First of all,
+
+00:17:01 before we get into the plan, I just want to say well done on this. You know, we covered this on the
+
+00:17:07 Python bytes podcast three or four weeks ago, something like that. And the response was,
+
+00:17:12 oh my gosh, this is incredibly detailed, incredibly well thought out. I think somebody audience commented
+
+00:17:18 like there are companies that have been created and founded with less thought about the future and
+
+00:17:23 doing that. So yeah, nicely done. Thank you. Yeah. I spent a lot of, a lot of time,
+
+00:17:29 quite a lot of PyCon talking about this, to people and say, you know, talking about little bits of it.
+
+00:17:35 There was a lot of it in my brain and Sebastian, who is kind enough to sponsor me, but also obviously
+
+00:17:40 is maintaining FastAPI. It's kind of asking me what it was going to do. And I kept being like,
+
+00:17:44 oh, it'll do that thing. And it'll do this thing. And then I, I got to the point of realizing,
+
+00:17:47 and probably about 70% of issues on PyLantix issue tracker, I reply with, don't worry,
+
+00:17:52 it'll work in V2. And I realized I got to the point where I really owed the community an answer to,
+
+00:17:57 to some of these questions. in fact, the first bit of feedback I got from it was I'm dyslexic,
+
+00:18:02 and I'm quite slow at reading and I, those, red time, notes never make any sense to me.
+
+00:18:07 So I just put 10 minutes in at the very beginning and then, forgot about it as I extended it and
+
+00:18:11 extended it. And the first feedback was great article, but how the hell is anyone reading that
+
+00:18:15 in 10 minutes? And so I pulled a new number out of thin air, but.
+
+00:18:18 Yeah. So yeah, it's 25 minutes reading time, which I think is actually fairly accurate,
+
+00:18:23 depending on how thoughtful you think about these, these various things.
+
+00:18:27 Someone had, I've got to, I've got to have a shout out to one joke on Twitter. Someone was like,
+
+00:18:31 when it said 10 minutes, they were like 10 minutes to parse two days to validate, which I thought.
+
+00:18:35 Oh yes. Well done. Very, very, Pydantic. Like, okay. Why do we need this plan? What's,
+
+00:18:42 why do we need to start?
+
+00:18:44 So I think, I mean, like stepping back a bit, most projects, once they're mature and in, in widespread use,
+
+00:18:49 like people don't sit down and tear them to pieces, right? they mostly stick with the
+
+00:18:54 same kind of warts and people polish the edges, but like that, that, that there's not a like
+
+00:18:59 from scratch rebuild. And often when there is from scratch rebuild, it, it offends a lot of people
+
+00:19:03 because they don't know what's happening. And you know, they're like the, the, you know, the cost of
+
+00:19:08 migrating is quite high and they're, they're turned off it. So, but I thought that there was,
+
+00:19:12 there was enough wrong with the internals of Pydantic and there was enough opportunity to do stuff
+
+00:19:16 way better. And there was enough, like, there was enough reason to do that because there were
+
+00:19:20 enough people using it that it was worth me sitting down and spending six months, but we've passed six
+
+00:19:25 months building it. Right. and like I say, this is, you know, there was one of the, one of the,
+
+00:19:30 like not stats, but one of the, my observations was, looking at, so there was a, it was a stack
+
+00:19:36 overflow, survey of what, of what technology people are using and FastAPI had, I don't know what
+
+00:19:42 percentage, but like 6%, market share. Right. And then below it, they were
+
+00:19:46 talking about clouds and which clouds had what market share. Now, if you assume the same number
+
+00:19:50 of people are using web frameworks as they're using clouds, which is an approximate approximation,
+
+00:19:54 but not a mad approximation, then you would say the FastAPI and therefore Pydantic have a bigger
+
+00:19:58 market share than Oracle and IBM combined in slightly different markets. And obviously without the,
+
+00:20:03 without the revenue to go with it, but like, it makes you realize that like getting this right
+
+00:20:08 has a massive effect on, on lots of people and on, yeah. And, and secondly, that I don't have a clue
+
+00:20:15 how many, how many times Pydantic validates data a day between, you know, Netflix and, Facebook
+
+00:20:21 and Amazon and Microsoft and everyone else, but it's a high number, right? And so the environmental
+
+00:20:27 impact of making Pydantic 10 times faster and therefore consume 10 times less CO2 to, to do a
+
+00:20:34 validation is I suspect not trivial. It's virtually impossible to, to get an accurate number, but
+
+00:20:39 something real.
+
+00:20:39 That's a really interesting way to think of it with, you know, almost having a responsibility
+
+00:20:44 to lessen the compute load. And when, you know, you're running your own website and it does a
+
+00:20:50 couple of users an hour or whatever, like who cares, right? But when you're talking a million requests
+
+00:20:55 a second or whatever it is across all the different people using all the different frameworks across,
+
+00:21:00 right? That actually, that's what I suspect. And like, think about, think about, a web server,
+
+00:21:06 assuming your database is doing all of the heavy lifting, that it should be doing. What's the
+
+00:21:11 next biggest thing? Well, there's, TLS termination that's expensive, but like, again,
+
+00:21:17 that's done by some optimized C and Nginx or probably outside your code completely. If you're using a
+
+00:21:22 platform provider, what's the next biggest thing that your code is doing CPU wise? Well, it's,
+
+00:21:26 it's data validation basically. Yeah. Conversion, serialization, deserialization, validation, and all that was in the Pydantic realm. Yeah. Also I talked about two
+
+00:21:36 frameworks and I know there are others, like Pydastic for Elasticsearch where the, the validation
+
+00:21:43 and the data exchange is the database exchange as well. Right. That's, that could be very important
+
+00:21:49 for if you make this much faster, I don't know the numbers for Beanie precisely, but I know that a lot
+
+00:21:56 of those ORM ODMs, if you go and query and get like 10,000 rows back, the vast majority of that
+
+00:22:02 time is how do I construct and fill out 10,000 objects in memory? Right. And if you make Pydantic
+
+00:22:10 faster and Pydantic is that object, well, there's a huge bonus. It's more than just, and I think the
+
+00:22:15 other thing to say is we've talked about, web applications and, you know, from FastAPI being the
+
+00:22:19 kind of most high profile user of, of Pydantic. We talk about that a lot, but a lot of its usage,
+
+00:22:25 if you look at, stuff that Explosion AI are doing, it's in data science and AI and it's, yeah,
+
+00:22:30 it's exactly that. It's like data sanitization into and out of, models or into and out of databases.
+
+00:22:36 And there you are talking about like, you know, really massive amounts of data.
+
+00:22:40 Absolutely. All right, let's get into it. So we talked about the plan. How about the,
+
+00:22:45 the roadmap, the timeline, things like that?
+
+00:22:48 So we're behind a bit, but we're not too far behind. I released, version 0.1 of Pydantic core
+
+00:22:53 yesterday. So that, I'll come to what that means in a minute, but, but that's, that was the,
+
+00:22:58 that's the first step of the plan. I'm about, I think I've either closed or merged 25 PRs today,
+
+00:23:05 trying to get through Pydantic and get, get version, V 1.10 out. So I'm, I'm halfway,
+
+00:23:11 I'm not halfway through. I'm some bit of the way through two to be, to be precise.
+
+00:23:15 right. And so what, what are you were talking about in the plan? As you said, there's a bunch
+
+00:23:19 of open PRs, a bunch of open issues. Let's merge in as much of that as possible to sort of capture it
+
+00:23:26 and then move forward in this, this rewrite that we'll talk about.
+
+00:23:29 Right. Yeah, exactly. So get, get 1.10 out, which is, which is the same, same basic code base with a
+
+00:23:35 bunch more stuff added that I've, because I had a, had a job and was really busy earlier in the year,
+
+00:23:39 I kind of dropped the ball on reviewing those PRs and they, they kind of got out of control.
+
+00:23:44 like get them, dealt with and then get to a kind of clean slate and then, and then, make
+
+00:23:50 the big move from, yeah, from V 1.10 to, to V 2. You do talk about there being breaking changes.
+
+00:23:56 We'll get into some specific details there, but probably the most relevant to this entire rewrite
+
+00:24:02 is this thing you're calling the Pydantic dash core. Yeah. So, this started off as a,
+
+00:24:08 as a kind of small experiment with me saying what would kind of thought experiment, what would,
+
+00:24:12 what would Pydantic's, what would Pydantic look like if it was implemented in Rust? What would its,
+
+00:24:17 internals look like if they were implemented in Rust? And that experiment effectively worked.
+
+00:24:22 And sure enough, Pydantic core is, is written in Rust and does all of the, the core data validation.
+
+00:24:28 and it will do a lot of the serialization. I haven't built that yet, but that I intend to build
+
+00:24:33 into Rust. So there's an awful lot that will stay in Python. but, yeah, Pydantic core is
+
+00:24:39 written, written in Rust and uses the amazing Py03, library to bindings to, to write Rust code that,
+
+00:24:46 that, that's callable from Python. yeah.
+
+00:24:50 Maybe tell people about Py03 real quick, because this is how you write it and write the code in Rust,
+
+00:24:55 but then expose it to the rest of the Python aspects of Pydantic, right?
+
+00:25:00 Yeah. Py03, I'm not a good C developer and I'm going to use the wrong terminology and be
+
+00:25:04 shy to that, but like it takes the Python ABI for C. So how you would write C codes to be used from
+
+00:25:11 Python and effectively makes that available in Rust. Rust has, has great interop with C.
+
+00:25:18 and so, yeah, it basically takes all those types and exposes them all in a type safe or type safe way
+
+00:25:25 that you can then consume. So if we look, we stop here and we look at like, Summers,
+
+00:25:30 a string, right? Where, Py03 is taking care of all the hard work of you passing two,
+
+00:25:37 ints from Python into this function, converting them to u-size. Then the logic inside is pure Rust.
+
+00:25:43 It's adding to u-sizes and, converting the result to a string. And then again,
+
+00:25:49 Py03 is taking care of returning it. And in particular, using this PyResult,
+
+00:25:53 result type in Rust without going too far down the rabbit hole of how Rust works. Rust has an amazing
+
+00:25:59 model for how to deal with errors that basically stops you from ever ignoring an exception or what they
+
+00:26:04 call an error. and that is, that's these results, which are basically, they would call it
+
+00:26:08 an enum, but from Python world, think of it like a union, which is either okay. It went well or error.
+
+00:26:13 It was an error. And so you have to return an okay, or you have to return an error. And when you consume
+
+00:26:18 that in Rust, you have to have to deal with the error case. it won't let you ignore it.
+
+00:26:23 but that, that maps really nicely into Python exceptions. So here we're returning. Okay. So we'll get a result.
+
+00:26:29 But if we use py error and return that, then you would get an exception when you, when you call the function.
+
+00:26:34 Mm-hmm. Interesting.
+
+00:26:35 The, so the powerful thing about Rust, obviously it's faster. Everyone knows that. And it does,
+
+00:26:41 it does mean that Pydantic core is much faster than Pydantic and Pydantic 2 will be much faster than
+
+00:26:47 Pydantic 1. I think it's probably quite rare to see a library in a version update, get, get significantly
+
+00:26:53 faster, let alone like 10 to 50 times faster as Pydantic 2 will be. So that's been achieved, but there are
+
+00:26:59 other advantages that you get, which are perhaps less obvious. one of them is like recursion
+
+00:27:04 without a performance penalty. That means that Pydantic, core data validation is, is truly
+
+00:27:12 recursive all the way down and allows you to build effectively any crazy combination of different
+
+00:27:17 validators, into each other. Cause yeah, validators are this basically pile of, think of them as
+
+00:27:22 think of them as classes in Python. They're not that, not classes in Rust, but that call each other
+
+00:27:27 recursively all the way down. and you can, one of the other advantages is like tiny functions,
+
+00:27:33 which allow you to split code up and make it easier to edit one thing without breaking other things.
+
+00:27:37 because in Python, it's not entirely obvious to people coming from languages like C, C#, Rust,
+
+00:27:44 and so on that just calling a function itself is pretty expensive relatively speaking in Python.
+
+00:27:49 Yeah. I I I'm on the edge. I'm on the like wing of people who would say,
+
+00:27:54 if you're worrying about the overhead of calling a function, you're probably not writing the right
+
+00:27:58 language most of the time, right? Like it's, yes, it's, yes, it's a big number, but it's a tiny number
+
+00:28:03 in, in most, in most contexts. But I think there's definitely a world in which like end users,
+
+00:28:08 people building web apps in Python definitely for companies should and will be using Python.
+
+00:28:14 But the libraries that underpin that, that they use super, there's big value value is a complex
+
+00:28:20 term in open source in itself, but let's use the word value and ignore that what it might mean
+
+00:28:24 in, in implementing those libraries, the second step down. So the Pydantic, the, the HTTP,
+
+00:28:31 framework, in, in Rust or in, in, I think in Rust basically, because those are the,
+
+00:28:36 well, there are three libraries that have real bindings for Python. C, I don't want to be writing
+
+00:28:41 lots of C and I don't think many people do. well, I'll say that, Rust obviously. And then
+
+00:28:47 there's C++ and Boost. And I think the, the developers of, Py03 came from using Boost and
+
+00:28:53 they basically built Py03 to be better. and I, yeah, I've used Boost a bit, but I found Py03 to be,
+
+00:28:59 to be really impressive.
+
+00:29:00 I think your comment about, should you be worrying about those loops is super relevant. There's
+
+00:29:05 certain libraries where Pydantic is certainly among them. It's used so much that these little tiny
+
+00:29:11 portions, you know, probably just a very small slice of the code that is applicable is actually
+
+00:29:16 a pretty significant hit in terms of overall performance. You know, you think like SQLAlchemy
+
+00:29:21 and like the serialization deserialization bit, right? That's a small part of the library,
+
+00:29:25 but that's something that just is ever, you know, omnipresent, right? And this internal
+
+00:29:30 validation and stuff that you're thinking about doing in Py03 or in Rust, combine it with Py03,
+
+00:29:35 it makes a big difference, even if it's only a small, relatively small portion of the part that
+
+00:29:39 people perceive it to be, you know?
+
+00:29:41 Exactly. And coming back to my environmental point, you know, the environment doesn't care if you take
+
+00:29:45 a flight or I take a flight or I miss a flight, but like, obviously the environment does care if we
+
+00:29:50 can reduce the number of flights taken worldwide by 10, worldwide by 10%. And because of Pydantic's
+
+00:29:54 widespread use, that's why I'm saying getting Pydantic to be 10% faster, you probably won't notice.
+
+00:30:00 But overall, we will hopefully make computation in the cloud a tiny bit faster.
+
+00:30:07 Absolutely. Question from the audience. Magnus says, will users be able to write data validators in
+
+00:30:13 Rust for Pydantic too? That is a difficult and complex question. There is an open issue on Pydantic
+
+00:30:19 Core's issue tracker about it. And I have proposed a way that it might be possible. I would, the story of
+
+00:30:27 shared libraries, DLLs in Rust is not quite as pretty as it could be. And I really don't want
+
+00:30:33 to build basically another way of sharing dependencies beyond PyPy where you're like, okay, you need to
+
+00:30:39 install Pydantic from PyPy, then you need to install this other package, perhaps from PyPy, and then you
+
+00:30:43 need to use this other code to link the DLL so that we can dynamically link those libraries. That sounds
+
+00:30:50 like an enormous maintenance overhead for me and for people doing it because people find it hard enough to
+
+00:30:57 share code and use code from PyPy. So PyPI. So yeah, then how do you deploy that and how do you get it
+
+00:31:05 compiled? Right. So very briefly, my theory for an answer is actually, I'm not going to go down that
+
+00:31:11 rabbit hole right now. But there's an issue that I think explains it and I'm happy to talk about it there.
+
+00:31:15 And I can, I'll finally link to it. If you don't add it now, you don't have to live with the consequences of
+
+00:31:19 choosing that. That's the other thing, right? That like someone comes along and has a really bright idea and in
+
+00:31:22 10 years time, I'm still answering questions about how to make it work. Yeah, exactly. Okay.
+
+00:31:27 You already mentioned the performance, but just working our way through the plan here, the next
+
+00:31:30 step is to say, hey, the benchmarks indicate this is four to 50 times faster. And in general,
+
+00:31:37 17x is kind of what you're guessing for something reasonable.
+
+00:31:40 Not guessing, as in just the benchmarks on Pydantic Core that are run on every commit,
+
+00:31:48 a lot of them have alternate equivalents in Pydantic 1.9. And so that's the speed up that we're seeing.
+
+00:31:56 There are a few more optimizations I can make. There are a few, it'll get a tiny bit slower,
+
+00:32:03 I guess, when it's wrapped in Python, but a tiny amount. So yeah, I think those are realistic numbers.
+
+00:32:09 Yeah, that's a huge difference. Now you say, when validating a model, how does that performance compare to treating a Pydantic class instance? How much faster does
+
+00:32:21 using it in Python get versus... 17 times faster, doing the validation. You should get your model
+
+00:32:27 back. So that is going from a Python object, a Python dict, let's say, of your input data to a
+
+00:32:36 instantiated class instance of your model.
+
+00:32:40 David Miller: Next up is strict mode. One of the things I really like about Pydantic is how
+
+00:32:45 it will take data that could be the right thing, but it's not actually the right thing. Like you said,
+
+00:32:51 the string one, two, three, but you really want an integer, the actual number one, two, three. And it just
+
+00:32:56 says, "This is what we would do if I had to do it myself. I would parse the string and convert it
+
+00:33:02 over and so on." That just happens. But some people don't want this clever behavior, right?
+
+00:33:08 Yeah, exactly. And I think that there are legitimate cases for that. I think there are
+
+00:33:14 some people who are wanting it whose cases I don't think are entirely legitimate, but I totally get
+
+00:33:19 why in some contexts it's valuable. And so, yeah. So it's built in. You have that switch from the word go.
+
+00:33:26 David Miller: One of the really cool things that this solves, David Miller: kind of not by mistake, but as a side effect is validating unions. We basically run
+
+00:33:37 through every member of the union in strict mode first and try and validate in strict mode and then
+
+00:33:42 validate in lax mode. And therefore, for example, if you had a union of int and string, and then you passed
+
+00:33:50 it the string one, two, three, it wouldn't get converted to int as it would do in historically
+
+00:33:57 in Pydantic. Pydantic now has smart union, but it's not perfect, but this solves some edge cases like
+
+00:34:04 that and some much more confusing ones than that. Nice. Related to that, I would say, is this conversion
+
+00:34:10 table that you're putting out, right? What's the story here?
+
+00:34:13 David Miller: Yeah. So there's two things. There's this, I kind of called it cod philosophy the other
+
+00:34:17 day, this rule for when you would convert something and when you wouldn't. And actually,
+
+00:34:23 it's come out to be really useful in us thinking about when we shouldn't convert things,
+
+00:34:27 because to take an example, we have been in Pydantic v1, you can coerce a set to a list.
+
+00:34:35 And that mostly seems to make sense. And it's something that you might want to do in lots of
+
+00:34:38 contexts, but actually you go up a bit, the single and intuitive means we can't converse,
+
+00:34:43 convert a set to a list because you don't always get the same output when you convert a set to a list
+
+00:34:49 because the order of things can change. And so using this rule has been helpful in trying to be
+
+00:34:54 more consistent about what we convert. But I'm the first to put my hand up and say,
+
+00:34:58 this rule is not perfect. There are always going to have to be exceptions to it. And at the bottom of this
+
+00:35:03 blog post, but then properly on the docs completed, will be a full on table of everything and what gets
+
+00:35:10 converted and what doesn't in max mode. So you can look it up rather than having to guess.
+
+00:35:15 This portion of Talk Python to me is brought to you by Microsoft for Startups Founders Hub.
+
+00:35:21 Starting a business is hard. By some estimates, over 90% of startups will go out of business in just
+
+00:35:27 their first year. With that in mind, Microsoft for Startups set out to understand what startups need
+
+00:35:33 to be successful and to create a digital platform to help them overcome those challenges. Microsoft
+
+00:35:39 for Startups Founders Hub was born. Founders Hub provides all founders at any stage with free
+
+00:35:45 resources to solve their startup challenges. The platform provides technology benefits,
+
+00:35:50 access to expert guidance and skilled resources, mentorship and networking connections, and much more.
+
+00:35:56 Unlike others in the industry, Microsoft for Startups Founders Hub doesn't require startups to be
+
+00:36:02 investor backed or third party validated to participate. Founders Hub is truly open to all.
+
+00:36:08 So what do you get if you join them? You speed up your development with free access to GitHub and
+
+00:36:13 Microsoft Cloud computing resources and the ability to unlock more credits over time. To help your startup
+
+00:36:19 innovate, Founders Hub is partnering with innovative companies like OpenAI, a global leader in AI research
+
+00:36:24 and development to provide exclusive benefits and discounts. Through Microsoft for Startups Founders Hub,
+
+00:36:31 becoming a founder is no longer about who you know. You'll have access to their mentorship network,
+
+00:36:35 giving you a pool of hundreds of mentors across a range of disciplines and areas like idea validation,
+
+00:36:41 fundraising, management and coaching, sales and marketing, as well as specific technical stress
+
+00:36:46 points. You'll be able to book a one-on-one meeting with the mentors, many of whom are former founders
+
+00:36:51 themselves. Make your idea a reality today with the critical support you'll get from Founders Hub. To
+
+00:36:57 join the program, just visit talkpython.fm/foundershub, all one word, no links in your show notes.
+
+00:37:03 Thank you to Microsoft for supporting the show.
+
+00:37:05 Before we move off strict mode, well, Clutch just has some kind things to say about Pythonics as it's
+
+00:37:13 one of the most useful packages ever. Congrats.
+
+00:37:15 That's really cool. Magnus asks, is strict mode a global or a per model setting? Or is it a usage
+
+00:37:25 when you actually do the parsing? Where do you set this?
+
+00:37:27 It's actually more powerful than that. It is either on a field or on an entire model. And you can set
+
+00:37:36 it at validation time. So you can configure it in config and configure it on a particular field,
+
+00:37:41 and then you can override it when you're effectively calling the validator.
+
+00:37:45 I see. Maybe there's some situation where you're loading old bad data or something,
+
+00:37:50 and you want to say, go ahead and do this, but in the future we're not accepting it. Something like that.
+
+00:37:54 Right. And actually, one of the reasons I built that was to use it in the union because we go through
+
+00:37:58 the validators the first time at validation time insisting on strict mode. But yeah, one of the other
+
+00:38:05 cases which will come up somewhere down here is we now have a isInstance or a like pseudo isInstance
+
+00:38:10 method which confirms whether data matches our model. And there we automatically use strict
+
+00:38:16 mode because for me it's kind of obvious that if you're doing isInstance, you want that to be checked,
+
+00:38:21 want that to be strict. Moving on to the next part of the plan is built-in JSON support.
+
+00:38:26 Yeah, so this is super. What are we talking about here? Yeah.
+
+00:38:29 So we're talking about parsing JSON in Rust and parsing that JSON object straight internally within the
+
+00:38:36 library to the validator to then do the validation. One of the big advantages that has is it solves the
+
+00:38:43 strict mode problem. So if you looked above, let's say we have the string of a date, let's say, you know,
+
+00:38:49 an iso 8601 date of year month day. In JSON, it's obvious that that should be validated as a date. But if
+
+00:38:57 you pass that in from a Python object, it's not valid in strict mode, right? That's not, that doesn't look
+
+00:39:01 anything like a date. The problem if we had strict mode before without the the built-in JSON validation
+
+00:39:07 is you can't parse JSON with a date in it because there's no date representation. There's no scenario
+
+00:39:11 where directly going from JSON works because JSON, for odd reasons, has no concept. It doesn't have date,
+
+00:39:17 but it also doesn't have sets or bytes or loads of stuff that you want to use in Python, right? So
+
+00:39:22 what one of the things that built-in JSON support gives us as well as obviously a performance premium is
+
+00:39:29 is that we can be sensible and say the iso 8601 date is a valid date in strict mode if it's coming
+
+00:39:37 from JSON, but not from Python. Okay. Yeah. And also just makes it faster, right? Because
+
+00:39:42 probably parsing JSON and Rust is pretty quick. It's really, it's fast. But also we don't have to
+
+00:39:49 create a Python dict on a Python list and all those Python types. Creating Python strings has like some
+
+00:39:56 significant overhead compared to creating a string in Rust. And in future, once I've got V2 out, I intend
+
+00:40:05 to build a custom JSON parser, which is even faster and will give us line numbers in errors, which would
+
+00:40:10 be really nice because we don't have that now and we can't do that in V2 because so JSON, which I'm using,
+
+00:40:16 doesn't provide line numbers. But I hope in V2.1 or something, we will be able to add that.
+
+00:40:21 Amazing. Really quick on the strict stuff as well. Manaj asks, what about strict int as a type? Is it
+
+00:40:28 going to be still around? That can stay around because that will just be, that'll be effectively.
+
+00:40:32 So it's probably worth this stage for people. If we, if you could just go to Pydantic cores repo and we'll
+
+00:40:38 have a really brief look at what it looks like. Yeah. And then just in the read me, you'll see
+
+00:40:45 a example. So you see here, right? We, up a bit, up a bit. You don't need to go into all the details of
+
+00:40:52 it, but the way that we define the model in Pydantic core is with this kind of like micro schema,
+
+00:40:58 which is defining in this case, a type dict with a bunch of fields in it. And here on a particular
+
+00:41:04 field, we could say strict true. So let's say on the int field, we could say strict true.
+
+00:41:08 And that field will be strict while the rest isn't. So obviously what strict int, the Python,
+
+00:41:13 the Pydantic type will do when it becomes a schema, it will set a strict true on that particular field.
+
+00:41:20 Got it. So it effectively is a synonym for the more general way to say, use strict mode, but only on this field, right? Yeah, exactly. It's just a market effectively set
+
+00:41:30 strict on this field. Yeah, exactly. So in Pydantic, you can say I have, say,
+
+00:41:35 an age, which is an int, and you can set it to a default value like zero, or you could say it's
+
+00:41:40 optional, set it to none, but you can also set it to a field, right? Where you have additional
+
+00:41:44 information. Is that how you set strict mode? You set it to a field and say strict mode equals true
+
+00:41:49 or something like that. It's not built yet. So it's up for debate, but yeah, effectively strict will be
+
+00:41:54 a setting on field and obviously on config as well. And there will be these types, which basically
+
+00:42:00 contain some extra information like strict int will just like set that strict to true for that field.
+
+00:42:04 Right, exactly. And for people who are not aware, config is an inner class of the Pydantic model that
+
+00:42:10 has a bunch of settings you can set, right? Yeah. And people do some unholy stuff of like modifying the
+
+00:42:15 base version of config and therefore doing global stuff, which I've never done. People seem to make it
+
+00:42:20 work. I don't know it'll work in V2. I don't promise it will. Yeah, absolutely. One of the things
+
+00:42:25 that's interesting with this Pydantic core is now this is a dependency of Pydantic, right? And people
+
+00:42:32 could use it directly if they wanted, right? Like validating without a model, you don't have to define
+
+00:42:36 a class or any of those things. 100%. You don't have to define the class. If we look in the example we were
+
+00:42:41 using there, we didn't have a class. We were just validating to a type dict. So we would get back a dict,
+
+00:42:48 which obviously means we have full support for typings type dict type. It's also a little bit
+
+00:42:54 faster than creating a model because we don't have to create the class instance. We just create the
+
+00:43:00 dict that goes inside it. Yeah, people could use it without. The only concern obviously is whether or not
+
+00:43:07 obviously it's now compiled and you have to be able to run that Rust code to be able to use Pydantic.
+
+00:43:14 We, with the V0.1 release of Pydantic core yesterday, we have, I think off the top of my
+
+00:43:19 head, 56 different binaries that we released for different environments. The team of the guys at
+
+00:43:25 Py03 and at Maturin, which is their way of building, have been super helpful and will continue to support.
+
+00:43:32 So it doesn't worry me. We already have the full Pydantic core set of unit tests running in the browser
+
+00:43:40 via WebAssembly. So obviously Python moving into the browser with WebAssembly is like the big new thing.
+
+00:43:45 I'm really excited about it. I wanted Pydantic core to work. And so Hood, who's one of the
+
+00:43:50 Pyodide maintainers, I met at PyCon. He's been super helpful actually with Pydantic core in general,
+
+00:43:57 but particularly with getting it to work. And at the risk of running a live demo, if you just go back
+
+00:44:01 to Pyodantic core, I know we're slightly changing subject, but I have to show you this because it
+
+00:44:06 makes me really excited. We go up and you go into WASM preview, which is one of the directories.
+
+00:44:10 Yeah, WASM preview. Okay. And then if you click here, which just basically renders that index file,
+
+00:44:18 I hope it works. This is... Gotta work. Gotta work.
+
+00:44:22 It's gotta work. This is it downloading the binary, downloading all the unit tests,
+
+00:44:28 extracting them in Python and running the full test suite in the browser.
+
+00:44:32 Let me try it one more time. Do it a second time. Yeah. So what we're seeing, if you click on this link,
+
+00:44:38 which I'll put in the show notes, is it downloads the CPython runtime in WebAssembly based on Pyodide,
+
+00:44:45 I'm guessing. And then... Then it downloads the archive zip, sends that to Python. Obviously,
+
+00:44:53 we're running full CPython in the browser, so we can use the zip package to extract zip,
+
+00:44:59 extract that into the virtual file system that Inscription gives us. Then we install the WASM32 wheel.
+
+00:45:08 We basically do pip install, well, micro pip, which is the way of installing stuff. And then we just call
+
+00:45:13 pytest and off it goes and it runs the test. And you see the test come by, standard colorized
+
+00:45:18 pytest output, 1465 tests pass in five seconds. Pretty fantastic.
+
+00:45:24 Yeah. So it is a bit slower this than full CPython, but I'm still really stoked for what this is going
+
+00:45:31 to mean to the future of Python and particularly to stuff like the context where you might use
+
+00:45:36 Pydantic of data processing and stuff. I don't think Python is going to replace React. And I think it's
+
+00:45:41 a bit daft of people to suggest it will because that's just going to lead to disappointment. But in
+
+00:45:44 contexts like this, it's going to be super valuable. One of the things I'm really looking forward to is
+
+00:45:50 Pydantic 2's documentation. Every single example is going to be executable. So you can edit it and you
+
+00:45:55 can press run right inside the browser, which I think should help a lot.
+
+00:45:58 Have you been tracking PyScript?
+
+00:46:00 Yeah, I have been tracking PyScript. It's obviously, it's very cool. It's wrapping PyDide,
+
+00:46:06 which is where all the genius work is going on. I'm using PyDide directly and I think I can continue
+
+00:46:11 to do that. But yeah, it's providing a bit of a super helpful wrapper for those who need a bit more
+
+00:46:19 help and it's simple as a script tag.
+
+00:46:22 A question from David out in the audience asks, "With at least two of your projects switching to Rust,
+
+00:46:27 Pydantic and watch files, do you see it as a general trend in the Python ecosystem,
+
+00:46:31 you know, in things like PyScript, which I just pulled out?" I have a third one actually, rtoml, which is a wrapper around the Rust-toml library,
+
+00:46:39 which is a bit less necessary now when there is better tomml support in Python. But a couple of years ago,
+
+00:46:43 when the main tomml package was not working for me, I wrapped that. Yes, I do. I was saying earlier
+
+00:46:49 that I think lots of the low-level tools should be written in Rust. There is a massive space for
+
+00:46:56 someone to go out and build a raging fast ASGI framework in Rust and obviously use a Rust web
+
+00:47:03 framework and just provide ASGI interface. I'm looking forward to someone doing that to replace
+
+00:47:10 the likes of uvehicorn. Not that uvehicorn is great. It uses watch files, in fact, so not to
+
+00:47:16 criticize them, but like, yeah, there are a bunch of low-level stuff where performance matters,
+
+00:47:20 which totally and I think should and will end up being more in Rust.
+
+00:47:25 You're suggesting something like what you have for Flask, but everything is Rust except for just
+
+00:47:31 your view methods happen to be Python and click that together with PyO3 or something like that.
+
+00:47:35 That's the ultimate place to go to. I think that the place to start would be, so we have WSGI, which many of you will have heard of, which Flask and
+
+00:47:44 Django run on. We have ASGI, which is the async equivalent, which is basically, it's great because
+
+00:47:50 it means that to build a web framework, you don't have to deal with HTTP. You deal with ADDICT, which
+
+00:47:56 has basically got fields and body and stuff like that, right? And some function to get the rest of the
+
+00:48:00 body in the async case. And that's what we have now. And we have like Starlit and uvehicorn,
+
+00:48:05 which are both built by ENCODE and are both great, but they have a separation by using this
+
+00:48:09 consistent protocol in between. And that allows really cool innovation on both sides. My suggestion
+
+00:48:16 is we don't have to get rid of the Starlit or the FastAPI or that level, but we could do lots of the
+
+00:48:22 low-level HTTP parsing in Rust. Before I get shouted down, I'm sure that uvehicorn and other such
+
+00:48:30 libraries are in turn using some Optimize-C for parsing some of the HTTP requests. So I don't have
+
+00:48:37 a number for the speed up. Right. Okay. But yeah, that's a very interesting idea.
+
+00:48:42 One thing I did want to sort of touch on here is you have, you talk about how there's not going to be
+
+00:48:47 a pure Python implementation of the Pydantic core because it's already this complex, specialized thing
+
+00:48:54 in Rust. And why do it again in Python just so there might be some edge case of where it'll run.
+
+00:48:59 Talk about many of the platforms really quick that supported for the WebAssembly one we just spoke
+
+00:49:03 about, which is fantastic. And I think that's going to open up a lot of possibilities the more
+
+00:49:07 stuff we have in WebAssembly. But there shouldn't be a big problem with this, right?
+
+00:49:11 There shouldn't. I think with what we have there, we've covered the 99%. We're probably into the 99.9%
+
+00:49:18 of platforms covered where people actually want to use this. The only place where I know that there's a
+
+00:49:23 slight challenge is on Raspberry Pi, where the normal install of Raspberryan or whatever it's called
+
+00:49:30 uses their own wheelhouse effectively for installing wheels, which doesn't yet support
+
+00:49:36 build of Rust. I'm sure it will one day and you can just tell it to use PyPI and it will work.
+
+00:49:42 Again, this is the kind of thing where having built watch files and distributed that, I've worked through
+
+00:49:46 a lot of these problems and I'm pretty confident we're not going to find some really important
+
+00:49:50 framework, sorry, really important environment where it's just not going to work. And again,
+
+00:49:55 as more packages adopt Rust, we'll smooth out those problems, we'll learn from them and we'll be able
+
+00:50:00 to fix the edge cases.
+
+00:50:01 One benefit of that is previously Pydantic itself had some Cython and other things where it needed to be
+
+00:50:10 faster, but because now it can just use the Pydantic core, what's left over is pure Python, right?
+
+00:50:15 Right. And one of the big problems, well, there were two problems with that. It made the development
+
+00:50:19 process a bit slow because we basically took vanilla Python, we compiled it with Cython and we got a kind
+
+00:50:25 of 50% speed up and we have to like do some slightly weird things. So occasionally you have to return
+
+00:50:29 union of just string to prevent Cython from casting that string to a native string and losing sub strings,
+
+00:50:36 stuff like that. Some weird edge cases that bite people occasionally. But the biggest problem is that
+
+00:50:42 that means that the Pydantic binaries are massive because the Cython compiled versions of Python code get
+
+00:50:49 really big and obviously moving the performance critical bit into Pydantic core gets rid of that
+
+00:50:55 concern and Pydantic itself becomes a pure Python package, easier to hack on, CI will run faster,
+
+00:51:00 whole process should be sped up and it'll be much smaller.
+
+00:51:02 Let's go, I jumped around because I did want to talk about this compiled stuff,
+
+00:51:06 but you'll just get that as a wheel. Almost everybody, they won't really know or care, right?
+
+00:51:12 They just pip install it. It doesn't matter that it's Rust, it just downloads as a binary, right?
 
 00:51:15 Right, exactly. Same as loads of packages you use now.
 
-00:51:20 Right.
+00:51:18 Now Pydantic included are compiled, right? They're all compiled, right? And if there is no wheel
 
-00:51:21 They're all compiled. Right. And if there is no wheel available, then pip will do its very best to try and compile that for you. So in the case of financial, if you were in some crazy environment where we didn't have a binary, you need Rust installed and then pipeline take care of compiling it for you. But like I said, that's going to be super rare and realistically, if you have that problem, come and create an issue and we'll add the binary for you.
+00:51:23 available, then pip will do its very best to try and compile that for you. So in the case of Pydantic
 
-00:51:44 Picking up back on the plan here you have required versus noble changes.
+00:51:29 core, if you were in some crazy environment where we didn't have a binary, you need Rust installed,
 
-00:51:50 We missed out one of the really cool things above. Identify if we're moving order, which is the removing of the necessity for a model. So as we saw earlier in the Pydantic example, we can validate. So in Pydantic one, everything was in the end of Pydantic model. So we looked earlier like FastAPI passing parameters in the background. FastAPI is creating a model, doing the validation against that, then extracting stuff from the model and passing it to the function or whatever else.
+00:51:35 and then pip will take care of compiling it for you. But like I say, that's going to be super rare.
 
-00:52:19 Similarly, if you wanted to pass a type DICT basically somewhere in the background as a model, we validate against that model, then we take the DICT from that model and pass it back to the user. That had some really confusing and annoying edge cases. But obviously the main thing was it did have a performance impact. Now there is no fundamental kind of base type in Pydantic core. You can validate an int or a string or a union of different stuff or a model or a data class or typed dict and you just create your schema and off you go.
+00:51:40 And realistically, if you have that problem, come and create an issue and we'll add the binary for you.
 
-00:52:49 Fantastic. So basically there's this low level fast engine that will just validate all sorts of things if you want to use it directly. Right?
+00:51:44 Picking up back on the plan here, you have required versus nullable changes.
 
-00:52:58 Yeah. And one thing important to add just while we're on that is there is stuff that's not going to be in Pydantical. I don't think we'll add the URL type for example.
+00:51:49 We missed out one of the really cool things above. I don't know if I'm sorry if we're moving order,
 
-00:53:06 There will be some custom types that we don't add. And obviously if you want to implement your own types then the way that we get around that is that pydantic core has basically a function validator which is basically call a function, either having done some validation before or after and return the result. So that's how we're going to provide a way to build validations without writing. Without writing.
+00:51:54 which is the removing of the necessity for a model. So as we saw earlier in the Pydantic core
 
-00:53:28 Rust required versus nullable.
+00:52:00 example, we can validate. So in Pydantic 1, everything was in the end of Pydantic model. So we looked
 
-00:53:31 Yeah, probably like hangover from again, me building Pydantic on my own for what I needed and also from kind of predated data classes, at least in some of the work. And so the real problem for me was the word optional and the idea that you had a field that was required but was literally called optional.
+00:52:08 earlier at like FastAPI, passing parameters. In the background, FastAPI is creating a model,
 
-00:53:50 Obviously Pydantic is not the only library that has that problem and the real solution is the pipe operator, which is the new way of doing unions none involves not using the word optional and obviously also get around it by using union of string int. But the point is that if you just have a field that is optional int it is required but can be none.
+00:52:13 doing a validation against that, then extracting stuff from the model and passing it to the function
 
-00:54:14 And that's really just to match data classes and other contexts.
+00:52:18 or whatever else. Similarly, if you wanted to pass a type dict, you basically somewhere in the background,
 
-00:54:19 Yeah. The new way to express optional for like string pipe none versus optional string, that kind of set you free to think about this differently.
+00:52:23 there's a model, we validate against that model, then we take the dict from that model and pass it
 
-00:54:31 Yeah. Also I literally asked what we do about it at PyCon and he was like he didn't say yes, we made a mistake. He said that's fixed by having pipe none. Which is a roundabout way of saying we kind of made a mistake back then. But typing has come a massively long way since someone settled on the word optional. So I get it. But it has been a source of confusion that's now being cleared up.
+00:52:27 back to the user. That had some really confusing and annoying edge cases. But obviously, the main thing
 
-00:54:51 Yeah, for sure. And there's other things that have been changed as well. Right. You used to have to say from typing import capital L list, return a lowercase list, but it'd be a capital L list and now it's like, you know what, lowercase list works too. Right now we just have a weird.
+00:52:33 was it did have a performance impact. Now, there is no fundamental kind of base type in Pydantic core.
 
-00:55:06 Type case of any where there isn't any function but you can't use it. But we won't go down that line.
+00:52:40 You can validate an int or a string or union of different stuff or a model or a data class or a type dict,
 
-00:55:11 Yeah, for sure. When I talk about validating functions, yeah.
+00:52:47 and you just create your schema and off you go. Fantastic. So basically, there's this low level,
 
-00:55:16 I touched on them just now and like I said, we have the idea of before, so we do a validation before and then we pass the result of that validation to a function. We have validate afterwards. And plane which doesn't do any validation, just calls the function. The most exciting thing and probably one of the things I'm most stoked for in Pydantic V2 is these wrap validators. So you'll have read about middleware in Django or any web framework. We have this idea of an on where we call a validator sorry, call a function which takes a handler to call the next function.
+00:52:53 fast engine that'll just validate all sorts of things if you want to use it directly, right?
 
-00:55:47 We have the same thing here in Pydantic V2 where we have these I've called them wrap validators. They take a handler to a function and then they call that the power here is obviously we can do some logic before the validator, we can do some logic after, we can catch errors, we can return a default value. It gives us loads of flexibility to do more powerful stuff.
+00:52:58 Yeah. And the one thing important to add just while we're on that is there is stuff that's not going to be in Pydantic core.
 
-00:56:09 Yeah, basically can do whatever you want and decide to delegate down to the chain of handlers if you want or skip it. Right. You say this looks good to me, we're just going to return a value.
+00:53:03 I don't think we'll add the URL type, for example. There'll be some, you know, there'll be some custom types that we don't add.
 
-00:56:20 Here in particular with Pydantic 1 there was no way to skip validation if you had a valid data, which obviously caused a slowdown if let's say you had date time. Now still have to call the validator which sure enough got a date time and was happy. But you have to go through that logic. Whereas here we know it's a date time because we've written that code.
+00:53:09 And obviously, if you want to implement your own types, then the way that we get around that is that
 
-00:56:39 There is the potential for people to make mistakes and not call the handler. If they wanted to return the raw value, then we can't stop them. But that's python there aren't always guardrails that's right.
+00:53:14 Pydantic core has a basically a function validator, which is basically call a function, either having
 
-00:56:51 Yeah. Some of the power is in the flexibility but that lets you do bad things as well.
+00:53:19 done some validation before or after and return the result. So that's how we're going to we're going to
 
-00:56:57 Yeah, I mean we could so sorry to interrupt, we could theoretically do some crazy thing where we check just to handle those calls and raise an error or a warning. But I think at this point we let people make their own mistakes if they insist.
+00:53:25 provide a way to build validators without writing without writing Rust.
 
-00:57:09 Well, you also would pay a performance price for all the places where it's used correctly. More powerful aliases.
+00:53:29 Required versus nullable?
 
-00:57:15 Yeah, this is the features that I saw.
+00:53:31 Yeah, probably like hangover from again, me building Pydantic on my own for what I needed.
 
-00:57:17 Although aliases are and then what's this here?
+00:53:37 And also from, you know, it's kind of predated data classes, at least in some of the work.
 
-00:57:20 Aliases are the idea that we have a name for what we want to call a variable in our code. But we know that in the real world where the data is coming from, say on the front end, it's got a different name. Often it's Camel case on the front end because it's JavaScript, and we want to use state case in Python, but also we're using some API, and it has to be called something when the data is coming in. We have that in Pydantic V1, the idea that you could have a field that's called something out externally, but this is actually a feature I saw in the Rust serd Library, which is the main validation library, this idea of flatten. So basically take a value not just from the top level dicks, but from deep down in some object. We pass it and use that for the field.
+00:53:42 And so there was the real problem for me was the word optional and the idea that you had a field that
 
-00:58:06 So I see this stuff all the time where you'll get some huge response from an API, but you're like, I just really want this little part here. And so what you end up having to do is say, okay, capture that result of the dictionary, then navigate down to the three levels and get the sub object, and then pass that to Pythonic. And here you could just say the alias is sort of traverse that down and start from there. Right?
+00:53:47 was required, but was literally called optional. Obviously, I'm not, Pydantic is not the only library that has that problem.
 
-00:58:26 Exactly. And we get nice advances. Like, if that thing is not there, we don't get an error because none has no get method or whatever it might be Pydantic will take care of. Just saying that feels missing if, let's say, Bass was a string, so therefore didn't get bazz second element, quacks, whatever that is. Yes.
+00:53:55 And the real solution is, is the pipe operator, which is the new way of doing unions. None involves not using
 
-00:58:48 So in the case you have here, you say the alias is a list and the list is Bass, and then two and quarks. These are things that are appearing in this JSON document in the dictionary.
+00:54:02 the word optional. You can obviously also get around it by using union of string int. But the point is that
 
-00:58:57 So that list is effectively some location. But what you'll notice, again, is actually another outer list, because we can have more than one of these. We can have it as deep as we like, saw as many different aliases to try as you want.
+00:54:09 if you just have a field that is optional int, it is required but can be none. And that's just that's really
 
-00:59:11 So this actually traverses down, and the two means go to the third item because it's zero based in the list, and then look for that element. That's pretty powerful.
+00:54:16 just to match data classes and other contexts.
 
-00:59:19 Yes. And again, this is the kind of thing that we can do because Pydantic calls in Rust, and the overhead of having aliases of multiple different types is basically absolutely minimal because in Rust, it's a single enum look up. And if we have a simple alias of a string, we don't need to worry about any of that crazy logic to recurs down. We just take the top element out of the top level dictionary and move on.
+00:54:19 Yeah, the new way to express optional for like string pipe none versus optional string. Yeah, that that kind of
 
-00:59:41 Jonas asks, would this solve when my app gets Pascal case, I want to work with Snake case and then return a Camel case. Is there some way to express that kind of stuff with aliases?
+00:54:27 set you free to think about this differently.
 
-00:59:51 This does not. But there was a pull request for Pydantic One where we had load alias and dump alias, so a different alias when we were exporting, and I do intend to support that. So this particular feature kind of related but won't solve it on its own. But yeah, I do intend to allow two different aliases.
+00:54:30 Yeah, also, I mean, I literally asked we do about it at PyCon. And he was like, he didn't say yes,
 
-01:00:09 Speaking of loading and getting back out improvements to dumping serialization export.
+00:54:35 we made a mistake. He said that's fixed by having having pipe none, which is a roundabout way of
 
-01:00:13 Yeah, there's a bunch of stuff here that people have wanted for a long time. In particular being able to create a JSON compliant dictionary, but also people wanting to do their own customization. Again, my hope is that because that dumping logic will be implemented in Rust, we can get like, I going to call it, kind of zero cost extra features because in the end it should be just an enormous lookup to do the complex stuff. And if we're not doing the complex stuff, we go the optimized path.
+00:54:41 saying we kind of made a mistake back then. But you know, typing has come a massively long way since
 
-01:00:44 What we've realized is there are a whole bunch of different things that people might want. They might want the raw data, including sub models. They might want what Dict does now, which is recursively convert models into Dictionaries but otherwise keep stuff unchanged. They might want a JSON compliant dict, as I was saying, or they might want full serialization to JSON. And obviously that last one in particular, we want to be quite well optimized. Well, we want them all to be, but yeah, effectively we want to be able to provide someone completely flexibility without it harming performance in the case where they're not using that. And that's why I think plant has allowed already on validation and I hope we'll allow on serialization.
+00:54:45 someone settled on the word optional. So I get it. But it has been a source of confusion that's now
 
-01:01:27 We're getting a little short on time.
+00:54:49 being like cleared up. Yeah, for sure. And there's other things that have been
 
-01:01:29 Yeah.
+00:54:53 changed as well, right? Used to have to say from typing import capital L list to return a lowercase
 
-01:01:31 Why don't you pick out some of the remaining stuff that you want to focus on. I think maybe the most important is a model namespace cleanup. What do you think?
+00:55:00 list, but it'd be a capital L list. And now it's like, you know what lowercase list works too.
 
-01:01:38 I think context, I was just going to mention here, that's going to be another amazingly powerful escape hatch for some of the things people want to do. Obviously the main use of it is for allowing validation against some dynamic data. But you can also update that thing. It's just a python object. So if you wanted some case we were talking about validators earlier where you've got errors and you want to raise a warning, you could append to context the warnings. So that's another super powerful escape patch without harming performance for everyone else. How it's going to work with FastAPI? Where the model where you do the validation before calling user code? I don't know yet, but I'm sure.
+00:55:03 Right. You have to now we just have the weird side case of any where there isn't any function,
 
-01:02:17 That is the context. Right.
+00:55:08 but you can't use it. But we won't. We won't go down that line.
 
-01:02:19 You have another dependency, I guess in FastAPI lingo that generates your context for that particular call.
+00:55:10 Yeah, for sure. Want to talk about validated functions?
 
-01:02:26 Yeah, I was thinking some of the dependency injection stuff, which is not very popular in Python in general, but that might be the way you might register here's how to get the context for these types of models or something.
+00:55:15 Yeah, I touched on them just now. And like I said, we have, we have the idea of before. So we do a
 
-01:02:38 Sebastian will decide. But that's what you'll be finding.
+00:55:22 validation before and then we pass the result of that validation to a function. We have validate afterwards
 
-01:02:42 Yes, for sure. One quick question, just on usage here. I see that you're saying user and then model validate JSON with this data. And you could also just say user star data. I know you're doing this different here, so you can pass the context, but what would you say is the best way to create these objects?
+00:55:26 and plane, which doesn't doesn't do any validation, just calls the function. The most exciting thing,
 
-01:03:01 Data model validate json is going to be there and it's going to be named that or something close to that. And the point is that's taking a string of json or in this case, a bytes of json and validating it directly. We talked about that earlier on. So that's not the same as user star because it's bytes. There's also model validate Python, which is effectively the same as model star data, except that because obviously we basically don't trust anything you pass to it. That's all external data. You can't pass context that way.
+00:55:31 probably the one of the things I'm most stoked for in Pydantic V2 is these wrap validators. So you'll
 
-01:03:30 Okay. Yeah.
+00:55:37 have, you'll have read about middleware in Django or, or any web framework. We have this idea of an onion
 
-01:03:32 Which I think comes onto your question about the cleanup of the namespace.
+00:55:42 where we call a validator, sorry, call a function, which takes a handler to call the next function.
 
-01:03:36 There are some breaking changes and there's a decent number about renaming some of these model methods and stuff. Right?
+00:55:47 We have the same, same thing here in, in, I'd antic V2 where we have these, I've called them
 
-01:03:44 Yeah. I'm not too worried about this because we're going to leave the old functions there with a depreciation warning on all of them. So that will be quite easy for stuff that's going to be really hard in terms of breaking changes is like where, for example, I've talked earlier about sets no longer being coercible to a list. There's no way to give a warning about that, really, without absolutely peppering pydantic core with warning logic, that would be horrific. So there are going to be the things that are going to be most difficult for people are going to be like silent breaking changes. I'm not particularly worried about functions that give you a warning when you call them and say used a new name. It's going to be the silent stuff or the fundamental changes in behavior that are going to be hard. But again, there's no way to make Pydantic better without doing that fair.
+00:55:52 wrap validators. They take a handler to a function and then they call that the power here is obviously
 
-01:04:25 I think it's worth pointing out the error descriptions now have a documentation link that's kind of interesting.
+00:55:58 we can, we can do some logic before the validator. We can do some logic after we can catch errors.
 
-01:04:30 Yeah, I think that's going to be super powerful for people. I don't know anyone who's ever used cargo and clippy, which are the rust tools for, broadly speaking, lenting and compiling. Whenever you get an error, there's a link basically to give you more information. And obviously a lot of the lot of these links will be being shown to developers through APIs and we can't provide all the information we might like in one sentence message. And so we're going to have these have a bit of Pydantic docs dedicated to information on every single warning, every single error message and what can happen.
+00:56:03 We can return a default value. It gives us like loads of flexibility to do, to do more powerful stuff.
 
-01:05:04 It leads to another interesting question about Pydantic 2, and what we do with the documentation and the licensing of it. So Pineapic is definitely going to stay MIT licensed, might be dual licensed Apache too, if someone can tell me why that's necessary. But it's going to stay permissively licensed. But I'm kind of becoming aware of the documentation, which is valuable and will get better and more valuable. It's currently MIT licensed, and some company could take it all and bang it on their domain totally legally. So I might change the documentation license to something a bit more restrictive to say, for example, you can't take all of these error message documentation and just put them on your own domain, or at least we have some way of making that possible without allowing people to commercialize that, mostly because it would get really confusing if there was Pydantic documentation is up to date, and FUBAR company who published the whole same thing, but leave it out of date, and they both come up on Google.
+00:56:09 Yeah. You basically can do whatever you want and decide to delegate down to the, the chain of
 
-01:05:59 It's interesting to think about having this mixed model in your repo, because obviously you want Pydantic library to be wide open for people, but then there's this supporting stuff they treat differently.
+00:56:14 handlers if you want, or skip it, right? You say that this, this looks good to me. We're just gonna
 
-01:06:10 Yeah. And I know that the Linux distributions are going to be super spiky if any of that stuff that's not MIT licensed got distributed. Right. Because their package managers have to have stuff that's correctly licensed. Obviously they allow stuff that's like GPL or something, but I'm thinking about something probably GPL doesn't stop you publishing documentation. So yeah, it's an open question. I don't want to have a separate repo for documentation because it will make creating a PR that much higher friction. But I think I need to talk to an IP lawyer before I say anything authoritative on this, is what I guess I'm getting to.
+00:56:19 return a value here.
 
-01:06:45 Yeah. I'm feeling entirely unqualified to give any advice on this, but it's tricky. Right. As we were talking before hit record. Like, if you have a license in a subfolder, does that license override the more broad one? You have to go and change your broad license, your MIT license. Say. Here's the MIT license. Except for this section of the repo, this doesn't apply to it's weird.
+00:56:20 In particular with, with Pynantic one, there was no way to skip, yeah, to skip validation if you
 
-01:07:11 I presume that the big projects, the Djangos of this world and the NumPy must have thought about this stuff. So probably worth doing some research on them. But I'm thinking out loud, and I probably need to come up with a conclusive answer before I say more.
+00:56:26 had a validator. So, which obviously caused a slowdown. If let's say you had date time now,
 
-01:07:23 Well, it's called a plan, not a release. Right. Okay. We talked about the Pydantic becoming its own license. One that I want to talk about is from Om and Friends, I guess.
+00:56:30 you still had to call the validator, which sure enough, got a date time and was happy,
 
-01:07:35 Yeah. Maybe talk about these sections here.
+00:56:34 but you had to go through that logic. Whereas here, we know it's a date time because we've,
 
-01:07:38 Yes. There's a whole bunch of improvements here that we could talk about for an hour, probably on each one. That loan fault, but the firm IRM was a bit of a strange case where you had to have a conflict flag. And then there was a method on a model pronunciation core has this built in from attributes Power, which basically allows it to recurse through some Python objects. That is not a dictionary instead of a dictionary, if you switch that on. So we talked earlier about aliases and about hunting down through some complex objects. Normally of dictionaries, if that came in from JSON, but in loss of context, and ORM in particular, it's not. Right. So from attribute to lets you basically do that same finding things in an object from something that's not a dictionary via basically get item from, not get item affected. Yeah.
+00:56:37 we've written that code. there is a, there is the potential for people to make mistakes and not
 
-01:08:23 And that makes a lot of sense because then you could just pass any class that you got from anywhere. You don't have to find a way to get it to a dictionary.
+00:56:42 call, the handler. if they wanted to return the raw value, then, we can't break,
 
-01:08:30 Yes, exactly.
+00:56:47 we can't stop them, but that's Python. There aren't, there aren't always guard rails.
 
-01:08:32 Pydantic should take care of that and give you nice warnings. When, like, the third level, it gets the right error or it gets a type error, it will tell you type error. And if it's an attribute error, it'll say not found. Got it? Yeah.
+00:56:50 That's right. Yeah. Some of the power is in the flexibility. All right. But that, that lets you
 
-01:08:43 So from Orm to me, that felt like, well, here's a thing, a way to integrate it with SQLAlchemy or something like that. But this is just more general to say we're moving to something that just says, given any object, just go get it.
+00:56:56 do bad things as well. Yeah. I mean, we could, so sorry to interrupt. we could theoretically do
 
-01:08:54 I mean, from ORM was a dumb name. You're quite right. It came exactly from compatibility with ORM's and SQLAlchemy, but in particular but yeah, what we're actually doing is taking stuff from attributes so the new name makes more sense and the new functionality is a lot more powerful.
+00:57:01 some crazy thing where we checked if the handler was called and raised an error or a warning. But
+
+00:57:05 I think, I think at this point we let people make their own mistakes if they, if they insist.
+
+00:57:09 Well, and you also would pay a performance price for all the places where it's used correctly.
+
+00:57:13 Yep. More powerful aliases.
+
+00:57:15 Aliases. Yeah, this is a features that I saw.
+
+00:57:17 It's helping what the alias are. And then, yeah, then what's the use here?
+
+00:57:20 Aliases are the idea that we, we have a name for what we want to want to call a variable in our code,
+
+00:57:25 but we know that in the real world where the data is coming from, say on the front end,
+
+00:57:29 it's got a different name. Often it's camel case, on the front end, because it's JavaScript and we want to
+
+00:57:33 use, state case, in Python, but also, you know, we're using some API and we want to,
+
+00:57:40 it has to be called something when the data is coming in. and so we had that in Pydantic,
+
+00:57:44 V1, the idea that you could have a field that was called something else externally.
+
+00:57:48 but this is actually a feature I'd saw in, the rust third library, which is that the main
+
+00:57:54 validation library, this idea of flatten. So basically take a value, not just from the top
+
+00:57:59 level decks, but from deep down in some object, we pass it and use that for the field. And so again,
+
+00:58:04 this is one of the things kind of stuff. Yeah, sorry. I see this stuff all the time where you'll
+
+00:58:08 get some huge response from an API, but you're like, I just really want this little part here.
+
+00:58:13 And so what you end up having to do is say, okay, capture that result. It's a dictionary,
+
+00:58:17 then navigate down to the three levels and get the sub object and then pass that to Pydantic. And here,
+
+00:58:22 you could just say the alias is sort of traverse that down and start from there. Right?
+
+00:58:26 Exactly. And we get nice advances. Like if that thing's not there, we don't get an error because
+
+00:58:30 the, the get, you know, none has no, you know, get method or whatever it might be. Pydantic will take
+
+00:58:36 care of just saying that feels missing. If let's say, as was a, was a string. So therefore,
+
+00:58:42 couldn't get as second element, you know, quarks, whatever that is. Yeah. So in the case you have here,
+
+00:58:49 you, you say the alias is a list and the list is baz and then two and quarks. These are things that are
+
+00:58:55 appearing in this JSON document. Yeah. The dictionary. So, so that list is, is effectively
+
+00:58:59 some location, but it, what you'll notice again is there's actually another outer list because we can
+
+00:59:04 have more than one of these. we can have it as deep as we like, I'm sorry, as many different
+
+00:59:09 aliases to try as you want. Yeah. So this actually traverses down and the two means go to the third
+
+00:59:15 item because it's zero based in the list and then look for that, that element. That's pretty powerful.
+
+00:59:19 Yeah. And again, this is the kind of thing that we can do because Pydantic calls in Rust and the,
+
+00:59:24 the overhead of, having aliases of, of multiple different types is basically absolutely
+
+00:59:29 minimal because it's a, in Rust, it's an, it's a single enum lookup. And if we have a simple alias
+
+00:59:34 of a string, we don't need to worry about any of that crazy logic to recurse down. We just take the
+
+00:59:38 top, you know, an element out of the top level dictionary and move on.
+
+00:59:41 Jonas asks, would this solve when my app gets Pascal case, I want to work with snake case and then return
+
+00:59:46 a camel case. Is there some way to express that kind of stuff with aliases?
+
+00:59:51 This does not, but we had, there was a pull request, for Pydantic two, Pydantic one,
+
+00:59:56 that where we had load alias and dump alias. So a different alias when we were exporting.
+
+01:00:01 and I, I do intend to support that. So this particular feature is kind of related, but won't
+
+01:00:05 solve it on its own. But yeah, I do intend to allow two different aliases.
+
+01:00:08 Speaking of loading and getting back out, improvements to dumping, serialization, export.
+
+01:00:13 Yeah. There's been, there's a bunch of stuff here that people have wanted for a long time,
+
+01:00:18 in particular, being able to create a, like a JSON compliant dictionary. but also people wanting
+
+01:00:23 to do their own customization. Again, my hope is that because that, that dumping logic will be
+
+01:00:29 implemented in rust, we can get like, I'm going to call it kind of zero cost
+
+01:00:33 extra features because in the end it's like, should be just an enum lookup, to, to do the complex stuff.
+
+01:00:39 And if we're not doing the complex stuff, we go the, we go the optimized path. yeah, there's,
+
+01:00:43 there's what, what we've realized is there's a, there are a whole bunch of different things that
+
+01:00:47 people might want. They might want the raw data, including, including sub models. They might want
+
+01:00:52 what DICT does now, which is recursively convert, models into dictionaries, but otherwise keep stuff
+
+01:00:58 unchanged. They might want to JSON compliant, DICT as I was saying, or they might want full
+
+01:01:04 serialization to JSON. And obviously that last one in particular, we want to be quite well optimized.
+
+01:01:08 Well, we want them all to be, but yeah, effectively.
+
+01:01:10 Last one's the most important. Yeah.
+
+01:01:12 Yeah. We, we want a, we want to be able to provide someone complete flexibility without it
+
+01:01:17 harming a performance in the case where they're not using that. And that's, that's why I think,
+
+01:01:21 Pydantic Core has allowed already on validation and I hope will allow on, on serialization.
+
+01:01:27 All right. We're getting a little short on time. So let's maybe, let's, why don't you pick
+
+01:01:32 out some of the remaining stuff that you want to focus on? I think maybe the most important is a model
+
+01:01:36 namespace cleanup. What do you think?
+
+01:01:37 I mean, I think context that I was just going to mention here, that's going to be another
+
+01:01:41 amazingly powerful, escape hatch for some of the, some of the things people want to do.
+
+01:01:46 obviously the main use of it is for, is for allowing validation against some dynamic data,
+
+01:01:51 but you can also update that thing. It's just a Python object. So if you wanted some case that we
+
+01:01:56 were talking about rapid validators earlier, where you've got errors and you want to raise a warning,
+
+01:01:59 you could append to context the warnings. so that is another super powerful escape hatch
+
+01:02:05 without, without harming performance for everyone else. How it's going to work with FastAPI,
+
+01:02:09 where the model, where you do the validation before, calling user code. I don't know yet,
+
+01:02:15 but I'm sure.
+
+01:02:16 Yeah. How do you provide that data that is the context, right?
+
+01:02:19 You have another dependency, I guess, in FastAPI, lingo that generates your context for that
+
+01:02:25 particular call.
+
+01:02:25 Yeah. I was thinking some of the dependency injection stuff, which is not very popular
+
+01:02:29 in Python in general, but that might be the way you might register. Here's how to get the context for
+
+01:02:35 these types of models or something. Yeah. I mean, Sebastian will decide, but that's what
+
+01:02:40 we'll find a way to do. Yeah, for sure. One quick question just on usage here. Like I see that you're
+
+01:02:45 saying user and then model validate JSON with this data. And you could also just say user star,
+
+01:02:51 star data. I know you're doing this different here, so you can pass the context, but what,
+
+01:02:55 what would you say is the best way to create these objects?
+
+01:03:00 So, so, so, so model validate.json is going to be there and it's going to be named that or something
+
+01:03:06 close to that. And the point is that's taking a string of Jason or in this, in this case,
+
+01:03:10 a bytes of Jason and validating it directly. We talked about that earlier on. so that's not
+
+01:03:15 the same as user star star, right? Right. Because it's bytes. there's also model validate
+
+01:03:20 Python, which is effectively the same as model, star star data, except that because obviously we
+
+01:03:26 basically don't trust anything you pass to it. That's all external data. You can't pass context
+
+01:03:30 that way. Okay. Yeah. which I think comes onto your, your question about the cleanup of the,
+
+01:03:35 of the namespace. There are some breaking changes and there's a decent number about sort of renaming
+
+01:03:41 some of these, these model methods and stuff, right? Yeah. I'm not too worried about these because
+
+01:03:45 we're going to leave the old functions there with a, with a depreciation warning on all of them.
+
+01:03:49 So that will be quite easy. The stuff that's going to be really hard in terms of breaking changes is like
+
+01:03:54 where, for example, I've talked earlier about sets no longer being coercible to a list.
+
+01:03:59 There's no way to give a warning about that really without absolutely peppering Pydantic core with,
+
+01:04:03 with like warning logic that, that would be horrific. so there are going to be the things that are
+
+01:04:08 going to be most difficult for people are going to be like silent breaking changes. I'm not particularly
+
+01:04:12 worried about functions that give you a warning when you call them and say, use the new name,
+
+01:04:16 it's going to be the silent stuff or the, you know, the fundamental changes in behavior that are going to be
+
+01:04:20 hard. But again, I, I, I, I, there's no way to make Pydantic better without doing that.
+
+01:04:24 Yeah.
+
+01:04:25 Fair. I think it's worth pointing out the error descriptions now have a documentation link.
+
+01:04:29 That's kind of interesting.
+
+01:04:30 Yeah. I think that's going to be super powerful for people. I don't know anyone who's ever used a cargo,
+
+01:04:37 and Clippy, which are the rust tools for, for broadly speaking, linting and compiling. whenever you get an
+
+01:04:42 error, there's a, there's a link basically to give you more information. And obviously a lot of these,
+
+01:04:46 a lot of these links will be being shown to developers through APIs, and we can't provide all the information we might like in a,
+
+01:04:52 like one sentence message. And so we're going to have these, have, a bit of Pydantic's,
+
+01:04:58 docs dedicated to information on every single warning, every single error message and what can happen.
+
+01:05:04 it leads to another interesting question about Pydantic two and what we do with the documentation
+
+01:05:09 and the licensing of it. So Pydantic is definitely going to stay MIT licensed, might be dual licensed Apache
+
+01:05:15 two, if someone can tell me why that's necessary, but it's going to stay, you know, permissively licensed,
+
+01:05:20 but I'm, I'm kind of becoming aware that the documentation, which is valuable and will get
+
+01:05:25 better and more valuable. It's currently MIT licensed and some company could, could take it
+
+01:05:29 all and bang it on their, their, their domain totally legally. So I might change the documentation
+
+01:05:35 license to something a bit more restrictive to say, for example, you can't take all of these, error
+
+01:05:40 message, documentation and just put them on your own domain. Or at least we have, we have some way of
+
+01:05:46 making that possible without make allowing people to commercialize that mostly because it would get
+
+01:05:50 really confusing if there was Pydantic documentation is up to date and Fubar company who published the
+
+01:05:56 whole same thing, but leave it out of date. And they both come up on Goop.
+
+01:05:58 It's interesting to think about having this mixed model in your repo, because obviously you want
+
+01:06:04 Pydantic, the library to be wide open for people, but then there's this supporting stuff.
+
+01:06:08 And I mean, I treat differently.
+
+01:06:10 Yeah. And I know that the, the unit, the Linux distributions are going to be super spiky. If any
+
+01:06:16 of that stuff that's not MIT licensed got distributed, right? Because they're, they're, package managers
+
+01:06:22 have to have stuff that's, that's, you know, correctly licensed. I mean, obviously they allow
+
+01:06:25 stuff that's, like GPL or something, but I I'm, I'm thinking about something from is GPL doesn't
+
+01:06:31 stop you publishing documentation. So yeah, it's an open question. I don't want to have a separate repo
+
+01:06:36 for documentation because it will make creating a PR that much, you know, higher friction. But,
+
+01:06:40 I think I need to talk to an IP lawyer before I say anything authoritative on this is what I guess I'm
+
+01:06:44 getting to. Yeah. I'm, I'm feeling entirely unqualified to, to give any advice on this,
+
+01:06:50 but it's tricky, right? As we were talking before you hit record, like if you have a sub light,
+
+01:06:55 a license in a sub folder, does that license override the more broad one? I do you have to go
+
+01:07:01 and change your broad license, your MIT license, say, here's the MIT license, except for this section
+
+01:07:06 of the, the repo. This doesn't apply to see it's license. You know, that's weird.
+
+01:07:11 I presume that the big projects, the Django's of this world and the num NumPy must've, must've thought about this stuff. So probably worth doing some research on them,
+
+01:07:18 but I'm thinking out loud and I probably need to come up with a conclusive answer before.
+
+01:07:21 Sure. Well, it's called a plan, not a release, right? Okay. we talked about the
+
+01:07:27 identity becoming its own license. One that I want to talk about is the from ORM and friends,
+
+01:07:34 I guess. yeah, maybe talk about this, these sections here.
+
+01:07:38 So there's a whole bunch of improvements here that we could talk about for, for an hour,
+
+01:07:42 probably on each one, let alone, let alone full, but, but the, the from ORM was a, was a,
+
+01:07:47 was a bit of a strange case where it was, you had to have a conflict flag and then there was a method
+
+01:07:51 on a, on a model. Pylandic core has this built in from attributes power, which basically allows
+
+01:07:57 it to recurse through some Python object that is not a dictionary instead of a dictionary, if you switch
+
+01:08:03 that on. So we talked earlier about aliases and about hunting down through some complex objects,
+
+01:08:07 normally of dictionaries, if that came in from JSON, but like in lots of contexts and ORM in particular,
+
+01:08:12 it's, it's not right. So from attributes, it lets you basically do that same finding things in an
+
+01:08:18 object from something that's not a dictionary via basically get atro, not get item effectively.
+
+01:08:23 Yeah. And that makes a lot of sense. Cause then you could just pass any class that you got from
+
+01:08:27 anywhere. You don't have to find a way to get it to a dictionary.
+
+01:08:30 Yeah, exactly. And, Pylandic should, should take care of that and give you nice warnings when
+
+01:08:35 it, when like the third level, it gets a, it gets the right error or it gets a, it gets a type error.
+
+01:08:39 It'll tell you type error. And if it's an attribute error, it'll say not found.
+
+01:08:41 So yeah.
+
+01:08:42 Got it. Yeah. So from ORM to me, that felt like, well, here's a thing, a way to integrate it with
+
+01:08:47 SQLAlchemy or something like that. But this is just more general to say, we're moving to something
+
+01:08:51 that just says given any object, just go get it.
+
+01:08:54 Yeah. I mean, from ORM was a dumb name. You're quite right. It came exactly from,
+
+01:08:58 from, compatibility with ORMs and SQLAlchemy, but in particular, but yeah, in what we're actually
+
+01:09:04 doing is taking stuff from attributes. So the new name makes more sense. And the new functionality is
+
+01:09:08 like a lot more powerful.
 
 01:09:09 Would from attributes work on properties in addition to fields?
 
-01:09:13 It should do, yeah. Yes, it does. It's a unit test for it. It does.
+01:09:13 It should do. Yeah. Yes, it does. There's a unit test for it. It does.
 
-01:09:16 Okay, fantastic. That's really cool, because your class might have computed elements, but you want them to show up in your JSON, right? Or something like that.
+01:09:16 Okay. Oh, fantastic. That's really cool. Cause your, your class might have computed elements,
 
-01:09:25 Yeah.
+01:09:22 but you want them to show up in your JSON, right? Or something like that. So yeah.
 
-01:09:26 Cool. All right.
+01:09:25 Yeah. Cool. All right. I think, I think that might be, I want to know one more question I have for you.
 
-01:09:27 I think that might be one more question I have for you. When I was doing C++ C#, I remember thinking about numerical types a lot. Is it sufficient to have an int here? Do I need a long? Is it an unsigned long? How much data could it be? What happens if I have an int and I increment it now? It's negative 2.1 billion or whatever. There's all these weird scenarios that go away in Python because Python uses a slower but way more flexible numerical type. Right. All the stuff happening to rust. I feel like you might need to think about that a little bit.
+01:09:32 When I was doing C, C++ C#, I remember thinking about numerical types a lot. Is it sufficient
 
-01:10:05 Yeah. So it's all I 32 in the case of in. So we're limited to whatever.
+01:09:40 to have an end here? Do I need a long? Is it an unsigned long? How much data could it be? What happens
 
-01:10:12 So whatever the limit is on I 64, that does mean that you can't pass in. You had it there. Whatever two to 64 is. There we are. There's a number.
+01:09:47 if I have an end and I increment it now it's negative 2.1 billion or whatever? Like there's
 
-01:10:22 I don't know how to say that number, but it's like a million trillion times nine or something.
+01:09:53 all these weird scenarios that go away in Python because Python uses a slower, but way more flexible
 
-01:10:28 Yeah, you would have trouble with you could use a functional validator. You could find a way around it if you had to. But yeah, I think that's a price worth paying for the fact that we can do internet integer stuff really quickly, right? And we can do bound checks much more quickly.
+01:10:00 numerical type, right? All this stuff happening in rust. I feel like you might need to think about
 
-01:10:46 And we have obviously we have nice errors in there. If you do pass in something bigger than that or if you pass float in again, we'll get infinity, same as we would if you got a number above that or float NAN again, you'll get in. That's not allowed. So those cases are all taken care of and they give you a nice error. And there would be an escape hatch if you really have to. Right.
+01:10:04 that a little bit. Yeah. So it's, it's all, I 32 in the case of, in the case of ints. So we're
 
-01:11:07 So the escape hatch could be you might write a validator that checks is the number in Python it checks is the number bigger than this limit if it is raising exception, say number two big or something like that.
+01:10:09 limited to whatever, so I 64, sorry, I 64. So whatever the limit is on, on I 64, that does
 
-01:11:18 Yeah, I mean there isn't actually an escape hatch in the case of JSON because we have to do the parsing before we get there. So you'd have to pass your JSON externally and then pass it in as a Python object and do something weird.
+01:10:16 mean that you can't pass in. Yeah. You had it there. Whatever, whatever two to the 64 is. There we are.
 
-01:11:29 But it's uncommon that you get insanely large numbers like this.
+01:10:21 There's the number. I don't know how to say that number, but it's like a million trillion times
 
-01:11:33 I think that insanely large numbers like that come up when people try and break things almost.
+01:10:27 nine or something. Yeah. you would have trouble with, you could use a, you could use a,
 
-01:11:38 Yeah, they try to break things or they're trying to do some odd math problem where like I'm trying to use recursion to compute and see how many prime something like that. But in the general day to day of I'm accepting user input over an API, what I would say is that.
+01:10:33 functional validator. You could find a way around it if you had to, but yeah, I think that's a price
 
-01:11:55 As a Unix timestamp in Milliseconds is beyond 999 in years, right. It's beyond the date that anyone is ever going to want to use.
+01:10:37 worth, worth paying for the fact that we can do internet integer, stuff really quickly. Right.
 
-01:12:03 So I don't see that being a problem. Really.
+01:10:43 And we can do bounds checks much more, much more quickly. yeah. And we have, obviously we have
 
-01:12:07 Actually, I think I don't know how to make it happen. But there's probably some interesting performance story for Python getting faster if it could work with real numerical types rather than these super flexible numerical types. A lot of times you'll see examples of math and it's like well, okay, this high long object thing instead of working just with true INTs and floats and stuff really slows it down. I see a future maybe someday where Python actually adopts these sort of limited.
+01:10:48 nice errors in there. If you do pass in something bigger than that, or if you pass, float inf,
 
-01:12:37 Types like this potentially isn't that what kind of library number are doing? They're allowing you to selectively compile a function without going completely off on a.
+01:10:53 again, we'll get infinity same as we would, if you've got a number above that or float nan,
 
-01:12:45 Pydantic there you explicitly say whether it's an end or stuff like that. Right.
+01:10:58 again, you'll get it. You know, that's not allowed. So those cases are all taken care of and they give
 
-01:12:51 I think the other option would be another way would be to say you don't want to be writing Python at that point because you want all the tools available in Rust syntax to allow you to say all the stuff you want to be able to say and do integer overflow nicely. So the other option would be at some point there will be a way to basically write Rust even more easily than now inside Python. Those are the two are using PyCharm and really lucky that we get PyCharm and we can get basically syntax highlighting in any random string that doesn't seem too crazy. Yeah. And obviously even more so if you were to file. So I think there are lots of ways around it.
+01:11:02 you a nice error and there would be an escape, escape hatch if you really had to. Right. So the escape
 
-01:13:24 Yeah, we'll see. Maybe more stuff to come together with a WebAssembly feature. Who knows? Anyway, a lot of stuff to think about.
+01:11:07 patch could be, you might write a validator that checks is the number in Python. It checks,
 
-01:13:31 I didn't bring this up because I feel like this is a problem or anything I brought up just because I wanted people to be maybe aware that there are some slightly different data types at play here since it's going through rust.
+01:11:12 is the number bigger than this limit. If it is race and exception, say number two bigger,
 
-01:13:41 Yeah. I think it's important to see that under the hood we are doing yeah, exactly.
+01:11:17 something like that. Yeah. I mean, there isn't actually an escape hatch in the case of Jason,
 
-01:13:45 We can talk about date time, date time, delta validation, but I've built a library in Rust for doing that a bit faster than all the ones I could find. That, for me, makes the right compromise, called speed date, and that is having to deal with exactly those overflow problems. And I fuzzed this library a great deal and found a whole bunch of overflow issues by fuzzing it, because when you're doing raw parsing in Rust, you have to think about that stuff that those of us who come from a Python background haven't even thought about the idea that adding two numbers is scary and might result in a panic.
+01:11:21 because we have to do the, we have to do the parsing before we get there. So you'd have to,
 
-01:14:22 Honestly, I hadn't thought about it for all it's kind of nice to just not have to worry about those things. You still just always have to consider, is it okay to add? Is it okay to multiply these things? Because even if that's just an intermediate value, something insane might happen along the way, right? Yeah.
+01:11:25 you'd have to pass your Jason externally and then pass it in as a Python object and do something weird,
 
-01:14:37 Cool.
+01:11:29 but it's uncommon that you get insanely large numbers like this. I think that the insanely large
 
-01:14:37 All right, well, thank you so much for working on Pydantic throughout there. I know it's made my code and my projects much nicer. 72,000 other people agree, it seems like no problem.
+01:11:35 numbers like that come up when people try and break things almost. Yeah. They try to break things or
 
-01:14:49 Thank you very much. And thank you so much to all of the people who helped with Pydantic in every way, from Eric and Sebastian and people who work on it quite a lot, but also to all the people who create issues and submit one pull request. That makes my job a lot more fun that it's not just me sitting in an ivory tower doing it on my own.
+01:11:39 they're trying to do some, some odd math problem where like, I'm trying to use recursion to compute
 
-01:15:06 It's much more fun to work on projects with people.
+01:11:45 and see how many prime, you know, something like that. But in the general day to day of I'm accepting
 
-01:15:08 Absolutely.
+01:11:50 like user input over an API, you know. What I would say is that as a Unix
 
-01:15:09 Magnus says thanks to the great show and all the work on Pydantic. Looking forward to Pydanti2. Right on. Now, before we get out of here, final two questions. If you're going to write some Python code, work on Pythonic, what editor do you pull up?
+01:11:56 timestamp in milliseconds is beyond 999 in years, right? It's, it's beyond the date that anyone's ever
 
-01:15:21 I pull up PyCharm. I'm a complete convert. I completely rely on it.
+01:12:02 going to want to use. So I'm, I don't see that being a problem really. I don't either.
 
-01:15:25 Yeah, right on. And notable PyPI or even cargo package, I suppose. Whatever you want to shout out to some external library out there that you think is pretty cool.
+01:12:07 Actually, I think there's probably, I don't know how to make it happen, but there's probably some
 
-01:15:35 It's not going to be particularly interesting because we talked about it already, but PyO3, I'm like, forever impressed by what these guys have done, and obviously they've made what I'm working on here possible, and they've been really helpful for me when I've asked dumb Rust questions. So, yeah, thank you to them. And if you're ever thinking about getting into Rust, doing it from Python is a really neat way where, when you can't work out what the hell is going on, you can kind of fall back to Python. Sometimes.
+01:12:11 interesting performance story for Python getting faster. If it could work with real numerical
 
-01:15:57 There's an audience question a while back about any resources that you might recommend for learning Rust or on the journey to getting to PyO3 and so on.
+01:12:17 types rather than these super flexible numerical types, you know, a lot of times you'll see examples
 
-01:16:07 No, people always ask me how did I learn to code and why did I do it, and I basically smashed my head against the wall until it's compiled.
+01:12:22 of math and it's like, well, okay, this, this, you know, pie, long object thing, instead of working
 
-01:16:14 Yeah, I hear that. That's a pretty common way. Okay, final call to action. People are interested, excited, they have feedback, something like that. They want to try out Python, particularly.
+01:12:28 just with, you know, true ints and floats and stuff really slows it down. So I don't know. I, I see a
 
-01:16:25 If you're in using an unusual environment. Install Pdantic core right now, pip, install Pyfantic Core and just run. The simple example was one, for example, on the release check it. Compiles, and if you find an environment where it doesn't work so it compiles but runs, let me know, because that'll be easier to fix sooner rather than later. And then most of all, once we get to the beta of an alpha of Pythonic V two, please come and try it then, because again, it'll be a lot easier to fix it before it's released and after.
+01:12:33 future maybe someday where Python actually adopts in these sort of limited types like this potentially,
 
-01:16:52 Yes, absolutely.
+01:12:38 but isn't that what kind of libraries like number number are doing? They're allowing you to selectively
 
-01:16:52 And I'll do a lot of shouting on Twitter about that when the time comes.
+01:12:43 compile a function without going completely off on a tangent. I think that's one approach.
 
-01:16:56 Perfect. All right, Samuel, thank you so much for being here.
+01:12:46 And there you explicitly say whether it's an, an, an, or, or stuff like that. Right.
 
-01:16:59 Thank you very much, michael, it's been a pleasure.
+01:12:50 I think the other option would be like, you know, another way would be to say,
 
-01:17:01 Yes, you bet. As always. See you later.
+01:12:54 you don't want to be writing Python at that point, because you want to be able, you want all the tools
+
+01:12:58 available in Rust syntax to allow you to, to say all the stuff you want to be able to say and do
+
+01:13:03 integer overflow nicely. So the other option would be some point there'll be a way to basically write
+
+01:13:08 Rust even more easily than now inside Python. Those of us who are using PyCharm and are, you know,
+
+01:13:13 really lucky that we get PyCharm and we can get basically syntax highlighting in any random string.
+
+01:13:17 That doesn't seem too crazy. and obviously even more so if you were porting a file. So I think there are
+
+01:13:22 lots of ways around it. yeah. Yeah. We'll see. Maybe more stuff to come together with the
+
+01:13:26 WebAssembly future. Who knows? Anyway, a lot, a lot of stuff to think about. I think this is this,
+
+01:13:31 I didn't bring this up because I feel like this is a problem or anything. I brought it up just because
+
+01:13:34 I wanted people to be maybe aware that there are some slightly different data types at play here.
+
+01:13:40 Yeah. Since it's going through Rust. Yeah. I think it's important to see that under the
+
+01:13:42 hood we are doing. Yeah. Yeah, exactly. And, and so I've, we can talk about date, time, date, time,
+
+01:13:49 time, time delta validation, but I've built a library in Rust for doing that.
+
+01:13:54 a bit faster than all the ones I could find that is for me, makes the right compromise called
+
+01:13:58 speed date. and that, that is having to deal with exactly those overflow problems. And I, I fuzz
+
+01:14:04 this library a great deal and found a whole bunch of overflow issues by fuzzing it because yeah,
+
+01:14:09 when you're doing raw parsing in, in Rust, you have to think about that stuff that those of us who come
+
+01:14:15 come from a Python background haven't even thought about, you know, the idea that adding two numbers
+
+01:14:19 is scary and might result in a panic is, is, is, is. Yeah. I honestly, I hadn't thought about it for
+
+01:14:24 while. It's kind of nice to just not have to worry about those things. You used to just always have to
+
+01:14:28 consider, you know, is it, is it okay to add, is it okay to multiply these things? Because even if that's
+
+01:14:33 just an intermediate value, something insane might happen along the way. Right. Yeah. Cool. All right.
+
+01:14:38 Well, thank you so much for working on Pydantic putting out there. I know it's made my code
+
+01:14:43 and my projects much nicer. 72,000 other people agree. It seems like. No problem. Thank you very
+
+01:14:49 much. And thank you so much to all of the people who, who help with Pydantic in, in every way from,
+
+01:14:53 from like Eric and Sebastian and people who, who work, like work on it quite a lot, but also to like
+
+01:14:59 all the people who create issues and, and submit one pull request that like makes my job a lot more
+
+01:15:03 fun that it's not just me sitting in a, sitting in an ivory tower, doing it on my own.
+
+01:15:06 It's much more fun to work on projects with people. Absolutely.
+
+01:15:09 Magnus says, thanks to the great show and all the work on Pydantic. Looking forward to Pydantic too.
+
+01:15:14 Right on. Now, before we get out of here, final two questions. If you're going to write some Python
+
+01:15:17 code, work on Pydantic, what editor do you pull up? I pull up PyCharm. I'm a complete convert. I
+
+01:15:23 completely rely on it. Yeah. Right on. And notable IPI or even a cargo package, I suppose, whatever,
+
+01:15:31 whatever you want to shout out to some external library out there that you think is pretty cool.
+
+01:15:34 It's not going to be, it's not going to be particularly interesting because we've talked
+
+01:15:39 about it already, but Py03, I'm like forever impressed by what those guys have done. And
+
+01:15:42 obviously they've made what I'm working on here possible. And they've been really helpful for
+
+01:15:45 me when I've asked dumb Rust questions. So yeah, thank you to them. And yeah, if you're ever thinking
+
+01:15:50 about getting into Rust, doing it from Python is a really, really neat way where when you can't
+
+01:15:54 work out what the hell's going on, you can kind of fall back to Python sometimes.
+
+01:15:57 There's an audience question a while back about any resources that you might recommend
+
+01:16:01 for learning Rust or on the journey to getting to Py03 and so on.
+
+01:16:06 No, I'm like, people always ask me, what, how did I learn to code and where did I do it? And I
+
+01:16:11 basically smashed my head against the wall until it compiled.
+
+01:16:13 Yeah, I hear that. That's a pretty common way. Okay. Final call to action. People are
+
+01:16:19 interested, excited. They have feedback, something like that. They want to try out
+
+01:16:23 Pydantic 2. Particularly if you're using an unusual environment, install Pydantic Core right now.
+
+01:16:29 pip install Pydantic Core and just run the simple example as one, for example, on the release.
+
+01:16:35 Check it compiles. And if you find an environment where it doesn't work, so it not compiles, but runs,
+
+01:16:39 let me know because that'll be easier to fix sooner rather than later. And then most of all,
+
+01:16:43 once we get to the betas and alphas of Pydantic V2, please come and try it then because,
+
+01:16:49 again, it'll be a lot easier to fix it before it's released and after.
+
+01:16:52 Yeah, absolutely.
+
+01:16:53 And I'll do a lot of shouting on Twitter about that when the time comes.
+
+01:16:55 Perfect. All right, Samuel, thank you so much for being here.
+
+01:16:59 Thank you very much, Michael. It's been a pleasure.
+
+01:17:01 Yeah, you bet. As always. See you later.
 
 01:17:02 Cheers. Bye bye.
 
-01:17:04 This has been another episode of Talk Python to me. Thank you to our sponsors. Be sure to check out what they're offering, it really helps support the show. Listen to an episode of Compiler, an original podcast from Red Hat Compiler unravels industry topics, trends and things you've always wanted to know about tech through interviews with the people who know it best. Subscribe today by following talkpython FM compiler. Starting a business is hard. Microsoft for Startups Founders Hub provides all founders at any stage with free resources and connections to solve startup challenges. Apply for free today at Talkpathon Fm/Foundershub want to level up your Python? We have one of the largest catalogs of Python video courses over at Talk Python. Our content ranges from true beginners to deeply advanced topics like memory and Async. And best of all, there's not a subscription in site. Check it out for yourself at training.talkpython FM. Be sure to subscribe to the show, open your favorite podcast app and search for Python. We should be right at the top. You can also find the itunes feed at /itunes the Google Play Feed at /Play and the Direct rss Feed at rss on talkpython FM.
+01:17:03 This has been another episode of Talk Python to Me.
 
-01:18:15 We're live streaming most of our recordings these days. If you want to be part of the show and have your comments featured on the air, be sure to subscribe to Our YouTube Channel at talk python.com/YouTube. This is your host, Michael Kennedy. Thanks so much for listening. I really appreciate It. Now get out there and write some python code
+01:17:07 Thank you to our sponsors. Be sure to check out what they're offering. It really helps support the show.
+
+01:17:12 Listen to an episode of Compiler, an original podcast from Red Hat. Compiler unravels industry topics,
+
+01:17:18 trends, and things you've always wanted to know about tech, through interviews with the people who know it best. Subscribe today by following talkpython.fm/compiler.
+
+01:17:28 Starting a business is hard. Microsoft for startups, Founders Hub provides all founders at any stage
+
+01:17:34 free resources and connections to solve startup challenges. Apply for free today at talkpython.fm/foundershub.
+
+01:17:41 Want to level up your Python? We have one of the largest catalogs of Python video courses over at Talk Python.
+
+01:17:47 Our content ranges from true beginners to deeply advanced topics like memory and async. And best of all,
+
+01:17:54 there's not a subscription in sight. Check it out for yourself at training.talkpython.fm.
+
+01:17:59 Be sure to subscribe to the show. Open your favorite podcast app and search for Python. We should be right at the top.
+
+01:18:05 You can also find the iTunes feed at /itunes, the Google Play feed at /play, and the direct RSS feed at /rss on talkpython.fm.
+
+01:18:14 We're live streaming most of our recordings these days. If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+
+01:18:25 This is your host, Michael Kennedy. Thanks so much for listening. I really appreciate it. Now get out there and write some Python code.
+
+01:18:31 Thank you.
+

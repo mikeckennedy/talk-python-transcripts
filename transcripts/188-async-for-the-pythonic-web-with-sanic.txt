@@ -1,0 +1,1458 @@
+00:00:00 What do web servers do most of the time? They wait. They wait on external systems while processing a
+
+00:00:05 request. Think about a standard web request to an e-commerce site where you're logged in.
+
+00:00:10 You send a session cookie and request to a URL. It pulls a bunch of items from the database,
+
+00:00:15 maybe a Redis cache, and even talks to an external API. And that is exactly the situation
+
+00:00:20 AsyncIO is built for. But to take advantage of it in the Python web frameworks, the framework
+
+00:00:25 itself has to support AsyncView methods. That's what SANEC was built to do. On this episode,
+
+00:00:31 you'll meet Adam Hopkins, who is leading the SANEC project. This is Talk Python to Me,
+
+00:00:35 episode 188, recorded November 27th, 2018.
+
+00:00:53 Welcome to Talk Python to Me, a weekly podcast on Python, the language, the libraries, the ecosystem,
+
+00:00:58 and the personalities. This is your host, Michael Kennedy. Follow me on Twitter where I'm at,
+
+00:01:03 mkennedy. Keep up with the show and listen to past episodes at talkpython.fm. And follow the show on
+
+00:01:08 Twitter via at Talk Python. Adam, welcome to Talk Python.
+
+00:01:11 Thank you for having me. I'm excited to be here.
+
+00:01:13 Yeah, I'm excited to have you here. I'm really excited to talk about asynchronous web frameworks
+
+00:01:18 with you, in particular, Sanic. But before we get to that story, let's start with yours. How'd you
+
+00:01:23 get into programming in Python?
+
+00:01:23 I started getting into programming mostly in high school, but I've sort of been around computers
+
+00:01:30 all my life. I mean, my dad had computers when I was a kid in the 80s, and I really remember not
+
+00:01:38 having computers. I've always been very comfortable, you know, tinking around and playing with them.
+
+00:01:42 But I think I really got started into programming mainly by, I wanted to build a website. I was
+
+00:01:49 interested in trying to put things online, and I started to build some stuff. And I mainly started
+
+00:01:56 out working with PHP, because at the time, that was sort of the big kingpin if you wanted to put
+
+00:02:03 something online, and it was easy to get started.
+
+00:02:05 Yeah, it's definitely, and it's still massive on the web.
+
+00:02:08 Yeah, it is. I think WordPress definitely helps get people started, and is a really good intro and a
+
+00:02:16 nice tool for people. And I kind of had my own, I don't want to call them problems, but I started,
+
+00:02:24 I felt like every time I was working in PHP, I sort of needed to keep one eye on the documentation,
+
+00:02:29 because I could never remember.
+
+00:02:31 Yeah. It wasn't obvious. It wasn't clear. It's just one of those languages, right?
+
+00:02:36 Exactly. You know, one time there's a function, and the parameters are needle and haystack,
+
+00:02:40 and the next time the search is haydl and e-stack, and I can never remember which way the namings
+
+00:02:46 convention. And so I started looking around to try to find something else.
+
+00:02:52 You're like, it's got to be better than this. Other people use other tools. What are we going to use?
+
+00:02:57 Exactly. And I did know a little bit about Python, and more, you know, just, I'm going to write a script
+
+00:03:04 and print out Hello World type stuff. I mean, nothing sophisticated at all. And at the time,
+
+00:03:10 this was just about when Django had been released. And Django had been released, and I think Ruby on
+
+00:03:16 Rails was out there. So it was a question of, like, here are these two different ways, and which way am I
+
+00:03:21 going to go? And I picked one, and I'm happy that I picked Django because it led me down a nice path,
+
+00:03:27 I think.
+
+00:03:28 Yeah. And I think that's, you know, that's a pretty, I don't know if it was luck or just good,
+
+00:03:32 but it was definitely a good choice that you went that way. I feel like Rails has definitely lost a
+
+00:03:37 lot of the favor that it had. I know there's a lot of projects out there that's still built on Rails,
+
+00:03:42 but it doesn't seem to have the shine that it did five years ago.
+
+00:03:47 No, and kudos to the Django team. I mean, I think what they're doing is pretty amazing that they continue
+
+00:03:53 to build a great product that's still very relevant and still hugely popular. I don't know, the framework's
+
+00:03:59 got to be, what, 15 years old maybe at this point? Maybe not quite.
+
+00:04:02 Yeah, but it's been around for a while, so that's pretty awesome. And did you practice law for a while?
+
+00:04:06 I did, I did.
+
+00:04:07 Tell us about that. That's far from programming, typically.
+
+00:04:11 Well, yeah, so I didn't go to school as, you know, I'm not a computer science major or anything like
+
+00:04:17 that. Everything that I know about programming is entirely self-taught. I went to school,
+
+00:04:22 I graduated from George Washington University in DC, and I went to law school after that. After
+
+00:04:29 law school, I practiced law for about five years. And all during that time, I didn't really ever lose
+
+00:04:37 touch with programming, but it was a hobby for me. Building things was, it was a hobby and was not my day-to-day job. But in 2014, my wife and I decided that, you know,
+
+00:04:50 we were living in Massachusetts at the time, and we decided that we were going to move across the world
+
+00:04:55 to Israel. And it was sort of as this life-changing time, and we decided, you know, we're going to make
+
+00:05:02 this move. And as part of that, we're going to assess our career paths. I felt very lucky that I sort of was
+
+00:05:08 able to take what had been my hobby and now turn it into a career. And I think that's a pretty fortunate
+
+00:05:16 thing. I think it's great. And I definitely think it's one of the real benefits of being in technology.
+
+00:05:21 We have so many ways of working that are just asynchronous already. Even when we're together,
+
+00:05:26 right? We all use GitHub and Slack or email or whatever. Right. And you could be 5,000 miles away
+
+00:05:32 and still do that, right? That's pretty awesome. Yeah. I mean, the team that I'm working on,
+
+00:05:36 working with right now, it's a pretty small group of guys. But, you know, I'm in Israel. There's a
+
+00:05:43 couple of guys in Ohio or North Carolina, Brazil. Like the team is, you know, we exist as a team. We
+
+00:05:51 function day to day as if we're a team and interact, you know, like it's, you know, the guy sitting right
+
+00:05:57 next door, but really he's literally halfway around the globe. Yeah. That's pretty awesome. So maybe
+
+00:06:02 that's a good segue into what you do day to day. Like, are you doing, what do you work on day to day?
+
+00:06:07 Sure. So my day job, I work with a company called Matrix Retail and their main product is geared towards
+
+00:06:16 retail companies that have a lot of different... Like Macy's or some Target or something like that.
+
+00:06:22 Exactly. The type of companies that exist in malls across the U.S. I mean, they're mostly U.S.-based.
+
+00:06:29 And the idea is they're constantly getting all this data, you know, how many sales they had,
+
+00:06:36 how many transactions, how many people are walking in and out of the store. And we sort of take all of
+
+00:06:42 that data and try to make a projection for what their sales are going to be. And then once we have
+
+00:06:49 that information, we can create a schedule for their staff. And so we determine you're predicting to have
+
+00:06:57 a thousand dollars worth of sales during this particular hour on this particular day. And
+
+00:07:03 how many people do you need to have in the store to be able to reach that thousand dollars of sales,
+
+00:07:08 but not have too many people that you're just paying for people to stand around doing nothing?
+
+00:07:13 Interesting. So you're kind of like load balancing, but for employment.
+
+00:07:16 That's actually a great way to put it. I like that.
+
+00:07:20 There you go.
+
+00:07:21 You know, I think one of the bigger complications in that is, you know, it's not just a matter of
+
+00:07:26 how do you slot people into the right place, but then you've got to deal with jurisdictional laws.
+
+00:07:31 So one place, you know, shift might need to be, can't be shorter than three hours. And another
+
+00:07:37 place, there can't be two shifts that are closer together and they need to have meal breaks and
+
+00:07:43 have to be a certain length. And so all these sort of validation rules we have to take into account.
+
+00:07:47 And it makes for a pretty complex puzzle.
+
+00:07:50 I'm sure it does actually. Anytime law gets involved, it's crazy as I'm sure you know, but it
+
+00:07:55 is this in Python?
+
+00:07:57 The application itself runs a pretty big stack of a bunch of different technologies.
+
+00:08:01 A lot of it is in Java.
+
+00:08:03 Like most places, right?
+
+00:08:04 Yeah, yeah, it's true. It's true. A lot of the stack is in Java, the earlier stuff. And
+
+00:08:10 what I've been working on is creating sort of a new API on top of what's currently existing to
+
+00:08:18 get some more features, get a little bit more performance. And actually that's a lot of how,
+
+00:08:24 how I came into, to using Sanic. We can get into that a little bit later, but all this new stuff that
+
+00:08:30 I'm adding is all in Python and load balanced across a pretty big cluster using Kubernetes and
+
+00:08:39 some other fun tools like that.
+
+00:08:41 It sounds like you're using a lot of cool technologies. And I think it's really cool using
+
+00:08:45 Sanic for that microservice bit. So you said we're switching to Python because it's for speed and to
+
+00:08:54 make it fast in addition to adding features, which I think is, you know, so many people who are not
+
+00:08:58 deeply involved in Python, like, oh, Python's slow and there's parallels and we can't do this and
+
+00:09:02 whatever. And here you are choosing it for it. And it's working out well, I would imagine.
+
+00:09:07 Yeah. I think, I think anybody that's, you know, sort of a Java developer out there is yelling at
+
+00:09:12 me saying, how could that possibly be true? But, but it is, I mean, you know, we're, we can benchmark
+
+00:09:18 some of the stuff that we've got in Java versus some of the stuff that we have running now.
+
+00:09:22 And we're definitely running a lot faster, a lot leaner. Our memory usage is, is a lot lower.
+
+00:09:27 So we're able to handle a lot more, a lot more connections and a lot more request response cycles
+
+00:09:34 a lot faster, which is, which is the most important thing at the end of the day.
+
+00:09:36 Yeah, absolutely. You know, it's so interesting. It's just, there are so many aspects to performance
+
+00:09:42 in Python. And I certainly want to go down that rabbit hole, but you've got like the concurrency,
+
+00:09:47 you've got like C and Cython implementations. You've just got all these things that, that are
+
+00:09:52 really interesting. And then you throw in the web app where web apps are mostly talking to external
+
+00:09:57 systems and are not themselves computationally heavy, but they're more orchestration in a sense,
+
+00:10:02 right? So there's just so many, many cool things in the, it sounds like you've got a cool
+
+00:10:06 architecture going there.
+
+00:10:07 What I was just going to say is on that point is, is it's, you know, to get that performance,
+
+00:10:11 it's sort of figuring out what are the right tools that you need to be able to, to achieve
+
+00:10:16 that. So we're using, we're using Sanic to sort of power our microservice architecture, but,
+
+00:10:21 you know, we're also pushing stuff off to, a queue, the task you're using salary.
+
+00:10:28 if you're familiar with that tool, it's, it's, it's basically, you know, we've got a server
+
+00:10:33 sitting somewhere else and we're just pushing messages off to it and letting it sort of handle
+
+00:10:38 all these background tasks. And, you know, instead of creating these big, large queries and running
+
+00:10:43 them on Postgres, we're caching a lot of stuff inside of Redis. That is, so it's sort of like a top to
+
+00:10:48 down, top to bottom, approach of, of where can we, where can we make things faster?
+
+00:10:53 Right. And using the right architecture, like asynchronous queues, for example, can just
+
+00:10:58 make all the difference. Yeah, absolutely. Yeah. So maybe this is a good, good place to start
+
+00:11:02 talking about, some of the web frameworks and some of these ideas. And before, you know,
+
+00:11:07 so Sanic is a web framework based on Python's async event loop, asyncio and the async and await
+
+00:11:13 keywords and all that. And we'll get into all those details, but before we dig in, like not everybody
+
+00:11:18 is using these, these newer features, right? Like asyncio only came out in three, four,
+
+00:11:22 and then really, I think properly in three, five with async and await. So maybe, maybe just tell us
+
+00:11:28 what is asyncio and why is it really good for web apps? Sure. Well, first I think, you know,
+
+00:11:34 everybody should be maybe using it. Maybe that's too broad of a statement, but, I really, I really,
+
+00:11:40 asyncio is a, is a great standard library module that was added to sort of be another answer to
+
+00:11:49 how can Python achieve concurrency. So we have some of the other modules that exist, including,
+
+00:11:57 multi-processing and threading and stuff like that. And, and while this answers some of the same
+
+00:12:02 questions, it does it in a sort of different way. Yeah. When you think of these other, all the
+
+00:12:07 traditional ways we've got multi-processing, we've got threading, and then of course, you know, like
+
+00:12:12 APIs built on top of those like execution pools and whatnot, but all of those involve some sort of
+
+00:12:18 forking. But asyncio is inherently doesn't even necessarily use multiple threads or processes at
+
+00:12:24 all. Right. Yeah. It's sort of a simpler methodology and cleaner methodology in that, you know, you're
+
+00:12:30 still running everything on, on a single process, but you're basically just taking the idea of start
+
+00:12:37 working on something in our case in a web framework, it's a request and you start working on it and
+
+00:12:42 processing it. And you get to a point where you say, well, I need to go find some information
+
+00:12:47 somewhere else. So I'm going to pause here. And while I'm pausing here, let's go see what else needs
+
+00:12:52 to get done. And actually it's very much sort of like what we're, what I'm doing in my day-to-day job.
+
+00:12:58 And, you know, we're trying to figure out, you know, you've got an employee and he's coming in for
+
+00:13:03 a five hour shift and you want to figure out how do you keep your, your person employed during those
+
+00:13:10 five hours without having just standing around doing nothing, wasting time and money is, you know,
+
+00:13:16 there to do, to work. So let's figure out how to make your, your web workers produce the most you can
+
+00:13:23 get for them. Yeah, absolutely. So, you know, the whole IO bit of asyncio, right? It's right there
+
+00:13:28 in the name is what it's for, right? Like it doesn't help you for computational things at all,
+
+00:13:34 right? You really only have one thread and if you start doing computational stuff, you know,
+
+00:13:38 you're just cute. You're just doing them in order, right? Yeah. But for web apps, their main job is to
+
+00:13:43 talk to a database, talk to other microservices, talk to a queue, and then they just wait, right? And so
+
+00:13:49 it's the perfect time, perfect way to structure these web apps is to say all the time that you're
+
+00:13:54 waiting on these external systems, we're going to go do other work, right? Other requests. And that's
+
+00:13:57 basically the idea behind Santa, right? Absolutely. It's using async. It's not like a magic bolt.
+
+00:14:03 It's going to make things run faster. It's just, it's going to make things run more efficient. I think
+
+00:14:08 that's a better way to put it. Yeah. It's not going to be just idly waiting around. It's going to be
+
+00:14:12 working on something else. It's a really good multitasker, I guess. But I'll go back to this. All right.
+
+00:14:18 So what, so Sanic is one of these async Python web frameworks, but there are others. Like,
+
+00:14:24 what are some of the other ones that people might compare to if they're, if they're like shopping for
+
+00:14:29 this type of framework? The ones that first come to mind are AIO HTTP. That's another big one.
+
+00:14:35 Jepronto, you mentioned them. I think they've sort of stopped working on developing on that project.
+
+00:14:41 I don't know if that one's still with the status of that or not. Yeah. I remember coming out around the
+
+00:14:47 Sanic. I feel like it did stall out. I'll have a look. It's a really interesting project. And I think
+
+00:14:54 what they did with it, it's a great approach. And it's a little bit different than Sanic's approach,
+
+00:14:59 because I believe Jepronto is written a lot in C, which makes it extremely fast, but it also makes it a
+
+00:15:06 little bit more difficult for, I think, the everyday Python programmer to pick up and look under the hood
+
+00:15:12 and make some changes or where they might need to. Yeah. And looking at the repo, it's 50% C,
+
+00:15:20 50% Python, and it had a ton of contributions and work on it back up till April 2017. Then you're
+
+00:15:28 right. It kind of just went on pause.
+
+00:15:32 This portion of Talk Python to me is brought to you by us. Have you heard that Python is not good for
+
+00:15:38 concurrent programming problems? Whoever told you that is living in the past because it's prime time
+
+00:15:43 for Python's asynchronous features. With the widespread adoption of async methods and the async and await
+
+00:15:49 keywords, Python's ecosystem has a ton of new and exciting frameworks based on async and await.
+
+00:15:55 That's why we created a course for anyone who wants to learn all of Python's async capabilities,
+
+00:16:00 async techniques and examples in Python. Just visit talkpython.fm/async and watch the intro video to see if this course is for you.
+
+00:16:08 It's only $49 and you own it forever. No subscriptions. And there are discounts for teams as well.
+
+00:16:14 Any others that people might consider?
+
+00:16:19 Court is another one. I think you've talked with the guy that built Court on your show before.
+
+00:16:25 I have. Yeah. Court's really nice as well.
+
+00:16:27 And I've actually been in contact with him a little bit. He's given us some ideas on where we can add into some stuff.
+
+00:16:35 ASGI to send. We could talk a little bit about that later.
+
+00:16:38 But he's been a pretty helpful resource. And I think the one more that I want to mention that's out there.
+
+00:16:45 It's I think the newest on the scene is called Vibora.
+
+00:16:49 Vibora. Yes. Vibora looks very interesting as well. Although I haven't done anything with Vibora.
+
+00:16:53 Yeah. I haven't tried it out to see what it is. It does a little bit more than what I would personally like from a web framework, from a micro framework.
+
+00:17:03 I like to handle a lot of things like caching and templating and stuff like that myself.
+
+00:17:08 And it comes with a lot of that. So for a lot of people, that might be a might be a plus.
+
+00:17:12 So it's another another one to definitely put out there.
+
+00:17:15 Yeah, it's interesting. I tried to play with it a little bit. And for some reason, it kept crashing.
+
+00:17:19 Not in the sense like it said you're doing something wrong, but it would just like the process would die.
+
+00:17:25 And I was a little underwhelmed with it, I guess.
+
+00:17:27 But definitely looks like it has a lot of promise. It maybe just needs a little polish.
+
+00:17:31 So let's get back to Sanic, which to me seems like maybe along with Cort, one of these async modern Python web frameworks that you really can use and depend upon.
+
+00:17:45 You know, like I mentioned earlier, I'm using it now in production. It's definitely production worthy and operational and it's pretty reliable.
+
+00:17:54 I mean, itself is still a pretty new framework, but I mean, anything that's going to be in this field is going to be fairly new.
+
+00:18:00 Because like you said, in sync IO is hasn't been a part of the standard library since version 3.4.
+
+00:18:07 So yeah, and it's really 3.5 where it actually became, you know, has the proper keywords to make it easy.
+
+00:18:13 Yeah, exactly.
+
+00:18:13 Easy to program.
+
+00:18:14 So maybe just give us the quick flyover of Sanic.
+
+00:18:17 Sure. It's probably probably good to mention that is Sanic does use those those keywords.
+
+00:18:23 So it's place. It's Python 3.5 and up only.
+
+00:18:26 I know there are some asyncio tools that you can still use 3.4 with, but you're not gonna be able to do that with Sanic.
+
+00:18:33 So 3.5.
+
+00:18:34 Yeah.
+
+00:18:35 I think most things have 3.5 if they have 3.5 at all, all these days.
+
+00:18:38 How do you feel about this Python 2, Python 3 thing? Do you feel like we've kind of, we're downhill headed towards 3.3 and beyond?
+
+00:18:45 Yeah, it's done. It's over. Game set match.
+
+00:18:49 Yeah, I kind of feel the same way. So yeah, this framework here, for example, like you have to have not just 3, but 3.5.
+
+00:18:55 So cool. So it depends on that. It's a lot like Flask, right?
+
+00:18:59 It is. And I think the original idea behind it, and I'm not the guy that developed it.
+
+00:19:05 The person that developed it is a guy named Michael Hill, and he originally created the API, and it looks very much like Flask, where you've got decorators and these blueprints so that you can sort of nest your functionality.
+
+00:19:19 And it looks a lot like Flask, but obviously being asyncio, it operates differently.
+
+00:19:26 Yeah, absolutely. So for example, all of Vue methods can be async def instead of just def, right?
+
+00:19:33 And you can use a weight in them and so on. Do you have to use, does everything have to be async? Or can you do like blocking work in there as well?
+
+00:19:41 Well, you could, for example, create a function that is, you know, a regular def and doesn't have to be async.
+
+00:19:49 It certainly would be better too, because that's where you're going to be able to sort of see this performance benefits.
+
+00:19:57 Because by definition, just about everything that we do in Python is going to be some blocking involved.
+
+00:20:04 So you can't avoid blocking code at all. But by using a tool like asyncio, you're giving yourself an opportunity to alleviate.
+
+00:20:13 Yeah, exactly. So I'm guessing, what I was getting at is like, well, what if I'm using some library, and it doesn't support asyncio?
+
+00:20:20 Let's say, let's say Mongo Engine, for example, or something like that, I could still make those calls in there would just be taking less advantage of its async potential, right?
+
+00:20:30 Exactly, exactly. So, so if you're going to use an ORM, say SQLAlchemy or PeeWee or something like that, you could still use it and it'll still function.
+
+00:20:38 But what's going to happen is when you make that call, and it goes to make that network call to your server, it's going to block up your whole process.
+
+00:20:45 And you're not going to be able to start handling a new request during that timeframe.
+
+00:20:49 Now, there are ways that you can get around that and use some of these other tools that are async enabled.
+
+00:20:55 Right. So the primary thing that you would do, the first thing that you might do is like, say, I'm using library X to talk to, let's say, Redis.
+
+00:21:05 It would be to go out and say, is there a asyncio enabled variant or extension or something to that library, right?
+
+00:21:13 Absolutely.
+
+00:21:14 Maybe talk us through, yeah, talk us through that.
+
+00:21:16 Sure. I think one of the first things that I do when I need to do to answer that question is, are you familiar with these awesome lists that are, you know, kind of circle around GitHub?
+
+00:21:26 Yes. Awesome Python and whatnot, things like that.
+
+00:21:29 Exactly. I like to go take a look at those.
+
+00:21:31 There is one for asyncio stuff and it lists, you know, a number of different ORMs and stuff like that that are on there.
+
+00:21:39 I do a lot of work in Redis and there's two different packages in Redis that async enabled Redis that I like to use.
+
+00:21:48 One of them is called a Redis, where if you did pip install Redis, you get a very popular library that's out there to interact with Redis.
+
+00:21:59 And this pretty much mirrors the exact same API as that.
+
+00:22:02 You just put a Redis instead of Redis.
+
+00:22:04 And the second one is called a IO Redis, which also has an async enabled API to be able to access your Redis layer.
+
+00:22:12 Yeah. So I think many of the different packages people are out there using, there is some variant or some alternative that they can switch to.
+
+00:22:21 But I just bring it up because it's not like, you know, having an asynchronous method, view method is going to just magically make your SQLAlchemy call or your Mongo Engine call or whatever.
+
+00:22:31 Just start being concurrent, right?
+
+00:22:33 You're going to have to go and get a library that allows you to write, await this query, await that insert, et cetera.
+
+00:22:41 Yeah. And I think if you're going to get started in doing the work in a framework like Sanic or one of these other async enabled, one of the first things I think you should do is figure out how you're going to talk to your data layer and figure out which one of these tools works best for you.
+
+00:22:55 There's a number of them and they're growing every day.
+
+00:22:58 And I feel like I continually get to see new ones.
+
+00:23:01 And I think it's an exciting time for Python.
+
+00:23:03 I think it absolutely is.
+
+00:23:04 I think the async and await stuff is really unlocking a lot of the potential.
+
+00:23:08 I'm especially excited for Sanic and some of the similar projects because while we've had these cool keywords in this capability, it's not until you can actually create asynchronous web methods that you can actually really break that thing loose and use it where it makes a lot of sense.
+
+00:23:26 Yeah, absolutely.
+
+00:23:27 So, yeah, it's an exciting time for sure.
+
+00:23:30 So what are some of the ways that we might get around these dependencies?
+
+00:23:33 So step one, go and find another library that does the similar or same thing that you're doing but has coroutines and async methods and whatnot.
+
+00:23:42 That's option one.
+
+00:23:43 If for some reason that fails, is there a way it can use threading or multiprocessing or some kind of background queue or something?
+
+00:23:50 Is there something else I can do to not block up my web async I.O. loop and still work with them?
+
+00:23:57 The question is, could potentially get really messy?
+
+00:24:00 If you're going to take and start a new, say, a new thread inside of your loop.
+
+00:24:07 Could be done.
+
+00:24:08 Could be done.
+
+00:24:09 That's a different question.
+
+00:24:10 Yeah.
+
+00:24:10 I think that's probably...
+
+00:24:12 So you could have a background thread that's always running for each worker process and then a queue that you drop something off.
+
+00:24:18 An in-memory queue.
+
+00:24:19 You drop something off and it picks it up.
+
+00:24:21 Like, say, subscribe this person to a mailing list.
+
+00:24:23 For some reason, the API that does that doesn't support async I.O.
+
+00:24:27 And I think for the most part that would work, but it's definitely not super good, is it?
+
+00:24:33 If the goal is to do something like that, I would highly suggest upgrading to Python 3.7 and then you get to use async I.O. queues, which is a fairly new feature, which basically you could just start pushing off tasks to this async I.O. queue and let them handle it.
+
+00:24:51 And I think the great use case for that is I take a request, I'm processing it, I need to send out an email, push that off to this queue and be done with it.
+
+00:25:00 A little bit more involve method, like you said, you could do something with threading or use another package like celery, which is something that I've had good success using for a number of years.
+
+00:25:13 So I'm still using it inside my async I.O. stack because it really solves a good problem for me.
+
+00:25:20 Yeah, it does.
+
+00:25:21 So we've got our web code, we're writing our async methods, we're awaiting all these calls, everything's working pretty well.
+
+00:25:29 Beyond that, it looks quite a bit like Flask, which I think is really a good thing.
+
+00:25:34 There's a couple of things I'd like to maybe call out that are either less well known about Flask and is relevant here as well, or this enables.
+
+00:25:42 And one of them is blueprints.
+
+00:25:43 So typically when people say, I'm going to go create a Flask app, they all, they say, well, what you do is you create the app.py and you.
+
+00:25:50 You allocate the app and then you use app, you know, as a decorator app.route and you put it on these methods.
+
+00:25:55 Boom, you're done with Flask, right?
+
+00:25:57 And that's cool for a demo.
+
+00:25:58 But if you have hundreds of view methods broken up by categories of like, here's the store views and here's the user management views and here's the reporting.
+
+00:26:07 And you don't want to cram that all into one file.
+
+00:26:09 And so Flask and Sanic both have this idea of blueprints to help you partition your projects into different pieces.
+
+00:26:17 Do you want to talk about that?
+
+00:26:17 Sure.
+
+00:26:18 I think there's a big difference between, you know, looking at the tutorial, it's got 10 lines and here's how to get started.
+
+00:26:25 Wow.
+
+00:26:25 It's amazing.
+
+00:26:26 You know, hello world.
+
+00:26:27 It's such an easy thing.
+
+00:26:29 But then you get to the question of how do I actually build something?
+
+00:26:32 Like, how is this usable?
+
+00:26:34 How does it not become a giant mess of one huge app.py file, right?
+
+00:26:39 Yeah.
+
+00:26:40 Maybe you like one giant file.
+
+00:26:42 Maybe that's your...
+
+00:26:44 But, you know...
+
+00:26:45 But if you don't, then it becomes a bit of a challenge of juggling that app.route stuff around.
+
+00:26:52 Exactly.
+
+00:26:52 And I think it's, you know, something to do is, okay, you've decided you're going to do async.
+
+00:26:57 You've decided on your data access layer and, you know, which one of these tools you're going to use.
+
+00:27:02 And then the next question, I think, is how am I going to organize this?
+
+00:27:05 Am I going to have one Sanic server that's going to handle all my requests?
+
+00:27:10 Or maybe I need to have 10 different services and they're all going to be connected and they're all going to be responding to different things.
+
+00:27:17 And within each one of those things, maybe we need to have one little unique entity called a blueprint that's going to handle certain information.
+
+00:27:27 And maybe you need to have, you know, 10 of these.
+
+00:27:30 So, for example, maybe you're going to have authentication be one blueprint.
+
+00:27:34 And maybe you're going to have users be another blueprint.
+
+00:27:37 The idea is just to organize and structure your code.
+
+00:27:42 One thing that Sanic also has is what's called a blueprint group, which does exactly that.
+
+00:27:49 It just takes a bunch of blueprints and it groups them together.
+
+00:27:52 And one of the big benefits here is for routing purposes.
+
+00:27:56 Yeah, that's cool.
+
+00:27:57 So, basically, instead of saying app.route, you say blueprint.route.
+
+00:28:02 And you kind of reverse it.
+
+00:28:04 In your main startup file, you import all the blueprints and you register them with the app and say, here's a whole bunch of subparts of my web framework and their routes and their view methods.
+
+00:28:14 Put them all together here and then run it.
+
+00:28:16 The group sounds pretty interesting.
+
+00:28:18 I didn't know about that.
+
+00:28:19 Yeah.
+
+00:28:19 And one of the big other benefits you get with blueprints is you don't have to be passing around your app object all over the place.
+
+00:28:27 So, if you're going to have...
+
+00:28:28 Yeah, that gets really tricky.
+
+00:28:29 Yeah.
+
+00:28:30 Exactly.
+
+00:28:31 So, it gives you a way to sort of register these views to something.
+
+00:28:37 And then when you finally have your app and you're creating your app, they all get added on at that point.
+
+00:28:41 So, you don't need to create these crazy global variables or anything like that.
+
+00:28:46 Yeah.
+
+00:28:46 I think it's a really nice way to break apart different parts of Flask or Static apps into little sections that are more self-contained.
+
+00:28:54 And then you can import them into the main app.
+
+00:28:56 It's sort of a personal preference of mine.
+
+00:28:58 I don't know that I necessarily say this is the way you have to do it.
+
+00:29:01 But I like to have each one of my different endpoints sort of be like its own blueprint.
+
+00:29:08 And at max have two or three different methods that are attached to it.
+
+00:29:12 I like to try to keep things as organized as possible.
+
+00:29:16 And mainly that's for development purposes.
+
+00:29:18 It's when I've got an issue or I need to make an update or fix a bug or something like that.
+
+00:29:23 It's a lot easier for me to navigate when I've got everything very finely grained, broken up into different files.
+
+00:29:29 Yeah, that's the same way I do it.
+
+00:29:31 And I really like it.
+
+00:29:32 You know, if you're in this file, this is the type of stuff you're working on and just that.
+
+00:29:37 So, another thing that Static makes pretty easy is WebSockets.
+
+00:29:42 And that's been traditionally a little tricky in regular Python code, right?
+
+00:29:48 Because it'll just block up.
+
+00:29:50 How are you just going to wait on this bidirectional communication thing, right?
+
+00:29:53 Yeah, I think one of the great benefits that we get from AsyncIO, besides being able to have, you know, these non-blocking access to other services and stuff like that, is to be able to do stuff like WebSockets.
+
+00:30:07 And, you know, WebSockets are fun.
+
+00:30:09 Yeah.
+
+00:30:10 It's great when you're building, you know, a front-end application and you can have that bidirectional control between server and client.
+
+00:30:16 And the way that it's achieved right now inside of Sanic is by using another package that's called WebSockets.
+
+00:30:23 So, you could just do pip install WebSockets.
+
+00:30:25 And that gets you to the same bit of code that's running inside of Sanic.
+
+00:30:31 And Sanic is just basically putting on another routing layer on top of that to be able to get to your socket.
+
+00:30:39 Yeah, it's really cool.
+
+00:30:40 Really cool.
+
+00:30:41 Say that now, in coming next year, there may be some ideas on how we change that and make that a little bit better.
+
+00:30:48 And being able to handle different deployment strategies.
+
+00:30:53 And by that, I mean using ASGI, which is sort of the asynchronous response to WSGI.
+
+00:31:02 Right.
+
+00:31:03 WSGI is the web service gateway interface, which is how most things like Flask, Pyramid, Django, etc., plug into larger web servers like MicroWSGI or G Unicorn or something, right?
+
+00:31:16 But the fundamental problem with that API is it's a single function call per request that has no asynchronous concepts around it, right?
+
+00:31:24 Exactly.
+
+00:31:25 So, you're not really going to be able to run an asynchronous application off of WSGI.
+
+00:31:31 And this is a problem that the guys building Django channels, I believe, were the first ones that came up with the ASGI implementation or specification, whatever you want to call it.
+
+00:31:44 We're looking into it to adopting that, which will open up a greater deployment strategy for Sanic.
+
+00:31:51 Yeah, that would be really nice if there was the WSGI equivalent for all these different frameworks.
+
+00:31:56 That's really one of the key missing things to unlock a lot of it.
+
+00:32:00 But since you brought it up, maybe we should talk a little bit about deployment on this.
+
+00:32:05 So, what is different or how does deployment for regular web servers and web apps change if you're deploying something based on Sanic versus something on Flask?
+
+00:32:14 The biggest change is you could just do Python app.py and just run your application straight from inside Sanic.
+
+00:32:24 And Sanic has its own way to be able to operate as a web server and to interact.
+
+00:32:30 And so, you could just do that and you don't have to do anything more.
+
+00:32:34 There is some other deployment strategies where you could use G Unicorn and there's a worker layer that sort of enables G Unicorn to be able to run Sanic.
+
+00:32:44 So, we've got that in the documentation.
+
+00:32:46 So, you could do that.
+
+00:32:48 I think the best way to do it, and my personally preferred way right now, is to just allow Sanic to handle its own handle itself and create Docker containers.
+
+00:32:59 And the Docker container's job is to run Python.py, Python app.py.
+
+00:33:05 And then stick in front of that something like Nginx or another load balancer that handles the incoming request and just kind of spits out my traffic to one of my services.
+
+00:33:15 Yeah, that makes a lot of sense.
+
+00:33:16 You don't have to do it that way.
+
+00:33:19 Yeah, sure.
+
+00:33:19 Would you set it up as like a system daemon type thing, system control, and like a service unit to run the Sanic part?
+
+00:33:28 Or do you just do that?
+
+00:33:29 Like, if you're using Docker containers, maybe it's just you start the container and it does its thing.
+
+00:33:33 Yeah, you could do that.
+
+00:33:34 And this is, again, this is my own personal preference bleeding in here.
+
+00:33:38 But Docker is such a widely popular tool now.
+
+00:33:42 It makes it so easy to deploy and to take something from development on my machine and to stick it up on a staging server and then eventually stick it into production.
+
+00:33:55 I find Docker to be a very useful tool for that.
+
+00:33:58 And, you know, one step further is to use Kubernetes to sort of manage that whole process.
+
+00:34:03 But that may be a little bit too complex for a lot of people.
+
+00:34:06 And I don't necessarily want to say that that's the way that you have to do it.
+
+00:34:10 Right.
+
+00:34:11 And regardless of whether you're using Docker or you're just running it in a separate process, you still probably want something like Nginx, which is going to handle SSL.
+
+00:34:21 It's going to handle delegating back to that server.
+
+00:34:24 It's going to handle, would you serve the static files through there still through Nginx?
+
+00:34:28 Yeah, absolutely.
+
+00:34:29 I think that's another good point to make.
+
+00:34:31 And while you certainly could handle static files through Sanic, and Sanic does give you an API to be able to do that.
+
+00:34:38 Your best bet most of the time is going to be just let Nginx handle your static files.
+
+00:34:43 You're going to get the most performance by just serving those directly.
+
+00:34:46 You don't really need to let Python handle static stuff.
+
+00:34:49 You don't let that handle all your dynamic content.
+
+00:34:52 Yeah, that makes sense.
+
+00:34:53 That's the way I run my stuff as well.
+
+00:34:54 Let's talk about testing.
+
+00:34:56 So testing regular web apps is pretty straightforward.
+
+00:35:01 I mean, it still requires some tricks to know how to like create a dummy request and things like that.
+
+00:35:07 But then you just call it, and then you get the answer.
+
+00:35:09 And then you assert things about the answer.
+
+00:35:12 But with Sanic, what does testing look like?
+
+00:35:15 Because typically testing async I/O stuff means there has to be an event loop.
+
+00:35:20 It has to be running.
+
+00:35:20 You've got to wait for it to be done.
+
+00:35:22 There's like extra stuff.
+
+00:35:23 What does testing one of these web apps look like?
+
+00:35:25 Yeah, it's certainly not an easy thing to do.
+
+00:35:28 And I think this is sort of one of those other areas where maybe you've checked off all those boxes and you've kind of are now onto the stage of how do I start testing this stuff?
+
+00:35:37 And I would say don't try to invent the wheel yourself.
+
+00:35:41 Go see what else is already out there.
+
+00:35:44 And personally, I like to use pytest.
+
+00:35:46 There's a great plugin for Sanic called pytest Sanic, which solves a lot of these problems and makes it pretty similar to what you're used to doing with pytest, where you're creating your application.
+
+00:36:00 And it's a little bit different because you've got your async and await keywords in there, but it's going to handle creating the loop for you.
+
+00:36:06 And so you can just kind of go about your process the way you would expect.
+
+00:36:11 Yeah, it's pretty interesting.
+
+00:36:12 Some of the stuff that you do.
+
+00:36:13 So like your test method might be an async method, right?
+
+00:36:17 Async def test something, not just a regular test method, but the pytest Sanic knows how to run it and it's all good, right?
+
+00:36:24 Yeah.
+
+00:36:25 And there's also an asyncio pytest.
+
+00:36:27 I forget the name of the package that does sort of the same thing, just not in the confines of Sanic itself.
+
+00:36:34 But that's also definitely something to look out for.
+
+00:36:37 So the answer is, yeah, it's definitely possible.
+
+00:36:40 There's a little bit more complexity to it, but take a look to see what other people are doing.
+
+00:36:44 And I think it's a piece of the puzzle that's been solved.
+
+00:36:48 So may as well go take a look to see how other people have done it.
+
+00:36:51 And especially since there's a pytest plugin, it's pretty easy.
+
+00:36:54 So that was one of maybe, I don't know if you call it an extension exactly, but it's one of the things that is sort of in the category of extensions.
+
+00:37:01 But there's actually a whole bunch of different extensions, right?
+
+00:37:08 So that's kind of a lot of different cores and all that.
+
+00:37:09 Do you want to give us a quick flyover of some of the more important extensions?
+
+00:37:12 Sure.
+
+00:37:12 I think probably the most important extension that's out there is the pytest Sanic extension because it gives you the extension ability.
+
+00:37:22 Another one that is hugely popular is Sanic OpenAPI, which adds, I don't know if you're familiar with OpenAPI or not, but it's a specification for how do you define your API endpoints.
+
+00:37:37 And with this plugin, you basically just add some more decorators around your methods and it's going to create the output for you.
+
+00:37:45 That's going to meet your specification of what kind of methods does it accept and what kind of intake variables might need to get passed into the method.
+
+00:37:57 And eventually, what's the output?
+
+00:37:59 What does your endpoint give you?
+
+00:38:01 Yeah, that's really cool.
+
+00:38:02 So it defines the API and gives you some Swagger UI back as well so you can actually see what methods are available and things like that, right?
+
+00:38:09 Exactly.
+
+00:38:09 Another one, and this one's going to be a little bit of a self-plug because it's my extension, is an authentication Sanic JWT, which adds web tokens.
+
+00:38:21 And if you do pip install Sanic JWT, it gives you a blueprint that has all the authentication endpoints that you would need to log in, to create a token, to verify a token, to pass refresh tokens and all that kind of fun stuff.
+
+00:38:38 That's a good one.
+
+00:38:39 I see that it has Jinja 2 as one of the extensions.
+
+00:38:43 What is the default template engine in Sanic?
+
+00:38:47 Well, there isn't one, and this is sort of where it's a micro framework where it's not going to make a lot of the decisions for you.
+
+00:38:54 And so you can kind of create your own stack.
+
+00:39:00 And personally, I think while you can serve static files, I think sort of the place where frameworks like Sanic really shine is using them to power web APIs and web sockets and stuff like that.
+
+00:39:15 Personally, I don't use it to handle HTML well.
+
+00:39:18 It certainly is capable of providing HTML responses.
+
+00:39:23 Sanic is going to say, let's you figure out what's the best way that you want to be able to template those.
+
+00:39:28 And if it's Jinja 2, there's a plugin that you can use for that.
+
+00:39:32 Yeah, that makes sense.
+
+00:39:32 Are there any other template languages that you can use?
+
+00:39:36 You can use Django ones, you can use Chameleon, Mako?
+
+00:39:39 I don't know how it would work with Django ones.
+
+00:39:42 Anything that's going to work in Python, you can use that.
+
+00:39:46 Because at the end of the day, what you need to do to respond with Sanic is you just need to be able to pass it a string.
+
+00:39:51 So use whatever template engine you want.
+
+00:39:55 I see.
+
+00:39:55 So you would basically just create the thing and tell it to here's your template file, here's your model data, render it, and just have Sanic return the HTML.
+
+00:40:04 So you kind of plug in that layer.
+
+00:40:06 Exactly.
+
+00:40:07 So you could use whatever you needed to there.
+
+00:40:09 It would work.
+
+00:40:10 Yeah, it seems like one of the first things you'd want to do is create your own little decorator that takes a template file and then just automatically does that.
+
+00:40:18 You just wrap up your view methods, right?
+
+00:40:21 Yeah, don't do that more than twice.
+
+00:40:23 Creating decorators is a huge thing, I think, in frameworks like Sanic and Flask and stuff like that.
+
+00:40:29 And there is some information in tutorials on how you would go about that when you realize that you're going to need something like that.
+
+00:40:36 Right.
+
+00:40:37 Yeah, very, very cool.
+
+00:40:38 So one of the things that happened not too long ago, maybe a year ago, is Sanic moved from being this framework created by, you said Michael Hill?
+
+00:40:50 Yes.
+
+00:40:50 Yeah, created by Michael Hill and has now become more of a community project.
+
+00:40:56 Do you want to talk about that whole process, what that means for Sanic and why it was done?
+
+00:41:00 Sure.
+
+00:41:01 So I kind of got involved with Sanic.
+
+00:41:04 First, I got it mainly because it was something that I wanted to just check out.
+
+00:41:09 You know, one of the things I like to do in my spare time is see what else is out there that I don't know and try playing with it.
+
+00:41:16 And Sanic was kind of how I started playing around with these async enabled frameworks.
+
+00:41:23 I sort of realized that there was a missing hole.
+
+00:41:26 And this is before I was involved as one of the maintainers of the Sanic project.
+
+00:41:31 I saw where there was a hole for authentication.
+
+00:41:33 So I created the JWT extension.
+
+00:41:36 And then when I started using it for work, I sat down and I said to myself, OK, this is a pretty new framework.
+
+00:41:43 You know, one of the risks with something that's new is how long is it going to last and how long is people going to be maintaining it?
+
+00:41:51 That is really one of the concerns with any of the one of the frameworks that you mentioned at the beginning is they're also new, but web apps are often long lived, right?
+
+00:41:59 You don't want to build your thing on, you know, if you'd built it on Jepranta, you'd be really bummed that contributions stopped, you know, a year ago.
+
+00:42:06 Yeah, absolutely.
+
+00:42:07 When I go to GitHub to find some package, that's one of the first things I do is look to see how active it's been.
+
+00:42:14 Because if I'm going to integrate this into something that I'm putting into production, if it stops getting maintained, then I need to step up to the plate and start maintaining it if something breaks.
+
+00:42:24 Yeah.
+
+00:42:24 And do you want to do that, right?
+
+00:42:26 You don't want to do that for everything out there.
+
+00:42:27 Sometimes you just want to use something.
+
+00:42:29 Exactly.
+
+00:42:30 And when I was making that decision with Sanic, I said to myself, okay, you know, what happens if these guys stop maintaining it?
+
+00:42:37 And I looked at it and I said, okay, you know, I mean, if that happens, then, you know, I realize this is a risk and maybe I'll get myself, maybe then I'll just take it out of my own wing and just fork it and do what I need to with it.
+
+00:42:50 And lo and behold, you know, some time goes by and I start noticing that all these issues are piling up and there's pull requests that are piling up and, you know, the release cycle is a little bit slower than it had been at first.
+
+00:43:03 And I started talking with some other people that are, that I know that are users of Sanic and I noticed that they also had the same concerns.
+
+00:43:11 And so we're saying, okay, well, maybe this is a long-lived project or not.
+
+00:43:15 And so I started talking with these people and I started talking with the guys that were the maintainers of the project and everybody that had used the package and had worked on it, you know, really liked it and was enjoying doing it and nobody wanted to see it just go away.
+
+00:43:30 So we said, okay, well, then let's take this package that was on GitHub as a repository for just a single user.
+
+00:43:38 Let's turn it into a community package, a community organization and invite whoever wants to be involved.
+
+00:43:45 Let's get everybody together and start working on this together.
+
+00:43:50 Let's make decisions together.
+
+00:43:51 Let's not have just one person hold the key to this.
+
+00:43:56 And, you know, we're still in this process of figuring out what that means to be a community run organization.
+
+00:44:03 And it's not like we have this answered yet, but, you know, we've been doing this for, I guess, about, I don't know, five or six months now.
+
+00:44:11 And it's sort of been a fun ride so far.
+
+00:44:14 And I think we're headed in a good direction.
+
+00:44:17 It looks like a good move in it.
+
+00:44:18 You definitely have some folks involved there.
+
+00:44:20 So I think it's very positive.
+
+00:44:22 I also just checked out Vibora and it looks like it's stalled out as well.
+
+00:44:26 So it's looking more and more like Sanic is the one that still has the momentum of the ones that we've been talking about.
+
+00:44:34 I don't want to be the one to make that claim, but.
+
+00:44:35 No, you let me say it.
+
+00:44:38 But, I mean, I think Hort is still doing really well and AIoHDP as well.
+
+00:44:42 But like some of the other ones that came out at the same time, I kind of feel like, I don't know, they just, they had a lot of activity, but not so much.
+
+00:44:49 So it's good that you're taking these steps to try to solidify that base and, you know, not make it just dependent upon one person's interest in pursuing this sort of tweak of the Flask API, right?
+
+00:45:00 Yeah, absolutely.
+
+00:45:00 And that's, we've sort of tried to make sure that there's some people that are involved, that have been involved in the project for, since it's beginning early days, and some people that are just getting involved now.
+
+00:45:12 And we try to have a mix of as many voices as we can.
+
+00:45:16 So we have consistency and we're not breaking any backwards compatibility issues.
+
+00:45:21 But I'm pretty excited because there definitely has been a good response and been a lot of community action in pushing this project.
+
+00:45:29 Yeah, that's great.
+
+00:45:30 So what are some of the plans going forward?
+
+00:45:33 You guys decided to issue the zero versioning style and go with something different for versioning, right?
+
+00:45:39 The current version is 0.8.3.
+
+00:45:42 And that's going to be the last zero versioned release.
+
+00:45:46 And coming up in about another month, we're going to switch over to calendar versioning.
+
+00:45:52 And the idea behind this is we've got a fast framework.
+
+00:45:56 Let's make our development cycles, you know, somewhat fast as well.
+
+00:46:00 So we can respond to things quickly.
+
+00:46:01 And so we decided to go with four releases per year.
+
+00:46:06 We're going to do one in March, one in June, September and December with the idea that the December release will be a long-term support release, an LTS release.
+
+00:46:17 That's pretty cool.
+
+00:46:18 I think it makes things more clear because a lot of folks have been involved in open source for a long time.
+
+00:46:22 They see 0.12 and they're like, oh, great, that's fine.
+
+00:46:25 But many people, especially coming from like the enterprise-y space and the commercial space, they see 0.something and they're like, oh, it's not ready yet.
+
+00:46:33 It's in some kind of beta or something.
+
+00:46:34 That's sort of what we're trying to achieve with moving to a community organization and moving to having an LTS release is to make this known that this is a safe project to rely upon.
+
+00:46:46 And you can use this in production.
+
+00:46:47 It's not going anywhere and it's going to perform.
+
+00:46:51 That's cool.
+
+00:46:51 What does a version number look like in calendar versioning?
+
+00:46:54 Is it like 2018 dot or like, yeah, what are you doing there?
+
+00:46:58 You could do that.
+
+00:46:59 What we're going to do is it's going to be 18.12.
+
+00:47:01 So that's going to be the next release.
+
+00:47:04 And then after that, it'll be 19.3, 19.6, 19.9.
+
+00:47:08 Yeah.
+
+00:47:09 And then like little patches and stuff would be like dot something on the end.
+
+00:47:12 Exactly.
+
+00:47:13 So if we need to have inside that release cycle, then yeah, it'll be 18.12.1.
+
+00:47:19 I imagine that those type of patches, you'll see more of those with the LTS releases because the idea behind that is we're going to lock in the API.
+
+00:47:28 We're going to lock in the feature set in December of 2018.
+
+00:47:32 And that's going to be on its own branch inside of GitHub.
+
+00:47:36 And for the next year, if we see any security issues or bugs, we're going to go and we're going to fix those and we're going to push those out to the 18.12 package.
+
+00:47:47 But while we're doing that, we may move on to additional feature sets inside 19.3 and moving forward.
+
+00:47:54 Yeah.
+
+00:47:54 That wouldn't necessarily get put into that 18.12.
+
+00:47:57 That's really cool.
+
+00:47:57 And you know, one thing I definitely like about this is I can open up a requirements file or I can do a pip list on a virtual environment or something and just look and know, oh, that library is a year and a half old.
+
+00:48:08 Or that library is pretty new.
+
+00:48:10 Like if I do, you know, a pip list and I see requests is that I don't even know what it's at.
+
+00:48:16 Like, let's say I see pyramid at 1.8.7.
+
+00:48:20 Right.
+
+00:48:22 Like that's out of date.
+
+00:48:23 It should be 1.9.
+
+00:48:25 That's something.
+
+00:48:25 But how out of date, right?
+
+00:48:27 Like, was it just updated?
+
+00:48:29 You need to know the package.
+
+00:48:30 You need to be involved in the community and have an understanding of when all those releases are happening to know, you know, whether your version is out of date and by how much.
+
+00:48:40 With your model, it's super clear.
+
+00:48:42 Oh, that's six months old.
+
+00:48:43 We should probably consider upgrading that.
+
+00:48:44 Yeah.
+
+00:48:44 I mean, I don't want to say it's our model.
+
+00:48:46 Like it's a thing that's out there.
+
+00:48:48 Sorry, the model.
+
+00:48:48 Let me rephrase it.
+
+00:48:49 The model you've adopted.
+
+00:48:50 It lets me see that.
+
+00:48:51 Yeah, that's really nice.
+
+00:48:52 And I think pip is now on to that model as well.
+
+00:48:55 And there's some other.
+
+00:48:56 I've noticed a lot more repositories using calendar versioning, I'd say, in the last year than I had, you know, before that.
+
+00:49:04 It's cool.
+
+00:49:04 Well, I'm definitely a fan.
+
+00:49:05 Now, one of the things I saw looking through the documentation is you have on the various issues and items in GitHub is you have help wanted labels.
+
+00:49:15 And it sounds like you're looking for folks who would be willing to be contributors and participate, right?
+
+00:49:22 That's sort of the goal is this is a community built project.
+
+00:49:25 You know, let's get everybody involved that wants to be.
+
+00:49:29 And one of the things that, you know, I'm not the only one doing this, but one of the things that I do, you know, when I check GitHub and I see that there are new issues open, I try to, you know, make an assessment, you know, of how difficult would it be to implement this feature?
+
+00:49:43 Or, you know, is this a bug or whatever it is?
+
+00:49:46 And use GitHub to provide the context.
+
+00:49:51 If I have a project and I want to help out and say, you know, I don't really know, you know, where can my efforts go?
+
+00:49:56 It's a little bit easier for me to see, okay, well, you know, this is an easy task for me to handle.
+
+00:50:02 So let me try this one first, as opposed to trying to add an ASGI or something like that, which would be more difficult.
+
+00:50:08 Yeah, the community is still working on that one as a whole.
+
+00:50:12 That's cool.
+
+00:50:13 So, but if people are keen to do it, there's all sorts of stuff I'm sure they could pick up, like even triaging issues, working on documentation tutorials.
+
+00:50:22 There's being a relatively new web framework.
+
+00:50:24 There's probably not as hard or solidified as say something like Django to make changes.
+
+00:50:30 Absolutely.
+
+00:50:31 And I think, you know, the best thing there is if you have interest in it, the best way to get involved is to just go into GitHub or we have, we have, we just opened up a community forum using Discourse.
+
+00:50:45 And just look to see what else, what the conversations are and just start responding, you know, just put in some, some thoughts.
+
+00:50:52 You know, there's a conversation about something and, you know, something that strikes your interest, you know, put in your own thoughts.
+
+00:50:58 And it's sort of a good way to just get yourself involved in, in your face known.
+
+00:51:03 So you don't even, you don't necessarily need to get involved by making a pull request and, you know, solving, you know, you know, bug issue number one, two, three, four.
+
+00:51:12 It's, I think just making your presence known is, is a great way to contribute yourself in your, in your, in your thoughts.
+
+00:51:20 Yeah, it's cool.
+
+00:51:21 A lot of people are looking to get into their first open source project for one reason or another.
+
+00:51:27 And I always like to highlight opportunities to do that.
+
+00:51:30 So it sounds like this is a good one.
+
+00:51:31 Anyone's looking to contribute, you know, we're definitely, you know, we'd love to have help with documentation and testing.
+
+00:51:37 And I think one of the big things right now would be examples is, you know, I used Sanic to solve this problem and this is how I did it.
+
+00:51:45 That kind of stuff.
+
+00:51:46 Yeah.
+
+00:51:46 Cool.
+
+00:51:47 That sounds really great.
+
+00:51:49 So I guess we're probably about out of time.
+
+00:51:51 So we should leave it there for Sanic.
+
+00:51:53 Let me ask you the two questions I always ask my guests at the end of the show.
+
+00:51:57 If you're going to work on Sanic or any other Python code, what editor do you use?
+
+00:52:01 I'm a sublime text guy.
+
+00:52:02 I really like when I can open up my code editor and just see code and I don't like to have too many distractions.
+
+00:52:09 So I like simplicity.
+
+00:52:11 Yeah, that's cool.
+
+00:52:12 And notable package on PyPI, not necessarily the most popular, but you're like, oh, you should know about this.
+
+00:52:17 And I'll go and throw a pip install Sanic out there.
+
+00:52:20 So you don't have to say that one, but maybe something else like maybe an extension or something or async ORM.
+
+00:52:26 I'll leave, maybe I'll leave all that stuff for the listeners to go and explore and find, you know, maybe one of those awesome async lists or something.
+
+00:52:35 Maybe someone wants to create an awesome Sanic list.
+
+00:52:38 Maybe that's a good contribution.
+
+00:52:40 That would be cool.
+
+00:52:41 How about, but as another notable package, I've got another GUI that I don't think you guys have necessarily covered yet.
+
+00:52:49 We've been on a real kick, but we haven't hit them all, I'm sure.
+
+00:52:53 Well, how about pip install eel?
+
+00:52:56 I think that's another one that you can, it's a fun little project, which is.
+
+00:53:01 Eel's a good one.
+
+00:53:02 The idea is somewhat similar to what Electron is doing, but doing it with Python instead.
+
+00:53:08 Yeah.
+
+00:53:08 So Electron JS allows you to take and create what looks like a desktop application, but it's actually, you know, a hidden Chrome running HTML defined front end.
+
+00:53:19 Maybe it's something like Ember or Angular and then a Node JS backend for much of the logic.
+
+00:53:23 Right.
+
+00:53:24 And so eel does basically that, but for Python, right?
+
+00:53:28 Exactly.
+
+00:53:28 And one of the benefits besides giving you the entire Python ecosystem is it's a little bit less intensive than say Electron might be.
+
+00:53:39 It's also a little simpler, isn't it?
+
+00:53:40 If I remember looking through.
+
+00:53:41 Yeah.
+
+00:53:42 It's a fun, it's a fun little project.
+
+00:53:43 Nice.
+
+00:53:43 Yeah.
+
+00:53:44 People should check that out.
+
+00:53:44 All right.
+
+00:53:45 Awesome.
+
+00:53:46 So final call to action.
+
+00:53:47 People are excited about Sanic and Async Web frameworks.
+
+00:53:50 What would you say to them?
+
+00:53:51 What I'd like to most stress is get yourself involved in open source work however you can.
+
+00:53:57 I think especially for people that are maybe newer developers and just getting started out, open source is a great way to get experience and to get exposure and most importantly, start learning.
+
+00:54:08 And so I'd say come say hi to us over in the Sanic community.
+
+00:54:14 We'd love to have you.
+
+00:54:15 But if not, go find another community that you're passionate about and make yourself known.
+
+00:54:21 And this whole web framework, Async Web framework in Python, you think it's time?
+
+00:54:25 It's time to come?
+
+00:54:26 Don't quote me on this, but I believe eventually Django's planning on adding Async several release sites, a couple years, two years down the low.
+
+00:54:35 And it's coming.
+
+00:54:36 I mean, it's definitely the way to go.
+
+00:54:38 So the future is now.
+
+00:54:39 Yeah.
+
+00:54:40 You spoke about Django channels and I think it was Andrew Godin that wrote this.
+
+00:54:46 Right.
+
+00:54:46 Put together a cool thing called a Django Async roadmap that lays out their plans for basically doing something similar.
+
+00:54:54 It's a really great article.
+
+00:54:55 I'll throw it in the show notes for people who are on the Django side of the fence.
+
+00:54:59 But yeah, definitely.
+
+00:55:00 I agree with you.
+
+00:55:01 And thanks for being on the show, Adam.
+
+00:55:03 It was great to talk with you.
+
+00:55:04 And best of luck on Sanic.
+
+00:55:05 It's a cool project.
+
+00:55:06 Thank you very much.
+
+00:55:07 You bet.
+
+00:55:07 Bye.
+
+00:55:08 Take care.
+
+00:55:09 This has been another episode of Talk Python to Me.
+
+00:55:12 The guest on this episode was Adam Hopkins.
+
+00:55:14 And it's been brought to you by us over at Talk Python Training.
+
+00:55:19 Want to level up your Python?
+
+00:55:20 If you're just getting started, try my Python Jumpstart by Building 10 Apps course.
+
+00:55:25 Or if you're looking for something more advanced, check out our new Async course that digs into all the different types of Async programming you can do in Python.
+
+00:55:33 And of course, if you're interested in more than one of these, be sure to check out our Everything Bundle.
+
+00:55:38 It's like a subscription that never expires.
+
+00:55:40 Be sure to subscribe to the show.
+
+00:55:42 Open your favorite podcatcher and search for Python.
+
+00:55:45 We should be right at the top.
+
+00:55:46 You can also find the iTunes feed at /itunes, the Google Play feed at /play, and the direct RSS feed at /rss on talkpython.fm.
+
+00:55:55 This is your host, Michael Kennedy.
+
+00:55:57 Thanks so much for listening.
+
+00:55:58 I really appreciate it.
+
+00:55:59 Now get out there and write some Python code.
+
+00:56:01 Thank you.
+
+00:56:01 Thank you.
+
+00:56:21 Thank you.
+

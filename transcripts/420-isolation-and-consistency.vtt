@@ -1,3525 +1,1421 @@
 WEBVTT
 
-00:00:00.000 --> 00:00:08.240
-When you use a SQL database like Postgres, you have to understand the subtleties of isolation levels from read committed to serializable.
+00:00:00.001 --> 00:00:05.380
+When you use a SQL database like Postgres, you have to understand the subtleties of isolation
 
+00:00:05.380 --> 00:00:11.740
+levels from read committed to serializable. And distributed databases such as MongoDB offer a
 
-00:00:08.240 --> 00:00:18.640
-And distributed databases such as MongoDB offer a range of consistency levels from eventually consistent to linearizable and many options in between.
+00:00:11.740 --> 00:00:17.960
+range of consistency levels from eventually consistent to linearizable and many options
 
+00:00:17.960 --> 00:00:23.900
+in between. Plus, it's easy enough to confuse isolation with consistency. To break it all down
 
-00:00:18.640 --> 00:00:22.880
-Plus, it's easy enough to confuse isolation with consistency.
+00:00:23.900 --> 00:00:29.440
+for us, we have A. Jesse Giroud-Davis from MongoDB back on the podcast. This is Talk Python to Me,
 
+00:00:29.440 --> 00:00:33.340
+episode 420, recorded June 7th, 2023.
 
-00:00:22.880 --> 00:00:28.080
-To break it all down for us, we have A. Jesse Jiryu-Davis from MongoDB back on the podcast.
+00:00:33.340 --> 00:00:52.240
+Welcome to Talk Python to Me, a weekly podcast on Python. This is your host, Michael Kennedy. Follow
 
+00:00:52.240 --> 00:00:59.140
+me on Mastodon, where I'm @mkennedy and follow the podcast using @talkpython, both on fosstodon.org.
 
-00:00:28.080 --> 00:00:34.080
-This is Talk Python To Me, episode 420, recorded June 7th, 2023.
+00:00:59.140 --> 00:01:03.900
+Be careful with impersonating accounts on other instances. There are many. Keep up with the show
 
+00:01:03.900 --> 00:01:10.120
+and listen to over seven years of past episodes at talkpython.fm. We've started streaming most of
 
-00:00:34.080 --> 00:00:46.080
-[music]
+00:01:10.120 --> 00:01:15.560
+our episodes live on YouTube. Subscribe to our YouTube channel over at talkpython.fm/youtube
 
+00:01:15.560 --> 00:01:22.220
+to get notified about upcoming shows and be part of that episode. This episode is sponsored by
 
-00:00:46.080 --> 00:00:50.080
-Welcome to Talk Python To Me, a weekly podcast on Python.
+00:01:22.220 --> 00:01:28.280
+Sentry. Don't let those errors go unnoticed. Use Sentry. Get started today at talkpython.fm slash
 
+00:01:28.280 --> 00:01:34.460
+Sentry. And it's brought to you by InfluxDB. InfluxDB is a database purpose built for handling
 
-00:00:50.080 --> 00:00:52.080
-This is your host, Michael Kennedy.
+00:01:34.460 --> 00:01:40.760
+time series data at a massive scale for real-time analytics. Try it for free at talkpython.fm
 
+00:01:40.760 --> 00:01:47.340
+slash InfluxDB. Hey, Jesse. Hey, Michael. Great to have you here on the show. Welcome back to Talk Python to Me.
 
-00:00:52.080 --> 00:00:54.080
-Follow me on Mastodon, where I'm @mkennedy,
+00:01:47.500 --> 00:01:53.660
+Thanks a lot. Yeah. It has been a little while since you were on the show. You were the second
 
+00:01:53.660 --> 00:01:59.360
+guest ever. How about that? How cool is that? That's really cool. I knew it was a while ago. I
 
-00:00:54.080 --> 00:00:59.440
-Kennedy and follow the podcast using @talkpython, both on fosstodon.org.
+00:01:59.360 --> 00:02:06.280
+think it was 2015. And we were talking about Python and MongoDB, which is a natural subject, but I
 
+00:02:06.280 --> 00:02:10.920
+didn't know it was so early in your career. Yeah, it was. You really helped launch the podcast. So
 
-00:00:59.440 --> 00:01:03.320
-Be careful with impersonating accounts on other instances, there are many.
+00:02:10.920 --> 00:02:16.380
+thanks for that. And then you also did a really popular episode about writing an excellent programming
 
+00:02:16.380 --> 00:02:23.000
+blog. And we talked about fun things like design patterns of writing for technical writing. That was
 
-00:01:03.320 --> 00:01:08.800
-Keep up with the show and listen to over seven years of past episodes at talkpython.fm.
+00:02:23.000 --> 00:02:28.720
+really well received. So yeah, excellent to have you back. We're going to make it a little bit
 
+00:02:28.720 --> 00:02:33.600
+more modern than just, you know, five, six years ago, whatever that was. Cool. So what have you been
 
-00:01:08.800 --> 00:01:12.560
-We've started streaming most of our episodes live on YouTube.
+00:02:33.600 --> 00:02:38.160
+up to? Give us maybe a quick intro for people who don't know you and catch up on what you've been up
 
+00:02:38.160 --> 00:02:47.080
+to since then. You and I met because when I joined MongoDB around 2011, I was the Python evangelist,
 
-00:01:12.560 --> 00:01:18.400
-Subscribe to our YouTube channel over at talkpython.fm/youtube to get notified about upcoming shows and be
-
-
-00:01:18.400 --> 00:01:20.680
-part of that episode.
-
-
-00:01:20.680 --> 00:01:23.320
-This episode is sponsored by Sentry.
-
-
-00:01:23.320 --> 00:01:24.840
-Let those errors go unnoticed.
-
-
-00:01:24.840 --> 00:01:25.840
-Use Sentry.
-
-
-00:01:25.840 --> 00:01:29.060
-Get started today at talkpython.fm/sentry.
-
-
-00:01:29.060 --> 00:01:31.320
-And it's brought to you by InfluxDB.
-
-
-00:01:31.320 --> 00:01:33.840
-InfluxDB is a database purpose-built
-
-
-00:01:33.840 --> 00:01:36.000
-for handling time series data
-
-
-00:01:36.000 --> 00:01:38.800
-at a massive scale for real-time analytics.
-
-
-00:01:38.800 --> 00:01:43.120
-Try it for free at talkpython.fm/influxdb.
-
-
-00:01:43.120 --> 00:01:44.160
-Hey, Jesse. - Hey, Michael.
-
-
-00:01:44.160 --> 00:01:45.840
-- Great to have you here on the show.
-
-
-00:01:45.840 --> 00:01:47.480
-Welcome back to "Talk Python To Me."
-
-
-00:01:47.480 --> 00:01:48.320
-- Thanks a lot.
-
-
-00:01:48.320 --> 00:01:50.320
-- Yeah, it has been a little while
-
-
-00:01:50.320 --> 00:01:51.800
-since you were on the show.
-
-
-00:01:51.800 --> 00:01:54.920
-You were the second guest ever.
-
-
-00:01:54.920 --> 00:01:55.800
-How about that?
-
-
-00:01:55.800 --> 00:01:56.640
-How cool is that?
-
-
-00:01:56.640 --> 00:01:59.240
->> That's really cool. I knew it was a while ago.
-
-
-00:01:59.240 --> 00:02:01.360
-I think it was 2015,
-
-
-00:02:01.360 --> 00:02:03.600
-and we were talking about Python and MongoDB,
-
-
-00:02:03.600 --> 00:02:05.360
-which is a natural subject,
-
-
-00:02:05.360 --> 00:02:07.920
-but I didn't know it was so early in your career.
-
-
-00:02:07.920 --> 00:02:10.800
->> Yeah. You really helped launch the podcast.
-
-
-00:02:10.800 --> 00:02:12.320
-So thanks for that. Then you also did
-
-
-00:02:12.320 --> 00:02:17.400
-a really popular episode about writing an excellent programming blog.
-
-
-00:02:17.400 --> 00:02:21.040
-We talked about fun things like design patterns of
-
-
-00:02:21.040 --> 00:02:27.040
-writing for technical writing. That was really well received. So, yeah, excellent to have you back.
-
-
-00:02:27.040 --> 00:02:30.960
-We're going to make it a little bit more modern than just, you know, five, six years ago,
-
-
-00:02:30.960 --> 00:02:35.840
-whatever that was. Cool. So what have you been up to? Give us maybe a quick intro for people
-
-
-00:02:35.840 --> 00:02:38.640
-who don't know you and catch up on what you've been up to since then.
-
-
-00:02:38.640 --> 00:02:47.040
-You and I met because when I joined MongoDB around 2011, I was the Python evangelist,
-
-
-00:02:47.040 --> 00:02:55.600
+00:02:47.080 --> 00:02:55.760
 which is still my favorite job title of all time. I'm still at MongoDB. And I've been doing various
 
+00:02:55.760 --> 00:03:04.580
+sorts of engineering the whole time. I switched over to doing C and C++ and moved from doing Python
 
-00:02:55.600 --> 00:03:03.920
-sorts of engineering the whole time I switched over to doing C and C++ and moved from doing
+00:03:04.580 --> 00:03:12.780
+client library work. I had been working on PyMongo to working on the core MongoDB server and helped
 
+00:03:12.780 --> 00:03:21.260
+develop the first version of serverless MongoDB, which is pay as you go. And now I'm a researcher
 
-00:03:03.920 --> 00:03:10.080
-Python client library work, I had been working on PyMongo, to working on the core MongoDB server,
+00:03:21.260 --> 00:03:30.440
+with MongoDB Labs, which is our tiny little research organization. And I'm looking at new products,
 
+00:03:30.440 --> 00:03:36.140
+cutting edge techniques that we might want to adopt at MongoDB. All of those things sound super awesome.
 
-00:03:10.720 --> 00:03:16.120
-and helped develop the first version of serverless MongoDB,
+00:03:36.140 --> 00:03:42.340
+Maybe take them in order if I remember them right. So you worked on PyMongo, which is if people use
 
+00:03:42.340 --> 00:03:49.200
+MongoDB at all, they basically either use PyMongo or Motor, right? And did you also work on Motor? You did,
 
-00:03:16.120 --> 00:03:17.920
-which is pay-as-you-go.
+00:03:49.200 --> 00:04:00.800
+right? Yeah, I invented Motor and came up with the cute name. At the time, Tornado was one of the major
 
+00:04:00.800 --> 00:04:06.780
+asynchronous Python servers. Very ahead of its time in that sense. There's way before async and await and
 
-00:03:17.920 --> 00:03:23.220
-And now I'm a researcher with MongoDB Labs,
+00:04:06.780 --> 00:04:14.180
+asyncio and all those things. Yeah, that's right. It was extremely influential. And I wanted PyMongo to
 
+00:04:14.180 --> 00:04:21.640
+work well with Tornado. So I came up with this very complicated way to sort of asynchronize PyMongo
 
-00:03:23.220 --> 00:03:26.820
-which is our tiny little research organization.
+00:04:21.640 --> 00:04:29.060
+and make it work with Tornado. And I combined Mongo with Tornado to come up with Motor.
 
+00:04:29.060 --> 00:04:37.860
+And it's still maintained, but not by me. And it's a good choice. If you want that asynchronous API,
 
-00:03:26.820 --> 00:03:31.720
-And I'm looking at new products, cutting-edge techniques
+00:04:37.860 --> 00:04:44.560
+it now supports async and await. And it now works with asyncio as well as Tornado. So if you have
 
+00:04:44.560 --> 00:04:49.600
+some reason for wanting to do async Python already, and then you want to connect to MongoDB without fear
 
-00:03:31.720 --> 00:03:34.220
-that we might want to adopt at MongoDB.
+00:04:49.600 --> 00:04:55.140
+of blocking your application, then Motor is the driver of choice.
 
+00:04:55.140 --> 00:05:00.220
+Yeah, absolutely. And much like if you're using, if you're doing synchronous MongoDB stuff in Python,
 
-00:03:34.220 --> 00:03:36.220
-All of those things sound super awesome.
+00:05:00.220 --> 00:05:04.800
+chances are using PyMongo. If you're doing async stuff, you're probably using Motor. For example,
 
+00:05:04.800 --> 00:05:11.580
+the website you're looking at here is backed by MongoDB. That is Talk Python. And it uses Beanie,
 
-00:03:36.220 --> 00:03:39.220
-Maybe take them in order, if I remember them right.
+00:05:11.580 --> 00:05:19.180
+which does basically Pydantic and async and await plus MongoDB. But the way you work with it is you
 
+00:05:19.180 --> 00:05:23.800
+create a motor connection, motor client and hand it off to the underlying framework. So really,
 
-00:03:39.220 --> 00:03:43.220
-So you worked on PyMongo, which is if people use MongoDB at all,
+00:05:23.800 --> 00:05:26.660
+it's still using your code. That's cool.
 
+00:05:26.660 --> 00:05:27.240
+That's neat.
 
-00:03:43.220 --> 00:03:47.620
-they basically either use PyMongo or Motor, right?
+00:05:27.240 --> 00:05:35.200
+Yeah. Pretty neat. So I imagine those are two really different worlds, building client libraries to talk
 
+00:05:35.200 --> 00:05:42.000
+to some semi-black box type of system, like I send requests over the API to Mongo and it does its thing
 
-00:03:47.620 --> 00:03:49.540
-And did you also work on Motor? You did, right?
+00:05:42.000 --> 00:05:48.960
+and I get a response to switching and being inside that box. Maybe contrast those two worlds,
 
+00:05:49.000 --> 00:05:51.120
+because I think they're probably pretty different.
 
-00:03:49.540 --> 00:03:54.500
-Yeah, I invented Motor and came up with the cute name.
+00:05:51.120 --> 00:06:01.000
+Yeah. The problem spaces are practically disjoint. When I was working on MongoDB drivers,
 
+00:06:01.000 --> 00:06:08.060
+I had a great deal of concern for making the API usable by application developers. A lot of my time
 
-00:03:54.500 --> 00:04:03.380
-At the time, Tornado was one of the major asynchronous Python servers.
+00:06:08.060 --> 00:06:16.420
+was spent figuring out how to make a consistent experience for people who were using MongoDB from
 
+00:06:16.420 --> 00:06:23.560
+Python and also from JavaScript or C or PHP. These are completely different kinds of languages,
 
-00:04:03.380 --> 00:04:04.820
-Very ahead of its time in that sense.
+00:06:23.560 --> 00:06:30.820
+but you need as much consistency as possible while still respecting the style of the language itself.
 
+00:06:30.820 --> 00:06:37.960
+And then of course, since these are semantically versioned libraries, almost every decision you make is permanent.
 
-00:04:04.820 --> 00:04:08.020
-That was way before Async and Await and Async.io and all those things.
+00:06:37.960 --> 00:06:46.420
+On the server side, on the other hand, I was mainly concerned with how to implement algorithms that solved tricky problems.
 
+00:06:46.420 --> 00:07:04.300
+And so we could change our minds every few years with sort of upgrade downgrade logic. It's complicated, but it's not permanent in the way that an API is. A lot of the problems that it was handling on the server side, first of all, I was working with C++ in a half million line code base.
 
-00:04:08.020 --> 00:04:16.340
-Yeah, that's right. It was extremely influential. And I wanted PyMongo to work well with Tornado.
-
-
-00:04:16.340 --> 00:04:23.780
-So I came up with this very complicated way to sort of asynchronize PyMongo and make it work
-
-
-00:04:23.780 --> 00:04:32.260
-with Tornado. And I combined Mongo with Tornado to come up with Motor. And it's still maintained,
-
-
-00:04:32.260 --> 00:04:39.460
-but not by me. And it's a good choice. If you want that asynchronous API, it now supports async
-
-
-00:04:39.460 --> 00:04:45.060
-and await. And it now works with asyncio, as well as tornado. So if you have some reason for
-
-
-00:04:45.060 --> 00:04:50.260
-wanting to do async Python already, and then you want to connect to MongoDB without fear of
-
-
-00:04:50.260 --> 00:04:55.140
-blocking your application, then motor is the driver of choice.
-
-
-00:04:55.140 --> 00:05:00.340
-Yeah, absolutely. And much like if you're using if you're doing synchronous MongoDB stuff in Python,
-
-
-00:05:00.340 --> 00:05:02.060
-and chances are using PyMongo.
-
-
-00:05:02.060 --> 00:05:04.400
-If you're doing async stuff, you're probably using motor.
-
-
-00:05:04.400 --> 00:05:06.520
-For example, the website you're looking at here
-
-
-00:05:06.520 --> 00:05:08.940
-is backed by MongoDB, that is talk by them.
-
-
-00:05:08.940 --> 00:05:13.840
-And it uses Beanie, which does basically
-
-
-00:05:13.840 --> 00:05:17.680
-Pydantic and async and await plus MongoDB.
-
-
-00:05:17.680 --> 00:05:19.540
-But the way you work with it is you create
-
-
-00:05:19.540 --> 00:05:21.780
-a motor connection, motor client,
-
-
-00:05:21.780 --> 00:05:23.480
-and hand it off to the underlying framework.
-
-
-00:05:23.480 --> 00:05:26.340
-So really, it's still using your code.
-
-
-00:05:26.340 --> 00:05:27.180
-That's cool.
-
-
-00:05:27.180 --> 00:05:28.500
-- That's neat. - Yeah.
-
-
-00:05:28.500 --> 00:05:29.340
-Pretty neat.
-
-
-00:05:29.340 --> 00:05:32.500
-So I imagine those are two really different worlds,
-
-
-00:05:32.500 --> 00:05:36.740
-building client libraries to talk to some
-
-
-00:05:36.740 --> 00:05:38.860
-semi-black box type of system,
-
-
-00:05:38.860 --> 00:05:41.260
-like I send requests over the API to Mongo
-
-
-00:05:41.260 --> 00:05:43.500
-and it does its thing and I get a response,
-
-
-00:05:43.500 --> 00:05:46.740
-to switching and being inside that box.
-
-
-00:05:46.740 --> 00:05:49.100
-What's the, maybe contrast those two worlds,
-
-
-00:05:49.100 --> 00:05:51.300
-'cause I think they're probably pretty different.
-
-
-00:05:51.300 --> 00:05:56.300
-- Yeah, the problem spaces are practically disjoint.
-
-
-00:05:58.900 --> 00:06:01.800
-When I was working on MongoDB drivers,
-
-
-00:06:01.800 --> 00:06:07.300
-I had a great deal of concern for making the API usable by application developers.
-
-
-00:06:07.300 --> 00:06:10.200
-A lot of my time was spent figuring out
-
-
-00:06:10.200 --> 00:06:13.940
-how to make a consistent experience for people
-
-
-00:06:13.940 --> 00:06:17.340
-who were using MongoDB from Python
-
-
-00:06:17.340 --> 00:06:21.200
-and also from JavaScript or C or PHP.
-
-
-00:06:21.200 --> 00:06:23.800
-These are completely different kinds of languages,
-
-
-00:06:23.800 --> 00:06:27.140
-but you need as much consistency as possible
-
-
-00:06:27.200 --> 00:06:31.440
-while still respecting the style of the language itself.
-
-
-00:06:31.440 --> 00:06:32.480
-And then of course,
-
-
-00:06:32.480 --> 00:06:36.000
-since these are semantically versioned libraries,
-
-
-00:06:36.000 --> 00:06:38.320
-almost every decision you make is permanent.
-
-
-00:06:38.320 --> 00:06:39.960
-On the server side, on the other hand,
-
-
-00:06:39.960 --> 00:06:44.960
-I was mainly concerned with how to implement algorithms
-
-
-00:06:44.960 --> 00:06:46.560
-that solved tricky problems.
-
-
-00:06:46.560 --> 00:06:49.080
-And so we could change our minds every few years
-
-
-00:06:49.080 --> 00:06:51.880
-with sort of upgrade downgrade logic.
-
-
-00:06:51.880 --> 00:06:52.720
-It's complicated,
-
-
-00:06:52.720 --> 00:06:56.440
-but it's not permanent in the way that an API is.
-
-
-00:06:56.440 --> 00:06:58.760
-A lot of the problems that it was handling on the server side,
-
-
-00:06:58.760 --> 00:07:04.760
-first of all, it was working with C++ in a half million line code base.
-
-
-00:07:04.760 --> 00:07:10.560
+00:07:04.300 --> 00:07:10.440
 So that was a great deal more complexity than I'd ever confronted before.
 
+00:07:10.440 --> 00:07:27.440
+And it's probably really super polished and had every little change probably has, you know, many, many knock on effects that you've got to carefully think about. And you're like, ah, do we really need to check for that? Would this ever happen? Or can we reorder those bytes? Probably it's fine.
 
-00:07:10.560 --> 00:07:15.880
->> It's probably really super polished and every little change probably
+00:07:27.440 --> 00:07:52.640
+There's a lot of hidden complexity that people who've been working on the server code base longer than I kept pointing out to me. Like, no, you can't just change this data structure. You have to take the following six locks before you can even think about touching that. Then interactions among the servers in a replica set or a sharded cluster are literally exponentially complex.
 
+00:07:52.640 --> 00:07:54.640
+Yeah. Like n factorial type of thing.
 
-00:07:15.880 --> 00:07:20.400
-has many, many knock-on effects that you've got to carefully think about.
+00:07:54.640 --> 00:07:54.960
+Right.
 
+00:07:54.960 --> 00:07:56.960
+Okay.
 
-00:07:20.400 --> 00:07:23.120
-You're like, "Do we really need to check for that?
+00:07:56.960 --> 00:08:02.640
+Okay. And C++ versus Python. That's a pretty big, pretty big distinction there.
 
+00:08:02.640 --> 00:08:26.940
+Yeah. I had coded C++ right out of college. I thought I was going to be a 3D graphics guy working for Pixar, which never happened, but I had known C++ once upon a time. But C++ in the nineties is a completely different language from modern C++. So I had a lot of catching up to do. On the other hand, I really enjoyed the fact that you can make it a lot of catching up to do.
 
-00:07:23.120 --> 00:07:26.760
-Would this ever happen or can we reorder those bytes?
+00:08:26.940 --> 00:08:32.620
+I had to make things run fast. And I hope that this is not offensive.
 
+00:08:32.620 --> 00:08:48.300
+And you can make algorithms and you can make algorithms more efficient, but you can't really make your code run all that fast. And I found it really enjoyable to write C++ and have things finish in microseconds.
 
-00:07:26.760 --> 00:07:27.760
-Probably it's fine.
+00:08:48.300 --> 00:08:53.980
+Right. And you're about as fast as it gets, unless you're going to go do assembler.
 
+00:08:53.980 --> 00:08:54.480
+And maybe not.
 
-00:07:27.760 --> 00:07:30.960
-There's a lot of hidden complexity
+00:08:54.480 --> 00:08:55.660
+Maybe you can make it a compiler.
 
+00:08:55.660 --> 00:08:56.660
+And probably not. Certainly not for me.
 
-00:07:30.960 --> 00:07:34.760
-that people who've been working on the server code base longer than I
+00:08:56.660 --> 00:08:57.660
+Yeah, exactly.
 
+00:08:57.660 --> 00:09:02.540
+Yeah. And who would want to write a similar, right? Especially. Oh my gosh.
 
-00:07:34.760 --> 00:07:36.400
-kept pointing out to me.
+00:09:02.540 --> 00:09:22.460
+Yeah. I think the story with Python performance is interesting. A lot of times it's plenty fast for what people need to do. But if you're building a server, like a high-end database server, you know, those microseconds count. And, you know, that's a different world, right? It's a different trade-off. Trading somewhat developer speed for performance and code speed.
 
+00:09:22.660 --> 00:09:42.360
+Although I do think we're getting, you know, some proper attention on Python speed in the last couple of years and will for the next couple as well. With, you know, the faster CPython initiative and 3.10, 3.11, 3.12, all that stuff. But it's still, even the fast versions of those are not, you know, C++ type of speed.
 
-00:07:36.400 --> 00:07:40.200
-Like, no, you can't just change this data structure.
+00:09:42.360 --> 00:09:49.020
+Yeah. It's a fundamentally different way of executing code and they're never really going to overlap.
 
+00:09:49.180 --> 00:10:02.080
+Maybe someday we'll get fully compiled Python. Who knows what the future holds, but until then. As long as it's interpreted, probably not. All right. The third thing you mentioned, which sounds interesting as well, is MongoDB Labs.
 
-00:07:40.200 --> 00:07:42.200
-You have to take the following six locks
+00:10:02.520 --> 00:10:15.780
+Can you give us an example of some of the things that have come out of there or some of the types of problems you're researching, anything like that? How secret is the lab? Is it like a skunk's work at Lockheed Martin? Or can you talk a little about it?
 
+00:10:15.780 --> 00:10:31.300
+I can certainly talk about it. It's small and fairly new, a couple of years old, about a dozen people working on a number of things. One of them is streaming data processing, which I think we'll be able to announce quite a bit more.
 
-00:07:42.200 --> 00:07:44.720
-before you can even think about touching that.
+00:10:31.300 --> 00:10:40.940
+Is this like a high speed time series data? Like I'm hooked up to some kind of pipe to the NASDAQ or something like this? Or what's an example?
 
+00:10:40.940 --> 00:10:52.300
+Right. Where you've got a source of data events, not necessarily stored in any database anywhere, but coming in as a continuous stream of events.
 
-00:07:44.720 --> 00:07:47.560
-Then interactions among the servers
+00:10:52.300 --> 00:11:08.740
+And you want to connect stream processors in some sort of kind of network of pipes and nodes and eventually drop the results into MongoDB or another data store or send it off to another service.
 
+00:11:08.740 --> 00:11:20.500
+MongoDB Labs has been a place where we can incubate some of those ideas and make them available in our developer data platform.
 
-00:07:47.560 --> 00:07:49.720
-in a replica set or a sharded cluster
+00:11:20.500 --> 00:11:26.180
+Sounds like a really cool, cool place to work. Just sort of playing with ideas and got the time and space to do that, right?
 
+00:11:26.180 --> 00:11:41.420
+Yeah. Labs has also been a place where we incubate cryptography ideas, like queryable encryption, where MongoDB doesn't know the contents of your data, but can nevertheless answer queries about it.
 
-00:07:49.720 --> 00:07:52.720
-are literally exponentially complex.
+00:11:41.420 --> 00:11:51.100
+I personally have been a lot of the data. I personally have been working on improving the debugging experience for people who are writing complex aggregation pipelines.
 
-
-00:07:52.720 --> 00:07:54.720
->> Yeah, like n factorial type of thing.
-
-
-00:07:54.720 --> 00:07:55.720
->> Right.
-
-
-00:07:55.720 --> 00:08:02.720
->> Okay. And C++ versus Python, that's a pretty big distinction there.
-
-
-00:08:02.720 --> 00:08:10.720
->> Yeah, I had coded C++ right out of college. I thought I was going to be a 3D graphics guy working for Pixar, which never happened.
-
-
-00:08:10.720 --> 00:08:21.720
-But I had known C++ once upon a time. But C++ in the '90s is a completely different language from modern C++.
-
-
-00:08:21.720 --> 00:08:23.720
-So I had a lot of catching up to do.
-
-
-00:08:23.720 --> 00:08:28.220
-On the other hand, I really enjoyed the fact that you can make things run fast.
-
-
-00:08:28.220 --> 00:08:37.220
-And I hope that this is not offensive, but CPython has a very low ceiling for performance.
-
-
-00:08:37.220 --> 00:08:42.720
-And you can make algorithms more efficient, but you can't really make your code run all that fast.
-
-
-00:08:42.720 --> 00:08:49.220
-And I found it really enjoyable to write C++ and have things finish in microseconds.
-
-
-00:08:49.220 --> 00:08:52.180
-Right, right. Near, about as fast as it gets,
-
-
-00:08:52.180 --> 00:08:53.560
-unless you're going to go do assembler.
-
-
-00:08:53.560 --> 00:08:56.180
-And then maybe not, maybe you should use a compiler.
-
-
-00:08:56.180 --> 00:08:57.680
-- Certainly not for me. - Yeah, exactly.
-
-
-00:08:57.680 --> 00:09:01.180
-Yeah, and who would want to write assembler, right?
-
-
-00:09:01.180 --> 00:09:02.780
-Especially, oh my gosh.
-
-
-00:09:02.780 --> 00:09:06.160
-No, I think the story with Python performance is interesting.
-
-
-00:09:06.160 --> 00:09:09.000
-A lot of times it's plenty fast for what people need to do,
-
-
-00:09:09.000 --> 00:09:10.700
-but if you're building a server,
-
-
-00:09:10.700 --> 00:09:12.620
-like a high-end database server,
-
-
-00:09:12.620 --> 00:09:14.700
-you know, those microseconds count.
-
-
-00:09:14.700 --> 00:09:17.580
-And, you know, that's a different world, right?
-
-
-00:09:17.580 --> 00:09:23.460
-That's a different trade-off, trading somewhat developer speed for performance and code speed.
-
-
-00:09:23.460 --> 00:09:29.580
-Although I do think we're getting some proper attention on Python speed in the last couple
-
-
-00:09:29.580 --> 00:09:32.780
-of years and will for the next couple as well.
-
-
-00:09:32.780 --> 00:09:38.080
-With the faster CPython initiative and 3.10, 3.11, 3.12, all that stuff.
-
-
-00:09:38.080 --> 00:09:42.980
-But it's still, even the fast versions of those are not C++ type of speed.
-
-
-00:09:42.980 --> 00:09:46.580
-It's a fundamentally different way of executing code
-
-
-00:09:46.580 --> 00:09:49.180
-and they're never really going to overlap.
-
-
-00:09:49.180 --> 00:09:51.780
-- Yeah, maybe someday we'll get fully compiled Python.
-
-
-00:09:51.780 --> 00:09:54.280
-Who knows what the future holds, but until then.
-
-
-00:09:54.280 --> 00:09:57.620
-As long as it's interpreted, probably not.
-
-
-00:09:57.620 --> 00:09:59.260
-All right, the third thing you mentioned,
-
-
-00:09:59.260 --> 00:10:02.860
-which sounds interesting as well, is MongoDB Labs.
-
-
-00:10:02.860 --> 00:10:05.460
-Can you give us an example of some of the things
-
-
-00:10:05.460 --> 00:10:07.420
-that have come out of there or some of the types
-
-
-00:10:07.420 --> 00:10:09.220
-of problems you're researching, anything like that?
-
-
-00:10:09.220 --> 00:10:10.420
-How secret is the lab?
-
-
-00:10:10.420 --> 00:10:14.140
-Is it like a skunk's work at Lockheed Martin?
-
-
-00:10:14.140 --> 00:10:15.820
-Can you talk a little about it?
-
-
-00:10:15.820 --> 00:10:17.140
->> I can certainly talk about it.
-
-
-00:10:17.140 --> 00:10:19.340
-It's small and fairly new,
-
-
-00:10:19.340 --> 00:10:21.520
-couple of years old, about a dozen people,
-
-
-00:10:21.520 --> 00:10:23.260
-working on a number of things.
-
-
-00:10:23.260 --> 00:10:27.740
-One of them is streaming data processing,
-
-
-00:10:27.740 --> 00:10:31.620
-which I think we'll be able to announce quite a bit more.
-
-
-00:10:31.620 --> 00:10:34.660
->> Is this like a high-speed time series data,
-
-
-00:10:34.660 --> 00:10:40.260
-like I'm hooked up to some pipe to the NASDAQ or something like this?
-
-
-00:10:40.260 --> 00:10:41.560
--What's an example? -Right.
-
-
-00:10:41.560 --> 00:10:46.200
-Where you've got a source of data events,
-
-
-00:10:46.200 --> 00:10:49.900
-not necessarily stored in any database anywhere,
-
-
-00:10:49.900 --> 00:10:52.340
-but coming in as a continuous stream of events.
-
-
-00:10:52.340 --> 00:10:56.940
-And you want to connect stream processors
-
-
-00:10:56.940 --> 00:11:00.980
-in some sort of network of pipes and nodes
-
-
-00:11:00.980 --> 00:11:05.220
-and eventually drop the results into MongoDB
-
-
-00:11:05.220 --> 00:11:09.180
-or another data store or send it off to another service.
-
-
-00:11:09.260 --> 00:11:15.900
-MongoDB Labs has been a place where we can incubate some of those ideas
-
-
-00:11:15.900 --> 00:11:20.600
-and make them available in our developer data platform.
-
-
-00:11:20.600 --> 00:11:24.700
-Sounds like a really cool place to work, just sort of playing with ideas
-
-
-00:11:24.700 --> 00:11:26.240
-and got the time and space to do that, right?
-
-
-00:11:26.240 --> 00:11:31.580
-Yeah. Labs has also been a place where we incubate cryptography ideas,
-
-
-00:11:31.580 --> 00:11:33.920
-like queryable encryption,
-
-
-00:11:33.920 --> 00:11:39.320
-where MongoDB doesn't know the contents of your data,
-
-
-00:11:39.320 --> 00:11:41.720
-but can nevertheless answer queries about it.
-
-
-00:11:41.720 --> 00:11:46.720
-I personally have been working on improving the debugging experience
-
-
-00:11:46.720 --> 00:11:51.120
-for people who are writing complex aggregation pipelines.
-
-
-00:11:51.120 --> 00:11:57.620
+00:11:51.100 --> 00:11:57.100
 And then what I'm working on right now is predictive scaling for Atlas.
 
+00:11:57.100 --> 00:12:04.780
+The idea is that a lot of customers have really regular weekly business cycles or daily business cycles.
 
-00:11:57.620 --> 00:12:03.520
-The idea is that a lot of customers have really regular weekly business cycles
+00:12:04.780 --> 00:12:04.780
+Right.
 
+00:12:04.780 --> 00:12:13.780
+Like you might have Monday through Friday, traffic gradually increases for around 9:00 or 10:00 AM, and then it drops off at the end of the day.
 
-00:12:03.520 --> 00:12:04.880
-or daily business cycles.
+00:12:13.780 --> 00:12:18.780
+And then you have a huge spike at midnight when all of your nightly analytics queries go off and then the weekend is quiet.
 
+00:12:18.780 --> 00:12:30.460
+We should be able to detect those patterns and automatically scale you up and down so that you have the capacity you need just before you need it.
 
-00:12:04.880 --> 00:12:08.280
-Like you might have Monday through Friday,
+00:12:30.460 --> 00:12:34.140
+And then you don't pay for it at a time when you predictably do not need it.
 
+00:12:34.140 --> 00:12:47.140
+Actual deployment of that idea? I have no idea how far off that is, but that's what's nice about labs is that we are working on things that the larger company doesn't have scheduled yet.
 
-00:12:08.280 --> 00:12:12.760
-traffic gradually increases around nine or 10 a.m.
+00:12:47.140 --> 00:12:51.140
+You can experiment, right? That's, I mean, it's a lab.
 
-
-00:12:12.760 --> 00:12:14.200
-and then it drops off at the end of the day.
-
-
-00:12:14.200 --> 00:12:15.880
-And then you have a huge spike at midnight
-
-
-00:12:15.880 --> 00:12:18.040
-when all of your nightly analytics queries go off
-
-
-00:12:18.040 --> 00:12:19.780
-and then the weekend is quiet.
-
-
-00:12:19.780 --> 00:12:23.420
-We should be able to detect those patterns
-
-
-00:12:23.420 --> 00:12:25.540
-and automatically scale you up and down
-
-
-00:12:25.540 --> 00:12:28.640
-so that you have the capacity you need
-
-
-00:12:28.640 --> 00:12:30.240
-just before you need it.
-
-
-00:12:30.240 --> 00:12:32.400
-And then you don't pay for it at a time
-
-
-00:12:32.400 --> 00:12:34.520
-when you predictably do not need it.
-
-
-00:12:34.520 --> 00:12:36.280
-Actual deployment of that idea,
-
-
-00:12:36.280 --> 00:12:38.040
-I have no idea how far off that is,
-
-
-00:12:38.040 --> 00:12:40.160
-but that's what's nice about labs
-
-
-00:12:40.160 --> 00:12:43.400
-is that we are working on things
-
-
-00:12:43.400 --> 00:12:47.600
-that the larger company doesn't have scheduled yet.
-
-
-00:12:47.600 --> 00:12:48.800
-- You can experiment, right?
-
-
-00:12:48.800 --> 00:12:51.360
-That's, I mean, it's a lab.
-
-
-00:12:51.360 --> 00:12:52.200
-- Exactly.
-
-
-00:12:52.200 --> 00:12:55.400
-- This portion of Talk Python to Me
-
-
-00:12:55.400 --> 00:12:57.100
-is brought to you by Sentry.
-
-
-00:12:57.100 --> 00:12:59.080
-You know that Sentry captures the errors
-
-
-00:12:59.080 --> 00:13:01.400
-that would otherwise go unnoticed.
-
-
-00:13:01.400 --> 00:13:05.760
-Of course, they have incredible support for basically any Python framework.
-
-
-00:13:05.760 --> 00:13:11.320
-They have direct integrations with Flask, Django, FastAPI, and even things like AWS
-
-
-00:13:11.320 --> 00:13:13.200
-Lambda and Celery.
-
-
-00:13:13.200 --> 00:13:17.440
-But did you know they also have native integrations with mobile app frameworks?
-
-
-00:13:17.440 --> 00:13:22.240
-Whether you're building an Android or iOS app or both, you can gain complete visibility
-
-
-00:13:22.240 --> 00:13:27.640
-into your application's correctness, both on the mobile side and server side.
-
-
-00:13:27.640 --> 00:13:32.500
-We just completely rewrote Talk Python's mobile apps for taking our courses.
-
-
-00:13:32.500 --> 00:13:37.160
-And we massively benefited from having Sentry integration right from the start.
-
-
-00:13:37.160 --> 00:13:41.760
-We used Flutter for our native mobile framework, and with Sentry, it was literally just two
-
-
-00:13:41.760 --> 00:13:45.880
-lines of code to start capturing errors as soon as they happen.
-
-
-00:13:45.880 --> 00:13:50.080
-Of course, we don't love errors, but we do love making our users happy.
-
-
-00:13:50.080 --> 00:13:54.560
-Solving problems as soon as possible with Sentry on the mobile Flutter code and the
-
-
-00:13:54.560 --> 00:13:56.560
-the Python server-side code together
-
-
-00:13:56.560 --> 00:13:59.560
-made understanding error reports a breeze.
-
-
-00:13:59.560 --> 00:14:02.560
-So whether you're building Python server-side apps
-
-
-00:14:02.560 --> 00:14:04.560
-or mobile apps or both,
-
-
-00:14:04.560 --> 00:14:08.560
-give Sentry a try to get a complete view of your apps' correctness.
-
-
-00:14:08.560 --> 00:14:11.560
-Thank you to Sentry for sponsoring the show
-
-
-00:14:11.560 --> 00:14:14.560
-and helping us ship more reliable mobile apps to all of you.
-
-
-00:14:14.560 --> 00:14:18.560
-Tell people about Atlas a little bit.
-
-
-00:14:18.560 --> 00:14:21.560
-You talked about your predictive scaling in Atlas.
-
-
-00:14:21.560 --> 00:14:23.560
-I imagine not everyone knows what that is.
-
-
-00:14:23.560 --> 00:14:28.360
-Sure. Atlas is MongoDB's cloud services,
-
-
-00:14:28.360 --> 00:14:33.560
-and we originally launched it as a database as a service.
-
-
-00:14:33.560 --> 00:14:38.440
-So you decide how you want to deploy your database,
-
-
-00:14:38.440 --> 00:14:40.640
-a replica set or a sharded cluster,
-
-
-00:14:40.640 --> 00:14:42.940
-which cloud providers you want to use.
-
-
-00:14:42.940 --> 00:14:45.940
-We allow you to use multiple cloud providers,
-
-
-00:14:45.940 --> 00:14:51.480
-and what size of server you need.
-
-
-00:14:52.280 --> 00:14:57.280
-And so we would manage backups and administration
-
-
-00:14:57.280 --> 00:14:59.920
-and that sort of thing, upgrades and so on.
-
-
-00:14:59.920 --> 00:15:03.160
-More recently, we've announced Atlas Serverless,
-
-
-00:15:03.160 --> 00:15:04.260
-which is pay as you go.
-
-
-00:15:04.260 --> 00:15:06.400
-So you no longer have to worry about
-
-
-00:15:06.400 --> 00:15:08.300
-how your database is deployed,
-
-
-00:15:08.300 --> 00:15:11.480
-what instance size you don't need to do, capacity planning.
-
-
-00:15:11.480 --> 00:15:15.900
-We just auto scale you and bill you for what you used.
-
-
-00:15:15.900 --> 00:15:17.540
-We've also got a few other services,
-
-
-00:15:17.540 --> 00:15:18.980
-which I'm not an expert in,
-
-
-00:15:18.980 --> 00:15:21.180
-but we've got Atlas Data Federation,
-
-
-00:15:21.180 --> 00:15:24.620
-which helps you move data among different services,
-
-
-00:15:24.620 --> 00:15:27.260
-both MongoDB services and other ones.
-
-
-00:15:27.260 --> 00:15:31.300
-And those are kind of the highlights as far as I'm aware.
-
-
-00:15:31.300 --> 00:15:34.820
-- All right, I'll put a link to the GitHub organization
-
-
-00:15:34.820 --> 00:15:36.380
-for MongoDB Labs up there.
-
-
-00:15:36.380 --> 00:15:39.220
-There's some cool looking repos
-
-
-00:15:39.220 --> 00:15:42.420
-and also some funny names like Coberta Snooty.
-
-
-00:15:42.420 --> 00:15:45.780
-- We don't have to be professional over here, it's nice.
-
-
-00:15:45.780 --> 00:15:47.580
-- Exactly, you can just have fun with it.
-
-
-00:15:47.580 --> 00:15:49.300
-Yeah, excellent.
-
-
-00:15:49.300 --> 00:15:52.380
-All right, well, let's talk a little bit about databases
-
-
-00:15:52.380 --> 00:15:55.620
-in the broad sense, and then we can dive into
-
-
-00:15:55.620 --> 00:15:58.740
-the core ideas that I invited you here,
-
-
-00:15:58.740 --> 00:16:00.100
-which I guess is worth pointing out.
-
-
-00:16:00.100 --> 00:16:03.980
-The reason I knew about this and reached out to you
-
-
-00:16:03.980 --> 00:16:08.100
-was you gave a talk at PyCon 2023.
-
-
-00:16:08.100 --> 00:16:09.580
-Maybe tell us a bit about that experience
-
-
-00:16:09.580 --> 00:16:11.340
-before we jump into the databases.
-
-
-00:16:11.340 --> 00:16:14.500
-- It's really nice to have PyCon back after COVID.
-
-
-00:16:14.500 --> 00:16:18.900
-I went to PyCon at Salt Lake City last year and this year.
-
-
-00:16:18.900 --> 00:16:24.900
-Last year, I spoke about modern concurrency patterns in Python.
-
-
-00:16:24.900 --> 00:16:28.700
-This year, I talked about consistency and isolation.
-
-
-00:16:28.700 --> 00:16:29.900
-I also learned a lot.
-
-
-00:16:29.900 --> 00:16:36.500
-After being a C++ programmer and going to PyCon and being not sure what I was doing at PyCon anymore,
-
-
-00:16:36.500 --> 00:16:39.900
-this year I came as a researcher.
-
-
-00:16:39.900 --> 00:16:44.700
-The areas of my interests are essentially everything.
-
-
-00:16:44.700 --> 00:16:52.540
-And so I went to a bunch of talks and learned a bunch of stuff and renewed my love for being at PyCon.
-
-
-00:16:52.540 --> 00:16:53.180
-Oh, that's so exciting.
-
-
-00:16:53.180 --> 00:17:01.020
-I wanted to talk about consistency and isolation at PyCon because these are fundamental database
-
-
-00:17:01.020 --> 00:17:08.300
-concepts. They are some of the hardest to learn that I've ever encountered in computer science.
-
-
-00:17:08.940 --> 00:17:16.220
-And I kind of think that most of the approaches are bad. You can read the fundamental papers,
-
-
-00:17:16.220 --> 00:17:21.660
-and you probably should, but reading the original papers is a very hard way to learn something,
-
-
-00:17:21.660 --> 00:17:29.180
-and they tend to be too concise and too abstract and not very well digested. And then maybe if I'd
-
-
-00:17:29.180 --> 00:17:34.620
-taken that databases elective in college and read the textbook, I would be in better shape,
-
-
-00:17:34.620 --> 00:17:40.460
-but I didn't. Then I joined a database company and I had to learn it on the job.
-
-
-00:17:40.460 --> 00:17:48.540
-So I came up with a few ways of thinking about it, which took me a few years. So I wanted to
-
-
-00:17:48.540 --> 00:17:54.620
-come to PyCon and share those and hopefully accelerate other people's learning.
-
-
-00:17:54.620 --> 00:17:59.100
-Yeah, I imagine approach everything about a conference like that is really different if
-
-
-00:17:59.100 --> 00:18:01.320
-if you come with a researcher's mindset.
-
-
-00:18:01.320 --> 00:18:04.480
-You go hit all the expo booths and you're like,
-
-
-00:18:04.480 --> 00:18:06.140
-"All right, I need your ideas.
-
-
-00:18:06.140 --> 00:18:09.720
-Tell me all about this with a special focus."
-
-
-00:18:09.720 --> 00:18:10.160
->> Yeah.
-
-
-00:18:10.160 --> 00:18:13.000
->> Cool. All right. Let's talk databases.
-
-
-00:18:13.000 --> 00:18:16.720
-I think we can start with just,
-
-
-00:18:16.720 --> 00:18:19.600
-not every database is the same.
-
-
-00:18:19.600 --> 00:18:21.520
-I think long ago,
-
-
-00:18:21.520 --> 00:18:22.940
-people when they said database,
-
-
-00:18:22.940 --> 00:18:25.720
-they just meant relational database.
-
-
-00:18:25.720 --> 00:18:29.000
-Nowadays, there's more variety.
-
-
-00:18:29.000 --> 00:18:32.600
-But nowadays, I'm thinking the last 15 years,
-
-
-00:18:32.600 --> 00:18:34.640
-it's not just today.
-
-
-00:18:34.640 --> 00:18:35.040
->> Yeah.
-
-
-00:18:35.040 --> 00:18:38.760
->> Let's just maybe get just a quick high-level landscape view
-
-
-00:18:38.760 --> 00:18:40.880
-of the different kinds of databases.
-
-
-00:18:40.880 --> 00:18:45.160
-Relational, that's probably what most people are using.
-
-
-00:18:45.160 --> 00:18:48.080
-I'm going to just give us a rundown of your thoughts on how
-
-
-00:18:48.080 --> 00:18:52.440
-this categorization goes, taxonomy, I guess.
-
-
-00:18:52.440 --> 00:18:58.760
-Yeah, relational databases, which are made of tables of rows and columns,
-
-
-00:18:58.760 --> 00:19:06.520
-and you almost always query them with SQL, which is standardized, although every database has its
-
-
-00:19:06.520 --> 00:19:16.520
-own extensions, came to really dominate in the 90s. And they are great for a lot of reasons.
-
-
-00:19:16.520 --> 00:19:21.160
-And I think everybody should know how to use them. But, you know, around the time that I
-
-
-00:19:21.160 --> 00:19:29.160
-joined MongoDB in 2011, something was happening, which is that the scale of data came to the point
-
-
-00:19:29.160 --> 00:19:33.960
-where you needed specialized approaches. And then another thing that was going on was that,
-
-
-00:19:33.960 --> 00:19:39.400
-sort of funny enough, object-oriented programming and relational databases had both come to dominate
-
-
-00:19:39.400 --> 00:19:43.080
-at the same time, and they work very, very poorly with each other.
-
-
-00:19:43.080 --> 00:19:44.680
-Yeah, that is funny, but that did happen.
-
-
-00:19:45.640 --> 00:19:51.160
-Because relational, I mean, a relation is sort of the object opposite of an object.
-
-
-00:19:51.160 --> 00:19:57.080
-Object-oriented programs are quite hierarchical and fairly flexible and relations are not
-
-
-00:19:57.080 --> 00:20:03.080
-hierarchical and extremely inflexible. So we call that the impedance mismatch. I don't know if that's
-
-
-00:20:03.080 --> 00:20:07.880
-actually a helpful term. It's just, it's bad. >> The object-relational impedance mismatch,
-
-
-00:20:07.880 --> 00:20:11.240
-if people are familiar with that term. I haven't thought of that for a while, but yeah, that's,
-
-
-00:20:11.240 --> 00:20:13.800
-That was a big concern often.
-
-
-00:20:13.800 --> 00:20:17.400
-NoSQL was kind of a movement,
-
-
-00:20:17.400 --> 00:20:24.200
-and it encompassed a number of solutions to these problems.
-
-
-00:20:24.200 --> 00:20:27.440
-One of them is that NoSQL databases tend to be distributed.
-
-
-00:20:27.440 --> 00:20:31.360
-So before I came to MongoDB, I was working with an Oracle database,
-
-
-00:20:31.360 --> 00:20:36.160
-and as load increased, we just needed to buy a bigger and bigger single box
-
-
-00:20:36.160 --> 00:20:40.360
-until we had like a million dollar refrigerator sized thing,
-
-
-00:20:40.360 --> 00:20:42.360
-which must never ever go down.
-
-
-00:20:42.360 --> 00:20:46.600
-Many of the NoSQL databases, including MongoDB,
-
-
-00:20:46.600 --> 00:20:51.760
-are distributed, so you can use a large number of smaller machines,
-
-
-00:20:51.760 --> 00:20:53.040
-which is much more economical.
-
-
-00:20:53.040 --> 00:20:54.360
-Much more cloud-friendly.
-
-
-00:20:54.360 --> 00:20:57.960
-Much more cloud-friendly. It's not only a good way to scale
-
-
-00:20:57.960 --> 00:21:00.560
-your CPU and RAM,
-
-
-00:21:00.560 --> 00:21:04.360
-but it's also a good way to ensure reliability in geo-distribution.
-
-
-00:21:04.360 --> 00:21:08.360
-So, we took advantage of all that. We kind of built in
-
-
-00:21:08.360 --> 00:21:14.760
-the distributed nature of it quite early. And a lot of the other NoSQL databases did as well.
-
-
-00:21:14.760 --> 00:21:23.080
-We're also a document database with the data format is a lot like JSON, and it's easily
-
-
-00:21:23.080 --> 00:21:28.760
-convertible to JSON. And that means that it's very familiar for people who write Python or
-
-
-00:21:28.760 --> 00:21:33.560
-JavaScript or anything like that. We store things that are a lot like dictionaries and lists.
-
-
-00:21:34.520 --> 00:21:35.920
-and there is--
-
-
-00:21:35.920 --> 00:21:37.320
-- Very API friendly, right?
-
-
-00:21:37.320 --> 00:21:39.040
-Like you're exchanging JSON.
-
-
-00:21:39.040 --> 00:21:41.360
-So you're 95% of the way there
-
-
-00:21:41.360 --> 00:21:43.640
-just on your API data exchange often.
-
-
-00:21:43.640 --> 00:21:46.000
-- Yeah, if you want to expose a MongoDB collection
-
-
-00:21:46.000 --> 00:21:47.800
-as something to a REST API,
-
-
-00:21:47.800 --> 00:21:49.320
-you can do that in a couple of lines
-
-
-00:21:49.320 --> 00:21:52.320
-because JSON and MongoDB data are so similar.
-
-
-00:21:52.320 --> 00:21:53.760
-- All right, so document databases
-
-
-00:21:53.760 --> 00:21:56.080
-is probably the best known NoSQL,
-
-
-00:21:56.080 --> 00:21:59.240
-but we also have key value stores
-
-
-00:21:59.240 --> 00:22:01.920
-and column oriented databases.
-
-
-00:22:01.920 --> 00:22:03.120
-Still trying to grok them.
-
-
-00:22:03.120 --> 00:22:08.120
-Yeah, key value stores are just like big dicks in the sky.
-
-
-00:22:08.120 --> 00:22:10.740
-And in exchange for that simplicity,
-
-
-00:22:10.740 --> 00:22:14.100
-they're usually extremely fast and extremely robust.
-
-
-00:22:14.100 --> 00:22:16.280
-Memcached, for example.
-
-
-00:22:16.280 --> 00:22:18.720
-And column oriented databases,
-
-
-00:22:18.720 --> 00:22:20.060
-I'm still wrapping my head around.
-
-
-00:22:20.060 --> 00:22:22.280
-So I'm not gonna talk about that all that much,
-
-
-00:22:22.280 --> 00:22:23.840
-but it's my impression that they're good
-
-
-00:22:23.840 --> 00:22:27.800
-for giant analytics jobs where you tend to need
-
-
-00:22:27.800 --> 00:22:32.000
-to do a huge aggregation, like find the sum or the mean
-
-
-00:22:32.000 --> 00:22:36.460
-of a very large amount of consistent data.
-
-
-00:22:36.460 --> 00:22:40.260
-Maybe Pandas is a good mental model
-
-
-00:22:40.260 --> 00:22:42.620
-or NumPy or something like that where you say,
-
-
-00:22:42.620 --> 00:22:44.740
-I'm going to apply this operation to this whole column
-
-
-00:22:44.740 --> 00:22:47.100
-and you don't want it on a per user basis.
-
-
-00:22:47.100 --> 00:22:52.420
-You want to say, I want all the latency times as a thing.
-
-
-00:22:52.420 --> 00:22:56.260
-That's a more natural thing to ask for instead of
-
-
-00:22:56.260 --> 00:23:00.660
-projecting out the latency where across all of them, that kind of thing.
-
-
-00:23:00.660 --> 00:23:04.960
-Graph databases, I think, are also seem to be going strong still.
-
-
-00:23:04.960 --> 00:23:07.360
-And this is an area where MongoDB hasn't,
-
-
-00:23:07.360 --> 00:23:11.060
-has kind of left it to our competitors for the moment.
-
-
-00:23:11.060 --> 00:23:14.600
-But graph databases are great at representing
-
-
-00:23:14.600 --> 00:23:17.000
-nodes that are connected by edges.
-
-
-00:23:17.000 --> 00:23:20.640
-So for example, a social network of people with friendships
-
-
-00:23:20.640 --> 00:23:25.340
-or a network of servers that are connected by Ethernet cables
-
-
-00:23:25.340 --> 00:23:27.720
-and you want to do queries like,
-
-
-00:23:27.720 --> 00:23:30.020
-how closely connected is this to that?
-
-
-00:23:30.020 --> 00:23:35.500
-Maybe even modeling like hierarchies within a large corporate organization or something.
-
-
-00:23:35.500 --> 00:23:35.820
->> Right.
-
-
-00:23:35.820 --> 00:23:39.300
->> This person reports to that person and then those kind of things.
-
-
-00:23:39.300 --> 00:23:44.220
-Yeah. Okay. So I think that sets the stage for a lot of what we're talking about.
-
-
-00:23:44.220 --> 00:23:47.940
-What ones in terms of consistency and isolation,
-
-
-00:23:47.940 --> 00:23:51.060
-this applies to relational documents,
-
-
-00:23:51.060 --> 00:23:53.100
-probably not key value stores.
-
-
-00:23:53.100 --> 00:23:56.180
-I don't know about graph databases at all in terms of these.
-
-
-00:23:56.180 --> 00:23:59.860
-Which ones of these are relevant to the main topic here?
-
-
-00:23:59.860 --> 00:24:28.740
-Actually, it's interesting. So first of all, let's separate out that isolation is a way of height. So even on a single machine, a database can run concurrent operations. So you can do have two transactions that are going on at once, and their operations may be in some way interleaved. And if the database allows concurrency like this on a single machine, then that can reveal
-
-
-00:24:28.980 --> 00:24:37.140
-phenomena that you would not observe if concurrency were not allowed. These phenomena are called
-
-
-00:24:37.140 --> 00:24:45.340
-anomalies. These terms, phenomena and anomalies, go all the way back to the 1970s database theory.
-
-
-00:24:45.340 --> 00:24:51.580
-There's nothing specific to relational or non-relational data, to the SQL language,
-
-
-00:24:51.580 --> 00:24:58.860
-or any other query language. So long as the database allows concurrency, then anomalies
-
-
-00:24:58.860 --> 00:25:06.420
-are possible. And so the database may choose to provide isolation levels to you. There
-
-
-00:25:06.420 --> 00:25:12.300
-are four isolation levels that people have probably heard of that are in the SQL standard.
-
-
-00:25:12.300 --> 00:25:17.580
-And so obviously, they've got that connection to the relational model in the SQL language.
-
-
-00:25:17.580 --> 00:25:20.780
-But in my PyCon talk, I was just showing a key value store.
-
-
-00:25:20.780 --> 00:25:23.580
-Yeah, that's right. You actually were kind of
-
-
-00:25:23.580 --> 00:25:27.900
-more or less writing the code for the different implementations
-
-
-00:25:27.900 --> 00:25:31.260
-or demonstrating the code for the different implementations of
-
-
-00:25:31.260 --> 00:25:33.580
-how you might do a key value store.
-
-
-00:25:33.580 --> 00:25:38.060
-So what you did was you said, let's imagine we just have a giant dictionary in memory
-
-
-00:25:38.060 --> 00:25:41.660
-and that was our database, at least for a table or a collection, right?
-
-
-00:25:41.660 --> 00:25:45.740
-And then like, how do we model these isolation levels in Python code, right?
-
-
-00:25:45.740 --> 00:26:01.740
-Yeah, right, exactly. So there was no SQL involved. The data was just a dict. But I was showing how you could use Python locks to provide each of the four well known isolation levels and allow concurrency.
-
-
-00:26:01.740 --> 00:26:07.700
-All right, so I interrupted you a tiny bit there. What are the four isolation levels, at least the SQL standard ones?
-
-
-00:26:07.700 --> 00:26:11.940
-Right. So there's read uncommitted, which is anything goes.
-
-
-00:26:11.940 --> 00:26:13.140
-YOLO.
-
-
-00:26:13.140 --> 00:26:18.580
-YOLO. Every operation that one transaction does is immediately visible to all the others,
-
-
-00:26:18.580 --> 00:26:24.100
-or may be visible to all the others, even if the transaction hasn't committed yet,
-
-
-00:26:24.100 --> 00:26:32.180
-even if it aborts later. And so the concurrency is nakedly displayed to all of the clients.
-
-
-00:26:32.180 --> 00:26:38.180
-Basically, you don't see this in practice. Read committed is what people are much more
-
-
-00:26:38.180 --> 00:26:45.380
-accustomed to, where your transaction as it's going along may see the data change as other
-
-
-00:26:45.380 --> 00:26:53.220
-transactions commit, but then its own writes are only visible to other transactions all in
-
-
-00:26:53.220 --> 00:26:58.820
-one instant at the moment that your transaction commits. But of course, you could read the same
-
-
-00:26:58.820 --> 00:27:02.020
-value multiple times in a row and get different answers
-
-
-00:27:02.020 --> 00:27:05.420
-because other transactions are allowed to commit and modify it as you go.
-
-
-00:27:05.420 --> 00:27:08.460
-Right. I imagine that that's a pretty common level.
-
-
-00:27:08.460 --> 00:27:11.500
-The read uncommitted is just chaos, right?
-
-
-00:27:11.500 --> 00:27:14.900
-It's like multi-threading without locks, basically.
-
-
-00:27:14.900 --> 00:27:18.100
-Without any locking mechanism or protection.
-
-
-00:27:18.100 --> 00:27:19.940
-While that it would be the fastest,
-
-
-00:27:19.940 --> 00:27:22.100
-it's probably too risky.
-
-
-00:27:22.100 --> 00:27:25.500
-But read committed, how common do you think that is?
-
-
-00:27:25.500 --> 00:27:26.880
-Read committed is quite prominent.
-
-
-00:27:26.880 --> 00:27:29.980
-It's the default for a number of the SQL databases.
-
-
-00:27:29.980 --> 00:27:33.980
-I don't remember which exactly, but people can live with it pretty happily.
-
-
-00:27:33.980 --> 00:27:38.220
-You know, and to be honest, MongoDB's default is read uncommitted.
-
-
-00:27:38.220 --> 00:27:41.420
-If you write to the primary,
-
-
-00:27:41.420 --> 00:27:45.420
-other clients can see those writes immediately.
-
-
-00:27:45.420 --> 00:27:47.220
-There's no transaction by default.
-
-
-00:27:47.220 --> 00:27:50.720
-After all, you have to opt into transactions on MongoDB.
-
-
-00:27:50.720 --> 00:27:53.320
-There are atomic changes you can make,
-
-
-00:27:53.320 --> 00:27:59.560
-like you can use the set and push those kinds of operators on a single document.
-
-
-00:27:59.560 --> 00:28:04.440
-But as soon as you start talking to two documents in the same collection or cross collection,
-
-
-00:28:04.440 --> 00:28:07.240
-then this is what you're talking about. There's no transaction, right?
-
-
-00:28:07.240 --> 00:28:11.080
-Yeah, that's exactly right. And the document model does make it much more practical to do
-
-
-00:28:11.080 --> 00:28:17.080
-things without transactions because you can keep related data all together in a single document
-
-
-00:28:17.080 --> 00:28:21.720
-and update it in one statement. Whereas the relational model tends to kind of spray your
-
-
-00:28:21.720 --> 00:28:28.680
-data around and make it much more difficult to maintain whatever application invariants you want
-
-
-00:28:28.680 --> 00:28:34.440
-because you have to modify multiple rows at the same time. Yeah, multiple rows, multiple tables,
-
-
-00:28:34.440 --> 00:28:39.400
-like there could be a many-to-many relationship that you're adding to or taking away from,
-
-
-00:28:39.400 --> 00:28:44.120
-right, just to update part of some statement. Yeah, right.
-
-
-00:28:44.120 --> 00:28:51.080
-This portion of Talk Python to Me is brought to you by Influx Data, the makers of InfluxDB.
-
-
-00:28:51.080 --> 00:28:58.280
-InfluxDB is a database purpose-built for handling time series data at a massive scale for real-time
-
-
-00:28:58.280 --> 00:28:59.800
-analytics.
-
-
-00:28:59.800 --> 00:29:04.760
-Developers can ingest, store, and analyze all types of time series data, metrics, events,
-
-
-00:29:04.760 --> 00:29:06.880
-and traces in a single platform.
-
-
-00:29:06.880 --> 00:29:09.000
-So dear listener, let me ask you a question.
-
-
-00:29:09.000 --> 00:29:13.760
-How would boundless cardinality and lightning-fast SQL queries impact the way that you develop
-
-
-00:29:13.760 --> 00:29:15.520
-real-time applications?
-
-
-00:29:15.520 --> 00:29:20.800
-InfluxDB processes large time series data sets and provides low-latency SQL queries,
-
-
-00:29:20.800 --> 00:29:25.440
-making it the go-to choice for developers building real-time applications and seeking
-
-
-00:29:25.440 --> 00:29:27.000
-crucial insights.
-
-
-00:29:27.000 --> 00:29:32.180
-For developer efficiency, InfluxDB helps you create IoT, analytics, and cloud applications
-
-
-00:29:32.180 --> 00:29:36.040
-using timestamped data rapidly and at scale.
-
-
-00:29:36.040 --> 00:29:41.480
-It's designed to ingest billions of data points in real-time with unlimited cardinality.
-
-
-00:29:41.480 --> 00:29:46.640
-InfluxDB streamlines building once and deploying across various products and environments,
-
-
-00:29:46.640 --> 00:29:49.480
-from the edge, on-premise, and to the cloud.
-
-
-00:29:49.480 --> 00:29:53.840
-Try it for free at talkpython.fm/influxdb.
-
-
-00:29:53.840 --> 00:29:56.880
-The link is in your podcast player show notes.
-
-
-00:29:56.880 --> 00:30:00.520
-Thanks to Influx Data for supporting the show.
-
-
-00:30:00.520 --> 00:30:05.240
-Okay, so read uncommitted, read committed.
-
-
-00:30:05.240 --> 00:30:10.760
-The next one is serializable, which takes a while to wrap your head around, but with
-
-
-00:30:10.760 --> 00:30:18.380
-serializable isolation, there is a total order of operations that every client sees that
-
-
-00:30:18.380 --> 00:30:27.340
-is as if each transaction ran one at a time, and each one read at one moment of time and then
-
-
-00:30:27.340 --> 00:30:33.580
-committed at one moment of time with no other transactions operations interleaved. So it's
-
-
-00:30:33.580 --> 00:30:37.100
-hard to explain. It's also extremely intuitive. It's almost what you would assume.
-
-
-00:30:37.100 --> 00:30:41.500
-It's kind of like, assume that there was no concurrency, this is what it would look like.
-
-
-00:30:42.140 --> 00:30:48.220
-The pedantic detail here is that the order that the transactions appear to occur
-
-
-00:30:48.220 --> 00:30:54.860
-might not be exactly the order that you did them in for complicated implementation reasons.
-
-
-00:30:54.860 --> 00:31:01.580
-So if you have multiple different databases talking to each other, it might not be good
-
-
-00:31:01.580 --> 00:31:05.260
-enough for you because they might end up choosing different orders of operations.
-
-
-00:31:05.260 --> 00:31:10.780
-And so you can see anomalies there. But basically, serializable is the highest
-
-
-00:31:10.780 --> 00:31:15.020
-isolation level that you're likely to need in a relational database.
-
-
-00:31:15.020 --> 00:31:18.860
-I feel like that might be the default for some of the relational databases.
-
-
-00:31:18.860 --> 00:31:20.620
-Not 100% sure.
-
-
-00:31:20.620 --> 00:31:25.740
-I'm not 100% sure either. There's also a compromise, less than serializable,
-
-
-00:31:25.740 --> 00:31:32.140
-called repeatable read, which means that any single piece of data that you've read,
-
-
-00:31:32.140 --> 00:31:37.580
-you'll continue to see the same value for it for the duration of your transaction until you commit.
-
-
-00:31:37.580 --> 00:31:43.980
-And the way it's usually actually implemented is a slightly stronger level called snapshot
-
-
-00:31:43.980 --> 00:31:48.540
-isolation, where you just get a copy of the data at the point in time when you first
-
-
-00:31:48.540 --> 00:31:55.260
-started your transaction, approximately, and you just read as if you are always reading from that
-
-
-00:31:55.260 --> 00:32:03.100
-version of the data until you commit. So snapshot isolation is what people usually actually mean by
-
-
-00:32:03.100 --> 00:32:06.100
-by repeatable read and a lot of databases provided.
-
-
-00:32:06.100 --> 00:32:08.100
-And it's the default for MongoDB.
-
-
-00:32:08.100 --> 00:32:10.100
-When you start a transaction in MongoDB,
-
-
-00:32:10.100 --> 00:32:12.100
-you read from a version of the data
-
-
-00:32:12.100 --> 00:32:14.100
-for the rest of that transaction.
-
-
-00:32:14.100 --> 00:32:15.100
-Okay, interesting.
-
-
-00:32:15.100 --> 00:32:17.100
-Yeah, you did say that MongoDB
-
-
-00:32:17.100 --> 00:32:20.100
-typically doesn't have transactions
-
-
-00:32:20.100 --> 00:32:23.100
-as its kind of recommended default way.
-
-
-00:32:23.100 --> 00:32:25.100
-You know, look at a lot of the tutorials and stuff.
-
-
-00:32:25.100 --> 00:32:27.100
-People are just making updates and so on.
-
-
-00:32:27.100 --> 00:32:31.100
-But this is, didn't come out originally
-
-
-00:32:31.100 --> 00:32:33.460
-with MongoDB, but at some point,
-
-
-00:32:33.460 --> 00:32:35.620
-what version did you all add transactions,
-
-
-00:32:35.620 --> 00:32:36.820
-like actual transactions?
-
-
-00:32:36.820 --> 00:32:37.900
->> I wish I could remember.
-
-
-00:32:37.900 --> 00:32:39.900
->> Yeah, I don't remember either, but I feel like,
-
-
-00:32:39.900 --> 00:32:41.020
-there we go, how about that?
-
-
-00:32:41.020 --> 00:32:41.420
->> Four.
-
-
-00:32:41.420 --> 00:32:44.940
->> Four, I think version four-ish.
-
-
-00:32:44.940 --> 00:32:45.500
->> Okay.
-
-
-00:32:45.500 --> 00:32:46.620
->> Which we're on version six now,
-
-
-00:32:46.620 --> 00:32:47.660
-but that was quite a while ago.
-
-
-00:32:47.660 --> 00:32:47.900
->> Yeah.
-
-
-00:32:47.900 --> 00:32:51.740
->> You've got to pick to go do those transactions in Mongo, for example.
-
-
-00:32:51.740 --> 00:32:52.060
->> Right.
-
-
-00:32:52.060 --> 00:32:53.860
->> Whereas that's also true,
-
-
-00:32:53.860 --> 00:32:58.420
-say for Postgres or Microsoft SQL Server.
-
-
-00:32:58.420 --> 00:33:04.660
-You've got to actually do the transactional stuff in whatever code you're using to talk to that as well.
-
-
-00:33:04.660 --> 00:33:11.220
-It's just more visible in a lot of the tutorials and examples for those libraries, I think.
-
-
-00:33:11.220 --> 00:33:16.660
-MongoDB in general has taken a more kind of "show our guts to you" approach,
-
-
-00:33:16.660 --> 00:33:25.380
-where we, early on, the distributed nature of MongoDB, which was much more visible to our users than other databases,
-
-
-00:33:25.380 --> 00:33:34.080
-And transactions now, we kind of show you the details a bit more than other databases do,
-
-
-00:33:34.080 --> 00:33:38.080
-but that actually allows you to write more reliable code.
-
-
-00:33:38.080 --> 00:33:47.080
-The interesting thing about an SQL interface is that you can start a transaction, do a bunch of writes,
-
-
-00:33:47.080 --> 00:33:49.480
-and then send the commit message.
-
-
-00:33:49.480 --> 00:33:52.280
-And if you get some sort of error, like a network error,
-
-
-00:33:52.280 --> 00:33:57.880
-Perhaps you got disconnected, or the server crashed.
-
-
-00:33:57.880 --> 00:34:01.480
-You don't know, and you don't know whether your transaction committed or not.
-
-
-00:34:01.480 --> 00:34:05.980
-And if you reconnect, you don't know whether you will see the data that you committed or not.
-
-
-00:34:05.980 --> 00:34:09.980
-This is somewhat difficult to handle, and most people aren't aware of it.
-
-
-00:34:09.980 --> 00:34:15.080
-The MongoDB transaction API makes you think about this.
-
-
-00:34:15.080 --> 00:34:19.280
-The drivers essentially have you pass a function in,
-
-
-00:34:19.280 --> 00:34:24.080
-which executes the transaction code and that it's automatically retried if the commit fails.
-
-
-00:34:24.080 --> 00:34:29.280
-And so we give you the mechanism to ensure reliable transaction commits.
-
-
-00:34:29.280 --> 00:34:30.640
-- I see. - But it's more work.
-
-
-00:34:30.640 --> 00:34:35.360
-Yeah, sure. You can either be sure it happened or you have the mechanism to run it again.
-
-
-00:34:35.360 --> 00:34:38.320
-- Exactly. - Yeah, okay. Interesting.
-
-
-00:34:38.320 --> 00:34:42.800
-Let's look at two aspects here. One of the things is you spoke about anomalies
-
-
-00:34:42.800 --> 00:34:47.840
-and what might go wrong. The read uncommitted, I think
-
-
-00:34:47.840 --> 00:34:51.960
-people can probably conceptualize that pretty well, right?
-
-
-00:34:51.960 --> 00:34:56.560
-It's just as multi-step transactions are happening,
-
-
-00:34:56.560 --> 00:34:59.600
-other ones are potentially running and you could read something,
-
-
-00:34:59.600 --> 00:35:03.160
-either that transaction could roll back after you've carried on,
-
-
-00:35:03.160 --> 00:35:07.720
-or you could have just had something of the equivalent of a race condition, right?
-
-
-00:35:07.720 --> 00:35:12.320
-So, there's a term for that kind of anomaly, right?
-
-
-00:35:12.320 --> 00:35:14.240
-Each of these anomalies have terms I've learned.
-
-
-00:35:14.240 --> 00:35:23.440
-And you can definitely memorize them. And if you go to jepson.io, there's a lovely
-
-
-00:35:23.440 --> 00:35:31.680
-diagram of the relationship among all of the consistency and isolation levels.
-
-
-00:35:31.680 --> 00:35:33.520
-CB: G-Y-P-S-U-M?
-
-
-00:35:33.520 --> 00:35:37.600
-That is J-E-P-S-E-N dot I-O.
-
-
-00:35:37.600 --> 00:35:38.320
-Ah.
-
-
-00:35:38.320 --> 00:35:46.320
-Yeah. This is a researcher named Kyle Kingsbury, his website about consistency and isolation and
-
-
-00:35:46.320 --> 00:35:51.520
-testing. This is the best place, I think, to go learn about this stuff.
-
-
-00:35:51.520 --> 00:35:53.840
-Yeah, there's a lot of cool visualizations and stuff here.
-
-
-00:35:53.840 --> 00:36:00.480
-Yeah. For those watching on the live stream, we've got a tree diagram up that shows
-
-
-00:36:01.200 --> 00:36:02.800
-all of the isolation levels,
-
-
-00:36:02.800 --> 00:36:05.480
-all of the consistency levels that are commonly used,
-
-
-00:36:05.480 --> 00:36:08.920
-and how they relate to each other in terms of how,
-
-
-00:36:08.920 --> 00:36:16.080
-let's say, the serializable isolation is strictly stronger than read committed.
-
-
-00:36:16.080 --> 00:36:24.040
-Every anomaly that is prohibited by serializable is also prohibited by read committed.
-
-
-00:36:24.040 --> 00:36:28.720
->> Got it. Maybe help us understand the read committed anomalies.
-
-
-00:36:28.720 --> 00:36:32.040
-The read uncommitted one is full of them.
-
-
-00:36:32.040 --> 00:36:35.680
-But maybe I'll just understand some of the things that can go wrong in the safer ones,
-
-
-00:36:35.680 --> 00:36:39.160
-like trying to decide between read committed and serializable, for example.
-
-
-00:36:39.160 --> 00:36:42.560
->> Right. This was also my approach when I first started learning,
-
-
-00:36:42.560 --> 00:36:44.000
-[LAUGHTER]
-
-
-00:36:44.000 --> 00:36:46.520
-was to try to memorize these things.
-
-
-00:36:46.520 --> 00:36:48.880
-The reason why I'm not answering your question is
-
-
-00:36:48.880 --> 00:36:50.920
-that I don't think that this is the right approach.
-
-
-00:36:50.920 --> 00:36:52.040
->> What would you suggest?
-
-
-00:36:52.040 --> 00:36:57.280
->> I think the right approach is to step back and ask,
-
-
-00:36:57.280 --> 00:36:59.280
-Why do anomalies exist?
-
-
-00:36:59.280 --> 00:37:03.280
-And the answer, as I've come to understand it, is that
-
-
-00:37:03.280 --> 00:37:07.280
-databases want to permit more concurrency
-
-
-00:37:07.280 --> 00:37:11.280
-so that you can get higher throughput with multiple transactions at once.
-
-
-00:37:11.280 --> 00:37:15.280
-But you've got to sacrifice something for that, and what you've got to sacrifice is isolation.
-
-
-00:37:15.280 --> 00:37:17.280
-Some of these anomalies have to appear.
-
-
-00:37:17.280 --> 00:37:21.280
-And, you know, so why is that? Why do you have to make that tradeoff?
-
-
-00:37:21.280 --> 00:37:25.280
-Well, the short answer is that databases prevent anomalies
-
-
-00:37:25.280 --> 00:37:32.840
-by in some way locking pieces of data to prevent one transaction from modifying or even reading it
-
-
-00:37:32.840 --> 00:37:37.680
-if another transaction has modified or read it. And so the more things you lock, the less
-
-
-00:37:37.680 --> 00:37:43.280
-concurrency is permitted. And if you want to understand that in detail for each of the
-
-
-00:37:43.280 --> 00:37:49.120
-isolation levels and each of the anomalies, you could watch the video of my PyCon talk,
-
-
-00:37:49.120 --> 00:37:57.880
-which goes through like 20 or 30 line long Python implementations of databases that provide each of
-
-
-00:37:57.880 --> 00:38:03.400
-these isolation levels. So you can see why they need different amounts of locking. You can see
-
-
-00:38:03.400 --> 00:38:10.360
-why they permit different levels of concurrency. You can start to get a feel for what amount of
-
-
-00:38:10.360 --> 00:38:17.960
-concurrency each of them permits, and also what sort of anomalies each of them permits. And with
-
-
-00:38:17.960 --> 00:38:22.920
-With that in mind, for me at least, thinking about how these things are actually implemented
-
-
-00:38:22.920 --> 00:38:26.920
-gave me a much, made it much easier for me to then memorize.
-
-
-00:38:26.920 --> 00:38:27.920
->> Sure.
-
-
-00:38:27.920 --> 00:38:31.760
->> Read committed provides phantom reads.
-
-
-00:38:31.760 --> 00:38:32.760
-Why is that?
-
-
-00:38:32.760 --> 00:38:33.800
-What does that mean?
-
-
-00:38:33.800 --> 00:38:38.640
-Now I understand that because I understand how unimplementation might work.
-
-
-00:38:38.640 --> 00:38:39.960
->> I think that makes a lot of sense.
-
-
-00:38:39.960 --> 00:38:43.960
-That really is the relationship that people should understand, right?
-
-
-00:38:43.960 --> 00:38:46.960
-there's an inverse relationship between
-
-
-00:38:46.960 --> 00:38:49.960
-sort of the data consistency
-
-
-00:38:49.960 --> 00:38:51.960
-and the lack of these anomalies
-
-
-00:38:51.960 --> 00:38:54.960
-and how much you can handle
-
-
-00:38:54.960 --> 00:38:56.960
-scale and concurrency.
-
-
-00:38:56.960 --> 00:38:59.960
-The stricter, the more consistent the data is,
-
-
-00:38:59.960 --> 00:39:01.960
-the less scale that you get.
-
-
-00:39:01.960 --> 00:39:03.960
-And so where do you live?
-
-
-00:39:03.960 --> 00:39:05.960
-Can you get to points where the database
-
-
-00:39:05.960 --> 00:39:07.960
-actually like locks up
-
-
-00:39:07.960 --> 00:39:09.960
-in kind of a deadlock situation?
-
-
-00:39:09.960 --> 00:39:12.960
-I'm going to show one of those in my PyCon talk.
-
-
-00:39:12.960 --> 00:39:19.160
-the serializable level of isolation is particularly prone to this. Basically, if--and I do this
-
-
-00:39:19.160 --> 00:39:27.760
-all with Star Trek memes. So I show an example where Sulu reads one piece of data and something
-
-
-00:39:27.760 --> 00:39:33.360
-which they're fighting over who gets to check out the shuttle to go to surface for a shore
-
-
-00:39:33.360 --> 00:39:41.160
-leave. And Sulu checks if Uhura has the shuttle and he sees no. But then Uhura starts a transaction
-
-
-00:39:41.160 --> 00:39:47.000
-checks if sulu has the shuttle. The answer is also no. So each of them tries to then check out the
-
-
-00:39:47.000 --> 00:39:55.240
-shuttle. But since they have each locked the row that the other needs to modify, they then deadlock.
-
-
-00:39:55.240 --> 00:40:03.240
-This then gets into fancy old database theory of deadlock detection and resolution, which is the
-
-
-00:40:03.240 --> 00:40:05.240
-the subject of many textbooks.
-
-
-00:40:05.240 --> 00:40:09.800
-But essentially, you're probably going to block
-
-
-00:40:09.800 --> 00:40:12.480
-for some period of time,
-
-
-00:40:12.480 --> 00:40:15.120
-and then a deadlock detector will come along
-
-
-00:40:15.120 --> 00:40:17.320
-and abort one of the transactions
-
-
-00:40:17.320 --> 00:40:18.720
-to allow the other to continue.
-
-
-00:40:18.720 --> 00:40:21.160
-- Right, making your code more complex,
-
-
-00:40:21.160 --> 00:40:22.440
-harder to work with, right?
-
-
-00:40:22.440 --> 00:40:24.160
-- And now your code needs to be able
-
-
-00:40:24.160 --> 00:40:25.600
-to handle this situation.
-
-
-00:40:25.600 --> 00:40:27.760
-If you are aborted due to deadlock,
-
-
-00:40:27.760 --> 00:40:29.960
-should you retry that transaction or not?
-
-
-00:40:29.960 --> 00:40:32.720
-That's now something that the developer needs
-
-
-00:40:32.720 --> 00:40:34.000
-to make a decision about.
-
-
-00:40:34.000 --> 00:40:36.000
-Okay. So all of this
-
-
-00:40:36.000 --> 00:40:38.500
-that we've discussed so far has to do with
-
-
-00:40:38.500 --> 00:40:41.500
-one or more database servers
-
-
-00:40:41.500 --> 00:40:45.160
-that just, the requirement is that it allows concurrent
-
-
-00:40:45.160 --> 00:40:47.160
-queries and updates and
-
-
-00:40:47.160 --> 00:40:48.420
-all that.
-
-
-00:40:48.420 --> 00:40:50.420
-On the other side,
-
-
-00:40:50.420 --> 00:40:54.620
-we might have some kind of distributed topology
-
-
-00:40:54.620 --> 00:40:56.620
-with, in MongoDB case,
-
-
-00:40:56.620 --> 00:40:58.920
-we have both replication and sharding,
-
-
-00:40:58.920 --> 00:41:01.220
-which maybe worth touching on those things.
-
-
-00:41:01.220 --> 00:41:04.260
-But in a lot of scale out situations,
-
-
-00:41:04.260 --> 00:41:07.860
-you know, you have some sort of data spread around,
-
-
-00:41:07.860 --> 00:41:10.460
-some kind of distributed database, or even
-
-
-00:41:10.460 --> 00:41:13.300
-you'll see like geo-replicated databases.
-
-
-00:41:13.300 --> 00:41:17.420
-You know, I want to have my data replicated in Asia and the US
-
-
-00:41:17.420 --> 00:41:20.900
-so that we can run our server-side code near
-
-
-00:41:20.900 --> 00:41:23.100
-data for those different users, right?
-
-
-00:41:23.100 --> 00:41:25.700
-That's the consistency,
-
-
-00:41:25.700 --> 00:41:28.780
-not the isolation side of your talk, right?
-
-
-00:41:28.780 --> 00:41:37.280
-That's right. So to review, isolation is a response to anomalies caused by concurrency on one machine.
-
-
-00:41:37.280 --> 00:41:47.480
-And then consistency is a response to anomalies that are due to replication in a distributed database.
-
-
-00:41:47.480 --> 00:41:55.980
-So the distributed database, you always write to one of the nodes or you read from one of the nodes for any particular operation.
-
-
-00:41:56.180 --> 00:42:01.540
-there are different rules about is there only one leader that can take rights or can any node take
-
-
-00:42:01.540 --> 00:42:06.980
-rights? Can you only read from the leader? Can you read from any node? Can you only read from
-
-
-00:42:06.980 --> 00:42:14.100
-some of the nodes? But no matter what database you're using, you always read or write to
-
-
-00:42:14.100 --> 00:42:22.660
-some nodes, and then they replicate rights to other nodes. And so there's always a lag because
-
-
-00:42:22.660 --> 00:42:27.380
-that replication takes time. The most obvious example is if you write to the leader and then
-
-
-00:42:27.380 --> 00:42:33.140
-immediately read from the follower, the data that you just wrote may or may not be there yet.
-
-
-00:42:33.140 --> 00:42:42.820
-So that's the source of inconsistencies, and those inconsistencies are called anomalies as well.
-
-
-00:42:42.820 --> 00:42:50.420
-And then there are multiple isolation levels, sorry, consistency levels, which allow or prevent
-
-
-00:42:51.060 --> 00:42:58.180
-various of those. This is not standardized, by the way. So here you're going to see different
-
-
-00:42:58.180 --> 00:43:03.540
-terms and then even more upsetting, you'll see some of the same terms, but they mean different
-
-
-00:43:03.540 --> 00:43:09.060
-things depending on which database documentation you're using or which paper you're reading.
-
-
-00:43:09.060 --> 00:43:14.660
-So I talked about three levels, eventual consistency, causal consistency,
-
-
-00:43:15.540 --> 00:43:17.540
-and linearizability in my talk,
-
-
-00:43:17.540 --> 00:43:20.540
-which I think is kind of a good sample, but
-
-
-00:43:20.540 --> 00:43:24.540
-this area of computer science is a lot
-
-
-00:43:24.540 --> 00:43:28.540
-less paved than isolation is.
-
-
-00:43:28.540 --> 00:43:32.540
-Yeah, I agree with that. And it also seems to me like it really matters
-
-
-00:43:32.540 --> 00:43:36.040
-for the particular database server that you're using,
-
-
-00:43:36.040 --> 00:43:40.040
-what its flavor of distributed means.
-
-
-00:43:40.040 --> 00:43:44.040
-My understanding from MongoDB is replication is largely about
-
-
-00:43:44.040 --> 00:43:47.040
-reliability, failover, uptime,
-
-
-00:43:47.040 --> 00:43:50.680
-the possibility of reading from a replica for some read scaling.
-
-
-00:43:50.680 --> 00:43:51.200
->> Exactly.
-
-
-00:43:51.200 --> 00:43:53.320
->> Whereas you might have another one,
-
-
-00:43:53.320 --> 00:43:55.440
-kind of with the example that I talked about with like,
-
-
-00:43:55.440 --> 00:43:59.040
-we want our data located in multiple geographies,
-
-
-00:43:59.040 --> 00:44:02.680
-and all of them are kind of the local database for those areas.
-
-
-00:44:02.680 --> 00:44:06.600
-So the types of issues you run into as well as the words you use,
-
-
-00:44:06.600 --> 00:44:08.720
-they probably vary somewhat, right?
-
-
-00:44:08.720 --> 00:44:11.720
-Because you're kind of solving different problems.
-
-
-00:44:11.720 --> 00:44:14.400
-Well, we both know the MongoDB one pretty well.
-
-
-00:44:14.400 --> 00:44:17.860
-So maybe give us the story on a replica set,
-
-
-00:44:17.860 --> 00:44:21.180
-which is all you talk about.
-
-
-00:44:21.180 --> 00:44:21.440
->> Yeah.
-
-
-00:44:21.440 --> 00:44:22.360
->> What's the motivation of
-
-
-00:44:22.360 --> 00:44:26.160
-a replica set and what are the challenges and different modes there?
-
-
-00:44:26.160 --> 00:44:30.000
->> Ninety percent, 95 percent of people use MongoDB,
-
-
-00:44:30.000 --> 00:44:35.160
-deploy it as a three node replica set.
-
-
-00:44:35.160 --> 00:44:39.580
-Ninety to 95 percent of the time, as you said,
-
-
-00:44:39.580 --> 00:44:50.940
-their goal is failover. If the primary goes down, they want a very recent hot copy of their data
-
-
-00:44:50.940 --> 00:44:56.620
-available in a secondary, which will be promoted to primary as quickly as possible. And if you're
-
-
-00:44:56.620 --> 00:45:02.860
-writing to and reading from the primary, somewhat surprisingly, you can still see anomalies because
-
-
-00:45:02.860 --> 00:45:09.020
-there could be a failover in between the time that you wrote to the primary and the time that
-
-
-00:45:09.020 --> 00:45:14.780
-that you do that read, you might be reading from a different member which didn't get the copy.
-
-
-00:45:14.780 --> 00:45:22.780
-And so we've changed the default in the last few years, I think, to make every right weight
-
-
-00:45:22.780 --> 00:45:30.300
-to be replicated to a majority of the members. And then we've got a protocol that ensures that
-
-
-00:45:30.300 --> 00:45:34.860
-whoever becomes primary after a failover, therefore, is guaranteed to have that data.
-
-
-00:45:34.860 --> 00:45:38.140
-So with that setup,
-
-
-00:45:38.140 --> 00:45:41.460
-you're pretty well protected from anomalies.
-
-
-00:45:41.460 --> 00:45:46.220
-I'm sure that pedants and stress testers have found exceptions to this.
-
-
-00:45:46.220 --> 00:45:47.540
-So I'm not going to make any promises.
-
-
-00:45:47.540 --> 00:45:51.820
->> Yeah. Maybe if your right to the primary is the thing that takes it down,
-
-
-00:45:51.820 --> 00:45:55.380
-potentially, something really, really instantaneous almost.
-
-
-00:45:55.380 --> 00:45:57.020
->> But there are always edge cases.
-
-
-00:45:57.020 --> 00:45:59.180
->> Yeah. But potentially, yeah. Okay.
-
-
-00:45:59.180 --> 00:46:03.180
->> The real inconsistencies that you start to see is if you do secondary reads.
-
-
-00:46:03.180 --> 00:46:10.940
-So if you read from a follower, that can be useful because you're shifting load from the primary,
-
-
-00:46:10.940 --> 00:46:16.780
-or maybe the follower is located at a lower latency location on Earth to you,
-
-
-00:46:16.780 --> 00:46:22.700
-but it's always going to have some degree of lag compared to the primary. So by default,
-
-
-00:46:22.700 --> 00:46:29.020
-you're going to get what we call eventual consistency. Any write that occurs on the
-
-
-00:46:29.020 --> 00:46:35.740
-primary that gets acknowledged by a majority of the members will eventually be replicated to all
-
-
-00:46:35.740 --> 00:46:42.220
-of the members. So all of the members will pass through the same series of states as the primary
-
-
-00:46:42.220 --> 00:46:47.740
-does, at least the same set of states that the primary got majority acknowledgement of,
-
-
-00:46:47.740 --> 00:46:53.100
-to be extremely technical. But if you read from the primary and then a secondary and then a
-
-
-00:46:53.100 --> 00:46:56.860
-different secondary, you'll feel like you're jumping around in time because you'll always
-
-
-00:46:56.860 --> 00:47:01.580
-be reading a different version of the data and some of those versions will be older
-
-
-00:47:01.580 --> 00:47:03.180
-than the last version that you saw.
-
-
-00:47:03.180 --> 00:47:08.220
-In MongoDB, in order to make that happen, you've got to pass extra flags
-
-
-00:47:08.220 --> 00:47:12.860
-opting into this read from secondary thing, right? In the driver?
-
-
-00:47:12.860 --> 00:47:16.700
-Yes, that's right. We call that read preference and there are a bunch of options,
-
-
-00:47:16.700 --> 00:47:21.420
-but the default is just to read from the primary and not see a lot of inconsistencies.
-
-
-00:47:21.420 --> 00:47:25.980
-So you mentioned a couple, this is the eventual consistency issue.
-
-
-00:47:25.980 --> 00:47:28.580
-What are some of the other consistencies that you talked about?
-
-
-00:47:28.580 --> 00:47:33.620
-There's causal consistency, which I think is quite nice.
-
-
-00:47:33.620 --> 00:47:39.680
-You can get it in MongoDB by using the Sessions API.
-
-
-00:47:39.680 --> 00:47:45.360
-And causal consistency ensures that every write that you do
-
-
-00:47:45.360 --> 00:47:47.660
-and everything affected by that write,
-
-
-00:47:47.660 --> 00:47:50.360
-you will be able to read its consequences.
-
-
-00:47:50.360 --> 00:47:53.940
-And here again, I think talking about the implementation
-
-
-00:47:54.000 --> 00:47:57.760
-really makes things a lot clearer than talking about the abstract mathematical...
-
-
-00:47:57.760 --> 00:47:59.120
-- Of course, yeah. - ...definition.
-
-
-00:47:59.120 --> 00:48:01.120
-So here's the way MongoDB does it.
-
-
-00:48:01.120 --> 00:48:04.640
-You connect a client, you do an update.
-
-
-00:48:04.640 --> 00:48:07.680
-The primary applies the update,
-
-
-00:48:07.680 --> 00:48:11.840
-sends it to, waits for a majority of members to acknowledge it.
-
-
-00:48:11.840 --> 00:48:14.080
-And then the primary also increments a counter.
-
-
-00:48:14.080 --> 00:48:18.400
-So let's say that counter now has the value four.
-
-
-00:48:18.400 --> 00:48:22.400
-And so it replies to the client and says, "Your update succeeded,
-
-
-00:48:23.040 --> 00:48:29.280
-and the counter value is now four. Now you can read from a secondary, you can say I want to read
-
-
-00:48:29.280 --> 00:48:34.800
-some value but don't reply until your counter is at least four. Now in the background,
-
-
-00:48:34.800 --> 00:48:41.120
-secondaries are replicating from the primary and they're also replicating the primary's counter
-
-
-00:48:41.120 --> 00:48:48.320
-value. And so only when they get to the number four or past do they reply to your query and
-
-
-00:48:48.320 --> 00:48:52.560
-they're also guaranteed at that point to have applied that update that you just sent to the
-
-
-00:48:52.560 --> 00:48:54.560
-- Yeah, that's a really cool solution.
-
-
-00:48:54.560 --> 00:48:56.060
-You know, one of the problems,
-
-
-00:48:56.060 --> 00:48:57.400
-if you're allowed to read from secondaries,
-
-
-00:48:57.400 --> 00:49:00.360
-is imagine you're going to create a new account,
-
-
-00:49:00.360 --> 00:49:01.820
-let's say, on a website.
-
-
-00:49:01.820 --> 00:49:04.360
-Go in there and say, "Here's my information.
-
-
-00:49:04.360 --> 00:49:06.900
-"Yes, my password has a lowercase and uppercase
-
-
-00:49:06.900 --> 00:49:10.240
-"and a special number and," you know, whatever, right?
-
-
-00:49:10.240 --> 00:49:14.040
-Say create, it inserts it into the primary.
-
-
-00:49:14.040 --> 00:49:16.920
-It response redirects back to the server and says,
-
-
-00:49:16.920 --> 00:49:18.240
-"Great, you're on your account page.
-
-
-00:49:18.240 --> 00:49:21.160
-"Let me just pull back from the database who you are
-
-
-00:49:21.160 --> 00:49:23.160
-to show you your details on the page.
-
-
-00:49:23.160 --> 00:49:27.160
-And if, you know, that's basically instant, right?
-
-
-00:49:27.160 --> 00:49:29.160
-Down to ping time to the server.
-
-
-00:49:29.160 --> 00:49:32.160
-And you could potentially end up in a situation
-
-
-00:49:32.160 --> 00:49:34.160
-where you've just created an account,
-
-
-00:49:34.160 --> 00:49:38.160
-but then you hit a replica that has yet to receive that.
-
-
-00:49:38.160 --> 00:49:42.160
-So what you're saying is, if we use this concept of sessions,
-
-
-00:49:42.160 --> 00:49:45.160
-we'll get some kind of point in time marker
-
-
-00:49:45.160 --> 00:49:50.160
-that we're going to wait until just MongoDB behind the scenes
-
-
-00:49:50.160 --> 00:49:54.460
-will basically block and say, "We're still waiting on that answer. Hold on for who it
-
-
-00:49:54.460 --> 00:49:58.740
-is until that replica makes that point in time or further."
-
-
-00:49:58.740 --> 00:49:59.740
+00:12:51.140 --> 00:12:52.140
 Exactly.
 
+00:12:52.140 --> 00:12:56.620
+This portion of Talk By The Nome is brought to you by Sentry.
 
-00:49:59.740 --> 00:50:03.820
-Okay, that's excellent. Question from the audience from Marwan says, "How do you keep
+00:12:56.620 --> 00:13:01.300
+Sentry. You know that Sentry captures the errors that would otherwise go unnoticed.
 
+00:13:01.300 --> 00:13:05.500
+Of course, they have incredible support for basically any Python framework.
 
-00:50:03.820 --> 00:50:08.580
-the counter store consistent if you need to replicate it across regions?"
+00:13:05.500 --> 00:13:12.940
+They have direct integrations with Flask, Django, FastAPI, and even things like AWS Lambda and Celery.
 
+00:13:12.940 --> 00:13:17.180
+But did you know they also have native integrations with mobile app frameworks?
 
-00:50:08.580 --> 00:50:15.460
-The counter at any given moment in time will have different values on different replicas.
+00:13:17.180 --> 00:13:24.380
+Whether you're building an Android or iOS app or both, you can gain complete visibility into your application's correctness,
 
+00:13:24.380 --> 00:13:27.060
+both on the mobile side and server side.
 
-00:50:15.460 --> 00:50:24.420
-that's actually its purpose, is that it represents how caught up each of the members is on their
+00:13:27.060 --> 00:13:32.060
+We just completely rewrote Talk Python's mobile apps for taking our courses.
 
+00:13:32.060 --> 00:13:36.620
+And we massively benefited from having Sentry integration right from the start.
 
-00:50:24.420 --> 00:50:31.100
-shared sequence of operations. Once you have replicated a given operation, you've also
+00:13:36.620 --> 00:13:39.420
+We used Flutter for our native mobile framework.
 
+00:13:39.420 --> 00:13:45.260
+And with Sentry, it was literally just two lines of code to start capturing errors as soon as they happen.
 
-00:50:31.100 --> 00:50:36.820
-updated your counter value to the counter value that the primary had when it did that operation.
+00:13:45.260 --> 00:13:49.260
+Of course, we don't love errors, but we do love making our users happy.
 
+00:13:49.260 --> 00:13:56.940
+Solving problems as soon as possible with Sentry on the mobile Flutter code and the Python server side code together
 
-00:50:36.820 --> 00:50:43.140
-And so you're now consistent, but the primary may be ahead of that as well. There's never any
+00:13:56.940 --> 00:13:58.940
+made understanding error reports a breeze.
 
+00:13:58.940 --> 00:14:04.300
+So whether you're building Python server side apps or mobile apps or both,
 
-00:50:43.140 --> 00:50:48.180
-the absolute truth. There's only a sequence of operations in your position in it.
+00:14:04.300 --> 00:14:08.620
+give Sentry a try to get a complete view of your app's correctness.
 
+00:14:08.940 --> 00:14:14.620
+Thank you to Sentry for sponsoring the show and helping us ship more reliable mobile apps to all of you.
 
-00:50:48.180 --> 00:50:51.900
->> I think another important piece of information here is that you're writing to the leader.
+00:14:14.620 --> 00:14:18.620
+Tell people about Atlas a little bit.
 
+00:14:18.620 --> 00:14:21.340
+You talked about your predictive scaling in Atlas.
 
-00:50:51.900 --> 00:50:55.940
-The leader always knows what its point in time number is and it can increment that.
+00:14:21.340 --> 00:14:23.340
+I imagine not everyone knows what that is.
 
+00:14:23.340 --> 00:14:27.820
+Sure. Atlas is MongoDB's cloud services.
 
-00:50:55.940 --> 00:50:56.940
->> That's right.
+00:14:27.820 --> 00:14:33.500
+And we originally launched it as a database as a service.
 
+00:14:33.500 --> 00:14:39.900
+So you decide how you want to deploy your database, a replica set or a sharded cluster,
 
-00:50:56.940 --> 00:51:01.260
->> Right? And so that thing's always going to be consistent and auto-incrementing forward.
+00:14:39.900 --> 00:14:42.860
+which cloud providers you want to use.
 
+00:14:42.860 --> 00:14:51.260
+We allow you to use multiple cloud providers and what size of server you need.
 
-00:51:01.260 --> 00:51:04.780
-It's just a matter of how caught up are the replicas, right?
+00:14:52.140 --> 00:14:59.740
+And so we would manage backups and administration and that sort of thing, upgrades and so on.
 
+00:14:59.740 --> 00:15:04.140
+More recently, we've announced Atlas serverless, which is pay as you go.
 
-00:51:04.780 --> 00:51:10.540
->> Exactly. And if you want the MongoDB terms for these, that sequence of operations is
+00:15:04.140 --> 00:15:09.340
+So you no longer have to worry about how your database is deployed, what instance size you don't
 
+00:15:09.340 --> 00:15:11.340
+need to do capacity planning.
 
-00:51:10.540 --> 00:51:14.060
-the op log and that counter is the op time.
+00:15:11.340 --> 00:15:15.660
+We just auto scale you and bill you for what you used.
 
+00:15:15.660 --> 00:15:21.020
+We've also got a few other services, which I'm not an expert in, but we've got Atlas data federation,
 
-00:51:14.060 --> 00:51:16.060
->> Yeah. That's basically that op log.
+00:15:21.020 --> 00:15:26.620
+which helps you move data among different services, both MongoDB services and other ones.
 
+00:15:26.620 --> 00:15:31.020
+And those are kind of the highlights as far as I'm aware.
 
-00:51:16.060 --> 00:51:18.500
-That's the thing that gets pushed to
+00:15:31.020 --> 00:15:36.220
+All right. I'll put a link to the GitHub organization for MongoDB Labs up there.
 
+00:15:36.220 --> 00:15:41.260
+There's some cool looking repos and also some funny names like Cobra to Snooty.
 
-00:51:18.500 --> 00:51:21.380
-the replicas and is copied as it goes.
+00:15:41.260 --> 00:15:44.540
+We don't have to be professional over here. It's nice.
 
+00:15:44.540 --> 00:15:47.100
+Exactly. You can just have fun with it.
 
-00:51:21.380 --> 00:51:22.140
->> Exactly.
+00:15:47.100 --> 00:15:48.140
+Yeah. Excellent.
 
+00:15:48.140 --> 00:15:53.500
+All right. Well, let's talk a little bit about databases in the broad sense,
 
-00:51:22.140 --> 00:51:24.100
->> Which brings us a little bit back full circle to
+00:15:53.500 --> 00:15:59.740
+and then we can dive into the core ideas that I invited you here, which I guess is worth pointing
 
+00:15:59.740 --> 00:16:07.340
+out. The reason I knew about this and reached out to you was you gave a talk at PyCon 2023.
 
-00:51:24.100 --> 00:51:26.940
-your talking about these time series stream data.
+00:16:07.340 --> 00:16:11.020
+Maybe tell us a bit about that experience before we jump into the databases.
 
+00:16:11.100 --> 00:16:18.460
+It's really nice to have PyCon back after COVID. I went to PyCon at Salt Lake City last year and this year.
 
-00:51:26.940 --> 00:51:29.680
-It's like replicating across these clusters.
+00:16:18.460 --> 00:16:24.300
+And last year, I spoke about modern concurrency patterns in Python.
 
+00:16:24.300 --> 00:16:28.700
+And this year, I talked about consistency and isolation.
 
-00:51:29.680 --> 00:51:31.820
->> Yeah, that's right. The op log is
+00:16:28.700 --> 00:16:34.860
+And I also learned a lot after being a C++ programmer and going to PyCon and being not sure what I was
 
+00:16:34.860 --> 00:16:43.020
+doing at PyCon anymore. This year, I came as a researcher. And so, the areas of my interests are
 
-00:51:31.820 --> 00:51:34.860
-the original streaming data at MongoDB,
+00:16:43.020 --> 00:16:50.460
+essentially everything. And so, I went to a bunch of talks and learned a bunch of stuff and renewed my
 
+00:16:50.460 --> 00:16:52.460
+love for being at PyCon.
 
-00:51:34.860 --> 00:51:37.820
-and people have done all sorts of hacks on top of it.
+00:16:52.460 --> 00:16:53.180
+Oh, that's excellent.
 
+00:16:53.180 --> 00:17:01.100
+I wanted to talk about consistency and isolation at PyCon because these are fundamental database
 
-00:51:37.820 --> 00:51:43.020
-We're making that kind of mechanism more and more general.
+00:17:01.100 --> 00:17:08.380
+concepts. They are some of the hardest to learn that I've ever encountered in computer science.
 
+00:17:08.380 --> 00:17:16.460
+And I kind of think that most of the approaches are bad. You can read the fundamental papers and you
 
-00:51:43.020 --> 00:51:46.980
-So you can do all sorts of different things with streams of operations.
+00:17:16.460 --> 00:17:23.020
+probably should, but reading the original papers is a very hard way to learn something. And they tend to be
 
+00:17:23.340 --> 00:17:29.740
+too concise and too abstract and not very well digested. And then maybe if I'd taken that
 
-00:51:46.980 --> 00:51:49.100
->> What should we throw in here before we call it?
+00:17:29.740 --> 00:17:37.100
+database's elective in college and read the textbook, I would be in better shape, but I didn't. And then I
 
+00:17:37.100 --> 00:17:45.580
+joined a database company and I had to learn it on the job. So, I came up with a few ways of thinking about
 
-00:51:49.100 --> 00:51:52.500
->> We can mention the final consistency level,
+00:17:45.580 --> 00:17:51.100
+learning about it, which took me a few years. So, I wanted to come to PyCon and share those and
 
+00:17:51.100 --> 00:17:54.540
+hopefully accelerate other people's learning.
 
-00:51:52.500 --> 00:51:54.740
-which is called linearizability.
+00:17:54.540 --> 00:17:59.660
+Yeah, I imagine everything about a conference like that is really different if you come with a
 
+00:17:59.660 --> 00:18:05.980
+researcher's mindset. You go hit all the expo booths and you're like, "All right, I need your ideas.
 
-00:51:54.740 --> 00:51:57.540
-It's pretty easy to understand.
+00:18:05.980 --> 00:18:10.300
+Tell me all about this with a special focus." Right?
 
+00:18:10.300 --> 00:18:14.620
+So, all right.
 
-00:51:57.540 --> 00:52:04.220
-If you do an operation and then you try to read the results of what you just did,
+00:18:14.620 --> 00:18:18.860
+So, we could start with just, you know, not every database is the same.
 
+00:18:18.860 --> 00:18:24.860
+I think long ago, people, when they said database, they just meant relational database.
 
-00:52:04.220 --> 00:52:07.820
-from any member, you are guaranteed to see that result.
+00:18:24.860 --> 00:18:25.420
+Mm-hmm .
 
+00:18:25.420 --> 00:18:31.820
+Right? And nowadays, there's more variety. And by nowadays, I'm thinking the last 15 years,
 
-00:52:07.820 --> 00:52:12.120
-It's pretty much the strictest level of consistency,
+00:18:31.820 --> 00:18:34.300
+right? It's not just today.
 
+00:18:34.300 --> 00:18:34.860
+Yeah.
 
-00:52:12.120 --> 00:52:14.320
-but it's also quite expensive and slow.
+00:18:34.860 --> 00:18:40.380
+Let's just maybe get a, just a quick high-level landscape view of the different kinds of databases. So,
 
+00:18:40.380 --> 00:18:44.620
+relational, that's probably what most people are using.
 
-00:52:14.320 --> 00:52:16.320
-So MongoDB does provide this,
+00:18:44.620 --> 00:18:45.260
+Mm-hmm .
 
+00:18:45.260 --> 00:18:48.220
+Yeah. I'm going to just give us a rundown of your thoughts on how this
 
-00:52:16.320 --> 00:52:20.020
-but it requires a lot of machination behind the scenes.
+00:18:48.220 --> 00:18:52.300
+category and this categorization goes. Taxonomy, I guess.
 
+00:18:52.300 --> 00:18:58.780
+Yeah. Relational databases, which are made of tables of rows and columns,
 
-00:52:20.020 --> 00:52:22.620
-So don't use it unless you need to.
+00:18:58.780 --> 00:19:07.260
+and you almost always query them with SQL, which is standardized, although every database has its own
 
+00:19:07.260 --> 00:19:17.820
+extensions, came to really dominate in the '90s. And they are great for a lot of reasons. And I think
 
-00:52:22.620 --> 00:52:24.620
-But if you do need it for something like,
+00:19:17.820 --> 00:19:22.060
+everybody should know how to use them. But, you know, around the time that I joined MongoDB in
 
+00:19:22.060 --> 00:19:29.820
+2011, something was happening, which is that the scale of data came to the point where you needed
 
-00:52:24.620 --> 00:52:26.920
-if you're updating users password,
+00:19:29.820 --> 00:19:35.100
+specialized approaches. And then another thing that was going on was that, sort of funny enough,
 
+00:19:35.100 --> 00:19:40.780
+object-oriented programming and relational databases had both come to dominate at the same time,
 
-00:52:26.920 --> 00:52:30.320
-where you want to make sure that
+00:19:40.780 --> 00:19:43.100
+and they worked very, very poorly with each other.
 
+00:19:43.100 --> 00:19:44.700
+Yeah, that is funny, but that did happen.
 
-00:52:30.320 --> 00:52:32.820
-every attempt to read that password
+00:19:44.700 --> 00:19:45.260
+Yeah.
 
+00:19:45.260 --> 00:19:51.900
+Because relational, I mean, a relation is sort of the object opposite of an object. Object-oriented
 
-00:52:32.820 --> 00:52:34.680
-will always get the freshest copy,
+00:19:51.900 --> 00:19:58.380
+programs are quite hierarchical and fairly flexible and relations are not hierarchical and extremely
 
+00:19:58.380 --> 00:20:03.980
+inflexible. So, we call that the impedance mismatch. I don't know if that's actually a helpful term.
 
-00:52:34.680 --> 00:52:38.980
-then linearizability is the consistency level to use.
+00:20:03.980 --> 00:20:05.500
+It's just, it's bad.
 
+00:20:05.500 --> 00:20:09.820
+The object-relational impedance mismatch, if people are familiar with that term. I haven't thought of
 
-00:52:38.980 --> 00:52:42.080
->> Excellent. They all sound pretty straightforward,
+00:20:09.820 --> 00:20:13.740
+that for a while, but yeah, that's, you know, that was a big concern often.
 
+00:20:13.740 --> 00:20:23.580
+NoSQL was kind of a movement, and it encompassed a number of solutions to these problems.
 
-00:52:42.080 --> 00:52:46.040
-but the consequences of choosing these different levels,
+00:20:23.580 --> 00:20:29.820
+One of them is that NoSQL databases tend to be distributed. So, before I came to MongoDB, I was
 
+00:20:29.820 --> 00:20:34.860
+working with an Oracle database. And as load increased, we just needed to buy a bigger and
 
-00:52:46.040 --> 00:52:48.100
-and then what that means for how you write code around
+00:20:34.860 --> 00:20:40.300
+bigger single box until, you know, we had like a million dollar refrigerator-sized thing,
 
+00:20:40.300 --> 00:20:41.740
+which must never ever go down.
 
-00:52:48.100 --> 00:52:50.660
-those systems is pretty complex.
+00:20:41.740 --> 00:20:50.140
+Many of the NoSQL databases, including MongoDB, are distributed. So, you can use a large number of
 
+00:20:50.140 --> 00:20:52.860
+smaller machines, which is much more economical.
 
-00:52:50.660 --> 00:52:54.540
-Also, just this whole conversation has made me appreciate how
+00:20:52.860 --> 00:20:54.220
+Much more cloud-friendly.
 
+00:20:54.220 --> 00:21:01.260
+Much more cloud-friendly. It's not only a good way to scale your CPU and RAM, but it's also a good
 
-00:52:54.540 --> 00:52:57.220
-much databases serve as
+00:21:01.260 --> 00:21:07.740
+way to ensure reliability and geo distribution. So, we took advantage of all that. We kind of built
 
+00:21:07.740 --> 00:21:14.700
+in the distributed nature of it quite early. And a lot of the other NoSQL databases did as well.
 
-00:52:57.220 --> 00:53:01.500
-the actual concurrency coordinators of modern applications.
+00:21:14.700 --> 00:21:24.060
+We're also a document database, with the data format is a lot like JSON, and it's easily convertible to JSON.
 
+00:21:24.060 --> 00:21:30.620
+And that means that it's very familiar for people who write Python or JavaScript or anything like that.
 
-00:53:01.500 --> 00:53:02.420
->> That is a great point.
+00:21:30.620 --> 00:21:33.500
+We store things that are a lot like dictionaries and lists.
 
+00:21:33.500 --> 00:21:35.740
+And they're...
 
-00:53:02.420 --> 00:53:07.140
->> Yeah. You can write web apps or APIs or queues and
+00:21:35.740 --> 00:21:41.260
+Very API-friendly, right? Like you're exchanging JSON. So, you're 95% of the way there,
 
+00:21:41.260 --> 00:21:43.500
+just on your API data exchange often.
 
-00:53:07.140 --> 00:53:10.200
-just almost forget that concurrency is happening,
+00:21:43.500 --> 00:21:48.460
+Yeah, if you want to expose a MongoDB collection as something to a REST API, you can do that in a
 
+00:21:48.460 --> 00:21:52.140
+couple of lines because JSON and MongoDB data are so similar.
 
-00:53:10.200 --> 00:53:12.460
-and you just talk to the database.
+00:21:52.140 --> 00:21:56.780
+All right. So, document databases is probably the best known NoSQL, but we also have
 
+00:21:56.780 --> 00:22:02.860
+key value stores and column-oriented databases. Still trying to grok them.
 
-00:53:12.460 --> 00:53:14.300
-How can you forget that?
+00:22:02.860 --> 00:22:07.340
+Yeah. Key value stores are just like big dicks in the sky.
 
+00:22:08.300 --> 00:22:13.340
+And in exchange for that simplicity, they're usually extremely fast and extremely robust.
 
-00:53:14.300 --> 00:53:18.200
-Because it falls upon the database to keep this stuff hanging together.
+00:22:13.340 --> 00:22:19.900
+Memcached, for example. And column-oriented databases, I'm still wrapping my head around.
 
+00:22:19.900 --> 00:22:22.140
+So, I'm not going to talk about that all that much. Yeah.
 
-00:53:18.200 --> 00:53:18.460
->> Yeah.
+00:22:22.140 --> 00:22:23.900
+But it's my impression that they're good for
 
+00:22:23.900 --> 00:22:31.260
+giant analytics jobs where you tend to need to do a huge aggregation, like find the sum or the mean
 
-00:53:18.460 --> 00:53:18.780
->> Cool.
+00:22:31.900 --> 00:22:36.300
+of a very large amount of consistent data.
 
+00:22:36.300 --> 00:22:42.460
+Maybe Pandas is a good mental model or NumPy or something like that, where you say,
 
-00:53:18.780 --> 00:53:20.900
->> In the show notes or wherever,
+00:22:42.460 --> 00:22:46.940
+I'm going to apply this operation to this whole column and you don't want it on a per user basis.
 
+00:22:46.940 --> 00:22:54.780
+You want to say, I want all the latency times as a thing, right? And that's a more natural thing to ask
 
-00:53:20.900 --> 00:53:23.620
-we should drop a link to a blog post that I wrote,
+00:22:54.780 --> 00:23:00.140
+for instead of projecting out the latency across all of them, that kind of thing.
 
+00:23:00.140 --> 00:23:04.780
+Graph databases, I think, seem to be going strong still.
 
-00:53:23.620 --> 00:53:28.860
-which has a link to lots of papers and other places where you can learn more.
+00:23:04.780 --> 00:23:11.100
+And this is an area where MongoDB hasn't, has kind of left it to our competitors for the moment.
 
+00:23:11.100 --> 00:23:17.980
+But graph databases are great at representing nodes that are connected by edges. So, for example,
 
-00:53:28.860 --> 00:53:35.500
-because this is a very hard topic to learn, especially from a podcast or a conference talk.
+00:23:17.980 --> 00:23:24.860
+a social network of people with friendships or a network of servers that are connected by ethernet
 
+00:23:24.860 --> 00:23:29.900
+cables. And you want to do queries like, how closely connected is this to that?
 
-00:53:35.500 --> 00:53:41.580
-You need to read multiple times, maybe make flashcards. But I think this way of talking
+00:23:29.900 --> 00:23:35.340
+Maybe even modeling like hierarchies within a large corporate organization or something.
 
+00:23:35.340 --> 00:23:35.740
+Right.
 
-00:53:41.580 --> 00:53:49.020
-about things where we think of, okay, isolation is a way of hiding the consequences of concurrency
+00:23:35.740 --> 00:23:39.100
+This person reports to that person and then, you know, those kinds of things.
 
+00:23:39.100 --> 00:23:44.300
+Yeah. Okay. So I think that sets the stage for a lot of what we're talking about. You know,
 
-00:53:49.020 --> 00:53:52.300
-and consistency is a way of hiding the consequences of replication.
+00:23:44.300 --> 00:23:51.020
+what ones for, in terms of consistency and isolation, this applies to relational document,
 
+00:23:51.020 --> 00:23:55.580
+probably not key value stores. I don't know about graph databases at all in terms of these,
 
-00:53:52.300 --> 00:53:57.340
-That was a useful breakthrough for me, and so I hope it's useful for other people too.
+00:23:56.540 --> 00:23:59.740
+which ones of these are kind of relevant to the main topic here?
 
+00:23:59.740 --> 00:24:07.180
+Actually, it's interesting. So first of all, let's separate out that isolation is a way of height.
 
-00:53:57.340 --> 00:54:02.100
-Yeah, I'm sure it will be. And I'll definitely link this article in the show notes along
+00:24:07.180 --> 00:24:14.620
+So even on a single machine, a database can run concurrent operations. So you could have two
 
+00:24:14.620 --> 00:24:21.980
+transactions that are going on at once and their operations may be in some way interleaved. And if the
 
-00:54:02.100 --> 00:54:05.940
-with the consistency diagrams and all the other things.
+00:24:21.980 --> 00:24:31.180
+database allows concurrency like this on a single machine, then that can reveal phenomena that you
 
+00:24:31.180 --> 00:24:39.260
+would not observe if concurrency were not allowed. And these phenomena are called anomalies. These terms,
 
-00:54:05.940 --> 00:54:06.940
-Great.
+00:24:39.260 --> 00:24:46.380
+phenomena and anomalies go all the way back to these, maybe to the 1970s database theory. There's nothing
 
+00:24:46.380 --> 00:24:54.060
+specific to relational or non-relational data to the SQL language or any other query language. So long as
 
-00:54:06.940 --> 00:54:10.200
-Yeah, cool. All right, Jesse, thank you for being here. It's been really great to have
+00:24:54.060 --> 00:25:03.580
+the database allows concurrency, then anomalies are possible. And so the database may choose to provide
 
+00:25:03.580 --> 00:25:09.500
+isolation levels to you. There are four isolation levels that people have probably heard of that are
 
-00:54:10.200 --> 00:54:11.200
-you back on the show.
+00:25:09.500 --> 00:25:17.180
+in the SQL standard. And so obviously they've got that connection to the relational model and the SQL language.
 
+00:25:17.180 --> 00:25:20.620
+But in my PyCon talk, I was just showing a key value store.
 
-00:54:11.200 --> 00:54:13.520
-Thanks a lot, Michael.
+00:25:20.620 --> 00:25:27.820
+Yeah, that's right. You actually were kind of more or less writing the code for the different implementations.
 
+00:25:27.820 --> 00:25:33.420
+They're demonstrating the code for the different implementations of how you might do a key value store.
 
-00:54:13.520 --> 00:54:18.280
-This has been another episode of Talk Python to Me. Thank you to our sponsors. Be sure
+00:25:33.420 --> 00:25:38.060
+And so what you did was you said, let's imagine we just have a giant dictionary in memory.
 
+00:25:38.060 --> 00:25:42.780
+And that was our database, at least for a table or a collection. Right. And then like, how do we
 
-00:54:18.280 --> 00:54:22.260
-to check out what they're offering. It really helps support the show. Take some stress out
+00:25:42.780 --> 00:25:49.100
+model these isolation levels in Python code? Right. Yeah, right. Exactly. So there was no SQL involved.
 
+00:25:49.100 --> 00:25:57.340
+The data was just a dict, but I was showing how you could use Python locks to provide each of the four
 
-00:54:22.260 --> 00:54:26.580
-of your life. Get notified immediately about errors and performance issues in
+00:25:58.380 --> 00:26:03.900
+well-known isolation levels and allow concurrency. All right. So I interrupted you a tiny bit there.
 
+00:26:03.900 --> 00:26:10.300
+What are the four isolation levels? At least the SQL standard ones. Right. So there's read uncommitted,
 
-00:54:26.580 --> 00:54:32.020
-your web or mobile applications with Sentry. Just visit talkpython.fm/sentry
+00:26:10.300 --> 00:26:18.060
+which is anything goes. YOLO. YOLO. Every operation that one transaction does is immediately visible to all
 
+00:26:18.060 --> 00:26:24.060
+the others or may be visible to all the others, even if the transaction doesn't, hasn't committed yet,
 
-00:54:32.020 --> 00:54:36.900
-and get started for free. And be sure to use the promo code "talkpython" all one
+00:26:24.060 --> 00:26:32.220
+even if it aborts later. Right. And so the concurrency is nakedly displayed to all of the clients.
 
+00:26:32.220 --> 00:26:38.860
+Basically, you don't see this in practice. Read committed is what people are much more accustomed to,
 
-00:54:36.900 --> 00:54:42.420
-word. InfluxData encourages you to try InfluxDB. InfluxDB is a database
+00:26:38.860 --> 00:26:46.940
+where your transaction as it's going along may see the data change as other transactions commit,
 
+00:26:46.940 --> 00:26:54.780
+but then its own writes are only visible to other transactions all in one instant at the moment that
 
-00:54:42.420 --> 00:54:47.060
-purpose-built for handling time series data at a massive scale for real-time
+00:26:54.780 --> 00:27:01.340
+your transaction commits. But of course, you could read the same value multiple times in a row and get
 
+00:27:01.340 --> 00:27:05.420
+different answers because other transactions are allowed to commit and modify it as you go.
 
-00:54:47.060 --> 00:54:54.180
-analytics. Try it for free at talkpython.fm/influxdb. Want to level up your Python? We have one of the
+00:27:05.420 --> 00:27:11.900
+Right. I imagine that that's a pretty common level. The read uncommitted is just chaos, right? It's like
 
+00:27:11.900 --> 00:27:15.260
+It's like multi-threading without locks, basically. Yeah.
 
-00:54:54.180 --> 00:54:59.700
-largest catalogs of Python video courses over at Talk Python. Our content ranges from true beginners
+00:27:15.260 --> 00:27:22.220
+Without any locking mechanism or protection. While that would be the fastest, it's probably too risky.
 
+00:27:22.220 --> 00:27:25.420
+But read committed, how common do you think that is?
 
-00:54:59.700 --> 00:55:04.740
-to deeply advanced topics like memory and async. And best of all, there's not a subscription in
+00:27:25.420 --> 00:27:30.460
+Read committed is quite prominent. It's the default for a number of the SQL databases. I don't remember
 
+00:27:30.460 --> 00:27:36.780
+which exactly, but people can live with it pretty happily. And to be honest, MagoDB's default is read
 
-00:55:04.740 --> 00:55:09.620
-sight. Check it out for yourself at training.talkpython.fm. Be sure to subscribe to the
+00:27:37.340 --> 00:27:45.740
+uncommitted. If you write to the primary, other clients can see those rights immediately. There's
 
+00:27:45.740 --> 00:27:50.620
+no transaction by default. After all, you have to opt into transactions on MagoDB.
 
-00:55:09.620 --> 00:55:14.420
-show, open your favorite podcast app, and search for Python. We should be right at the top. You
+00:27:50.620 --> 00:27:57.820
+There are atomic changes you can make. Like you can use the set and push those kinds of operators
 
+00:27:57.820 --> 00:28:03.420
+on a single document. But as soon as you start talking to two documents in the same collection or
 
-00:55:14.420 --> 00:55:17.320
-You can also find the iTunes feed at /itunes,
+00:28:03.420 --> 00:28:07.340
+cross-collection, then this is what you're talking about. There's no transaction, right?
 
+00:28:07.340 --> 00:28:11.660
+Yeah, that's exactly right. And the document model does make it much more practical to do things without
 
-00:55:17.320 --> 00:55:19.520
-the Google Play feed at /play,
+00:28:11.660 --> 00:28:18.140
+transactions because you can keep related data all together in a single document and update it in one
 
+00:28:18.140 --> 00:28:23.660
+statement. Yeah. Whereas the relational model tends to kind of spray your data around and make it much more
 
-00:55:19.520 --> 00:55:24.420
-and the Direct RSS feed at /rss on talkpython.fm.
+00:28:23.660 --> 00:28:31.020
+difficult to maintain whatever application invariance you want because you have to modify multiple
 
+00:28:31.660 --> 00:28:37.580
+rows at the same time. Yeah, multiple rows, multiple tables. Like there could be a many-to-many relationship that you're
 
-00:55:24.420 --> 00:55:27.020
-We're live streaming most of our recordings these days.
+00:28:37.580 --> 00:28:43.740
+adding to or taking away from, right? Just to update part of some statement.
 
+00:28:43.740 --> 00:28:44.220
+Yeah, right.
 
-00:55:27.020 --> 00:55:30.420
-If you want to be part of the show and have your comments featured on the air,
+00:28:44.220 --> 00:28:51.020
+This portion of Talk Python to Me is brought to you by Influx Data, the makers of InfluxDB.
 
+00:28:51.020 --> 00:28:58.860
+InfluxDB is a database purpose-built for handling time series data at a massive scale for real-time analytics.
 
-00:55:30.420 --> 00:55:35.320
-be sure to subscribe to our YouTube channel at talkpython.fm/youtube.
+00:28:59.340 --> 00:29:06.220
+Developers can ingest, store, and analyze all types of time series data, metrics, events, and traces in a single platform.
 
+00:29:06.220 --> 00:29:11.420
+So, dear listener, let me ask you a question. How would boundless cardinality and lightning-fast
 
-00:55:35.320 --> 00:55:36.720
-This is your host, Michael Kennedy.
+00:29:11.420 --> 00:29:14.860
+SQL queries impact the way that you develop real-time applications?
 
+00:29:14.860 --> 00:29:22.380
+InfluxDB processes large time series datasets and provides low-latency SQL queries, making it the go-to choice
 
-00:55:36.720 --> 00:55:39.120
-Thanks so much for listening. I really appreciate it.
+00:29:22.380 --> 00:29:28.300
+for developers building real-time applications and seeking crucial insights. For developer efficiency,
 
+00:29:28.300 --> 00:29:35.500
+InfluxDB helps you create IoT analytics and cloud applications using time-stamped data rapidly and at scale.
 
-00:55:39.120 --> 00:55:41.320
-Now get out there and write some Python code.
+00:29:35.500 --> 00:29:40.860
+It's designed to ingest billions of data points in real-time with unlimited cardinality.
 
+00:29:40.860 --> 00:29:47.340
+InfluxDB streamlines building once and deploying across various products and environments from the edge,
 
-00:55:41.320 --> 00:55:51.320
-[MUSIC]
+00:29:47.340 --> 00:29:53.260
+on-premise and to the cloud. Try it for free at talkpython.fm/influxDB.
 
+00:29:53.260 --> 00:29:58.780
+The link is in your podcast player show notes. Thanks to Influx Data for supporting the show.
 
-00:55:51.320 --> 00:55:53.900
-(upbeat music)
+00:30:01.820 --> 00:30:22.460
+The next one is serializable, which takes a while to wrap your head around. But with serializable isolation, there is a total order of operations that every client sees that is as if each transaction ran one at a time.
 
+00:30:22.460 --> 00:30:32.620
+InfluxDB – And each one read at one moment of time and then committed at one moment of time with no other transactions operations interleaved.
 
-00:55:53.900 --> 00:55:56.480
-(upbeat music)
+00:30:32.620 --> 00:30:37.100
+InfluxDB – So it's hard to explain. It's also extremely intuitive. It's almost what you would assume.
 
+00:30:37.100 --> 00:30:41.500
+It's kind of like assume that there was no concurrency. This is what it would look like.
 
-00:55:56.480 --> 00:55:59.060
-(upbeat music)
+00:30:42.140 --> 00:30:54.940
+The pedantic detail here is that the order that the transactions appear to occur might not be exactly the order that you did them in for complicated implementation reasons.
 
+00:30:54.940 --> 00:31:05.260
+So if you have multiple different databases talking to each other, it might not be good enough for you because they might end up choosing different orders of operations.
 
-00:55:59.060 --> 00:56:02.180
-[MUSIC]
+00:31:05.260 --> 00:31:14.940
+So you can see, you can see anomalies there. But basically, serializable is the highest isolation level that you're likely to need in a relational database.
+
+00:31:14.940 --> 00:31:20.620
+I feel like that might be the default for some of the relational databases. Not 100% sure.
+
+00:31:20.620 --> 00:31:34.460
+I'm not 100% sure either. There's also a compromise, less than serializable, called repeatable read, which means that any single piece of data that you've read, you'll continue to see the same value for it.
+
+00:31:34.460 --> 00:31:38.140
+So you'll see that in the same way.
+
+00:31:38.140 --> 00:31:51.500
+And the way it's usually actually implemented is a slightly stronger level called snapshot isolation, where you just get a copy of the data at the point in time when you first started your transaction, approximately.
+
+00:31:51.500 --> 00:31:56.940
+And you just read as if you are always reading from that version of the data until you commit.
+
+00:31:56.940 --> 00:32:05.820
+So snapshot isolation is what people usually actually mean by repeatable read and a lot of databases provided.
+
+00:32:05.820 --> 00:32:12.620
+And it's the default for MongoDB. When you start a transaction in MongoDB, you read from a version of the data for the rest of that transaction.
+
+00:32:12.620 --> 00:32:14.300
+For the rest of that transaction.
+
+00:32:14.300 --> 00:32:26.300
+Okay, interesting. Yeah, you did say that MongoDB typically doesn't have transactions as it's kind of recommended default way, you know, look at a lot of the tutorials and stuff. People are just making updates and so on. But this is
+
+00:32:26.300 --> 00:32:35.980
+didn't come out originally with MongoDB, but at some point, what version did you all add transactions? Like actual transactions?
+
+00:32:35.980 --> 00:32:37.660
+I wish I could remember.
+
+00:32:37.660 --> 00:32:38.620
+Yeah, I don't remember either.
+
+00:32:38.620 --> 00:32:40.780
+But I feel like, oh, there we go. How about that?
+
+00:32:40.780 --> 00:32:41.660
+Oh, 4.2.
+
+00:32:41.660 --> 00:32:44.540
+Jumping around for, I think version four-ish.
+
+00:32:44.540 --> 00:32:45.100
+Okay.
+
+00:32:45.100 --> 00:32:47.500
+Which we're on version six now, but that was quite a while ago.
+
+00:32:47.500 --> 00:32:47.820
+Yeah.
+
+00:32:47.820 --> 00:32:51.500
+You've got to pick to go do those transactions in Mongo, for example.
+
+00:32:51.500 --> 00:32:51.980
+Right.
+
+00:32:51.980 --> 00:32:58.780
+Whereas that's also true, say for Postgres or Microsoft SQL Server, right?
+
+00:32:58.780 --> 00:33:04.540
+You've got to, you've got to actually do the transactional stuff in whatever code you're using to talk to that as well.
+
+00:33:04.540 --> 00:33:11.180
+So it's just more, more visible in a lot of the tutorials and examples for those libraries, I think.
+
+00:33:11.180 --> 00:33:17.420
+MongoDB in general has taken a more kind of show our guts to you approach where we,
+
+00:33:17.420 --> 00:33:24.860
+early on the distributed nature of MongoDB, which was much more visible to our users than other databases
+
+00:33:24.860 --> 00:33:33.660
+and transactions. Now we kind of show you the details a bit more than other databases do,
+
+00:33:34.220 --> 00:33:42.060
+but that actually allows you to write more reliable code. The interesting thing about an SQL interface is
+
+00:33:42.060 --> 00:33:49.900
+that you can start a transaction, do a bunch of writes, and then send the commit message. And if you
+
+00:33:49.900 --> 00:33:58.220
+get some sort of error, like a network error, perhaps you got disconnected or the server crashed, you don't
+
+00:33:58.220 --> 00:34:02.860
+know. And you don't know whether your transaction committed or not. And if you reconnect, you don't know whether you will see the data,
+
+00:34:02.860 --> 00:34:07.500
+you don't know whether you will see the data that you committed or not. This is somewhat difficult to handle.
+
+00:34:07.500 --> 00:34:29.180
+But that's what you're trying to do. And most people aren't aware of it. The MongoDB transaction API makes you think about this. The drivers essentially have you pass a function in, which executes the transaction code, and that it's automatically retried if the commit fails. And so we give you the mechanism to ensure reliable transaction commits.
+
+00:34:29.180 --> 00:34:31.180
+I see.
+
+00:34:31.180 --> 00:34:35.100
+You can either be sure it happened or you have the mechanism to run it again.
+
+00:34:35.100 --> 00:34:36.100
+Exactly.
+
+00:34:36.100 --> 00:34:36.100
+Yeah.
+
+00:34:36.100 --> 00:35:03.740
+Yeah. Okay. Interesting. Let's look at two aspects here. One of the things is you spoke about anomalies and what might go wrong. The read uncommitted, I think people can probably conceptualize that pretty well. Right? It's just as multi-step transactions are happening, other ones are potentially running. And you could read something. Either that transaction could roll back after you've carried on, or you could have just, you know, had some
+
+00:35:03.740 --> 00:35:06.740
+Speaker 1: The equivalent of a race condition. Right?
+
+00:35:06.740 --> 00:35:06.740
+Right.
+
+00:35:06.740 --> 00:35:12.740
+Right. Right. So, is there a, there's a term for that kind of anomaly, right? Each of these anomalies have terms I've learned.
+
+00:35:12.740 --> 00:35:30.740
+And you can definitely memorize them. And if you go to Jepson.io, there's a lovely diagram of the relationship among all of the consistency and isolation levels.
+
+00:35:30.740 --> 00:35:33.740
+Speaker 1: G-Y-P-S-U-M?
+
+00:35:33.740 --> 00:35:37.740
+That is J-E-P-S-E-N.io.
+
+00:35:37.740 --> 00:35:38.740
+Ah.
+
+00:35:38.740 --> 00:35:51.740
+Yeah. This is a researcher named Kyle Kingsbury, his website about consistency and isolation and testing. This is the best place, I think, to go learn about this stuff.
+
+00:35:51.740 --> 00:35:53.740
+Yeah. There's a lot of cool visualizations and stuff here.
+
+00:35:53.740 --> 00:36:15.740
+Yeah. For those watching on the live stream, we've got a tree diagram up that shows all of the isolation levels, all of the consistency levels that are commonly used, and how they relate to each other in terms of how, let's say, the serializable isolation is strictly stronger than read committed.
+
+00:36:15.740 --> 00:36:16.740
+Speaker 1: Mm-hmm.
+
+00:36:16.740 --> 00:36:22.740
+Speaker 1: Every anomaly that is prohibited by serializable is also prohibited by read committed.
+
+00:36:22.740 --> 00:36:37.740
+Speaker 1: Got it. Maybe help us understand the read committed anomalies versus, like the read uncommitted one is, like, it's full of them. But maybe help us understand some of the things that can go wrong in the safer ones. Like trying to decide between read committed and serializable, for example.
+
+00:36:37.740 --> 00:36:41.740
+Speaker 1: Right. This was also my approach when I first started learning.
+
+00:36:41.740 --> 00:36:43.740
+Speaker 1: Right. This was also my approach when I first started learning.
+
+00:36:43.740 --> 00:36:45.740
+Speaker 1: Was to try to memorize these things.
+
+00:36:45.740 --> 00:36:46.740
+Speaker 1: Hmm.
+
+00:36:46.740 --> 00:36:49.740
+Speaker 1: The reason why I'm not answering your question is that I don't think that this is the right approach.
+
+00:36:49.740 --> 00:36:50.740
+Speaker 1: What would you suggest?
+
+00:36:50.740 --> 00:36:58.740
+Speaker 1: I think the right approach is to step back and ask, why do anomalies exist?
+
+00:36:58.740 --> 00:37:11.740
+Speaker 1: And the answer is, I've come to understand it, is that databases want to permit more concurrency so that you can get higher throughput with multiple transactions at once.
+
+00:37:11.740 --> 00:37:17.740
+But you've got to sacrifice something for that. What you've got to sacrifice is isolation. Some of these anomalies have to appear.
+
+00:37:17.740 --> 00:37:20.740
+Speaker 1: And so why is that? Why do you have to make that trade-off?
+
+00:37:20.740 --> 00:37:35.740
+Speaker 1: Well, the short answer is that databases prevent anomalies by in some way locking pieces of data to prevent one transaction from modifying or even reading it if another transaction has modified or read it.
+
+00:37:35.740 --> 00:37:38.740
+And so the more things you lock, the less concurrency is permitted.
+
+00:37:38.740 --> 00:37:49.740
+Speaker 1: And if you want to understand that in detail for each of the isolation levels and each of the anomalies, you could watch the video of my PyCon talk, which...
+
+00:37:49.740 --> 00:37:50.740
+Speaker 1: Yeah.
+
+00:37:50.740 --> 00:37:58.740
+Speaker 1: ... goes through like 20 or 30 line long Python implementations of databases that provide each of these isolation levels.
+
+00:37:58.740 --> 00:38:06.740
+So you can see why they need different amounts of locking. You can see why they permit different levels of concurrency.
+
+00:38:06.740 --> 00:38:17.740
+And you could start to get a feel for what amount of concurrency each of them permits and also what sort of anomalies each of them permits.
+
+00:38:17.740 --> 00:38:26.740
+Speaker 1: And with that in mind, for me at least, thinking about how these things are actually implemented gave me a much... made it much easier for me to then memorize.
+
+00:38:26.740 --> 00:38:27.740
+Speaker 1: Sure.
+
+00:38:27.740 --> 00:38:37.740
+Speaker 1: Read committed provides phantom reads. Why is that? What does that mean? Now I understand that because I understand how the... how an implementation might work.
+
+00:38:37.740 --> 00:38:46.740
+Speaker 1: I think that makes a lot of sense. And that really is the relationship that people should understand, right? That there's an inverse relationship between...
+
+00:38:46.740 --> 00:38:55.740
+Speaker 1: ... sort of the data consistency and the lack of these anomalies and how much you can handle scale and concurrency.
+
+00:38:55.740 --> 00:38:56.740
+Speaker 1: Right.
+
+00:38:56.740 --> 00:38:56.740
+Speaker 1: Right.
+
+00:38:56.740 --> 00:39:00.740
+Speaker 1: Right. The stricter, the more consistent the data is, the less scale that you get.
+
+00:39:00.740 --> 00:39:01.740
+Speaker 1: Right.
+
+00:39:01.740 --> 00:39:05.740
+Speaker 1: And so where... where do you live? Can you get to points where the database actually like locks up and kind of a deadlock situation?
+
+00:39:05.740 --> 00:39:24.740
+Speaker 1: And I show one of those in my PyCon talk, the serializable level of isolation is particularly prone to this. Basically if... and I do this all with Star Trek memes. So I show an example where Sulu reads one piece of data and something which... they're fighting over who gets to check out the shuttle to go to surface for shore leave. And Sulu reads one piece of data.
+
+00:39:24.740 --> 00:39:53.740
+Speaker 1: And Sulu checks if Uhura has the shuttle and he sees no. But then Uhura starts a transaction and checks if Sulu has the shuttle. The answer is also no. So each of them tries to then check out the shuttle. But since they have each locked the row that the other needs to modify, they then
+
+00:39:53.740 --> 00:40:17.740
+Speaker 1: deadlock. This then gets into fancy old database theory of deadlock detection and resolution, which is the subject of many textbooks. But essentially you're probably going to block for some period of time. And then a deadlock detector will come along and abort one of the transactions to allow the other to continue.
+
+00:40:17.740 --> 00:40:21.740
+Speaker 1: Right. Making your code more complex, harder to work with. Right.
+
+00:40:21.740 --> 00:40:33.740
+Speaker 1: And now your code needs to be able to handle this situation. If you are aborted due to deadlock, should you retry that transaction or not? That's now something that the developer needs to make a decision about.
+
+00:40:33.740 --> 00:40:50.740
+Speaker 1: Okay. So all of this that we've discussed so far has to do with one or more database servers that just... the requirement is that it allows concurrent queries and updates and all that. On the other side, we might have...
+
+00:40:50.740 --> 00:40:54.740
+Speaker 1: Some kind of distributed topology with...
+
+00:40:54.740 --> 00:41:08.740
+Speaker 1: In MongoDB case, we have both replication and sharding, which may be worth touching on those things. But in a lot of scale out situations, you know, you have some sort of data spread around some kind of distributed database or even you'll see like geo replicated databases. You know, I want to have my data replicated in Asia and the US so that we can run our server side code near...
+
+00:41:08.740 --> 00:41:14.740
+Speaker 1: Data for those different users, right? Right.
+
+00:41:14.740 --> 00:41:14.740
+Speaker 1: Right.
+
+00:41:14.740 --> 00:41:18.740
+Speaker 1: That's the consistency, not the isolation side of your talk, right?
+
+00:41:18.740 --> 00:41:24.740
+Speaker 1: That's right. So to review, isolation is a response to anomalies caused by concurrency on one machine. And then...
+
+00:41:24.740 --> 00:41:42.740
+Speaker 1: Consistency is a response to anomalies that are due to replication in a distributed database. So the distributed database, you always write to one of the nodes or you read from one of the nodes.
+
+00:41:42.740 --> 00:42:07.740
+Speaker 1: For any particular operation. And there are different rules about, is there only one leader that can take writes or can any node take writes? Is there... Can you only read from the leader? Can you read from any node? Can you only read from some of the nodes?
+
+00:42:07.740 --> 00:42:32.740
+Speaker 1: But no matter what database you're using, you always read or write to some nodes and then they replicate writes to other nodes. And so there's always a lag because that replication takes time. The most obvious example is if you write to the leader and then immediately read from the follower, the data that you just wrote may or may not be there yet.
+
+00:42:32.740 --> 00:43:00.740
+Speaker 1: So that's the source of inconsistencies. And those inconsistencies are called anomalies as well. And then there are multiple isolation levels, sorry, consistency levels, which allow or prevent various of those. This is not standardized, by the way. So here you're going to see different terms. And then even more upsetting, you'll see some of the same terms.
+
+00:43:00.740 --> 00:43:28.740
+Speaker 1: You'll see some of the same terms, but they mean different things depending on which database documentation you're using or which paper you're reading. So I talked about three levels of eventual consistency, causal consistency, and linearizability in my talk, which I think is kind of a good sample. But this area of computer science is a lot less paved than isolation is.
+
+00:43:28.740 --> 00:43:38.740
+Speaker 1: Yeah, I agree with that. And it also seems to me like it really matters for the particular database server that you're using, what its flavor of distributed means.
+
+00:43:38.740 --> 00:43:38.740
+Speaker 1: Yeah.
+
+00:43:38.740 --> 00:43:50.740
+Speaker 1: Right? Like my understanding from MongoDB is replication is largely about reliability, failover, uptime, but the possibility of reading from a replica for some read scaling.
+
+00:43:50.740 --> 00:43:50.740
+Speaker 1: Exactly.
+
+00:43:50.740 --> 00:43:56.740
+Speaker 1: Whereas you might, you might have another one kind of with the example that I talked about with like, we want our data located in multiple geographies.
+
+00:43:56.740 --> 00:44:10.740
+Speaker 1: And all of them are kind of the local database for those, those areas. And so the types of issues you run into, as well as the words you use, they probably vary somewhat, right? Because you're kind of solving different problems.
+
+00:44:10.740 --> 00:44:11.740
+Speaker 1: Mm hmm.
+
+00:44:11.740 --> 00:44:18.740
+Speaker 1: Well, we both know the MongoDB one pretty well. So maybe give us the story on like a replica set, which is, I'll let you talk about it. Yeah.
+
+00:44:18.740 --> 00:44:25.740
+Speaker 1: What's the motivation of a replica set and what are the challenges and different modes there?
+
+00:44:25.740 --> 00:44:46.740
+Speaker 1: 90%, 95% of people use MongoDB deploy it as a three node replica set. And 90 to 95% of the time, as you said, their goal is failover. That if the primary goes down, they want a very different way.
+
+00:44:46.740 --> 00:44:54.740
+Speaker 1: That if the primary goes down, they want a very recent hot copy of their data available in a secondary, which will be promoted to primary as quickly as possible.
+
+00:44:54.740 --> 00:45:08.740
+Speaker 1: And if you're writing to and reading from the primary, somewhat surprisingly, you can still see anomalies because there could be a failover in between the time that you wrote to the primary and the time that you do that read.
+
+00:45:08.740 --> 00:45:26.740
+Speaker 1: You might be reading from a different member, which didn't get the copy. And so we've changed the default in the last few years, I think, to make every write weight to be replicated to a majority of the members.
+
+00:45:26.740 --> 00:45:34.740
+Speaker 1: So that, and then we've got a protocol that ensures that whoever becomes primary after a failover, therefore is guaranteed to have that data.
+
+00:45:34.740 --> 00:45:46.740
+Speaker 1: So you were with that setup, you're pretty well protected from anomalies. I'm sure that pedants and stress testers have found exceptions to this. I'm not going to make any promises.
+
+00:45:46.740 --> 00:45:54.740
+Speaker 1: Yeah. Maybe if your right to the primary is the thing that takes it down potentially, you know, something really, really instantaneous almost.
+
+00:45:54.740 --> 00:45:56.740
+Speaker 1: There are always edge cases.
+
+00:45:56.740 --> 00:45:58.740
+Speaker 1: Yeah. Potentially. Yeah. Okay.
+
+00:45:58.740 --> 00:46:24.740
+Speaker 1: The real inconsistencies that you start to see is if you do secondary reads. So if you read from a follower, that can be useful because you're shifting load from the primary or maybe the follower is located at a lower latency location on earth to you, but it's always going to have some degree of lag compared to the primary. So by default, you're going to get what we call eventually
+
+00:46:24.740 --> 00:46:42.740
+eventual consistency. Any right that occurs on the primary that gets acknowledged by a majority of the members will eventually be replicated to all of the members. So all of the members will pass through the same series of states as the primary does.
+
+00:46:42.740 --> 00:46:42.740
+Speaker 1: Okay.
+
+00:46:42.740 --> 00:46:54.720
+Speaker 1: At least the same set of states that the primary got majority acknowledgement of to be extremely technical. But if you read from the primary and then a secondary and then a different secondary, you'll feel like you're doing a lot of
+
+00:46:54.720 --> 00:47:02.720
+jumping around in time because you'll always be reading a different version of the data and some of those versions will be older than the last version that you saw.
+
+00:47:02.720 --> 00:47:12.720
+Speaker 1: In MongoDB, in order to make that happen, you've got to pass extra flags opting into this read from secondary thing, right? And you're in the driver.
+
+00:47:12.720 --> 00:47:20.720
+Speaker 1: Yes, that's right. We call that read preference and there are a bunch of options, but the default is just to read from the primary and not see a lot of consistent inconsistencies.
+
+00:47:20.720 --> 00:47:28.720
+Speaker 1: So you mentioned a couple of this is the eventual eventual consistency issue. What are some of the other consistencies that you talked about?
+
+00:47:28.720 --> 00:47:48.720
+Speaker 1: There's causal consistency, which I think is quite nice. You can get it in MongoDB by using the sessions API and causal consistency ensures that every right that you do and everything affected by that right, you will be able to read its consequences.
+
+00:47:48.720 --> 00:47:58.720
+Speaker 1: And here again, I think talking about the implementation really makes things a lot clearer than talking about like the abstract mathematical definition.
+
+00:47:58.720 --> 00:47:58.720
+Speaker 1: Of course, yeah.
+
+00:47:58.720 --> 00:48:16.720
+Speaker 1: So here's the way MongoDB does it. You connect a client, you do an update. The primary applies the update, sends it to, waits for a majority of members to acknowledge it. And then the primary also increments a counter. So let's say that counter is now has the value four.
+
+00:48:16.720 --> 00:48:34.720
+Speaker 1: And so replies to the client and says your update succeeded and the counter values now for now you can read from a secondary. You can say I want to read some value, but don't reply until your counter is at least for now in the background.
+
+00:48:34.720 --> 00:48:52.720
+Speaker 1: Secondaries are replicating from the primary. And they're also replicating the primary counter value. And so only when they get to the number four or past, do they reply to your query. And they're also guaranteed at that point to have applied to that update that you just sent to the primary.
+
+00:48:52.720 --> 00:49:02.720
+Speaker 1: Yeah, that's a really cool solution. You know, the one of the problems, if you're allowed to read from secondaries is imagine you're going to create a new account, let's say on a website. Go in there and say, here's my information.
+
+00:49:02.720 --> 00:49:21.720
+Speaker 1: Yes, my password has a lowercase and uppercase and a special number and you know, whatever, right? Say create it inserts it into the primary response redirects back to the server and says, great, you're on your account page. Let me just pull back from the database who you are to show your details on the page.
+
+00:49:21.720 --> 00:49:48.720
+Speaker 1: And if you know that's basically instant right at the bit down to ping time to the server and you could potentially end up in a situation where you've just created an account, but then you hit a replica that has yet to receive that. So what you're saying is if we use this concept of sessions, we'll get some kind of point in time marker that we're going to wait until just MongoDB,
+
+00:49:48.720 --> 00:49:57.720
+Speaker 1: DB behind the scenes will basically block and say, we're still waiting on that answer. Hold on for who it is until that replica makes that point in time or further.
+
+00:49:57.720 --> 00:49:58.720
+Speaker 1: Exactly.
+
+00:49:58.720 --> 00:50:06.720
+Speaker 1: Okay. That's excellent. Question from the audience from Marwan says, how do you keep the counter store consistent? If you need to replicate it across regions?
+
+00:50:06.720 --> 00:50:24.720
+Speaker 1: The counter at any given moment in time, we'll have different values on different replicas, but that's actually its purpose is that it represents how caught up each of the members is on their shared sequence of operations. Once you have replicated a given operation, you've also updated your counter value to the counter value that the primary had when it did that operation.
+
+00:50:24.720 --> 00:50:43.720
+Speaker 1: And so you're now consistent, but the primary may be ahead of that as well. Like there's never any absolute truth. There's only a sequence of operations in your position in it.
+
+00:50:43.720 --> 00:50:55.720
+Speaker 1: I think another important piece of information here is that you're writing to the leader. The leader always knows what its point in time number is and it can increment that.
+
+00:50:55.720 --> 00:50:55.720
+Speaker 1: That's right.
+
+00:50:55.720 --> 00:51:01.720
+Speaker 1: Right. And so that thing's always going to be consistent and auto incrementing forward. It's just a matter of how caught up are the replicas, right?
+
+00:51:01.720 --> 00:51:13.720
+Speaker 1: Exactly. And if you want the MongoDB terms for these, that sequence of operations is the op log and that counter is the op time.
+
+00:51:13.720 --> 00:51:21.720
+Speaker 1: Yeah. And that's basically that op log. That's the thing that's gets pushed to the replicas and is copied as it goes. Yeah, exactly.
+
+00:51:21.720 --> 00:51:28.720
+Speaker 1: Which brings us a little bit back full circle to your talking about like these time series stream data. It's kind of like replicating across these clusters.
+
+00:51:28.720 --> 00:51:28.720
+Speaker 1: Yeah, that's right. The op log is a little bit back full circle to your talking about like these time series stream data. It's kind of like replicating across these clusters.
+
+00:51:28.720 --> 00:51:29.720
+Speaker 1: Yeah, that's right. The op log is a little bit back full circle to your talking about like these time series stream data. It's kind of like replicating across these clusters.
+
+00:51:29.720 --> 00:51:42.720
+Speaker 1: Yeah, that's right. The op log is the original streaming data at MongoDB and people have done all sorts of hacks on top of it. And we're making that kind of mechanism more and more general.
+
+00:51:42.720 --> 00:51:46.720
+Speaker 1: Interesting. So you can do all sorts of different things with streams of operations.
+
+00:51:46.720 --> 00:51:48.720
+Speaker 1: What should we throw in here before we call it?
+
+00:51:48.720 --> 00:51:59.720
+Speaker 1: We can mention the final consistency level, which is called linearizability. And it's pretty easy to understand. If you do an operation and then
+
+00:51:59.720 --> 00:52:28.720
+Speaker 1: You try to read the results of what you just did from any member, you are guaranteed to see that result. It's pretty much the strictest level of consistency, but it's also quite expensive and slow. So MongoDB does provide this, but it requires a lot of machination behind the scenes. So don't use it unless you need to. But if you do need it for something like if you're updating users password, where you want to make sure that you're going to be able to update your password.
+
+00:52:28.720 --> 00:52:38.720
+Speaker 1: To make sure that every attempt to read that password will always get the freshest copy, then linearizability is the consistency level to use.
+
+00:52:38.720 --> 00:52:57.720
+Speaker 1: Excellent. Yeah, they all sound pretty straightforward, but the consequences of choosing these different levels and then what that means for how you write code around those systems is pretty complex. And it also just this whole conversation has made me appreciate how much databases serve as the actual conclusion.
+
+00:52:57.720 --> 00:53:01.720
+Speaker 1: Concurrency coordinators of modern applications.
+
+00:53:01.720 --> 00:53:01.720
+Speaker 1: That is a great point.
+
+00:53:01.720 --> 00:53:02.720
+Speaker 1: Yeah.
+
+00:53:02.720 --> 00:53:16.720
+Speaker 1: I mean, you can write web apps or APIs or queues and just kind of almost forget that concurrency is happening and you just talk to the database and how come, you know, how can you forget that? Because it falls upon the database to like keep this stuff hanging together.
+
+00:53:16.720 --> 00:53:17.720
+Speaker 1: Yep.
+
+00:53:17.720 --> 00:53:18.720
+Speaker 1: Cool.
+
+00:53:18.720 --> 00:53:19.720
+Speaker 1: Yeah.
+
+00:53:19.720 --> 00:53:30.720
+Speaker 1: In the show notes or wherever we should drop a link to a blog post that I wrote, which has a link to lots of papers and other places where you can learn more because this is a very hard topic.
+
+00:53:30.720 --> 00:53:56.720
+Speaker 1: To learn, especially from a podcast or a conference talk, you need to read multiple times, maybe make flashcards. But I think this way of talking about things where we think of, okay, isolation is a way of hiding the consequences of concurrency and consistency is a way of hiding the consequences of replication. That was a useful breakthrough for me. And so I hope it's useful for other people too.
+
+00:53:56.720 --> 00:54:05.720
+Speaker 1: Yeah, I'm sure it will be. And I'll definitely link this article in the show notes along with the consistency diagrams and all the other things.
+
+00:54:05.720 --> 00:54:06.720
+Speaker 1: Great.
+
+00:54:06.720 --> 00:54:10.720
+Speaker 1: Yeah, cool. All right, Jesse, thank you for being here. It's been really great to have you back on the show.
+
+00:54:10.720 --> 00:54:11.720
+Speaker 1: Thanks a lot, Michael.
+
+00:54:11.720 --> 00:54:20.720
+Speaker 1: This has been another episode of Talk Python to Me. Thank you to our sponsors. Be sure to check out what they're offering. It really helps support the show.
+
+00:54:20.720 --> 00:54:37.720
+Speaker 1: Take some stress out of your life. Get notified immediately about errors and performance issues in your web or mobile applications with Sentry. Just visit talkpython.fm/sentry and get started for free. And be sure to use the promo code talkpython, all one word.
+
+00:54:37.720 --> 00:54:50.720
+Speaker 1: Influx data encourages you to try InfluxDB. InfluxDB is a database purpose built for handling time series data at a massive scale for real time analytics. Try it for free at talkpython.fm/influxdb.
+
+00:54:50.720 --> 00:55:07.720
+Speaker 1: Want to level up your Python? We have one of the largest catalogs of Python video courses over at talkpython. Our content ranges from true beginners to deeply advanced topics like memory and async. And best of all, there's not a subscription in sight. Check it out for yourself at training.talkpython.fm.
+
+00:55:07.720 --> 00:55:19.720
+Speaker 1: Be sure to subscribe to the show. Open your favorite podcast app and search for Python. We should be right at the top. You can also find the iTunes feed at /itunes, the Google Play feed at /play, and the direct RSS feed at /play.
+
+00:55:19.720 --> 00:55:40.720
+Speaker 1: RSS on talkpython.fm. We're live streaming most of our recordings these days. If you want to be part of the show and have your comments featured on the air, be sure to subscribe to our YouTube channel at talkpython.fm/youtube. This is your host, Michael Kennedy. Thanks so much for listening. I really appreciate it. Now get out there and write some Python code.
+
+00:55:40.720 --> 00:55:41.720
+Speaker 1:
+
+00:55:41.720 --> 00:55:57.740
+I'm out.
+
+00:55:57.740 --> 00:55:58.240
+you
+
+00:55:58.240 --> 00:55:58.740
+you
+
+00:55:58.740 --> 00:55:59.240
+you
+
+00:55:59.240 --> 00:56:01.240
+Thank you.
 

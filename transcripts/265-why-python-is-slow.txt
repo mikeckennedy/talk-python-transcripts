@@ -1,0 +1,2330 @@
+00:00:00 The debate about whether Python is fast or slow is never-ending.
+
+00:00:03 It depends on what you're optimizing for.
+
+00:00:05 CPU server consumption?
+
+00:00:07 Developer time?
+
+00:00:08 Maintainability?
+
+00:00:09 There are many factors.
+
+00:00:11 But if we keep our eye on the pure computational speed in the Python layer,
+
+00:00:15 then yes, Python is slow.
+
+00:00:17 In this episode, we invite Anthony Shaw back on the show.
+
+00:00:21 He's here to dig into the reasons that Python is computationally slower than many of its pure languages and technologies, such as C++ and JavaScript.
+
+00:00:29 This is Talk Python to Me, episode 265, recorded May 19, 2020.
+
+00:00:34 Welcome to Talk Python to Me, a weekly podcast on Python, the language, the libraries, the ecosystem, and the personalities.
+
+00:00:54 This is your host, Michael Kennedy.
+
+00:00:56 Follow me on Twitter, where I'm @mkennedy.
+
+00:00:58 Keep up with the show and listen to past episodes at talkpython.fm, and follow the show on Twitter via at Talk Python.
+
+00:01:04 This episode is sponsored by Brilliant.org and Sentry.
+
+00:01:08 Please check out their offerings during their segments.
+
+00:01:10 It really helps support the show.
+
+00:01:12 Anthony, welcome back to Talk Python.
+
+00:01:15 Hey, Mike.
+
+00:01:15 It's great to be back.
+
+00:01:16 Yeah, it's great to have you back.
+
+00:01:17 You've been on the show a bunch of times.
+
+00:01:19 You've been over on Python Bytes when you're not featured there.
+
+00:01:22 But, you know, people may know you were on episode 168, 10 Python security holes and how to plug them.
+
+00:01:29 That was super fun with one of your colleagues.
+
+00:01:31 And then 214, dive into the CPython 3.8 source code.
+
+00:01:36 Or just what was new in 3.8.
+
+00:01:38 And then a guided tour of the CPython source code, which I think at the time was also 3.8.
+
+00:01:42 And now we're going to look at the internals of Python again.
+
+00:01:45 I feel like you're becoming the Python internals guy.
+
+00:01:48 Yeah.
+
+00:01:48 Well, I don't know.
+
+00:01:50 There's lots of people who know a lot more about it than I do.
+
+00:01:53 But I've been working on this book over the last year on CPython internals, which has been focused on 3.9.
+
+00:02:00 So, yeah, we've got some stuff to talk about.
+
+00:02:03 Yeah, that's awesome.
+
+00:02:04 And your book started out as a realpython.com article, which I'm trying to define a term that describes what some of these look like.
+
+00:02:13 When I think of article, I think of a three to four page thing.
+
+00:02:17 Maybe it's in depth and it's 10 pages.
+
+00:02:19 This is like 109 pages or something as an article, right?
+
+00:02:22 It was like insane.
+
+00:02:23 But it was really awesome and really in depth.
+
+00:02:24 And so you were partway towards a book and you figured like, well, what the heck?
+
+00:02:28 I'll just finish up this walk.
+
+00:02:29 Yeah, I figured I'd pretty much written a book.
+
+00:02:32 So I might as well put it between two covers.
+
+00:02:34 It was actually a lot.
+
+00:02:36 It was actually a lot of work to get it from that stage to where it is now.
+
+00:02:41 So I think the whole thing's pretty much been rewritten.
+
+00:02:43 There's a way that you explain things in an article that people expect, which is very different to the style of a book.
+
+00:02:49 And also there's stuff that I kind of skimmed over in the article.
+
+00:02:53 I think it's actually about three times longer than the original article.
+
+00:02:56 And it's a lot more practical.
+
+00:02:59 So rather than being like a tourist guide to the source code, it's more about like CPython internals and optimizations and practical tools you can learn as more sort of like advanced techniques.
+
+00:03:12 If you use CPython a lot for your day job to either make it more performant or to optimize things or to make it more stable and stuff like that.
+
+00:03:21 Yeah.
+
+00:03:21 It's really interesting because if you want to understand how Python works and you're, say, the world's best Python developer, your Python knowledge is going to help you a little bit.
+
+00:03:31 But not a ton for understanding CPython because that's mostly, well, C code, right?
+
+00:03:36 And so I think this having this guided tour, this book that talks about that is really helpful, especially for taking people who know and love Python, but actually want to get a little deeper and understand the internals or maybe even become a core developer.
+
+00:03:49 Yeah, definitely.
+
+00:03:49 And if you look at some of the stuff we'll talk about this episode, hopefully, like Cython and mypyC and stuff like that, then knowing C or knowing how C and Python work together is also really important.
+
+00:04:02 Yeah, absolutely.
+
+00:04:02 All right.
+
+00:04:03 So looking forward to talking about that.
+
+00:04:05 But just really quickly, you know, give people a sense of what you work on day to day when you're not building extensions for IDEs, writing books and otherwise doing more writing.
+
+00:04:15 Yeah, so I work at NTT and run sort of learning and development and training for the organization.
+
+00:04:22 So I'm involved in, I guess, like what skills we teach our technical people and our sales people and all of our employees, really.
+
+00:04:30 Yeah, that's really cool.
+
+00:04:31 That sounds like a fun place to be.
+
+00:04:32 Yeah, that's a great job.
+
+00:04:33 Yeah, awesome.
+
+00:04:33 All right.
+
+00:04:34 Well, the reason I reached out to you about having you on the show for this specific topic, I always like to have you on the show.
+
+00:04:42 We always have fun conversations, but I saw that you were doing, were you doing multiple or just this PyCon talk?
+
+00:04:50 Just one.
+
+00:04:51 I was accepted for two, but I was supposed to pick one.
+
+00:04:55 I see.
+
+00:04:55 That's right.
+
+00:04:55 That's right.
+
+00:04:56 And then PyCon got canceled.
+
+00:04:57 Yeah.
+
+00:04:59 So I was like, well, let's, you know, talk.
+
+00:05:00 We can talk after PyCon after you give your talk.
+
+00:05:02 It'll be really fun to cover this.
+
+00:05:04 And then, you know, we were supposed to share a beer in Pittsburgh and we're like half a world away.
+
+00:05:12 Didn't happen, did it?
+
+00:05:13 Yeah.
+
+00:05:13 Maybe next year.
+
+00:05:14 Yeah.
+
+00:05:15 Hopefully next year.
+
+00:05:15 Hopefully things are back to up and running because I don't know.
+
+00:05:18 To me, PyCon is kind of like my geek holiday that I get to go on.
+
+00:05:22 I love it.
+
+00:05:22 Yeah.
+
+00:05:23 All right.
+
+00:05:23 Well, so just, I guess, for people listening, you did end up doing that talk in an altered sense,
+
+00:05:30 right?
+
+00:05:30 And they can technically go watch it soon, at least maybe by the time this is out.
+
+00:05:34 Yeah, definitely.
+
+00:05:35 It'll be out tonight.
+
+00:05:36 It's going to be on the YouTube channel, the PyCon 2020 YouTube channel.
+
+00:05:41 The organizers reached out to all the speakers and said, if you want to record your talk and
+
+00:05:46 submit it from home, then you can still do that and put them all up on YouTube.
+
+00:05:50 I think that's great.
+
+00:05:51 You know, and there's also a little bit more over PyCon online.
+
+00:05:54 One thing I think is really valuable for people right now is they have the job fair, kind of,
+
+00:06:00 right?
+
+00:06:01 There's a lot of job listings for folks who are looking to get in jobs.
+
+00:06:05 Have you seen the PSF JetBrains survey that came out?
+
+00:06:08 Yes.
+
+00:06:09 In the 2019, it came out just like a few days ago.
+
+00:06:11 Really interesting stuff, right?
+
+00:06:13 Like a lot of cool things in there.
+
+00:06:14 Yeah, definitely.
+
+00:06:15 Yeah.
+
+00:06:15 I love that.
+
+00:06:16 That and the Stack Overflow developer survey.
+
+00:06:18 Those are the two that really, I think, have the pulse correctly taken.
+
+00:06:22 One of the things that was in there I thought was interesting is more than any other category
+
+00:06:27 of people, they said, how long have you been coding?
+
+00:06:30 I don't know if it was in Python or just how long have you been coding, but it was different,
+
+00:06:36 you know, one to three years, three to five, five to 10, 10 to 15.
+
+00:06:41 And then people like me forever, long time, you know, like 20 plus or something.
+
+00:06:45 The biggest bar of all those categories, the biggest group was the one to three years.
+
+00:06:51 Yeah.
+
+00:06:52 Right.
+
+00:06:52 Like by 29% of the people said, I've only been coding three years or fewer.
+
+00:06:56 And I think that that's really interesting.
+
+00:06:58 So I think things like that job board and stuff are probably super valuable for folks just getting
+
+00:07:02 into things.
+
+00:07:03 Definitely.
+
+00:07:03 Yeah.
+
+00:07:03 So really good that they're putting that up and people will be able to check out your
+
+00:07:07 talk.
+
+00:07:07 I'll put a link to it in the show notes, of course, but they can just go to the PyCon 2020
+
+00:07:11 YouTube channel and check it out there.
+
+00:07:13 Yeah.
+
+00:07:13 And check out the other talks as well.
+
+00:07:15 There's some really good ones up already.
+
+00:07:16 The nice thing about this year's virtual PyCon is you can watch talks from your couch.
+
+00:07:20 That's right.
+
+00:07:22 You don't even have to get dressed to go to PyCon.
+
+00:07:25 Just do it in your PJs.
+
+00:07:26 That's right.
+
+00:07:27 It's so much more comfortable than the conference chairs.
+
+00:07:31 That's true.
+
+00:07:31 That's for sure.
+
+00:07:32 Yeah.
+
+00:07:33 Very cool.
+
+00:07:33 I'm definitely looking forward to checking out more of the talks as well.
+
+00:07:35 I've already watched a few.
+
+00:07:36 I wanted to set the stage for our conversation here by defining slow because I think slow is
+
+00:07:44 in the eye of the beholder, just like beauty, right?
+
+00:07:46 Like sometimes slow doesn't matter.
+
+00:07:50 Sometimes computational speed might be slow, but some other factor might be quick.
+
+00:07:57 So I'll let you take a shot at it, then I'll throw in my two cents as well.
+
+00:08:00 Like let's like, what do you mean when you say, why is Python slow?
+
+00:08:04 So when I say, why is Python slow?
+
+00:08:06 The question is, why is it slower than other languages doing exactly the same thing and have
+
+00:08:14 picked on an error?
+
+00:08:15 Right.
+
+00:08:15 So if I had an algorithm that I implemented, say in C, a JavaScript on top of Node and Python,
+
+00:08:20 it might be much slower in Python.
+
+00:08:23 Wall time, like execution time.
+
+00:08:25 Yeah.
+
+00:08:26 Execution time might be much slower in Python than it is in other languages.
+
+00:08:29 And that matters sometimes.
+
+00:08:31 And sometimes it doesn't matter as much.
+
+00:08:34 It depends what you're doing, right?
+
+00:08:35 If you're doing like a DevOps-y thing and you're trying to orchestrate calling into Linux, well,
+
+00:08:40 who cares how fast Python goes?
+
+00:08:42 Probably like the startup time is the most important of all of them.
+
+00:08:45 If you're modeling stuff and you're trying to do the mathematical bits, anything computational,
+
+00:08:51 and you're doing that in Python, then it really might matter to you.
+
+00:08:54 Yeah.
+
+00:08:55 So it was kind of like a question, if we can find out the answer, maybe there's a solution
+
+00:09:00 to it.
+
+00:09:00 Yeah.
+
+00:09:01 Because, you know, you hear this thrown around.
+
+00:09:02 People say Python's too slow and I use this other language because it's faster.
+
+00:09:06 And so I just wanted to understand, like, what is the actual reason why Python is slower
+
+00:09:12 at doing certain things than other languages?
+
+00:09:14 And is there a reason that can be resolved?
+
+00:09:18 Or is it just that's just how it is as part of the design?
+
+00:09:22 Fundamentally, it's going to be that way.
+
+00:09:23 Yeah.
+
+00:09:24 I don't think it is.
+
+00:09:25 I think...
+
+00:09:26 You don't think it's slow?
+
+00:09:27 No, I don't think it's fundamentally has to be that way.
+
+00:09:30 I agree with you.
+
+00:09:31 I think in the research as well, it uncovered it doesn't fundamentally have to be that way.
+
+00:09:36 And in lots of cases, it isn't that way either.
+
+00:09:38 Like there's ways to get around the slowdown, like the causes of slowdown.
+
+00:09:44 And if you understand in what situations Python can be slow, then you can kind of like bypass
+
+00:09:51 those.
+
+00:09:51 Right.
+
+00:09:52 So let me tell a really interesting story that comes from Michael Driscoll's book, Python
+
+00:09:57 Interviews.
+
+00:09:58 So over there, he interviewed, I think it was Alex.
+
+00:10:02 Yeah, Alex Martelli.
+
+00:10:03 And they talked about the history of YouTube, right?
+
+00:10:07 YouTube's built on Python.
+
+00:10:09 And why is that the case?
+
+00:10:11 Originally, there was Google Video, which had hundreds of engineers writing, implementing
+
+00:10:18 Google Video, which is going to be basically YouTube.
+
+00:10:21 But YouTube was also a startup around the same time, right?
+
+00:10:24 And they were kind of competing for features and users and whatnot.
+
+00:10:26 And YouTube only had like 20 employees at the time or something like that, whereas Google
+
+00:10:31 had hundreds of super smart engineers.
+
+00:10:34 And Google kept falling behind farther and farther and not be able to implement the features that
+
+00:10:39 people wanted nearly as quick as YouTube.
+
+00:10:41 YouTube.
+
+00:10:41 And the reason was they were all doing it in C++ and it took a long time to get that written.
+
+00:10:47 And YouTube just ran circles around them with a, you know, more less than a fifth of the
+
+00:10:52 number of people working on it.
+
+00:10:53 So in some sense, like that's a testament of Python speed, right?
+
+00:10:58 But it's not its execution speed.
+
+00:11:00 It's like the larger view of speed, which is why I really wanted to find like what computational
+
+00:11:04 speed is.
+
+00:11:05 Another sense where it may or may not matter is like where you're doing stuff that waits,
+
+00:11:10 right?
+
+00:11:10 Somewhere where asyncio would be a really good option, right?
+
+00:11:13 I'm talking to Redis.
+
+00:11:14 I'm talking to this database.
+
+00:11:15 I'm calling this API.
+
+00:11:16 Like if 95% of your time is waiting on a network response, it probably doesn't matter, right?
+
+00:11:21 As long as you're using some sort of async or something.
+
+00:11:24 But then there's that other part where it's like I have on my computer, I've got six hyperthreaded
+
+00:11:30 cores.
+
+00:11:30 Why can I only use one twelfth of my computational power on my computer if I still write C code,
+
+00:11:36 right?
+
+00:11:37 So there's these other places where it super matters.
+
+00:11:39 Or I just, like you said, there's this great example that we're going to talk about the
+
+00:11:43 in-body problem, modeling like planets and how they interact with each other.
+
+00:11:48 And I mean, just like to set the stage, what was the number for C versus Python in terms
+
+00:11:53 of time, computation time?
+
+00:11:54 To give people a sense, like why did we care?
+
+00:11:56 Like why is this a big enough deal to worry about?
+
+00:11:58 Is it, what is it like 30% slower?
+
+00:12:00 It's a little bit slower.
+
+00:12:01 Yeah.
+
+00:12:01 It's a, for this algorithm, so this is called the end body problem and it's to do with calculating
+
+00:12:07 the orbits of some of the planets in the solar system.
+
+00:12:10 And you just do a lot, a really simple arithmetic operations.
+
+00:12:15 So just adding numbers, but again and again and again.
+
+00:12:17 So millions of times.
+
+00:12:18 Lots of loops, lots of math.
+
+00:12:20 Lots of math, lots of looping.
+
+00:12:22 And in C, this implementation is seven seconds to complete.
+
+00:12:27 And in Python, it's 14 minutes.
+
+00:12:29 That might be a difference that you're needing to optimize away.
+
+00:12:32 That could be too much, right?
+
+00:12:34 Yeah.
+
+00:12:34 I mean, everyone is calculating the orbits of planets as part of their day job.
+
+00:12:38 So yeah.
+
+00:12:39 You know, I honestly, I haven't really done that for at least two weeks.
+
+00:12:44 No, but I mean, it's, it's fundamentally like I'm thinking about like, this is, I think this
+
+00:12:48 undercovers one of the real Achilles heels of Python in that doing math in tight loops is really not super great in pure Python.
+
+00:13:00 Right.
+
+00:13:01 Whether that's planets, whether that's financial calculations or something else.
+
+00:13:05 Right.
+
+00:13:05 But numbers are very flexible, but that makes them inefficient.
+
+00:13:08 Right.
+
+00:13:09 Python is interpreted, which has a lot of benefits, but also can make it much slower as well.
+
+00:13:15 Right.
+
+00:13:15 Yeah.
+
+00:13:16 So I think looking at this particular problem, because I thought it would be a good example,
+
+00:13:20 it shines a bit of a spotlight on one of CPython's weaknesses when it comes to performance.
+
+00:13:26 But in terms of like the loop, the only times you would be doing like a small loop and doing
+
+00:13:31 the same thing over and over again is if you're doing like math work, doing like number crunching,
+
+00:13:37 or if you're doing benchmarks, that's like one of the other reasons.
+
+00:13:41 So like the way that a lot of benchmarks designed to do like computational benchmarks anyway,
+
+00:13:47 is to do the same operation again and again.
+
+00:13:49 So if there is an overhead or a slowdown, then it's magnified to the point where you can see
+
+00:13:55 it a lot bigger.
+
+00:13:55 Yeah, for sure.
+
+00:13:56 I guess one thing to put out there before people run code, it doesn't go as fast as they'd hoped.
+
+00:14:04 So they say that Python is slow, right?
+
+00:14:07 Assuming the code they originally ran was Python like that.
+
+00:14:09 That would be a requirement, I guess, is you probably should profile it.
+
+00:14:13 You should understand what your code is doing and where it's slow.
+
+00:14:17 Like, for example, if you're doing lookups, but your data structure is a list instead of
+
+00:14:21 a dictionary, right?
+
+00:14:23 You could make that a hundred times faster just by switching a date because you're just doing
+
+00:14:26 the wrong type of data structure, the wrong algorithm.
+
+00:14:29 It could be just that you're doing it wrong, right?
+
+00:14:32 So I guess before people worry about like, is it executing too slowly?
+
+00:14:37 Maybe you should make sure that it's executing the right thing.
+
+00:14:40 Yeah, and it's unlikely that your application is running a very small operation, which is
+
+00:14:47 this benchmark again and again, like millions of times in a loop.
+
+00:14:50 And if you are doing that, there's probably other tools you could use and there's other
+
+00:14:55 implementations you can do in Python.
+
+00:14:59 This portion of Talk Python to Me is brought to you by Brilliant.org.
+
+00:15:03 Brilliant's mission is to help people achieve their learning goals.
+
+00:15:06 So whether you're a student, a professional brushing up or learning cutting edge topics,
+
+00:15:10 or someone who just wants to understand the world better, you should check out Brilliant.
+
+00:15:14 Set a goal to improve yourself a little bit every day.
+
+00:15:17 Brilliant makes it easy with interactive explorations and a mobile app that you can use on the go.
+
+00:15:22 If you're naturally curious, want to build your problem solving skills, or need to develop
+
+00:15:26 confidence in your analytical abilities, then get Brilliant Premium to learn something new
+
+00:15:31 every day.
+
+00:15:32 Brilliant's thought-provoking math, science, and computer science content helps guide you
+
+00:15:37 to mastery by taking complex concepts and breaking them into bite-sized, understandable chunks.
+
+00:15:42 So get started at talkpython.fm/brilliant, or just click the link in your show notes.
+
+00:15:50 Another benchmark I covered in the talk was the regular expression benchmark,
+
+00:15:54 which Python is actually really good at.
+
+00:15:57 So this is like the opposite to this particular benchmark.
+
+00:16:01 So just saying that Python is slow isn't really a fair statement, because, and we'll kind of talk about this in a minute,
+
+00:16:07 but like for other benchmarks, Python does really well.
+
+00:16:11 So its string implementation is really performant.
+
+00:16:14 And when you're working with text-based data, Python's actually a great platform to use, a great language to use.
+
+00:16:20 The CPython compilers is pretty efficient at dealing with text data.
+
+00:16:25 And if you're working on web applications or data processing, chances are you're dealing with text data.
+
+00:16:32 Yeah, that's a good example.
+
+00:16:33 Like the websites that I have, like the Talk Python training site, and the various podcast sites and stuff,
+
+00:16:39 they're all in Python with no special, incredible optimizations, other than like databases with indexes and stuff like that.
+
+00:16:46 And, you know, the response times are like 10, 30 milliseconds.
+
+00:16:51 There's no problem.
+
+00:16:52 Like it's fantastic.
+
+00:16:53 It's really, really good.
+
+00:16:54 But there are those situations like this in-body problem or other ones where it matters.
+
+00:17:01 I don't know if it's fair or not to compare it against C, right?
+
+00:17:04 C is really, really low level, at least from today's perspective.
+
+00:17:10 It used to be a high level language, but now I see it as a low level language.
+
+00:17:13 If you do a malloc and free and, you know, the address of this thing, right,
+
+00:17:17 that feels pretty low level to me.
+
+00:17:19 So maybe it's unfair.
+
+00:17:21 I mean, you could probably get something pretty fast in assembly, but I would never choose to use assembly code these days
+
+00:17:27 because it's just like I want to get stuff done and maintain it and be able to have other people understand what I'm doing.
+
+00:17:31 But, you know, kind of a reasonable comparison, I think, would be Node.js and JavaScript.
+
+00:17:38 And you made some really interesting compare and contrast between those two environments
+
+00:17:43 because they seem like, well, like, okay, Python, at least it has some C in their JavaScript.
+
+00:17:48 Who knows what's going on with that thing, right?
+
+00:17:50 Like, you know, what's the story between those two?
+
+00:17:52 Yeah, you make a fair point, which is, I mean, comparing C and Python isn't really fair.
+
+00:17:56 One is like a strongly typed compiled language.
+
+00:17:59 The other is a dynamically typed interpreted language and they handle memory differently.
+
+00:18:06 Like in C, you have to statically or dynamically allocate memory and CPython is done automatically.
+
+00:18:12 Like it has a garbage collector.
+
+00:18:14 There's so many differences between the two platforms.
+
+00:18:16 And so I think Node.js, which is, so Node.js is probably a closer comparison to Python.
+
+00:18:24 Node.js isn't a language.
+
+00:18:25 It's a kind of like a stack that sits on top of JavaScript that allows you to write JavaScript,
+
+00:18:32 which operates with things that run in the operating system.
+
+00:18:36 So similar to CPython, like CPython has extensions that are written in C that allow you to do things
+
+00:18:43 like connect to the network or, you know, connect to like physical hardware
+
+00:18:49 or talk to the operating system in some way.
+
+00:18:51 Like if you just wrote pure Python and there was no C, you couldn't do that because the operating system APIs
+
+00:18:56 are C headers in most cases.
+
+00:18:59 Right.
+
+00:18:59 Almost all of them are in C somewhere.
+
+00:19:01 Yeah.
+
+00:19:01 Yeah.
+
+00:19:02 And with JavaScript, it's the same thing.
+
+00:19:03 Like if you want to talk to the operating system or do anything other than like working with stuff
+
+00:19:09 that's in the browser, you need something that plugs into the OS.
+
+00:19:12 And Node.js kind of provides that stack.
+
+00:19:15 So when I wanted to compare Python with something, I thought Node was a better comparison
+
+00:19:21 because like JavaScript and Python, in terms of the syntax, they're very different.
+
+00:19:25 But in terms of their capabilities, they're quite similar.
+
+00:19:29 You know, they both have classes and functions and you can use them interchangeably.
+
+00:19:33 They're both kind of like dynamically typed.
+
+00:19:35 The scoping is different and the language is different.
+
+00:19:37 But like in terms of the threading as well, they're quite similar.
+
+00:19:42 Right.
+
+00:19:42 They do feel much more similar.
+
+00:19:44 But there's a huge difference between how they run, at least when run on Google's V8 engine,
+
+00:19:51 which basically is the thing behind Node and whatnot, versus CPython is,
+
+00:19:56 CPython is interpreted and V8 is JIT compiled, just in time compiled.
+
+00:20:02 Yeah, so that's probably one of the biggest differences.
+
+00:20:04 And when I was comparing the two, so I wanted to see, okay, which one is faster?
+
+00:20:10 Like if you gave it the same task and if you gave it the end body problem,
+
+00:20:13 then Node.js is a couple of multiples faster.
+
+00:20:18 I think it was two or three times faster to do the same algorithm.
+
+00:20:23 And for a dynamically typed language, you know, that means that they must have some optimizations,
+
+00:20:28 which make it faster.
+
+00:20:30 I mean, if you're running on the same hardware, then, you know, what is the overhead?
+
+00:20:34 And kind of digging into it, I guess, in a bit more detail.
+
+00:20:39 So JavaScript has this, actually there's multiple JavaScript engines, but kind of the one that Node.js uses
+
+00:20:45 is Google's V8 engine.
+
+00:20:47 So quite cleverly named, which is all written in...
+
+00:20:52 Only would it be better if it were a V12, you know?
+
+00:20:54 Or an inline six.
+
+00:20:56 I think that's a better option.
+
+00:20:57 Yeah, there you go.
+
+00:21:01 So Google's V8 JavaScript engine is written in C++, so maybe that's a fair comparison.
+
+00:21:07 But the optimizing compiler is called TurboFan, and it's a JIT optimizing compiler.
+
+00:21:14 So it's a just-in-time compiler, whereas CPython is an ahead-of-time or an AIT compiler.
+
+00:21:20 And it's JIT optimizer has got some really clever, basically sort of algorithms and logic
+
+00:21:27 that it uses to optimize the performance of the application when it actually runs.
+
+00:21:31 And these can make a significant difference.
+
+00:21:33 Like some of the small optimizations alone can make 30%, 40% increase in speed.
+
+00:21:39 And if you compare even just V8 compared to other JavaScript engines, you can see, like,
+
+00:21:45 what all this engineering can do to make the language faster.
+
+00:21:49 And that's how it got two, three multiples performance increases, was to optimize the JIT
+
+00:21:54 and to understand, like, how people write JavaScript code and the way that it compiles the code
+
+00:22:01 down into operations.
+
+00:22:03 Then basically, like, it can reassemble those operations that are more performant for the CPU
+
+00:22:08 so that when it actually executes them, does it in the most efficient way possible.
+
+00:22:12 Right.
+
+00:22:13 The difference between a JIT and an AOT is that the JIT compiler kind of makes decisions
+
+00:22:18 about the compilation based on the application and based on the environment,
+
+00:22:22 whereas an AOT compiler will compile the application the same and it does it all ahead of time.
+
+00:22:29 Right.
+
+00:22:29 So you probably have a much more coarsely-grained set of optimizations and stuff for an ahead-of-time compiler,
+
+00:22:36 like C++ or something, right?
+
+00:22:38 Like, I've compiled against x86 Intel CPU with, like, the multimedia extensions
+
+00:22:47 or whatever, right?
+
+00:22:48 The scientific computing extensions.
+
+00:22:49 But other than that, I make no assumptions, whether it's multi-core, highly multi-core,
+
+00:22:54 what its L2 cache is, none of that stuff, right?
+
+00:22:57 It's just, we're going to kind of target modern Intel on macOS and do it on Windows
+
+00:23:04 and compile that.
+
+00:23:05 Yeah.
+
+00:23:05 So modern CPU architectures and modern OSes can really benefit if you've optimized
+
+00:23:12 the instructions that you're giving them to benefit, like, the caches that they have
+
+00:23:17 or the cycles that they've set up and the sort of the turbo fan optimizer
+
+00:23:22 for the VA engine takes a lot of advantage of those things.
+
+00:23:25 Yeah.
+
+00:23:25 That seems really powerful.
+
+00:23:27 I guess we should step back and talk a little bit about how CPython runs,
+
+00:23:32 but being an interpreter, it can only optimize so much.
+
+00:23:37 It's got all of its byte codes and it's going to go through its byte codes
+
+00:23:41 and execute them, but saying, like, well, these five byte codes, we could actually turn that
+
+00:23:45 into an inline thing over here and I see this actually has no effect on what's loaded on the stack,
+
+00:23:51 so we're not going to, like, push the item.
+
+00:23:53 I mean, it seems like it doesn't operate optimizing, tell me if I'm wrong,
+
+00:23:57 if it doesn't optimize, like, across lots of byte codes as it's thinking about it.
+
+00:24:04 Yeah, so what CPython will do when it compiles your code, and it's also worth pointing out
+
+00:24:08 that when you run your code for the first time, it will compile it, but when you run it again,
+
+00:24:14 it will use the cached version, so...
+
+00:24:16 Right, if you ever see the dunder pycache with .pyc files, that's, like,
+
+00:24:21 three of the four steps of getting your code ready to run saved and done
+
+00:24:25 and never done again.
+
+00:24:26 Yeah, so that's, like, the compiled version.
+
+00:24:28 So it's not...
+
+00:24:29 If Python is slow to compile code, it doesn't really matter unless your code
+
+00:24:33 is somehow changing every time it gets run, which I'd be worried about.
+
+00:24:37 You have bigger problems.
+
+00:24:38 Yeah, exactly.
+
+00:24:39 So the benefits, I guess, of an AOT compiler is that you compile things ahead of time
+
+00:24:45 and then when they execute, they should be efficient.
+
+00:24:47 So CPython's compiler will kind of take your code, which is, like, a text file,
+
+00:24:53 typically.
+
+00:24:53 It'll look at the syntax.
+
+00:24:55 It will parse that into an abstract syntax tree, which is a sort of representation of functions
+
+00:25:02 and classes and statements and variables and operations and all that kind of stuff.
+
+00:25:08 your code, your file, your module, basically, becomes like a tree and then what it does
+
+00:25:13 is it then compiles that tree by walking through each of the branches and walking through
+
+00:25:19 and understanding what the nodes are and then there is a compilation.
+
+00:25:23 Basically, like, in the CPython compiler, there's a function for each type of thing
+
+00:25:28 in Python.
+
+00:25:28 so there's a compile binary operation or there's a compile class function
+
+00:25:34 and a compile class will take a node from the AST, which has got your class in it
+
+00:25:39 and it will then go through and say, okay, what properties, what methods does it have
+
+00:25:44 and it will then go and compile the methods and then inside a method it will go and compile the statements.
+
+00:25:48 So, like, once you break down the compiler into smaller pieces, it's not that complicated
+
+00:25:53 and what a compiler will do is it will spit out so compiled basic frame blocks
+
+00:25:59 they're called and then they get assembled into bytecode.
+
+00:26:03 So, after the compiler stage, there is an assembler stage which basically figures out
+
+00:26:08 in which sequence should the code be executed, you know, which basically,
+
+00:26:13 like, what will the control flow be between the different parts of code,
+
+00:26:17 the different frames.
+
+00:26:18 In reality, like, they get executed in different orders because they depend on input
+
+00:26:23 whether or not you call this particular function but still, like, if you've got a for loop,
+
+00:26:27 then it's still got to go inside the for loop and then back to the top again.
+
+00:26:31 Like, that logic is, like, hard-coded into the for loop.
+
+00:26:34 Right.
+
+00:26:35 You know, as you're talking, I'm wondering if, you know, minor extensions
+
+00:26:39 to the language might let you do higher-level optimizations.
+
+00:26:43 Like, say, like, having a frozen class that you're saying I'm not going to add any fields to
+
+00:26:49 or, like, an inline on a function, like, I only, or make it a function internal
+
+00:26:54 to a class in which it could be inlined, potentially, because, you know,
+
+00:26:58 no one's going to be able to, like, look at it from the outside of this code and stuff.
+
+00:27:02 What do you think?
+
+00:27:03 There is an optimizer in the compiler called the peephole optimizer.
+
+00:27:07 And when it's compiling, I think it's actually it's after the compilation stage,
+
+00:27:12 I think, it goes through and it looks at the code that's been compiled and if it can make some
+
+00:27:18 decisions about either, like, dead code that can be removed or branches which can be simplified,
+
+00:27:25 then it can basically optimize that.
+
+00:27:27 And that will make some improvement, like, it will optimize your code slightly.
+
+00:27:31 Right.
+
+00:27:32 But then once it's done, basically, your Python application has been compiled down
+
+00:27:36 into this, like, assembly language called bytecode, which is the, like, the actual individual operations
+
+00:27:42 and then they're executed in sequence.
+
+00:27:45 They're split up into small pieces, they're split up into frames, but they're executed
+
+00:27:50 in sequence.
+
+00:27:50 Right.
+
+00:27:51 And if you look at the C source code, dive into there, there's a C eval.c file
+
+00:27:56 and it has, like, the world's largest while loop with a switch statement
+
+00:28:01 in it, right?
+
+00:28:02 Yeah.
+
+00:28:02 So this is, like, the kind of the brain of CPython.
+
+00:28:06 Oh, maybe it's not the brain, but it's the bit that, like, goes through each
+
+00:28:10 of the operations and says, okay, if it's this operation, do this thing,
+
+00:28:13 if it's that one, do this thing.
+
+00:28:14 This is all compiled in C, so it's fairly fast, but it will basically sit and run the loop.
+
+00:28:20 So when you actually run your code, it takes the assembled bytecode and then for each
+
+00:28:26 bytecode operation, it will then do something.
+
+00:28:29 So, for example, there's a bytecode for add an item to a list.
+
+00:28:33 So it knows that it will make a value off the stack and it will put that
+
+00:28:37 into the list or this one which calls a function.
+
+00:28:40 So, if the bytecode is call function, then it knows to figure out how to
+
+00:28:44 call that function in C.
+
+00:28:46 Right.
+
+00:28:46 Maybe it's loaded a few things on the stack, it's going to call it, do it just get sucked along,
+
+00:28:51 something like that.
+
+00:28:51 And so I guess one of the interesting things, and you were talking about an interesting
+
+00:28:56 analogy about this, sort of when Python can be slow versus a little bit less slow,
+
+00:29:02 it's the overhead of like going through that loop, figuring out what to do,
+
+00:29:06 like preparing stuff before you call the CPython's thing, right?
+
+00:29:10 Like list.sort, it could be super fast even for a huge list because it's just going
+
+00:29:15 to this underlying C object and say, in C, go do your sort.
+
+00:29:18 But if you're doing a bunch of small steps, like the overhead of the next step
+
+00:29:24 can be a lot higher.
+
+00:29:26 in the nbody problem, the step that it has to do, the operation it has to do,
+
+00:29:30 will be add number A to number B, which on a decent CPU, I mean, this is like nanoseconds
+
+00:29:36 in terms of time it takes to execute.
+
+00:29:39 So if it's basically, if the operation that it's doing is really tiny, then after doing
+
+00:29:46 that operation, it's got to go all the way back up to the top of the loop again,
+
+00:29:49 look at the next barcode operation, and then go and run this, you know, call this thing,
+
+00:29:56 which runs the operation, which takes again like nanoseconds to finish, and then it goes
+
+00:30:00 all the way back around again.
+
+00:30:01 So I guess the analogy I was trying to think of with the nbody problem is,
+
+00:30:05 you know, if you were a plumber and you got called out to do a load of jobs
+
+00:30:10 in a week, but every single job was, can you change this one washer on a tap for me,
+
+00:30:16 which takes you like two minutes to finish, but you get a hundred of those jobs
+
+00:30:21 in a day, you're going to spend most of your day just driving around and not actually doing
+
+00:30:25 any plumbing.
+
+00:30:26 You're going to be driving from house to house and then doing these like two
+
+00:30:30 minute jobs and then driving on to the next job.
+
+00:30:33 So I think the nbody problem, that's kind of an example of that is that the evaluation
+
+00:30:39 loop can't make decisions, like it can't say, oh, if I'm going to do the same operation
+
+00:30:43 again and again and again, instead of going around the loop each time, maybe I should just
+
+00:30:49 call that operation the number of times that I need to.
+
+00:30:53 and those are the kind of optimizations that a JIT would do because it kind of
+
+00:30:56 changes the compilation order in sequence.
+
+00:30:59 So that's, I guess like we could talk about there are JITs available for
+
+00:31:03 Python.
+
+00:31:04 Yes.
+
+00:31:05 CPython doesn't have, CPython doesn't use a JIT, but for things like the
+
+00:31:10 nbody problem, instead of the, you know, the plumber driving to every house and doing
+
+00:31:15 this two minute job, why can't somebody actually just go and, why can't everyone
+
+00:31:20 just send their tap to like the factory and he just sits in the factory all day
+
+00:31:24 replacing the washers.
+
+00:31:26 Like Netflix of taps or something, yeah.
+
+00:31:28 Back when they sent out DVDs.
+
+00:31:31 Maybe I was stretching the analogy a bit, but, you know, basically like you can
+
+00:31:35 make optimizations if you know you're going to do the same job again and again
+
+00:31:39 and again, or maybe like he just brings all the washers with him instead of driving
+
+00:31:44 back to the warehouse each time.
+
+00:31:45 So, like there's optimizations you can make if you know what's coming.
+
+00:31:49 But because the CPython application was compiled ahead of time, it doesn't know
+
+00:31:54 what's coming.
+
+00:31:55 There are some opcodes that are coupled together, but there's only a few
+
+00:32:00 like which ones they are off the top of my head, but there's only a couple and it doesn't
+
+00:32:04 really add a huge performance increase.
+
+00:32:05 Yeah, there have been some improvements around like bound method execution time and
+
+00:32:10 methods without keyword arguments or some something along those lines that got quite a
+
+00:32:14 bit faster.
+
+00:32:14 But that's still just like how can we make this operation faster?
+
+00:32:18 Not how can we say like, you know what, we don't need a function, let's inline that.
+
+00:32:21 It's called in one place once, just inline it, right?
+
+00:32:23 Things like that.
+
+00:32:24 This portion of Talk Python to me is brought to you by Sentry.
+
+00:32:29 How would you like to remove a little stress from your life?
+
+00:32:32 Do you worry that users may be having difficulties or are encountering errors
+
+00:32:36 with your app right now?
+
+00:32:37 Would you even know it until they send that support email?
+
+00:32:40 How much better would it be to have the error details immediately sent to you,
+
+00:32:44 including the call stack and values of local variables, as well as the active user stored in
+
+00:32:50 the report?
+
+00:32:51 With Sentry, this is not only possible, it's simple and free.
+
+00:32:54 In fact, we use Sentry on all the Talk Python web properties.
+
+00:32:58 We've actually fixed a bug triggered by our user and had the upgrade ready to roll
+
+00:33:03 out as we got the support email.
+
+00:33:04 That was a great email to write back.
+
+00:33:06 We saw your error and have already rolled out the fix.
+
+00:33:09 Imagine their surprise.
+
+00:33:10 Surprise and delight your users today.
+
+00:33:12 Create your free account at talkpython.fm/sentry and track up to 5,000
+
+00:33:18 errors a month across multiple projects for free.
+
+00:33:20 So you did say there were some.
+
+00:33:23 There was Pigeon, there's PyPy, there's Unladen Swallow, there's some other options as
+
+00:33:33 well, but those are the JITs that are coming to mind.
+
+00:33:35 Piston, all of those were attempts and I have not heard anything about any of them for a
+
+00:33:39 year, so that's probably not a super sign for their adoption.
+
+00:33:43 Yeah, so the ones I kind of picked on because I think they've got a lot of promise
+
+00:33:46 and kind of show a big performance improvement is PyPy, which shouldn't be new.
+
+00:33:52 I mean, it's a popular project, but PyPy uses a...
+
+00:33:55 PY, PY, because some people say like Python package inject, they also call it PyPy, but
+
+00:34:00 that's a totally different thing.
+
+00:34:01 Yeah, so PyPy...
+
+00:34:02 Just for listeners who aren't sure.
+
+00:34:03 PyPy kind of helped solve the argument for my talk actually, because if Python is slow, then
+
+00:34:10 writing a Python compiler in Python should be like really, really slow.
+
+00:34:14 But actually, PyPy, which is a Python compiler written in Python, in problems like the n-body
+
+00:34:21 problem, where you're doing the same thing again and again, it's actually really good at
+
+00:34:26 it.
+
+00:34:26 Like, it's significantly...
+
+00:34:28 It's 700-something percent faster than CPython at doing the same algorithm.
+
+00:34:33 Like, if you copy and paste the same code and run it in PyPy versus CPython, yeah, it will
+
+00:34:40 run over seven times faster in PyPy, and PyPy is written in Python.
+
+00:34:44 So it's an alternative Python interpreter that's written purely in Python.
+
+00:34:49 But it has a JIT compiler.
+
+00:34:51 That's probably the big difference.
+
+00:34:52 Yeah.
+
+00:34:52 As far as I understand it, PyPy is kind of like a half JIT compiler.
+
+00:34:57 It's not like a full JIT compiler like, say, C Sharp or Java, in that it
+
+00:35:02 will, like, run on CPython and then, like, decide to JIT compile the stuff that's run a lot.
+
+00:35:08 I feel like that's the case.
+
+00:35:09 PyPy is a pure JIT compiler, and then number is a, you can basically choose to JIT
+
+00:35:16 certain parts of your code.
+
+00:35:17 So with number, you can use a, actually, a decorator, and you can stick it on.
+
+00:35:22 An at JIT.
+
+00:35:23 Yeah, it literally is that.
+
+00:35:25 You can do an at JIT on a function, and it will JIT compile that function for
+
+00:35:30 you.
+
+00:35:30 So if there's a piece of your code which would work better if it were JITed, like it would be
+
+00:35:35 faster, then you can just stick a JIT decorator on that using the number
+
+00:35:40 package.
+
+00:35:41 Yeah, that's really cool.
+
+00:35:42 Do you have to, how do you run it?
+
+00:35:44 I've got some function within a larger Python program, and I put an at JIT on it.
+
+00:35:48 Like, how do I make it actually JIT that and, like, execute?
+
+00:35:52 Can I still type Python space, I think, or what happens?
+
+00:35:56 I don't know.
+
+00:35:56 Do you know?
+
+00:35:57 Yeah, I'm just wondering, like, it probably is the library that, as it pulls
+
+00:36:02 in what it's going to give you back, you know, the wrapper, the decorator, the
+
+00:36:05 function, it probably does JIT.
+
+00:36:07 So interesting.
+
+00:36:07 I think that's a really good option.
+
+00:36:09 Of all the options, honestly, I haven't done anything with Numba, but it looks like probably the
+
+00:36:13 best option.
+
+00:36:13 It sounds a little bit similar to Cython, but Cython's kind of the upfront style, right?
+
+00:36:20 Like, we're going to pre-compile this Python code to see, whereas Numba, it sounds more, a
+
+00:36:25 little more runtime.
+
+00:36:26 Yeah, so Cython is not really a JIT or a JIT optimizer.
+
+00:36:31 It's a way of decorating your Python code with type annotations and using, like, a sort of
+
+00:36:40 slightly different syntax to say, oh, this variable is this type, and then Cython will
+
+00:36:47 actually compile that into a C extension module, and then you run it from CPython.
+
+00:36:51 So it basically, like, compiles your Python into C and then loads it as a
+
+00:36:57 C extension module, which can make a massive performance improvement.
+
+00:37:01 Yeah, so you've got to run a, like, a set of py build command to generate the libraries, the
+
+00:37:07 .o files, or whatever the platform generates, and then those get loaded in.
+
+00:37:13 Even if you change the Python code that was their source, you've got to recompile them, or it's
+
+00:37:18 just still the same old compiled stuff, same old binaries, yeah.
+
+00:37:21 You can automate that so you don't have to type it by hand, but I think Cython is a really good
+
+00:37:26 solution for speeding it up.
+
+00:37:28 But as I kind of pointed out in my talk, it doesn't answer the question of why Python is
+
+00:37:32 slow.
+
+00:37:33 It says, well, Python can be faster if you do C instead.
+
+00:37:37 Yeah.
+
+00:37:37 One thing I do like about Cython these days is they've adopted the type hints,
+
+00:37:42 type annotation format.
+
+00:37:44 So if you have, what is that, Python 3, 4, or later type annotations, you
+
+00:37:51 got to be explicit on everything.
+
+00:37:53 But if you have those, that's all you have to do to turn it into like official Cython, which is
+
+00:38:00 nice because it used to be you'd have to have like a C type or Cython type dot
+
+00:38:04 int rather than a, you know, colon int or something funky like that.
+
+00:38:08 Yeah.
+
+00:38:08 And it's nice that they brought the two things together.
+
+00:38:10 Cython like had type annotations before the language did, I think.
+
+00:38:14 Right.
+
+00:38:14 Yeah.
+
+00:38:15 So they had their own special way.
+
+00:38:16 They had their own special little sub language that was Python-esque, but not
+
+00:38:20 quite.
+
+00:38:20 So I was looking at this nbody problem and I thought, all right, well, I
+
+00:38:24 probably should have played with Numba, but I have a little more experience with
+
+00:38:27 Cython.
+
+00:38:27 So let me just see, like the code is not that hard and I'm going in terms of
+
+00:38:32 like how much code is there or whatever.
+
+00:38:34 Sure.
+
+00:38:34 The math is hard, but the actual execution of it isn't.
+
+00:38:37 So I'll link to the actual Python source code for the nbody problem.
+
+00:38:41 And I ran it.
+
+00:38:42 It has some defaults that are much smaller than the one you're talking about.
+
+00:38:45 So if you run it, just hit run.
+
+00:38:46 It'll run for like two on my machine.
+
+00:38:48 It ran for 213 milliseconds just in pure CPython.
+
+00:38:52 So I said, all right, well, what if I just grab that code and I just plunk it
+
+00:38:56 into a PYC file unchanged.
+
+00:38:59 I didn't change anything.
+
+00:39:00 I just moved it over.
+
+00:39:01 I got it to go into 90 milliseconds, which is like 2.34 times faster.
+
+00:39:06 And then I did the type hints that I told you about.
+
+00:39:09 Because if you don't put the type hints, it'll still run, but it will work at the, the, the
+
+00:39:14 pie object level.
+
+00:39:16 Like, so your numbers are pie object numbers, not, you know, ints and floats down.
+
+00:39:22 So you make it a little bit faster.
+
+00:39:23 So, but I was only able to get it four times faster down to 50 milliseconds.
+
+00:39:26 Either I was doing it wrong or that's just about as that much faster as I
+
+00:39:30 can get it.
+
+00:39:31 I could have been missing some types and it was still doing a little more
+
+00:39:33 CPython interrupt stuff.
+
+00:39:36 But yeah, I don't know.
+
+00:39:37 It's, it's an interesting challenge.
+
+00:39:39 I guess the last thing to talk about, like on this little bit right here is
+
+00:39:42 the, is my PYC.
+
+00:39:44 Yeah.
+
+00:39:44 I didn't know much about my PYC.
+
+00:39:46 I don't know a lot about it either.
+
+00:39:47 So my PY is a type checking library and verification library for the type annotations.
+
+00:39:54 Right.
+
+00:39:54 So if you put these type annotations in there, they don't do anything at runtime.
+
+00:39:57 They're just like there to tell you stuff.
+
+00:39:59 Right.
+
+00:40:00 But things like certain editors can partially check them or my PY can like
+
+00:40:05 follow the entire chain and say this code looks like it's typewise hanging
+
+00:40:09 together.
+
+00:40:10 Not like a pure five levels.
+
+00:40:12 pass an integer and you expect a string.
+
+00:40:14 So it's broken.
+
+00:40:15 Right.
+
+00:40:15 It can check that.
+
+00:40:16 So they added this thing called my PYC, which can take stuff that is annotated in a way that
+
+00:40:22 my PY works with, which is basically type annotations, but more.
+
+00:40:25 And they can compile that to see as well, which they also interestingly got
+
+00:40:30 like a four times speed up with stuff, not in the embody problem, but on my PY.
+
+00:40:34 So I don't know.
+
+00:40:34 It's, there's a lot of options, but as you point out, they are a little bit dodging Python.
+
+00:40:41 The number stuff is cool because I think you don't really write different code.
+
+00:40:45 Do you?
+
+00:40:46 Yeah, it's been more natural.
+
+00:40:47 And I think PYPY, like you're saying you kind of got two to four times improvement by moving
+
+00:40:54 things to Siphon.
+
+00:40:55 And it took a decent amount of work, right?
+
+00:40:56 Because every loop variable had to be declared somewhere else because you can't set the
+
+00:41:00 type or the type annotation inside the loop declaration, right?
+
+00:41:03 Like it wasn't just put a colon in.
+
+00:41:05 I had to do like a decent amount of work to drag out the types.
+
+00:41:08 Yeah.
+
+00:41:08 And whereas PYPY will be a seven times improvement in speed, for that problem.
+
+00:41:13 Yeah.
+
+00:41:14 And there's no C compilation.
+
+00:41:15 Yes.
+
+00:41:16 That's really nice.
+
+00:41:17 That's really nice.
+
+00:41:18 So we talked about JITs and JITs are pretty interesting.
+
+00:41:21 To me, I feel like JITs often go together with garbage collection in the entirely
+
+00:41:28 unmanaged sort of non-deterministic sense of garbage collection, right?
+
+00:41:33 Not reference counting, but sort of the mark and sweep style.
+
+00:41:37 So Python, I mean, maybe we could talk about GC at Python first and then
+
+00:41:41 if there's any way to like change that or advantages there, disadvantages.
+
+00:41:46 From the Instagram story that they saw a performance improvement when they turned off GC.
+
+00:41:52 Yeah, like we're going to solve the memory problem by just letting it leak.
+
+00:41:55 Like literally, we're going to disable garbage collection.
+
+00:41:58 Yeah, I think they got like a 12% improvement or something.
+
+00:42:01 It was significant.
+
+00:42:02 They turned it off and then they just restarted the worker processes every 12 hours
+
+00:42:06 or something like that.
+
+00:42:06 And it wasn't that bad.
+
+00:42:07 The GC itself, like to your, I said there's another problem that I studied
+
+00:42:13 which was the binary tree problem.
+
+00:42:15 And this particular problem will show you the impact of the garbage collector
+
+00:42:22 performance on, like in this particular algorithm, this benchmark, it will show you
+
+00:42:27 how much your GC slows down the program.
+
+00:42:30 And again, I wanted to compare Node with Python because they both have both reference
+
+00:42:35 counting and garbage collection.
+
+00:42:36 So the garbage collector with Node is a bit different in terms of its design,
+
+00:42:42 but both of them are a stop everything garbage collector.
+
+00:42:45 So, you know, CPython has a main thread, basically, and the garbage collector will run
+
+00:42:52 on the main thread and it will run every number of operations.
+
+00:42:55 So, I think the, I can't remember what the default is, it's like 3,000 or
+
+00:42:59 something.
+
+00:42:59 Every 3,000 operations in the first generation where an object has been assigned
+
+00:43:05 or deassigned, then it will run the garbage collector, which goes and inspects every,
+
+00:43:09 every list, every dictionary, every, what other types, like custom objects,
+
+00:43:14 and sees if they have any circular references.
+
+00:43:17 Right, and the reason we need the GC, which does this, is because it's not
+
+00:43:21 even the main memory management system, because if it was, Instagram would not
+
+00:43:26 at all be able to get away with that trick.
+
+00:43:27 Right, this is like a, a final net to catch the stuff that reference counting doesn't
+
+00:43:33 work.
+
+00:43:33 Normally, like if there's some references to an object, once things stop
+
+00:43:37 pointing at it, the last one that goes, it just poof, it disappears.
+
+00:43:41 But the challenge of reference counting garbage collection is if you've got like
+
+00:43:46 some kind of relationship where one thing points at the other, but that thing
+
+00:43:49 also points back to itself, right, like a couple object, right, a person object
+
+00:43:54 with a spouse pointer or something like that, right?
+
+00:43:57 If you're married, you're going to leak.
+
+00:43:58 Yeah, absolutely.
+
+00:43:59 So this is the thing you're talking about, those types of things that's addressing.
+
+00:44:02 And it's kind of designed on the assumption that most objects in CPython
+
+00:44:06 have very short lifespans.
+
+00:44:09 So, you know, they get created and then they get destroyed shortly afterwards.
+
+00:44:13 So like local variables inside functions or, you know, like local variables
+
+00:44:17 inside list comprehensions, for example, like those can be destroyed pretty much
+
+00:44:22 straight away.
+
+00:44:22 But the garbage collective will stop everything running on the main thread
+
+00:44:26 while it's running because it has to because you can't, you know, if it's deleting stuff
+
+00:44:30 and there's something else running at the same time that's expecting that thing
+
+00:44:34 to exist, it's going to cause all sorts of problems.
+
+00:44:36 So yeah, the GC will kind of slow down your application if it gets hit a lot.
+
+00:44:41 And the binary tree problem will basically construct a series of trees and then loop
+
+00:44:47 through them and then delete the nodes and the branches, which kind of triggers
+
+00:44:51 the GC to run a lot.
+
+00:44:53 And then you can compare the performance of the garbage collectors.
+
+00:44:56 So one thing I kind of noted in the design is that they stop everything.
+
+00:45:02 If the time it takes to run the garbage collector could be as short as possible,
+
+00:45:06 then the performance hit of running it is going to be smaller.
+
+00:45:08 And something that Node does is it runs a multi-threaded mark process.
+
+00:45:13 So when it actually goes and looks for circular references, it actually starts
+
+00:45:18 looking before it stops the main thread on different helper threads.
+
+00:45:23 So it starts separate threads and starts the mark process.
+
+00:45:26 And then it still stops everything on the main process, but it's kind of prepared all its
+
+00:45:31 homework ahead of time.
+
+00:45:32 It's already figured out what is garbage before it stops stuff.
+
+00:45:36 And it's like, now we just have to stop what we throw it away and update the pointers and
+
+00:45:41 then you can carry on, right?
+
+00:45:42 Because it's got to, you know, balance the memory and stop allocation and whatnot.
+
+00:45:45 Yeah.
+
+00:45:46 So I think technically that's possible in CPython.
+
+00:45:49 I don't think it has anything to do with the GIL either, like why that couldn't be
+
+00:45:53 done.
+
+00:45:53 You could still do...
+
+00:45:55 Right.
+
+00:45:55 It seems like it totally could be done.
+
+00:45:56 Yeah.
+
+00:45:56 Yeah.
+
+00:45:57 Because marking and finding circular references could be done outside of the gill
+
+00:46:01 because it's a C-level call.
+
+00:46:02 It's not an opcode.
+
+00:46:04 But like I say in the talk, you know, all this stuff that I've listed so far is a lot of
+
+00:46:11 work and it's a lot of engineering work that needs to go into it.
+
+00:46:14 And if you actually look at the CPython compiler, like the CEval, and look
+
+00:46:20 at the number of people who've worked on or contributed to it, it's less than 10
+
+00:46:24 like to the core component.
+
+00:46:27 I wouldn't want to touch it.
+
+00:46:28 I would not want to get in there and be responsible for that part of it.
+
+00:46:31 No way.
+
+00:46:31 Yeah.
+
+00:46:33 And at this stage, they're minor optimizations.
+
+00:46:35 They're not sort of big overhauls because there just isn't the people to do it.
+
+00:46:41 Yeah.
+
+00:46:41 You made a point in your PyCon talk that, you know, the reason that V8 got to be so
+
+00:46:47 optimized so fast is because it's got, you know, tens of millions of dollars of
+
+00:46:51 engineering put against it yearly.
+
+00:46:54 Right?
+
+00:46:55 I mean, it's kind of part of the browser wars.
+
+00:46:58 The new browser wars a bit.
+
+00:47:00 Yeah.
+
+00:47:00 From what I could work out, there's at least 35 permanent developers working on
+
+00:47:05 it.
+
+00:47:05 Just looking at the GitHub project, like if you just see the commit histories, like
+
+00:47:10 nine to five, Monday to Friday, 35 advanced C++ developers hacking away at it.
+
+00:47:16 Right.
+
+00:47:16 If we had that many people continuously working on CPython's like internals and
+
+00:47:22 garbage collection and stuff, we'd have more optimizations or bigger projects that people
+
+00:47:26 will try to take on probably.
+
+00:47:27 Yeah, absolutely.
+
+00:47:27 And the people who work on it at the moment, all of them have day jobs and this
+
+00:47:32 is not typically their day job.
+
+00:47:33 Like they managed, they've convinced their employer to let them do it in their spare time
+
+00:47:38 or, you know, one or two days a week, for example, and they're finding the time to do
+
+00:47:42 it.
+
+00:47:42 And it's a community run project.
+
+00:47:44 it's an open source project.
+
+00:47:45 But I think kind of going back to places where Python could be faster, like these kind
+
+00:47:51 of optimizations in terms of engineering, they're expensive optimizations.
+
+00:47:56 They cost a lot of money because they need a lot of engineering expertise and a lot of
+
+00:48:01 engineering time.
+
+00:48:02 And I think as a project at the moment, we don't really have that luxury.
+
+00:48:06 So it's not really fair of me to complain about it if I'm not contributing to the
+
+00:48:12 solution.
+
+00:48:12 Yeah, but you have a day job as well, right?
+
+00:48:14 But I have a day job and this is not day job.
+
+00:48:16 So yeah, I think there's, I think for what we use Python for most of the
+
+00:48:21 time, it's definitely fast enough.
+
+00:48:23 And in places where it could have optimizations like the ones that we talked about, those
+
+00:48:28 optimizations have drawbacks because, you know, adding a JIT, for example, means that it
+
+00:48:34 uses a lot more memory.
+
+00:48:35 like the Node.js example, the n-body problem, sure, it finishes it faster, but
+
+00:48:40 uses about five times more RAM to do it.
+
+00:48:42 Right.
+
+00:48:43 And PyPy uses more memory, like the JIT compiler, and also the startup time of the
+
+00:48:48 process is typically a lot longer.
+
+00:48:50 If anyone's ever tried to boot Java JVM cold, you know, like the startup time for
+
+00:48:57 JVM is pretty slow.
+
+00:48:58 .NET's the same, like the initial boot time for it to actually get started and warm up
+
+00:49:03 is time consuming.
+
+00:49:05 So you wouldn't use it as a, like a command line tool to write a simple script
+
+00:49:10 that you'd expect to finish in, you know, under 100 milliseconds.
+
+00:49:13 I think that that kind of highlights one of the challenges, right?
+
+00:49:16 It's if you thought your process was just going to start and be a web server or a desktop
+
+00:49:21 application, two seconds start of time is fine, or whatever that number is.
+
+00:49:26 But if it's solving this general problem, yeah, it could be running Flask as
+
+00:49:30 a microservice, or it could be, you know, replacing Bash, right?
+
+00:49:35 Like these are very different constraints and interests, right?
+
+00:49:38 Yeah.
+
+00:49:38 And there aren't really many other languages where there is one sort of language definition and
+
+00:49:44 there are multiple mature implementations of it.
+
+00:49:47 So, you know, with Python, you know, you've got Cython, you've got PyPy, you've got
+
+00:49:53 Numba, you've got LionPython.
+
+00:49:55 I mean, there's like a whole list of, you know, different, Jython, like different implementations
+
+00:50:02 of the language.
+
+00:50:02 And people can choose the, I guess, kind of pick which one is best for the problem that they're
+
+00:50:08 trying to solve, but use the same language across them.
+
+00:50:10 Whereas you don't really have that luxury with others.
+
+00:50:12 You know, if you're writing Java, then you're using JVM.
+
+00:50:15 There are, I mean, there's two implementations.
+
+00:50:17 It's the free one and the licensed one, but like that's pretty much as far as it goes.
+
+00:50:22 That's not exactly the same trade-off.
+
+00:50:25 Yeah.
+
+00:50:25 It's optimizing for money.
+
+00:50:26 That's not optimizing for performers or whatever necessarily.
+
+00:50:30 So one thing that I feel like comes around and around again in this discussion, and I'm
+
+00:50:36 thinking mostly of like PyPy and some of these other attempts people have made to add like
+
+00:50:41 JIT compilation to the language or other changes.
+
+00:50:43 It's always come back, it seems like, to well, it would be great to have these
+
+00:50:49 features.
+
+00:50:49 Oh yeah, but there's this thing called the C API.
+
+00:50:52 And so no, we can't change the GIL.
+
+00:50:54 No, we can't change memory allocation.
+
+00:50:56 No, we can't change any of these other things because of the C API.
+
+00:51:01 And so we're stuck.
+
+00:51:02 Yeah.
+
+00:51:03 I mean, I'm not saying I'm asking you for a solution here.
+
+00:51:07 like, I just, it feels like that is both the real value of Python in that like some of the
+
+00:51:15 reasons that we can still do insanely computational stuff with Python is
+
+00:51:20 because a lot of these libraries where they have these tight loops or these little bits of code
+
+00:51:24 deserialization or matrix multiplication or whatever, they've written that in C
+
+00:51:29 and then ship that as a wheel.
+
+00:51:31 And so now all of a sudden our code is not slow as doing math with Python,
+
+00:51:35 as fast as doing math with C.
+
+00:51:37 Yeah.
+
+00:51:37 I mean, so if you look at a NumPy, for example, if you're doing a lot of
+
+00:51:41 math, then you, you know, you could be using the NumPy library, which is
+
+00:51:45 largely compiled C code.
+
+00:51:47 It's not like you import it from Python and you run it from Python, but the
+
+00:51:51 actual implementation is a C extension.
+
+00:51:54 And that wouldn't be possible if CPython wasn't built in the way it is, which is that it is a
+
+00:52:00 ahead of time extension loader that you can run from Python code.
+
+00:52:04 Yeah.
+
+00:52:05 One project I do want to give a shout out to, I don't know if it's going to
+
+00:52:08 go anywhere.
+
+00:52:08 It's got a decent amount of work on it, but it's only got 185 GitHub stars.
+
+00:52:13 So take that for what it's worth.
+
+00:52:14 This thing called HPY, H-P-Y.
+
+00:52:17 Guido Van Rossum called this out on Python Bytes 179 when he was a guest co-host there.
+
+00:52:24 And it's an attempt to make a new replacement of the C API for Python, where instead of
+
+00:52:33 pass around pointers to objects, you pass basically pointers to pointers, which
+
+00:52:37 means that things that move stuff around like compacting garbage collectors or other
+
+00:52:44 implementations like JITs have a much better chance to change things without directly breaking
+
+00:52:49 the C API.
+
+00:52:50 You can change the value of the pointer pointer without, you know, having to reassign that
+
+00:52:55 down at that layer.
+
+00:52:56 So they specifically call out it's, you know, the current C API makes it hard for things like
+
+00:53:02 PyPy and Grail Python and JITon.
+
+00:53:04 And the goals are to make it easier to experiment with these ideas, more friendly for other
+
+00:53:10 implementations, reference counting, for example, and so on.
+
+00:53:14 So anyway, I don't know that's going anywhere, how much traction it has, but it's interesting
+
+00:53:19 idea.
+
+00:53:20 Yeah, no, I like the idea.
+
+00:53:21 And the C API, like, has come a long way, but it's got its quirks.
+
+00:53:26 I don't know, there's been a lot of discussions, and there's a lot of draft peps as well, you know,
+
+00:53:31 proposing kind of different designs to the C API.
+
+00:53:34 Yeah.
+
+00:53:35 So we're getting kind of short on time.
+
+00:53:36 We've discussed a bunch of stuff.
+
+00:53:38 I guess two other things I'd like to cover real quickly.
+
+00:53:41 One, we've talked about a lot of stuff in terms of computational things, but understanding memory
+
+00:53:48 is also pretty important.
+
+00:53:49 And we did just talk about the GC.
+
+00:53:50 It's pretty easy in Python to just run C profile and ask what my computational time is.
+
+00:53:57 It's less obvious how to understand memory allocation and stuff.
+
+00:54:00 And was it you that recommended Austin to me?
+
+00:54:03 Yeah.
+
+00:54:04 Yeah, so Austin is a super cool profiler, but does both CPU profiling, but also memory
+
+00:54:09 allocation profiling and tracing in Python.
+
+00:54:13 Do you want to tell people about Austin real quick?
+
+00:54:14 Yeah, so Austin is a new profiler written for Python code.
+
+00:54:18 It's a sampling profiler, so it won't, like other profilers, it won't slow your code down
+
+00:54:23 significantly.
+
+00:54:23 It's kind of basically sits on the side, just asking your app, you know, what it's doing as a
+
+00:54:30 sample.
+
+00:54:30 And then it will give you a whole bunch of visuals to let you see, like flame graphs, for example,
+
+00:54:36 like what's being called, what's taking a long time, which functions are chewing up your CPU, like
+
+00:54:42 which ones are causing the bottlenecks and then which ones are consuming a lot of memory.
+
+00:54:46 So if you've got a, you know, a piece of code that is, it is slow, the first thing you should probably
+
+00:54:52 do is just stick it through a profiler and see if there is a reason why, like if there is
+
+00:54:57 something that you could either optimize or, you know, you've accidentally done like a nested
+
+00:55:02 loop or something and Austin would help you do that.
+
+00:55:06 One of the things I thought was super cool about this, like the challenge I have so often with
+
+00:55:10 profilers is the startup of whatever I'm trying to do, it just overwhelms like the little thing I'm
+
+00:55:16 trying to test.
+
+00:55:18 you know, I'm like starting up a web app and initializing database connections and I just want to
+
+00:55:22 request a little bit of some paid and it's not that slow, but you know, it's just, I'm seeing all
+
+00:55:28 this other stuff around and I'm just like, I just want to focus on this one part of it and they've got all
+
+00:55:33 these different user interfaces, like a web user interface in a terminal
+
+00:55:37 user interface.
+
+00:55:38 They call it two, which is cool.
+
+00:55:39 And it gives you like a, like kind of like top or glances or one of these things that tells you right now,
+
+00:55:45 here's what the profile for the last five seconds looks like.
+
+00:55:48 And it gives you the call stack and breakdown of your code right now for
+
+00:55:53 like that five second segment, like updating in real time.
+
+00:55:56 That's super cool.
+
+00:55:56 Yeah.
+
+00:55:57 So if you want to run something and then just see what it's doing or you
+
+00:56:00 want to replay it.
+
+00:56:01 Why is it using a lot of CPU now?
+
+00:56:02 Yeah.
+
+00:56:03 Yeah.
+
+00:56:03 Yeah.
+
+00:56:03 That's, I really like that.
+
+00:56:04 That's super cool.
+
+00:56:05 All right.
+
+00:56:06 Also, you know, concurrency is something that Python has gotten a bad rap for in terms of slowness.
+
+00:56:11 I think with async and await and asyncio, if you're waiting on an external thing, Python can be ultra
+
+00:56:17 fast now, right?
+
+00:56:18 Like it's acing and awaiting waiting on like database calls, web calls with the right drivers, super fast.
+
+00:56:26 But when it comes down to the computational stuff, there's still the GIL and there's really not a
+
+00:56:30 great fix for that.
+
+00:56:32 I mean, there's multiprocessing, but that's got a lot of overhead.
+
+00:56:35 So it's got to make sense, right?
+
+00:56:36 Kind of like your plumber analogy, right?
+
+00:56:38 You can't do like one line function calls in multiprocessing or, you know, like one line computations.
+
+00:56:45 But the work that Eric Snow's doing with subinterpreters looks pretty promising to unlock another layer.
+
+00:56:50 Yeah.
+
+00:56:50 So it's out in the 3.9 alpha.
+
+00:56:53 If you've played with that yet, it's still experimental.
+
+00:56:56 So subinterpreters is somewhere in between multiprocessing and threading in terms of the like the
+
+00:57:03 implementation.
+
+00:57:04 So it will it doesn't spawn.
+
+00:57:06 So if you use multiprocessing, I mean, that's basically just saying let's hire another plumber and we'll get
+
+00:57:13 them to talk to each other at the beginning of the day and split up the tasks.
+
+00:57:17 Whereas subinterpreters, actually, maybe they're sharing the same van.
+
+00:57:20 I'm not sure where this analogy is going, but, you know, they use the same process.
+
+00:57:25 The subinterpreters share the same Python process.
+
+00:57:27 It doesn't spawn up an entirely new process.
+
+00:57:29 It doesn't have to load all the modules again.
+
+00:57:33 And the subinterpreters can also talk to each other.
+
+00:57:36 they can use shared memory to communicate with each other as well.
+
+00:57:40 But because they're separate interpreters, then technically they can have their own locks.
+
+00:57:47 So the lock that, you know, gets locked whenever you run any opcode is the
+
+00:57:52 interpreter lock.
+
+00:57:52 And this basically means that you can have two interpreters running in a
+
+00:57:57 single process, each with its own lock.
+
+00:57:59 So it can be running different operations at the same time.
+
+00:58:03 Right.
+
+00:58:04 They would automatically run on separate threads.
+
+00:58:06 So you're basically running multi-threading and it can also use multi-CPU.
+
+00:58:10 That'd be great.
+
+00:58:11 Fundamentally, the GIL is not about a threading thing per se.
+
+00:58:16 It's about serializing memory access allocation and deallocation.
+
+00:58:21 And so with the subinterpreters, the idea is you don't directly share pointers
+
+00:58:26 between subinterpreters.
+
+00:58:27 There's like a channel type of communication between them.
+
+00:58:30 So you don't have to take a lock on one when it's working with objects versus another, like they're entirely
+
+00:58:36 different set of objects.
+
+00:58:37 They're still in the same process space, but they're not actually sharing
+
+00:58:40 pointers.
+
+00:58:40 So you don't need to protect each other.
+
+00:58:42 Right.
+
+00:58:42 You just have to protect within each subinterpreter, which has a possibility to let me use all six of
+
+00:58:47 my cores.
+
+00:58:48 Yeah, absolutely.
+
+00:58:49 You can't read and write from the same local variables for that reason, which you can do in threading.
+
+00:58:54 But with subinterpreters, it's kind of like a halfway halfway between just
+
+00:58:58 running a separate process.
+
+00:58:59 Yeah.
+
+00:58:59 It probably formalizes some of the multi-threading communication styles that are going to keep things safer
+
+00:59:05 anyway.
+
+00:59:06 Definitely.
+
+00:59:07 Yeah.
+
+00:59:07 All right.
+
+00:59:08 Let's talk about one really quick thing before we wrap it up.
+
+00:59:10 Just one interesting project that you've been working on.
+
+00:59:13 I mentioned that you were on before about some security issues, right?
+
+00:59:16 Yeah.
+
+00:59:16 I want to tell people about your PyCharm extension that you've been working on.
+
+00:59:19 Yeah.
+
+00:59:19 So I've been working on a PyCharm extension called Python Security.
+
+00:59:23 It's very creatively named.
+
+00:59:25 It's available.
+
+00:59:27 Take the straightforward.
+
+00:59:28 Yeah, exactly.
+
+00:59:29 So it's basically like a code checker, but it runs inside PyCharm and it will
+
+00:59:34 look for security vulnerabilities that you may have written in your code and
+
+00:59:39 underline them for you and in some cases fix them for you as well.
+
+00:59:42 So it will say the thing you've done here is really bad because it can cause
+
+00:59:46 someone to be able to hack into your code and you can just press the quick
+
+00:59:50 fix button and it could fix it for you.
+
+00:59:52 So it's got actually over a hundred different inspections now.
+
+00:59:56 And also you can run it across...
+
+00:59:58 Should I use the YAML.load still?
+
+01:00:00 Is that good?
+
+01:00:00 No.
+
+01:00:01 I think that was like the first checker, right?
+
+01:00:05 Actually, it was the YAML.load.
+
+01:00:07 Yeah, you can run it across the whole project.
+
+01:00:09 So you can do a code inspection across your project to like a code audit.
+
+01:00:12 And also it uses PyCharm's package manager.
+
+01:00:15 So it will go in and look at all the packages you have installed in your project and it will
+
+01:00:21 check them against either Snyk, which is a big database of vulnerable Python packages.
+
+01:00:28 Snyk.io uses their API.
+
+01:00:31 So it checks it against that or you can check it against like your own list.
+
+01:00:36 And also it's available as a GitHub action.
+
+01:00:39 So manage to figure out how to run PyCharm inside Docker so that you can run PyCharm from
+
+01:00:46 GitHub action.
+
+01:00:47 Wow.
+
+01:00:48 Yeah, you can write a CICD script in GitHub to just say inspect my code and it will just
+
+01:00:55 inside GitHub.
+
+01:00:56 You don't need PyCharm to do it, but it will run the inspection tool against your code repository.
+
+01:01:01 It just requires that it's open source to be able to do that.
+
+01:01:03 Okay, that's super cool.
+
+01:01:04 All right, well, we're definitely out of time, so I have to leave it there.
+
+01:01:07 Two quick questions.
+
+01:01:08 Favorite editor, notable package?
+
+01:01:10 What do you got?
+
+01:01:10 PyCharm and I don't know about the notable package.
+
+01:01:14 I don't know.
+
+01:01:15 Yeah, you've been too far in the C code.
+
+01:01:16 Yeah, I know.
+
+01:01:17 I'm like, what are packages?
+
+01:01:18 I think there's something that does install those, but they don't work down in C.
+
+01:01:22 Yeah, no, that's cool.
+
+01:01:23 All right, so people are interested in this.
+
+01:01:26 They want to maybe understand how CPython works better or how that works and where and why
+
+01:01:31 it might be slow so they can avoid that.
+
+01:01:33 Or maybe they even want to contribute.
+
+01:01:35 What do you say?
+
+01:01:35 Wait for my book to come out and read the book or read the real Python article, which is free
+
+01:01:40 and online.
+
+01:01:40 And it talks through a lot of these concepts.
+
+01:01:43 Yeah, right on.
+
+01:01:43 Well, Anthony, thanks for being back on the show.
+
+01:01:46 Great, as always, to dig into the internals.
+
+01:01:48 Thanks, Michael.
+
+01:01:48 Yeah, you bet.
+
+01:01:49 Bye.
+
+01:01:49 Bye.
+
+01:01:49 Bye.
+
+01:01:50 Bye.
+
+01:01:51 This has been another episode of Talk Python to Me.
+
+01:01:54 Our guest on this episode was Anthony Shaw, and it's been brought to you by Brilliant.org
+
+01:01:59 and Sentry.
+
+01:01:59 Brilliant.org encourages you to level up your analytical skills and knowledge.
+
+01:02:04 Visit talkpython.fm/brilliant and get Brilliant Premium to learn something new every
+
+01:02:10 day.
+
+01:02:10 Take some stress out of your life.
+
+01:02:12 Get notified immediately about errors in your web applications with Sentry.
+
+01:02:17 Just visit talkpython.fm/sentry and get started for free.
+
+01:02:21 Want to level up your Python?
+
+01:02:23 If you're just getting started, try my Python Jumpstart by Building 10 Apps course.
+
+01:02:28 Or if you're looking for something more advanced, check out our new Async course that digs into
+
+01:02:33 all the different types of async programming you can do in Python.
+
+01:02:36 And of course, if you're interested in more than one of these, be sure to check out our
+
+01:02:40 Everything Bundle.
+
+01:02:41 It's like a subscription that never expires.
+
+01:02:43 Be sure to subscribe to the show.
+
+01:02:45 Open your favorite podcatcher and search for Python.
+
+01:02:47 We should be right at the top.
+
+01:02:48 You can also find the iTunes feed at /itunes, the Google Play feed at /play,
+
+01:02:53 and the direct RSS feed at /rss on talkpython.fm.
+
+01:02:57 This is your host, Michael Kennedy.
+
+01:02:59 Thanks so much for listening.
+
+01:03:01 I really appreciate it.
+
+01:03:02 Now get out there and write some Python code.
+
+01:03:04 I'll see you next time.
+
+01:03:24 Thank you.
+
