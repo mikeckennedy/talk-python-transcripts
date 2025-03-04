@@ -44,7 +44,7 @@
 
 00:01:43 To learn more, visit talkpython.fm/assemblyai.
 
-00:01:47 Ned, welcome back to Talk Python to me.
+00:01:47 Ned, welcome back to Talk Python To Me.
 
 00:01:49 Hey, thanks for having me.
 
