@@ -2218,7 +2218,7 @@
 
 01:07:41 It is amazing. All right. I think this is probably going to be it for our final thing to cover and
 
-01:07:46 read me and friends. Let's close this out just really quickly with a, give us the, the 7.0 story on
+01:07:46 read me and friends. Let's close this out just really quickly with a, give us the 7.0 story on
 
 01:07:53 coverage. Oh, coverage on 5.7.0. Yeah. That's a big deal. All right. I mean, if you're going to
 
