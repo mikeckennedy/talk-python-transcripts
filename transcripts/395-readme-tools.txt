@@ -8,9 +8,9 @@
 
 00:00:20 We cover his tools and a bunch of others he and I found along the way.
 
-00:00:24 This is Talk Python to Me, episode 395, recorded Monday, December 5th, 2022.
+00:00:24 This is Talk Python To Me, episode 395, recorded Monday, December 5th, 2022.
 
-00:00:30 Welcome to Talk Python to Me, a weekly podcast on Python.
+00:00:30 Welcome to Talk Python To Me, a weekly podcast on Python.
 
 00:00:46 This is your host, Michael Kennedy.
 
@@ -672,13 +672,13 @@
 
 00:14:55 He's relaxing because he knows his tests are all covering his product and he's sleeping well.
 
-00:15:05 This portion of Talk Python to Me is brought to you by the Local Maximum Podcast.
+00:15:05 This portion of Talk Python To Me is brought to you by the Local Maximum Podcast.
 
 00:15:09 It's an interesting and technical podcast that dives into trends in technology, stats, and more.
 
 00:15:14 But rather than tell you about it, let's hear from Max and Aaron about their show.
 
-00:15:18 We are now on with Talk Python to Me.
+00:15:18 We are now on with Talk Python To Me.
 
 00:15:22 Let's say hi to all the Python fans.
 
@@ -2218,7 +2218,7 @@
 
 01:07:41 It is amazing. All right. I think this is probably going to be it for our final thing to cover and
 
-01:07:46 read me and friends. Let's close this out just really quickly with a, give us the, the 7.0 story on
+01:07:46 read me and friends. Let's close this out just really quickly with a, give us the 7.0 story on
 
 01:07:53 coverage. Oh, coverage on 5.7.0. Yeah. That's a big deal. All right. I mean, if you're going to
 
@@ -2336,7 +2336,7 @@
 
 01:11:39 It's always fun. Yeah. See ya.
 
-01:11:41 This has been another episode of Talk Python to Me. Thank you to our sponsors. Be sure to check
+01:11:41 This has been another episode of Talk Python To Me. Thank you to our sponsors. Be sure to check
 
 01:11:48 out what they're offering. It really helps support the show. Listen to the Local Maximum podcast.
 
