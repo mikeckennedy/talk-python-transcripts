@@ -1,0 +1,1962 @@
+00:00:00 When LLMs write code to accomplish a task, that code has to actually run somewhere.
+
+00:00:05 And right now, the options aren't great.
+
+00:00:07 You can spin up a sandbox container and you're paying the full second of cold start overhead, plus the complexity of another service.
+
+00:00:15 Let the LLM loose on your actual machine and, well, you better keep an eye on it.
+
+00:00:20 On this episode, I sit down with Samuel Colvin, the creator of Pydantic, now at 10 billion downloads, to explore Monty, a Python interpreter written from scratch in Rust, purpose-built to run LLM-generated code.
+
+00:00:33 It starts in microseconds, is completely sandboxed by design, and can even serialize its entire state to a database and resume later.
+
+00:00:42 We dig into why this deliberately limited interpreter might be exactly what the AI agent error needs.
+
+00:00:48 This is Talk Python To Me, episode 541, recorded February 17, 2026.
+
+00:00:54 Welcome to Talk Python To Me, the number one Python podcast for developers and data scientists.
+
+00:01:16 This is your host, Michael Kennedy. I'm a PSF fellow who's been coding for over 25 years.
+
+00:01:22 Let's connect on social media.
+
+00:01:24 You'll find me and Talk Python on Mastodon, Bluesky, and X.
+
+00:01:27 The social links are all in your show notes.
+
+00:01:30 You can find over 10 years of past episodes at talkpython.fm.
+
+00:01:33 And if you want to be part of the show, you can join our recording live streams.
+
+00:01:37 That's right. We live stream the raw, uncut version of each episode on YouTube.
+
+00:01:41 Just visit talkpython.fm/youtube to see the schedule of upcoming events.
+
+00:01:46 Be sure to subscribe there and press the bell so you'll get notified anytime we're recording.
+
+00:01:51 This episode is brought to you by our Agentic AI Programming for Python course.
+
+00:01:55 Learn to work with AI that actually understands your code base and build real features.
+
+00:02:00 Visit talkpython.fm/Agentic-AI.
+
+00:02:05 Samuel, welcome back to Talk Python To Me.
+
+00:02:07 Great to have you here, as always.
+
+00:02:08 Thank you so much for having me back. Yeah, it's good to be here.
+
+00:02:11 I saw your project and I immediately sent you a message.
+
+00:02:14 You need to come on the show and talk about this.
+
+00:02:16 What is going on? What is Monty?
+
+00:02:18 Hat tip to the name. I want to hear the origin of the name.
+
+00:02:21 You might be able to guess it.
+
+00:02:22 I think I can guess it. I think I can guess it.
+
+00:02:25 It's awesome to be here talking about this.
+
+00:02:28 You've been on a bunch of times, but there's a bunch of new listeners or they don't listen to every show.
+
+00:02:32 Give us your background.
+
+00:02:33 So I'm Samuel and I'm probably best known as creating Pydantic validation library way back in the annals of time in 2017.
+
+00:02:42 That is kind of an infrastructural bit of Python today.
+
+00:02:45 We just crossed 10 billion downloads in total.
+
+00:02:48 We're at like 580 million downloads a month.
+
+00:02:50 So that gets a lot of usage.
+
+00:02:53 Very lucky that Sequoia Capital came along and invested in Pydantic to start a company at the beginning of 2023.
+
+00:02:59 So now we have a kind of stable of different things we do, what we call the Pydantic stack.
+
+00:03:04 So there's Pydantic validation.
+
+00:03:05 We talked about Pydantic AI, which is an agent framework where Monty kind of fits in best.
+
+00:03:11 And then there's Pydantic Logfire, the observability platform for AI and general observability, which is the commercial bit of what we do.
+
+00:03:19 So I suppose I'm supposed to be being CEOing most of the time.
+
+00:03:23 I actually spend far too much of my time clauding.
+
+00:03:25 I seem to be in good company.
+
+00:03:27 I keep seeing people on Twitter, lots of CEOs of much bigger companies and writing lots of code.
+
+00:03:31 So apparently I'm allowed to again.
+
+00:03:32 It is an insanely exciting time with just the agentic AI in general.
+
+00:03:38 And Claude, you know, Claude Opus, Claude Sonnet in particular, they are so good.
+
+00:03:43 I don't know about you.
+
+00:03:43 I'm sure at least half the people, at least half of the people listening are like, they've got a backlog of ideas they want to try.
+
+00:03:50 Things they've always wanted to build and not the time.
+
+00:03:52 Or maybe it's a bit of a stretch.
+
+00:03:54 Like, I don't really know mobile.
+
+00:03:55 I can't really build a mobile app.
+
+00:03:56 But if I could, I would build this.
+
+00:03:58 And now you kind of can, right?
+
+00:04:00 Yeah.
+
+00:04:00 I mean, I think it's got scary bits of it too.
+
+00:04:02 I mean, maybe we're experiencing the like bonfire of the thing.
+
+00:04:04 We all, you know, I was speaking to Zach Hatfield Dodds just before Christmas.
+
+00:04:09 And he was like, we have had this weird time period when the thing I love doing happens to be incredibly financially lucrative.
+
+00:04:15 I mean, he's anthropic.
+
+00:04:16 So it's probably more financially lucrative for him than the rest of us.
+
+00:04:19 But hey, and maybe that time is going to come to an end.
+
+00:04:22 But I still feel very privileged to have had that time.
+
+00:04:24 I don't know exactly what's going to go.
+
+00:04:27 I mean, and definitely the jobs of software developers are changing.
+
+00:04:30 And some of that is scary.
+
+00:04:31 But as you say, it's also super exciting projects from Go Build a Mobile App, which you didn't know how to do.
+
+00:04:37 But there were others who did through to building Monty, which I think we were relatively well placed to do it as a team of people.
+
+00:04:43 But we would never have had the resources or the time to do it if it wasn't for LLMs being especially good at tasks like that.
+
+00:04:52 Interesting.
+
+00:04:52 Okay.
+
+00:04:53 I do want to dive into that later.
+
+00:04:54 But we haven't even introduced what Monty is yet.
+
+00:04:57 So let's hold off on that deep dive.
+
+00:05:00 But when I saw this, I'm like, I wonder what role that agentic coding sort of made this possible for a small team.
+
+00:05:07 You know, like that was certainly one of the thoughts I had.
+
+00:05:10 Yeah.
+
+00:05:11 I mean, I can dive into it.
+
+00:05:12 But yeah, I mean, I've got a bit of help now from David Hewitt, who is a great deal better Rust developer and knows more of the Python internals than many people.
+
+00:05:22 Well, definitely more than me.
+
+00:05:23 But for the most of it was just me in my spare time building it, which I'll talk in a bit about like why I think this is such an eligible project for LLM acceleration.
+
+00:05:33 Yeah.
+
+00:05:33 Yeah.
+
+00:05:33 So you're playing both sides of the fence here.
+
+00:05:36 It sounds like both maybe using a little AI, but also building for AI, which I think is quite interesting.
+
+00:05:42 Yeah, I think we're I mean, yeah, we're doing we're building Pydantic AI as a way for LLMs to power applications or be part of applications.
+
+00:05:51 We're also using AI to build that more and more.
+
+00:05:55 I think of people's usage of Logfire is through their coding agent, as in sure, people can log into Logfire.
+
+00:06:00 We love our tracing view, et cetera.
+
+00:06:02 But I acknowledge there's a lot of people who are just going to point and clawed code at it and ask it to go and work out what's wrong and fix their bug.
+
+00:06:08 So, yeah, we contact contact with what's going on in LLMs all over the place.
+
+00:06:12 How did you facilitate that?
+
+00:06:14 Like, how can the AI get that information?
+
+00:06:16 We make this weird, esoteric, odd decision back when we first started Logfire not to allow users to write arbitrary SQL against their data.
+
+00:06:25 We did that really because we thought it was too much hard work to build a build a query builder.
+
+00:06:30 And like SQL seemed like the thing we would want.
+
+00:06:32 And it seemed like a pretty esoteric, odd decision back when we started it in 2023.
+
+00:06:36 Now it is like the most powerful, most defensible thing we have because we've spent two years learning how to build effectively an analytical database that anyone can go and query and run any query against and dealing with all of the side effects of that.
+
+00:06:51 But everyone has an MCP server.
+
+00:06:53 Fine.
+
+00:06:53 But what's powerful about Logfires is LLMs are very, very, very good at writing SQL when they have a schema.
+
+00:06:59 And so, you know, you ask it something that no one's ever asked it before, say, find me the five slowest endpoints by P95.
+
+00:07:04 Now that's a reasonable one, but you can imagine some incredibly complex question that no one's ever answered before that no other kind of query builder dialect could do.
+
+00:07:12 But because you have full SQL, you can go and write this.
+
+00:07:15 LLM will write the SQL to give you back the answer.
+
+00:07:17 I want the P95 worst top five there.
+
+00:07:20 For this app, at this endpoint, for the people in Southeast Asia on Tuesday.
+
+00:07:26 Right?
+
+00:07:27 Something like you're like, we've run out of filters, but like SQL just keeps going.
+
+00:07:31 And by the way, group that by hour or group that by every 15 minutes.
+
+00:07:36 And like, you know, it gets arbitrarily more complex.
+
+00:07:38 That just just works.
+
+00:07:39 Yeah.
+
+00:07:40 How very interesting.
+
+00:07:41 I just wrote an article about how I think working in the native query language, if you're using agentic programming.
+
+00:07:50 I saw you write it.
+
+00:07:50 I was like, yeah, yeah, yeah.
+
+00:07:52 Yeah.
+
+00:07:52 And I mean, Pydantic is a perfect fit for that style.
+
+00:07:55 It's like, if you could write your actual queries in native syntax and then transform it to a rich class, like a Pydantic or a data class or something like that.
+
+00:08:03 These AIs, they are so trained on SQL or MongoDB native query syntax or, you know, whatever vanilla lowest level thing.
+
+00:08:11 They see more of that than anything because it's across all the technologies.
+
+00:08:14 I think that's going to be a thing.
+
+00:08:15 And it's interesting how you sort of set the stage so that was already present for you and your product, right?
+
+00:08:21 Yeah.
+
+00:08:22 But even when we started building the Logfire platform, I remember saying, everyone was like, you know, which ORM are we going to use?
+
+00:08:27 We're building a FastAPI.
+
+00:08:28 So there was some debate about how we do it.
+
+00:08:30 And I was like, let's just write SQL.
+
+00:08:32 And everyone, you know, it seemed like an odd thing to do because, sure, it's like six lines of SQL to do a simple, like, what would be a like get in Django ORM.
+
+00:08:39 But, I mean, I think even before LLMs, people were compelled enough because they were like, yeah, the like autocomplete kind of LLM will do a lot of the work for me.
+
+00:08:46 And now I have complete control.
+
+00:08:48 Now, I think where the majority of code is being written by AIs, having full control, full SQL is incredibly useful.
+
+00:08:55 And you can optimize it, right?
+
+00:08:56 You can only get the particular column that you want.
+
+00:08:58 You can be very careful about which indexes are being used.
+
+00:09:01 You can copy paste the SQL into whatever and work out the plan.
+
+00:09:05 That's much harder when you're using an ORM.
+
+00:09:07 So, yeah.
+
+00:09:08 Yeah.
+
+00:09:08 And you could just star star the dictionary that comes back right into a Pydantic class.
+
+00:09:13 And then you put that behind a function.
+
+00:09:15 You don't mess with it.
+
+00:09:16 It's safe.
+
+00:09:17 Exactly.
+
+00:09:18 Yeah.
+
+00:09:18 You kind of get the programmer benefits of programming against typed classes and the AI benefits of it can just talk like vanilla and the performance as well.
+
+00:09:27 All right.
+
+00:09:27 Don't necessarily want to go too far down that rat hole.
+
+00:09:30 We got a different one to go down.
+
+00:09:32 Let's talk about Python interpreters.
+
+00:09:34 So, you built Monty, a specialized Python interpreter written in Rust.
+
+00:09:40 And I just want to just do a little historical journey to show, like, for people who don't know, like, this is not the first one of these.
+
+00:09:49 Actually, I'm happy to riff on this, but I'll let you take the lead.
+
+00:09:52 I heard a conversation from two programmers in interchange, exchange between those two, talking about CPython.
+
+00:09:59 They're like, what is CPython?
+
+00:10:01 Is it like Python that compiles to C?
+
+00:10:04 Or, you know?
+
+00:10:05 So, maybe just a little bit of a chat about what the heck is an interpreter?
+
+00:10:09 Yeah, go ahead.
+
+00:10:10 I remember being confused about that, too.
+
+00:10:11 And, you know, in Cython, which I don't think we hear about so much anymore, but that confused me as well.
+
+00:10:15 I remember, yeah.
+
+00:10:16 So, it's interesting that even from as far back as CPython's origination, there was an acknowledgement that there might be other Pythons, and that Python is a language, not an implementation.
+
+00:10:28 But, yeah.
+
+00:10:28 Go ahead.
+
+00:10:29 Yeah.
+
+00:10:29 So, well, we've got the Python interpreter, and we've got Python code we write.
+
+00:10:34 Often, we write, well, Python, the language, but when it executes, it doesn't actually execute in Python.
+
+00:10:41 It might execute because C understands it, and a C compiled thing runs.
+
+00:10:45 Or, in your case, Rust understands the bytecode, right?
+
+00:10:49 So, the interpreter parses our Python into Python bytecodes, which you can get through with the disk module.
+
+00:10:56 You can disassemble it and look at the actual bytecodes you got back.
+
+00:10:59 And then those are sent off to, like, a giant loop that interprets them, hence the term interpreter.
+
+00:11:04 So, we've got CPython.
+
+00:11:06 We have the defunct IronPython for .NET, which made it all the way to 3.4.
+
+00:11:10 We've got the defunct Gython, which made it all the way to 2.7.
+
+00:11:14 And we've got the much more exciting and modern Pyodide.
+
+00:11:18 Well, Pyodide is still CPython, so.
+
+00:11:20 Yes.
+
+00:11:21 But compiled for WebAssembly, which I feel, I don't know, I feel like Rust and WebAssembly have this kinship.
+
+00:11:25 So, it's like, I don't know, it feels closer to Rust than the others.
+
+00:11:28 I agree.
+
+00:11:28 There's also Rust Python, which is in active development.
+
+00:11:30 I don't know what that's currently pointing at.
+
+00:11:34 There's also Grail, which is another Python interpreter.
+
+00:11:40 And the second biggest, really, is PyPy, probably the best-known one of all.
+
+00:11:46 So, without meaning to cause offense to those that are still active, there's also Unladen Swallow was another attempt.
+
+00:11:54 And there's a whole, but look, without meaning to cause offense to any of those that are still alive, there was a kind of graveyard of other Python implementations.
+
+00:12:02 And so, I went into this knowing that it's a space where lots of people have tried to build things, put in, bluntly, a great deal more effort than we have.
+
+00:12:09 And for the most part, I wouldn't say they failed, but they haven't got the same kind of adoption that CPython has.
+
+00:12:16 I mean, I think...
+
+00:12:16 Oh, 100%.
+
+00:12:17 CPython is 99.9s of usage of Python.
+
+00:12:21 And my take is that the reason for that is you need almost complete, perfect consistency with CPython to use something else.
+
+00:12:33 Again, you need 99.59s of perfection, of identical behavior before you would go and switch in any real application.
+
+00:12:40 I remember trying to use PyPy, and even if I could get it to run, well, it turns out its foreign function interfaces are not with, like, asyncpg were slower than CPython's, and so actually it didn't perform as well.
+
+00:12:50 And so, the threshold to switch from CPython to something else or to choose something else was incredibly high.
+
+00:12:57 And so, we are not trying to build another Python interpreter that you might credibly move your application across.
+
+00:13:04 We're using Python as a syntax for a very specific thing where LLMs write code.
+
+00:13:10 And the fact that we have a different goal is one of the reasons that we thought this was a credible project to take on.
+
+00:13:16 This portion of Talk Python To Me is brought to you by us.
+
+00:13:21 I want to tell you about a course I put together that I'm really proud of, Agentic AI Programming for Python Developers.
+
+00:13:29 I know a lot of you have tried AI coding tools and come away thinking, well, this is more hassle than it's worth.
+
+00:13:35 And honestly, all the vibe coding hype isn't helping.
+
+00:13:39 It's a smokescreen that hides what these tools can actually do.
+
+00:13:42 This course is about agentic engineering, applying real software engineering practices with AI that understands your entire code base, runs your tests, and builds complete features under your direction.
+
+00:13:55 I've used these techniques to ship real production code across Talk Python, Python Bytes, and completely new projects.
+
+00:14:02 I migrated an entire CSS framework on a production site with thousands of lines of HTML in a few hours, twice.
+
+00:14:09 I shipped a new search feature with caching and async in under an hour.
+
+00:14:14 I built a complete CLI tool for Talk Python from scratch, tested, documented, and published to PyPI in an afternoon.
+
+00:14:22 Real projects, real production code, both Greenfield and Legacy.
+
+00:14:27 No toy demos, no fluff.
+
+00:14:29 I'll show you the guardrails, the planning techniques, and the workflows that turn AI into a genuine engineering partner.
+
+00:14:35 Check it out at talkpython.fm/agentic dash engineering.
+
+00:14:39 That's talkpython.fm/agentic dash engineering.
+
+00:14:43 The link is in your podcast player's show notes.
+
+00:14:45 You know, the real challenge, I think, that I saw with all of those is there are so many different use cases, and it's both a big benefit of all the Python packages and stuff,
+
+00:14:58 but, you know, this package pulls in this compiled thing, and this other one pulls in another compiled thing, and it assumes that the gil works exactly in this way.
+
+00:15:08 And so there's all these implied behaviors that have to be carried across.
+
+00:15:12 And a lot of these, I think, we're trying to say, let's put those to the side and see if we could build something neater that's more native to Java or .NET or whatever people were after, you know, with those different ones.
+
+00:15:24 But then the compatibility just hit them in the face, right?
+
+00:15:27 We've like, I haven't actually counted PyPI lately, but how many were almost just short of three-quarter million, two packages short of three-quarters of a million packages.
+
+00:15:37 We've got to reload this page at the end of the pod.
+
+00:15:39 I'm just going to say, yes, we're going to leave it open.
+
+00:15:42 We're absolutely leaving that open.
+
+00:15:44 But trying to be compatible with that many projects?
+
+00:15:47 We're actually 5,002 short of.
+
+00:15:50 Oh, yeah, yeah, okay.
+
+00:15:51 Sorry to be a pedant, but it comes with a gun.
+
+00:15:54 Oh, yeah, yeah, no, you're right.
+
+00:15:55 We're at 744, not 7.
+
+00:15:57 Or 9, yeah.
+
+00:15:59 There's going to be some kind of milestone reach, but it's not the one I was hoping for.
+
+00:16:02 Anyway, the point is there's so many edge cases and so many specializations.
+
+00:16:08 Yeah.
+
+00:16:09 I think that's really where it hit them.
+
+00:16:11 And, you know, maybe this is a good segue to just, you know, if not that, then what are you actually building?
+
+00:16:17 What is this Monty?
+
+00:16:18 So Monty tries to solve this problem where we want to allow, LLMs are very, very good at writing code.
+
+00:16:25 We were talking about them writing SQL earlier.
+
+00:16:26 They're very good at writing Python and JavaScript.
+
+00:16:30 I think, honestly, it wouldn't really matter to the implementation whether we were implementing Python or JavaScript.
+
+00:16:37 It just turns out for a bunch of reasons.
+
+00:16:38 Python is easier and it's also like where we come from.
+
+00:16:43 The simplest use case of Monty is what people call programmatic tool calling or code mode, where instead of my LLM calling tools in a loop,
+
+00:16:54 sometimes using the return value from one tool straight into the next tool, the LLM can just go and write code and thereby be more reliable and much more performant and much lower cost.
+
+00:17:07 So we've seen examples of like, if you, for example, connect Pydantic AI with code mode enabled to GitHub's MCP and you say, go and find the five latest pull requests.
+
+00:17:18 And I forget what the question was, right?
+
+00:17:21 But the point was we have to go jump through their API via MCP and calculate some value.
+
+00:17:27 We've seen tasks go from kind of $2 down to $0.04 as a result of using code mode.
+
+00:17:33 Because one of the big reasons for that is that those MCP responses are vast.
+
+00:17:38 And so the LLM has to put loads of tokens into context to go and pull out, well, actually, this is just like the ID of the thing I need to make the next request.
+
+00:17:45 I just added an MPC server to Talk Python a few weeks ago so people could ask questions about it and stuff.
+
+00:17:52 And what really surprised me is the actual return type that MCP servers recommend is markdown, not structured data.
+
+00:18:01 So you basically send a giant blob of markdown back as the response.
+
+00:18:05 And then, like you're saying, a bunch of tokens get consumed just trying to understand the response rather than, here's a JSON document.
+
+00:18:11 I know it's called this.
+
+00:18:12 Boom, answer.
+
+00:18:13 So I think in the case of GitHub's one, they do return JSON, which is useful for us because we can then go parse that JSON.
+
+00:18:18 But also, if you don't need the whole of that response, you can search through it and extract a particular thing you need.
+
+00:18:26 So the conservative threshold for what Monty can do is allow us to implement this code mode use case.
+
+00:18:35 And I think it works for that for the most part now.
+
+00:18:37 We're working hard on some improvements.
+
+00:18:39 The biggest difference of it versus all of the other Python implementations is it is completely sandboxed.
+
+00:18:46 It is isolated from your machine.
+
+00:18:50 So you can't open a file or read an environment variable unless you very specifically say, here are the environment variables you're passing into this context.
+
+00:18:59 Or here are the pseudo files or indeed real files that I specifically want to expose to this runtime.
+
+00:19:07 That means that obviously reading a file is going to be way less performant than in CPython where we can go and make some syscall to read a file.
+
+00:19:14 We're not doing that.
+
+00:19:15 You're calling back from the Monty runtime to the host runtime, which might be Python or might be JavaScript or Rust, to say, read me this particular file, and then it can choose what to do.
+
+00:19:26 But that is obviously what you want in this scenario where the LLM is writing the code.
+
+00:19:31 So that is the regard in which we are completely different from all of the other Python implementations.
+
+00:19:38 And then there's a few other projects doing similar things, but we're different in that regard from all of the established programming languages, which would all have ways to read files.
+
+00:19:47 Very interesting take.
+
+00:19:47 You know, it might be worth just a quick mention.
+
+00:19:50 There's plenty of people out there listening who have not done agentic tool using coding.
+
+00:19:56 So I think understanding just that the flow of that is kind of important to understanding the value of this, right?
+
+00:20:02 And you did definitely touch on it, but if you go and ask Claude Code to do something, or Cursor, or whatever, it's constantly like, let me run this GitHub command.
+
+00:20:11 Let me run this Git command.
+
+00:20:12 Let me run this LS command.
+
+00:20:13 Let me run this find.
+
+00:20:15 And periodically it'll just exec Python, like little strings of Python and stuff.
+
+00:20:20 So one of your core ideas is, what if we could give it a better Python that it's encouraged to use for this kind of behavior, right?
+
+00:20:30 Let me describe it in a slightly different way.
+
+00:20:32 Okay, so we have a continuum of how much control and how much flexibility LLMs have.
+
+00:20:37 At one end of the spectrum, we have pure tool calling, where they can basically return JSON with the name of a tool that you're going to call.
+
+00:20:43 And there are agent frameworks like PyLance AI that allow you to hook that up to functions.
+
+00:20:49 But ultimately, you're just getting JSON back and you're deciding what to do with that.
+
+00:20:53 And you may call the LLM again with some return value.
+
+00:20:55 At the full other end of the spectrum, we have complete computer use.
+
+00:20:58 Some LLM has some vision model and is moving my cursor around on screen to do everything I want.
+
+00:21:04 Type onto our keyboard.
+
+00:21:05 In the middle, we have a bunch of options.
+
+00:21:07 We have Monty, which is kind of on the near the tool calling end of the spectrum.
+
+00:21:12 Then we have sandboxes like Daytona and E2B and modal.
+
+00:21:15 And then we have the kind of Claude code or codex style of like complete control of your terminal.
+
+00:21:20 And along that spectrum, you go more and more power in terms of like capacity of what the LLM might be able to do and more and more security concerns.
+
+00:21:29 And generally that comes with more and more of having an adult watching what it's going to go and do and controlling it and uncrashing it when it crashes, when it goes and does the wrong thing.
+
+00:21:37 And so for the most part today, when we're using something in the cloud that uses an LLM, it's doing the tool calling end of the spectrum.
+
+00:21:48 That's what the kind of LangChain, Langgraph, Pydantic AI, Crew AI, all those guys are doing.
+
+00:21:54 The LLM is doing very similar things when Claude code basically decides to go and run LS or run RM-RF.
+
+00:22:01 It's calling the tool like bash command, which the Claude application running on your machine chooses to go and execute.
+
+00:22:09 The point is, for the most part, when we're building applications that are going to go and run in the cloud, we don't have a software developer who understands what's going on, sitting, watching every command.
+
+00:22:19 And so we need to be much more constrained in what we're going to allow the LLM to do.
+
+00:22:23 But we want to have a little bit more expressiveness than we do with pure tool calling.
+
+00:22:27 And at the moment, there is basically nothing in the spectrum between tool calling and go and run a sandboxing service and have access to a full sandbox.
+
+00:22:36 And that's powerful.
+
+00:22:37 You can do a bunch of things with it, but often we don't need that stuff.
+
+00:22:40 And that's where Monty's, that's the kind of sweet spot.
+
+00:22:43 Okay.
+
+00:22:43 There's interesting incentives or something that align with this undertaking as well.
+
+00:22:49 For example, if you don't give it a networking stack, it can't do bad things on the network.
+
+00:22:54 Yeah.
+
+00:22:55 Because it just doesn't exist, right?
+
+00:22:56 So it helps you, it inspires to create like a more minimal version of the standard library and so on.
+
+00:23:02 Yeah.
+
+00:23:02 And you can imagine like we, we will soon have a, some version of HTTP request that you can make, but you will be required to go and enable that explicitly.
+
+00:23:11 And even better, because you're calling through the host, you're going to have a perfect point where you can go and read the URL and go, no, you can't make a request to local host and go and like start snooping on what's going on here.
+
+00:23:22 You have to be making a request to an external URL or whatever else it might be.
+
+00:23:26 Or even I'm going to go and use some third party service to proxy all HTTP requests.
+
+00:23:31 So it is never an untrusted HTTP request inside my network.
+
+00:23:34 But the point is, this is the single biggest difference of Monty is every single place where you can, where the code could interact with the real world, it must call an external function.
+
+00:23:46 So call back through the host.
+
+00:23:47 And then the other regard in which it is, I think somewhat innovative is we are not using traditional callbacks for that.
+
+00:23:54 So we're not giving the runtime a list of pointers to functions it can call on the host.
+
+00:24:00 Instead, the Monty runtime is effectively suspending and returning control to the host whenever you're doing a tool call.
+
+00:24:08 So you're basically getting a response, which is like call the function, read file with the arguments file name on whatever else it might be.
+
+00:24:15 And that allows a few things, but in particular, it allows us if that tool we're going to go and run, or that function we're going to go and run is going to take two days to run, we can serialize the Monty runtime, go put that in a database, and shut down our process
+
+00:24:29 and wait for the tool to come back.
+
+00:24:31 And that's something that CPython doesn't offer, understandably, but we are able to build because we built Monty from scratch.
+
+00:24:37 You can serialize the entire interpreter state, go put it into a database and retrieve it later when you want to resume.
+
+00:24:43 That's pretty wild.
+
+00:24:44 So it's got this durability aspect, right?
+
+00:24:46 Yeah, which I think is in these scenarios where often the code execution part of this is going to take milliseconds, but our tools might take minutes or hours or whatever else,
+
+00:24:58 both for durability and to build an application that's both more durable and easier to maintain.
+
+00:25:05 You don't have to have that interpreter state hanging around in memory as you would with CPython.
+
+00:25:12 And all the other things like timeout and just other weird oddities, right?
+
+00:25:18 Like I was working on something on my laptop just yesterday and my wife's like, you ready to go?
+
+00:25:24 I'm like, hold on, I got to wait.
+
+00:25:26 I got to wait for this chat to complete before it's been going for five minutes.
+
+00:25:31 It's almost done.
+
+00:25:31 Just hold on.
+
+00:25:32 And then I can close my laptop and roll, you know, because it would have, who knows what it would have done to it, right?
+
+00:25:37 Yeah.
+
+00:25:37 Yeah.
+
+00:25:37 And talking of timeouts, the other thing that we're able to do in Monty is we're able to, look, it's not perfect yet because it's early, but we basically allow you to set resource limits.
+
+00:25:45 So total execution time and memory limit in particular and recursion depth.
+
+00:25:51 And therefore you can run this Monty thing in some small image in the cloud and you can say it's got 10 megabytes and it, you know, once it's hardened, you know, it's early, we have that support now, but I'm not saying there are no ways around it.
+
+00:26:04 It can't go and kill your machine out of memory.
+
+00:26:07 Can't oom your container.
+
+00:26:09 You're just going to get back a resources error saying too much memory can suit.
+
+00:26:14 Yeah. Very powerful.
+
+00:26:15 So I see on the GitHub page here, a couple of things.
+
+00:26:17 First of all, it supports Python 3, 10, 11, 12, 13, 14, presumably 15 will take the place of 10 in a year or something.
+
+00:26:25 So that is the support for the, so we have, so the Monty runtime is written entirely in Rust.
+
+00:26:31 It has no dependency on CPython or PyO3 or anything else.
+
+00:26:37 It is a pure Rust library.
+
+00:26:38 We're very lucky.
+
+00:26:39 We have the AST parser from Ruff, from the Astral team that we're able to, gives us, allows us to go from Python code to some basically structured objects.
+
+00:26:49 We don't have to go and do that, like parsing the Python code ourselves.
+
+00:26:52 Right.
+
+00:26:52 Because Ruff is already written in Rust.
+
+00:26:55 Like that's, I feel like the Astral team is kind of a peer of yours for sure.
+
+00:26:59 You guys must look at each other, what you all are doing.
+
+00:27:01 Yeah. Yeah.
+
+00:27:02 And, and, and, you know, we use that a lot.
+
+00:27:03 And also we have ty built in.
+
+00:27:04 So the ty type checker from Astral is again written in Rust.
+
+00:27:09 And so it is compiled into Monty when you use it.
+
+00:27:12 And so before you run your code, you can go and run type checking at the same time.
+
+00:27:16 And again, that, that feedback is incredibly useful for LLMs to get them to, to write reasonably reliable run like workflows.
+
+00:27:24 But, but to, to come back to your, your question.
+
+00:27:27 So we have Monty itself, which is just Rust, pure Rust, no other C dependencies, just in Rust.
+
+00:27:32 And then we have, and that you can use that as a Rust library directly in your Rust application, if you so wish.
+
+00:27:38 And there are people already doing that, but we then have libraries for Python and for JavaScript, which use in the case of Python, PyO3, which is amazing.
+
+00:27:47 In the case of JavaScript, a thing called NAPI, or maybe you're supposed to pronounce it NAPI.
+
+00:27:52 I don't know.
+
+00:27:54 Which allow, which basically means we can go and have JavaScript and Python packages where you can call Monty.
+
+00:27:58 And so slightly confusingly, that Python 310, Python 3.3.14 is referring to the Python package that you're installing.
+
+00:28:05 The actual Monty is targeting Python 3.14 syntax only.
+
+00:28:09 I see.
+
+00:28:10 But those are the different language features that you support basically for parsing, right?
+
+00:28:15 Something like that.
+
+00:28:15 Yes.
+
+00:28:16 No, no, no.
+
+00:28:16 So that's just like, we only support, so Monty itself will run as if it was 3.14 or, you know, some subset of it.
+
+00:28:22 We don't support all the syntax yet, but like 3.14 type stuff.
+
+00:28:26 But yeah, if you're, when you're installing it, when you're uv add Pydantic Monty, you can do that in 3.10 through 3.14.
+
+00:28:32 And obviously, because we maintain a bunch of Rust stuff, we've worked hard to have binaries for basically every environment, Python, Linux, macOS, Windows, bunch of different architectures.
+
+00:28:43 And we have PGO builds, which no one else has.
+
+00:28:45 So that should improve performance again.
+
+00:28:47 Yeah.
+
+00:28:47 Yeah.
+
+00:28:47 PGO is process.
+
+00:28:52 I did.
+
+00:28:53 Yeah.
+
+00:28:53 So, so we did this first in, in, in Pydantic itself, which obviously the core is written in Rust.
+
+00:28:58 And it was in fact, David, David Hewitt on our team, who's the PyO3 maintainer, who identified this, this great technique.
+
+00:29:04 So basically it's, it's part of Rust.
+
+00:29:06 You basically compile the library, and then you run as many different bits of code against it as you can, in our case, all of the unit tests.
+
+00:29:14 And then you basically recompile it with pointers as to which paths in the code, which branches are most common.
+
+00:29:21 And you can get up to like 50% performance improvement.
+
+00:29:23 But the thing is, if you're building your own library, that's a real pet.
+
+00:29:26 If you're building your own application, that's a pain.
+
+00:29:28 If you just uv add Pydantic Monty, you get that stuff for free.
+
+00:29:31 Yeah.
+
+00:29:32 Super cool.
+
+00:29:32 Yeah.
+
+00:29:33 I'm reoriented in my acronyms now, profiler guided optimizations, right?
+
+00:29:38 Yes.
+
+00:29:38 So basically compilers as, as Python people, we don't necessarily think about them a lot, but compilers have all sorts of optimizations.
+
+00:29:46 And I remember in the late nineties, when I was working with things like GCC and stuff, you could actually break your program by asking for too many optimizations.
+
+00:29:54 You know, you could, it had these levels.
+
+00:29:55 And if you put it on the top level, there's a chance your program like literally might not run, which is a really bizarre thing for compilers to do, but they can, they make like decisions.
+
+00:30:04 Like maybe we should inline this so we can avoid a stack jump and setting up the stack and all that.
+
+00:30:09 with the PGO, it actually looks at how the code runs and uses that as input for its optimization, which is a super cool idea.
+
+00:30:18 So it's awesome.
+
+00:30:18 You're doing that.
+
+00:30:19 Yeah.
+
+00:30:19 And I honestly don't know what the difference is here.
+
+00:30:21 I think when I tried it, it was relatively minor, but in Pydantic, it's, it's a, it makes for a big improvement.
+
+00:30:26 Yeah.
+
+00:30:26 going back a bit, I don't know if people remember depending on where they were in their journey, but from Pydantic one to two, I've got 50 X performance increases.
+
+00:30:36 And yeah, the Pydantic of today is not the Pydantic of 2017, right?
+
+00:30:40 It sure is not.
+
+00:30:41 It's sure it's not.
+
+00:30:42 And that was, you know, that was an enormous piece of work, the rewrite, because we didn't have LLMs.
+
+00:30:46 I think it would have been a job that would have been a heck of a lot easier if we'd been able to point Opus 4.6 at Pydantic and be like, do this, but in Rust, but Hey, we got it done.
+
+00:30:55 And I learned a lot along the way.
+
+00:30:56 That's a challenge that we're going to have to, I don't know how you see it, but I think as an industry and individually, each of us is going to struggle with like, how much rust did you learn and how, how much experience and ideas did you get spending that year evolving
+
+00:31:10 Pydantic versus if you just got it knocked out?
+
+00:31:13 Like where's the trade-off?
+
+00:31:14 It's a big double end thought.
+
+00:31:14 Like I don't, I know there were those people who were like, now it's impossible to enter as a software engineer.
+
+00:31:18 I've spoken to some people, some really amazing product people who were like, I'm writing code suddenly because I have the right technical mindset.
+
+00:31:24 I just have never had the time to go and learn all this stuff.
+
+00:31:27 And now the LLM can do the like rote for me and I can do the innovative product stuff on top.
+
+00:31:32 So I get to build.
+
+00:31:33 So we have new people entering, but you're right.
+
+00:31:35 There are, there are going to be big challenges because just as I don't have a clue about assembly and I'm not good at writing it.
+
+00:31:41 And that probably makes me a worse engineer than if I spent the first decade of my career hand writing out assembly.
+
+00:31:47 So as we add layers of abstraction, the layer of abstraction beneath becomes kind of in the shade to, to most of us.
+
+00:31:55 And we never, we never look at it.
+
+00:31:56 Yeah.
+
+00:31:57 It's very interesting.
+
+00:31:58 I sort of think of this whole agentic coding thing as the change when design patterns became popular.
+
+00:32:05 Instead of talking about, here's how we're going to do the loop or here's how we're going to construct the class.
+
+00:32:08 You just think singleton flyweight.
+
+00:32:10 And like you're building with these bigger conceptual building blocks.
+
+00:32:14 And now it's kind of like make a login page.
+
+00:32:16 Okay.
+
+00:32:16 We've got the law.
+
+00:32:17 Now what, now what else am I building?
+
+00:32:18 Like you can think almost in components rather than like very small pieces.
+
+00:32:23 Yeah.
+
+00:32:23 I don't know what PyPI does, but like at the next level up.
+
+00:32:26 Yeah.
+
+00:32:26 Yeah.
+
+00:32:27 Kind of.
+
+00:32:27 Yeah.
+
+00:32:28 I do think there's still room for people to come into the industry.
+
+00:32:30 I think it's super exciting.
+
+00:32:31 You still just, I think it's really going to come down to like problem solving and breaking down things into the way you want them to work.
+
+00:32:37 And that's a programmer skill.
+
+00:32:39 I also think what we haven't seen yet is the things that LLMs are bad at.
+
+00:32:43 Because one, if an LL, if I tried to do something with an LLM and it doesn't work, that is not proof that I cannot do it with an LLM.
+
+00:32:49 It's proof it didn't work that particular time.
+
+00:32:51 Whereas if I go and try and do something with an LLM and it does work, well, hey, that's proof it can be done.
+
+00:32:56 And two, no one wants to talk about this is the thing that failed, right?
+
+00:32:59 So Anthropic announced we built a C compiler in two weeks by giving Opus loads of access.
+
+00:33:06 What they didn't say is we tried to build an eBay clone and it was a complete unmitigated failure.
+
+00:33:11 Cost us what would have been a hundred thousand dollars of inference.
+
+00:33:14 I'm not saying that's happened and no criticism.
+
+00:33:16 Yeah.
+
+00:33:17 We don't hear about the failures both because they're less attractive to state and because they are not clear identifiers as it were in the way that like successes are.
+
+00:33:25 And I think one of the things we will learn over the next few years is like, here are the things LLMs are really, really good at.
+
+00:33:30 And here are the things that no one succeeded with them yet.
+
+00:33:32 And that's probably meaningful.
+
+00:33:34 I don't want to go too deep in this because I want to stay focused on money, but I'm also a believer of Jevon's paradox.
+
+00:33:39 I think that this is going to create more demand for software.
+
+00:33:43 Now that people see what is possible rather than just like, well, we're going to build exactly the same amount of software with fewer people.
+
+00:33:49 So I think there's a lot there.
+
+00:33:51 So codspeed.
+
+00:33:52 So you have, have that on.
+
+00:33:53 That's the, this is a pretty interesting tool.
+
+00:33:56 I just recently learned about this.
+
+00:33:57 You have this as a badge on your GitHub.
+
+00:33:59 Tell us a quick bit about this.
+
+00:34:01 I'm good friends with Arthur who, who was the founder.
+
+00:34:05 I'm a big fan of codspeed when you're building performance critical code.
+
+00:34:09 This is a nice few, but the real powerful thing is if you go in on a, on a pull request, you can see if you're getting performance regressions.
+
+00:34:17 So, and even better.
+
+00:34:19 So if, if you go to, so these are the particular benchmarks we have.
+
+00:34:22 So if, yeah, maybe you go to branches, it's a, or if you go to a pull request in, in our GitHub.
+
+00:34:28 Oh, if I compare all these, I've compared main against main.
+
+00:34:31 That's not super interesting.
+
+00:34:32 If you go back to our, if you go back to, to the, like go to PR that you guys have to, to PRs.
+
+00:34:38 And if you go, for example, to that data class one, the third one down.
+
+00:34:42 Gotcha.
+
+00:34:42 All right.
+
+00:34:43 Let's check that out.
+
+00:34:43 You'll see, we have a comment from codspeed saying one benchmark has got more performance.
+
+00:34:47 more importantly, I had performance regression.
+
+00:34:51 Now Monty, now, now codspeed would be failing and I'd be like, I need to go fix that before I merge it.
+
+00:34:56 So we can't, as long as we have enough benchmarks, we can't have like silent regressions in performance.
+
+00:35:02 And even more powerful.
+
+00:35:03 If I go click on that, on that particular one, if you kick on the pair tuples, or go just, perhaps.
+
+00:35:10 Yeah.
+
+00:35:10 Yeah.
+
+00:35:11 What you will see is we can now go and see, the flame chart, the flame graph of exactly what's taken, what time and where the performance changes have come from.
+
+00:35:19 This, this change is very minor.
+
+00:35:21 So it's not very interesting, but you can imagine if you accidentally do something slow in your code, this is rust, but that'll work on Python as well.
+
+00:35:27 You would have this like flame chart showing you where the performance has changed.
+
+00:35:30 yeah.
+
+00:35:31 If people who are listening, they just go to the Monty, get up repo, go to any pull requests, pull it down.
+
+00:35:36 And there's just a comment from the cod speed bot.
+
+00:35:39 And it says the improvement changed from 97.7 milliseconds to 88.1 milliseconds.
+
+00:35:45 That's a 10.95% increase in performance.
+
+00:35:47 So, Hey, this thing doesn't hurt performance, right?
+
+00:35:50 By adding it.
+
+00:35:51 Yeah.
+
+00:35:51 What's even cooler is under the hood.
+
+00:35:52 They're using, Oh, I'm having a blank on the name, but they're, they're not even measuring, they're measuring like CPU and CPU instructions.
+
+00:36:00 Okay.
+
+00:36:00 Yeah.
+
+00:36:01 So it can run in, in a like noisy environment, like you have actions and you can still get like pretty good accuracy on detecting performance changes.
+
+00:36:09 Valgrind.
+
+00:36:09 There we are.
+
+00:36:10 Valgrind is the underlying tool that like at the compiler level is looking at number of CPU instructions.
+
+00:36:15 See what this pulls up.
+
+00:36:16 Well, cool.
+
+00:36:18 I don't know what that's about, but there's a, a polygonal polygon.
+
+00:36:23 No, well, I don't know what this is a cartoon, but there's also the app.
+
+00:36:27 Yeah.
+
+00:36:28 The, the, the, the, Oh, that's its logo.
+
+00:36:30 Okay.
+
+00:36:30 I got it.
+
+00:36:30 That's it's like, at least it's like hero image or something.
+
+00:36:34 yeah.
+
+00:36:35 Yeah.
+
+00:36:35 So, so we, it's maybe a good segue then into performance where like the aim of Monty is not to build something faster than CPython.
+
+00:36:42 The aim, the aim I suppose is to build something that is not like heinously slower.
+
+00:36:47 we performance seems to vary from about five times better to five times worse.
+
+00:36:52 In most cases, I'm sure that there are, there are edge cases we need to go and improve where it's worse than that, but like, that's what I seem to see.
+
+00:36:58 I mean, in my impression of the kind of LLM written code that we're mostly talking about, performance is not critical.
+
+00:37:04 Execution is going to be in the matter of single digit milliseconds.
+
+00:37:08 And that's not going to matter when you add a LLM requests are taking seconds.
+
+00:37:11 The thing where Monty really excels.
+
+00:37:13 So if you scroll down a bit and I can talk you through the table, it's like near the bottom of the, of the read me.
+
+00:37:19 but yeah, there we are.
+
+00:37:22 So like the startup time here measured for Monty to go from basically code to a result.
+
+00:37:27 I think the code here is like one plus one is, 0.06 milliseconds.
+
+00:37:34 So that's six, microseconds.
+
+00:37:37 So, and actually in the hot, hot loop in benchmarks, we see one plus one, going from codes to result in Monty taking about 900 nanoseconds.
+
+00:37:45 So under a microsecond, again, that's, that's microsecond, not millisecond or second.
+
+00:37:51 when you compare that to like running something in Docker, which is taking in, in my example here, 195 milliseconds, Pyodide, Pyodide is awesome project.
+
+00:38:01 Big fan of, of the team, allowing you to run Python in the browser, but wasn't designed for this use case, running, going from zero to like getting a result in Pyodide is, 2.8 seconds.
+
+00:38:13 Starlark's a special case of another project, a bit like Monty, but a bit more limited.
+
+00:38:19 but sandboxing, I was talking earlier about that being one of the main options, like go run a, basically spin up a new container somewhere.
+
+00:38:25 There's a bunch of services that will do that.
+
+00:38:26 They're very popular at a moment from, from scratch to creating a new container and getting a result.
+
+00:38:30 Here's taking over a second.
+
+00:38:32 So where Monty really excels is where you have relatively small amount of Python code to call.
+
+00:38:38 And that this, the overhead of running it is, is basically in the realistic term zero.
+
+00:38:43 It's, it's the cold start over and over and over again.
+
+00:38:46 The, cause these are all one shot commands, like the LLM asks for this thing and it shuts down when it gets the answer.
+
+00:38:51 Right.
+
+00:38:52 Yeah.
+
+00:38:52 And, and I'm sure that if you ask the sandbox providers, they would be like, yeah, but it's not about cold start.
+
+00:38:57 It's about reusing an existing container.
+
+00:38:59 And that is way faster.
+
+00:39:01 I agree that, you know, and then there, there are impressive pieces of technology, but there are also lots of cases where I do want, where I do want cold start.
+
+00:39:07 I've spoken to the big LLM providers who are interested in Monty, because if you go and ask, ChatGPT, like effectively some, some arithmetic or like how many days between these two dates in the background, they're running Python code.
+
+00:39:21 do that calculation.
+
+00:39:22 They're obviously very security conscious.
+
+00:39:24 They can't just go run that Python code YOLO on, on whatever host.
+
+00:39:27 So they're actually using external, sandboxing services often.
+
+00:39:30 And that one, they're paying the second of overhead for that, where they do need a new container, but also that, you know, they're paying the organizational complexity of another, another provider.
+
+00:39:41 They're paying the fee of running that.
+
+00:39:43 Whereas Monty would allow you to do that kind of thing right there in the process.
+
+00:39:47 That is something that's really interesting about how these LLMs are like bad at math, you know, just add up these numbers and it might not get it right.
+
+00:39:53 And so, like you said, they've, they've started to go, okay, I'm going to write some bit of code that I know how to write really well and can verify.
+
+00:40:00 And then I'll just apply this data set to it.
+
+00:40:02 Right.
+
+00:40:03 Like you'll see it doing, you know, CSV types of things with Python and all sorts of stuff.
+
+00:40:08 And so that's a really good place where that Monty could be the foundation of it.
+
+00:40:12 Right.
+
+00:40:13 Yeah, exactly.
+
+00:40:13 And, you know, the other nice thing about that is if you have the Python code and something does go wrong, you're not having to like kind of guess at what's going on inside the black box of the LLM.
+
+00:40:23 Well, I suppose you are at some level, but you have the code, which is kind of the intermediate step where you can go and verify.
+
+00:40:28 Yep.
+
+00:40:28 That code makes sense.
+
+00:40:29 I mean, not saying everyone will do that, but as a developer debugging it, or as a data scientist trying to work out whether or not it is likely to have got the right result, I have the kind of intermediate representation of the logic that I can go and review.
+
+00:40:41 And so it's that much easier to, to debug.
+
+00:40:43 So let's talk about some of the columns, partial language completeness.
+
+00:40:47 I'm not saying it needs to be completely complete, but you know, like what, what does it, what does it need?
+
+00:40:53 You know, for example, do you need really dynamic metaclass programming for your tool use?
+
+00:40:58 Probably not.
+
+00:40:58 Right.
+
+00:40:59 Right.
+
+00:40:59 So probably not.
+
+00:41:00 So at the moment, the two, what does it need?
+
+00:41:02 Yeah.
+
+00:41:02 So the things we miss right now, I'll start with, with the downside.
+
+00:41:05 The things we miss right now are, classes, context managers.
+
+00:41:10 So, so with expressions, and match expressions, which are obviously relatively new.
+
+00:41:16 I think classes are by far the most complex of those.
+
+00:41:18 We will support them at some point.
+
+00:41:20 They're somewhat complex to, to get right.
+
+00:41:22 I have been amazed by how much LLMs just don't need classes to do most of the stuff they're doing.
+
+00:41:27 Like, so you could pass a data class into Monty and you will have some object where you can access attributes.
+
+00:41:32 And access as of later today methods on that, on that data class.
+
+00:41:35 But what you can't do is like define a class or a data class in, in the Monty code itself.
+
+00:41:40 I'm amazed at how often that that's just not necessary.
+
+00:41:43 Context managers will mostly be nice because we can allow the LLM to write the kind of code it might want to.
+
+00:41:50 So let's say we allow the open, at the moment the open built in is not, it's not provided at all for opening a file.
+
+00:41:55 We have like the, we have basic support for path lib via our way of, allowing use like very controlled access to the outside world.
+
+00:42:04 But if we have add open, very often LLMs want to write with open, yada, yada.
+
+00:42:08 And we want to be able to support that match expressions are, are, are neat.
+
+00:42:12 And I think will be more and more common in Python.
+
+00:42:13 And I think we can, you know, full support will be hard, but getting most of it there is hard.
+
+00:42:18 What we will never.
+
+00:42:19 And then, then the other big part of partial is we don't have the full standard library.
+
+00:42:23 So we have a very, very limited standard library today of some bits of typing, some bits of the SIS, module, OS dot environment, as a PR up from someone to add re, regexes date, date time.
+
+00:42:38 And I think we'll add Jason.
+
+00:42:40 and so those will all be, be supported.
+
+00:42:42 And to be clear, they will all be implemented in rust.
+
+00:42:45 So like Jason dot loads will be rust level performance of loading that thing.
+
+00:42:49 I mean, we're a bit of overhead to creating the Monty object, but, but very, very fast.
+
+00:42:54 but we're never going to go and support the whole standard library.
+
+00:42:58 It'll be on a case by case to LLMs actually need this thing, that we can go and go and add them.
+
+00:43:02 I will say, and I know we're going to talk about this at some point, but like, it is amazing what this project is only made possible by LLMs and not, not that we're ever aiming to full standard library, but adding support for certain, certain modules of the standard library is a heck of a lot easier when you can, again,
+
+00:43:17 we have a perfect record of what it's supposed to do.
+
+00:43:19 So we can go and ask the LLM to, to build that.
+
+00:43:22 and then the last test for like CPython has a ton of tests.
+
+00:43:26 You can extract out the bits that apply to that maybe.
+
+00:43:29 And just, well, does it run here?
+
+00:43:31 I'll come on to like, so I have three reasons why I think it's, this is possible with LLM.
+
+00:43:35 Let me just, the last point that's going to make is what we will never support is, or I think never support is third party libraries.
+
+00:43:41 So you'll never be able to pip install Pydantic or FastAPI or requests inside, inside Monty.
+
+00:43:48 And because the reason, the reason for that is we would need to support the CPython ABI and basically support full CPython.
+
+00:43:55 And if you're going to do that, you're basically back to CPython.
+
+00:43:58 and so sure there are ways of sandboxing CPython, most of which are demonstrated here.
+
+00:44:02 That's not the aim of this project.
+
+00:44:03 However, what we can allow you to do is basically have a shim where you expose, let's say HTTPX, get and post methods and patch and whatever you need through to Monty.
+
+00:44:13 And we're, we're currently working out whether or not we basically add those, provide those shims as, as part of the library.
+
+00:44:21 So you don't need to go and think about that.
+
+00:44:22 You can be like, yes, give it HTTP access or yes, give it access to DuckDB's SQL, engine or give it access to beautiful soup.
+
+00:44:32 And that shim comes and you don't need to go and implement it.
+
+00:44:34 so you can whitelist in like super critical libraries that people are like, we, if I had this, I could really do.
+
+00:44:42 So one of the questions we have now, that we need to probably go run evals on to find out is if we come up with a very Pythonic type safe, example of let's say an HTTP library, and we give those types to the LLM,
+
+00:44:54 does it do better or worse with that than just being told you can use requests?
+
+00:44:58 And I don't know the answer.
+
+00:44:59 There are, there are genuine arguments in both cases.
+
+00:45:02 Some people seem to be very sure one or the other is right.
+
+00:45:04 I just, I just don't know.
+
+00:45:05 And that's the kind of thing where we need to go and run evals and work out what an LLM will find easiest.
+
+00:45:10 but yeah, we can either kind of attempt to fake the existing libraries, API, warts and all, or we can go.
+
+00:45:18 And in many cases just say, Oh, we've got this new fetch library that has a fetch method and here's its, signature.
+
+00:45:24 And I suspect the LLM will do, do a pretty good job of it.
+
+00:45:26 So what are the weird new, not quite typo squatting, but kind of typo squatting supply chain type of issues has, at least in the earlier days of LLMs, they, when you would ask it to write code, sometimes it would say,
+
+00:45:39 we're going to import some library and that library didn't exist.
+
+00:45:42 And then it imagined a bunch of code series that happened after it.
+
+00:45:45 So people would go and find popular ones of those and then register malicious packages that the LLMs had hallucinated.
+
+00:45:53 Right.
+
+00:45:54 but I guess you probably kind of, you kind of got to do a similar analysis, but not for evil where you say like, well, if I just ask Claude or, or, codex or whatever to do a thing, what is it?
+
+00:46:06 What does it try to do?
+
+00:46:07 If you see it always asking for a question, like maybe it's just better that we, we lie to it and say, okay, whenever it says import requests, we give it our special way to just get stuff off the internet.
+
+00:46:17 And it only really needs to get put in like a couple of, it doesn't need all of requests.
+
+00:46:21 It just needs a very basic behaviors.
+
+00:46:23 Yeah.
+
+00:46:23 Is that the kind of stuff you're thinking?
+
+00:46:25 Yeah, exactly that.
+
+00:46:25 And that's one of the reasons we didn't start with Starlark, which is a, I think originally a meta Facebook project to have a, like basically isolated Python runtime was because Starlark has a very
+
+00:46:39 disciplined and principled approach to what it supports and what it doesn't.
+
+00:46:43 We have to be not principled.
+
+00:46:44 We have to be like, well, if the LLM wants to write this thing, we're going to go and implement the CSV module, but not the Toml lib module.
+
+00:46:51 Cause that's just what they need to go and use.
+
+00:46:53 And we're going to be like, our principle is give the LLM what it wants, not here's our rule.
+
+00:46:57 so yes, exactly.
+
+00:47:00 And yeah, I mean, I think Boris, Boris, the, code code creator talked about this.
+
+00:47:06 So I saw him speaking, he was saying like, you know, one of the reasons they gave the LLM bash early on was like, you can tell it to use the make dark, tool to make directories, but half the time it'll just go and call make dark --P and make the directory that way.
+
+00:47:20 And like, are we going to fight it and always return an error being like, you should do this other thing, or are we just going to make that thing work?
+
+00:47:25 And often you have to just make nothing work.
+
+00:47:27 so, so yeah, go ahead.
+
+00:47:29 Yeah.
+
+00:47:29 Is this useful outside of this for AI story?
+
+00:47:34 You know, like if I'm creating something that has really high security, I want to add some, some mechanism for people to write scripting, but not full on programming language.
+
+00:47:44 So in other places.
+
+00:47:46 Yeah.
+
+00:47:46 We've actually thought about this internally inside log fire already.
+
+00:47:49 Like we want to be able to give people a way of basically entering config config that can do things.
+
+00:47:54 There's no easy way of doing that right now.
+
+00:47:55 Right.
+
+00:47:55 As it's sure I can go and use as again, one of these sandboxing services to run that code, all the complexity of setting up, we offer self-hosted log fire.
+
+00:48:02 So they're not going to work, et cetera, et cetera.
+
+00:48:03 Or once Monty is a bit more mature, we can just go and use Monty to let them like define the expression that, that it might be as simple as like, what field do we use from your profile to display as your net?
+
+00:48:14 Right.
+
+00:48:15 And we can, we can let you bet in or an AI can write the, like one line of code that does that.
+
+00:48:19 And then we can call it lots of times.
+
+00:48:20 They're like, it's feasible now to have the, like a few lines of Python code to define this.
+
+00:48:24 That's generally, generally been hard until now.
+
+00:48:27 but of course, you know, the best tools are the ones where you, people use the tool for not what it was originally designed for.
+
+00:48:34 So someone invents the hammer and I think it's going to be used for nails.
+
+00:48:36 And then someone else realizes that you can like change the, like knockout, like mistakes in your bumper of your car with a hammer.
+
+00:48:43 Right.
+
+00:48:43 And like, of course, what's amazing about Pydantic, why I'm so proud of it is people gone and used it as a general purpose tool for a bunch of things I'd never thought of.
+
+00:48:50 So my like dream for Monty is that people come along with things to do with it that I had never heard of.
+
+00:48:55 And like, RLM is a really good example of that.
+
+00:48:57 So recursive language models of this way in which you use almost always a Python REPL as a way of implementing effectively agentic loop.
+
+00:49:05 And there were some people who have an example of doing that and like getting better results in the RKGI 2 benchmarks by using RLM.
+
+00:49:13 I didn't even know about RLMs when I announced Monty.
+
+00:49:16 There are now at least four different libraries that are using Monty for RLM with, with DSPY because DSPY because people are super excited about that space.
+
+00:49:25 So that's, that's agentic, but it's definitely something I hadn't thought of when I announced it.
+
+00:49:29 Yeah.
+
+00:49:30 I was even thinking just like, I have a medical device, like a CT scanner.
+
+00:49:34 I want to let people script it, but we can't break it and like zap somebody.
+
+00:49:38 Do you know what I mean?
+
+00:49:39 It needs to be really very, very controlled.
+
+00:49:42 this could be a really interesting, thing.
+
+00:49:44 So does it compile to WebAssembly?
+
+00:49:46 Can I in browser it?
+
+00:49:48 Yep.
+
+00:49:48 And in fact, Simon Willison, the day it came out or Simon Willison, Claude prompted by Simon Willison set one up.
+
+00:49:54 So I think if you go to Simon's blog somewhere, there's actually an example of Monty running somewhere, somewhere in a browser that you can, you can go and go and try it.
+
+00:50:03 Probably an earlier version.
+
+00:50:04 yeah, somewhere here, I think he'll have a link to, to his, his version of it.
+
+00:50:09 so as he pointed out that you can do the really crazy thing, which is you can, you can compile the Python package for, yeah, so this is, this is his example, which is, I think like, WebAssembly running directly in the browser, but he did something even more crazy, which is he took the Python library,
+
+00:50:24 compiled that to, to Wasm and then called that from inside Pyodide, which is like crazy worlds within worlds.
+
+00:50:31 definitely not the original plan, but, but interesting.
+
+00:50:34 Yeah.
+
+00:50:34 Wow.
+
+00:50:35 Okay.
+
+00:50:35 So yes.
+
+00:50:36 And here's your example to do it, right?
+
+00:50:38 Yeah.
+
+00:50:39 Yeah.
+
+00:50:39 And I think the other, the other thing we really need to add to this table, in terms of, of latency and complexity is calling back to the host.
+
+00:50:45 So one of the reasons a number of people have reached out to me and excited about this is sure that they're happy to have a sandboxing service.
+
+00:50:51 They don't even mind the second of, of start time, but like if they want to, for example, build an agent that can go and basically, run SQL against a bunch of CSV files, how do I get those CSV files into the sandbox?
+
+00:51:03 Well, that is painful and often slow because we have to make a full network round trip back to the host to get those files.
+
+00:51:09 The, the network latent, the, sorry, the overhead of calling a function on the host in Monty is a single digit milliseconds or maybe even less.
+
+00:51:17 And so if you're making, if you're reading 50 different files from the, from, from the local, yeah, from within the sandbox, but effectively they're registered locally, that's super easy and performance because it's running right there and the same process.
+
+00:51:30 Very neat.
+
+00:51:30 So a couple of questions.
+
+00:51:32 Bonita says we have agents running on AWS strands.
+
+00:51:36 Here's the crazy thing about AWS.
+
+00:51:37 There's like so many services.
+
+00:51:39 I don't even know what strands is.
+
+00:51:40 Yeah.
+
+00:51:40 But amazing.
+
+00:51:41 I think strands is their agent framework is my, my, my guess.
+
+00:51:45 Yeah.
+
+00:51:45 Yeah.
+
+00:51:45 Will the use of Monty help us improve performance there?
+
+00:51:49 Could they use Monty?
+
+00:51:50 Yes, it should be able to.
+
+00:51:51 I'm again, again, apologies if I don't know exactly what strands is.
+
+00:51:54 If strands is their agent framework.
+
+00:51:56 Yes.
+
+00:51:57 In principle, Pynastic AI, our agent framework will have support for Monty as a code execution environment later this week.
+
+00:52:05 And so you'll be able to basically, instead of running, yes, open source agents SDK.
+
+00:52:11 So I don't know whether AWS intend to add specific support for Monty, but I know our agent framework will support it later this week.
+
+00:52:18 My guess from, from what we've built in the past is others will pick up on it and also integrate it into, into their things.
+
+00:52:24 And of course, the nice thing is here because all the only real requirement is rust.
+
+00:52:28 We already have the Python package and JavaScript package, but if you wanted to call it from, from any other language base where you can call rust, that should be possible.
+
+00:52:36 And data science, you mentioned DuckDB already.
+
+00:52:39 Sort of.
+
+00:52:39 Yeah.
+
+00:52:40 NumPy would be, would be great to have, I think full, I mean, I think when like, this is where we need to be a bit careful about what we add.
+
+00:52:47 Like, sure.
+
+00:52:47 If there are particular bits of, of NumPy that are useful, can we go and add shims for that?
+
+00:52:51 Or can we even go and implement that in rust?
+
+00:52:53 So you can do a like NumPy matrix transformation that happens effectively in rust, but we need to work out what people want and where, what we can't do, unfortunately, I'd love to be able to, but we can't do is just be like, yep, click this button.
+
+00:53:06 And then now we have the full NumPy API available.
+
+00:53:09 That is the, you know, that's the big, I'm not going to say Achilles heel because I'm super optimistic about Monty, but that's the, you know, the biggest challenge of Monty is, is that we don't just get to use all the libraries.
+
+00:53:18 Okay.
+
+00:53:19 Let me propose a slightly different path.
+
+00:53:21 Yep.
+
+00:53:22 Polars.
+
+00:53:23 Yep.
+
+00:53:23 Plus Narwhals.
+
+00:53:24 What's Narwhals?
+
+00:53:25 Narwhals is a, a facade API, a facade across NumPy, Polars, and a few other things that gives you, like you can program in either, and it'll talk to one or the other.
+
+00:53:37 So basically you could use Narwhals to talk NumPy, but it translates all the calls over to Polars.
+
+00:53:43 Yeah.
+
+00:53:43 I mean, given that, you know, there's a paradigm shift happening here.
+
+00:53:47 We, what we, what we're not trying to do is let your existing Python code run in this runtime.
+
+00:53:52 We're trying to give it a context for LLMs to be able to write code.
+
+00:53:56 And so why not?
+
+00:53:57 I mean, Polars is written in Rust.
+
+00:53:58 And exactly.
+
+00:53:59 That's why I said that.
+
+00:54:00 Yeah.
+
+00:54:00 Go and like compile Polars into Monty.
+
+00:54:03 And now you have a full, like very performant data frame library or, you know, analytical database effectively built into it.
+
+00:54:11 And you can, and we have the full Polars API available in, in Monty.
+
+00:54:16 That would be, that would be one option.
+
+00:54:19 Again, I'm going to be a bit restrictive and, you know, any color, as long as it's black about what we add, because I don't think, you know, we don't need, I don't care about your taste of whether you prefer Polars to Pandas or anything else.
+
+00:54:30 I care about what are the LLMs find easy to do.
+
+00:54:33 I think the biggest point of proof of that, Samuel, is that it doesn't do Pydantic yet.
+
+00:54:39 Yeah.
+
+00:54:39 If it doesn't do Pydantic, like, okay, you, you're, you're walking the walk.
+
+00:54:44 Yeah.
+
+00:54:44 And, and I, to be clear, I don't think, yeah, am I going to vibe code a whole new Pydantic in Monty?
+
+00:54:50 I don't know whether I'm keen for that yet.
+
+00:54:53 Yeah.
+
+00:54:53 Yes, indeed.
+
+00:54:54 So how do I go about making my AI, like, let's say I'm doing Claude Code, Opus 4.6, some project.
+
+00:55:03 I'm actually not a huge fan of the terminal Claude Code.
+
+00:55:06 I feel like it takes me too far away from the code.
+
+00:55:10 Just, I prefer to kind of have it in to kind of editor, like the extension for say cursor or VS Code, where I can sort of like watch the code as it's going and sort of, no, no, no, you're going the wrong way.
+
+00:55:21 Anyway, it doesn't matter really which, how you run it.
+
+00:55:22 Suppose I'm running it somehow.
+
+00:55:25 How do I tell it about Monty?
+
+00:55:27 How does it know what Monty can and can't do?
+
+00:55:29 How do I make it use Monty?
+
+00:55:31 You know what I mean?
+
+00:55:32 You wait a few weeks for us to have skills for Monty and the rest of our stack, and then you install those skills.
+
+00:55:39 It's something we need to do.
+
+00:55:40 And I think that's the number.
+
+00:55:41 We will have proper documentation for Monty as well.
+
+00:55:44 And that will, that will be an important part of it.
+
+00:55:47 That's, yeah, there's a lot to do here.
+
+00:55:49 LLMs can help with some of it, but not, not by any means do all of it.
+
+00:55:52 I mean, at the moment, read the read me and read the issues.
+
+00:55:55 And I'm, I am like impressed, surprised, scared by how much people are using Monty already.
+
+00:56:01 how much is he picked up?
+
+00:56:02 It's already, what are you doing?
+
+00:56:04 You know what I saw?
+
+00:56:04 I saw your announcement of this on X actually is where I saw it.
+
+00:56:08 And I believe, it's been a little while since I saw it, but it said something to the effect of like, this is way too early, but what the heck, here we go.
+
+00:56:17 Posted the GitHub link, right?
+
+00:56:19 Something to that effect.
+
+00:56:20 And that was, what's that last week?
+
+00:56:23 Here we are with 5,000 stars.
+
+00:56:26 Yeah.
+
+00:56:26 yeah, exactly.
+
+00:56:28 And it shows how many people are, you know, are looking, are interested in this space.
+
+00:56:32 I mean, look, a lot of people would have started thinking, Oh, there's going to be a new Python.
+
+00:56:36 That's just faster.
+
+00:56:37 Cause it's in Rust and it's going to do everything better in a way that like, you might argue, you know, rough is like wholly better than what one before.
+
+00:56:44 That is not, that's not the aim for Monty.
+
+00:56:46 This is not going to supplant or replace in any way.
+
+00:56:48 See Python.
+
+00:56:49 It's a, it's a completely separate thing.
+
+00:56:50 But I think there's also a lot of people who have started this because they're running, they're having a headache running stuff in a, you know, with existing options for sandboxing and something like this is, is interesting.
+
+00:56:59 There's also, there's another project that's worth calling out from Vasell called Just Bash, which is very similar conceptually.
+
+00:57:07 It's a bash environment written entirely in TypeScript by, by a team.
+
+00:57:11 I've said, I met them when I was in San Francisco a few weeks ago and the plan, when I get around to finishing the JavaScript API is that they will in fact use, Monty as the way of calling Python code.
+
+00:57:22 Cause they have some way of calling Python code within this, which I think uses Pyodide at the moment.
+
+00:57:26 And it has some, some overheads and some, some, challenges around, security.
+
+00:57:33 but yeah, this is very similar in the sense of like, it's basically vibe coding, all of the terminal methods that you might want, and using a bunch of existing unit tests to, to check that they're correct.
+
+00:57:43 interesting that obviously Vasell is a much, much bigger name than we are.
+
+00:57:47 And it hasn't got as much, like traction early on as at least in terms of GitHub stars, the, you know, the worst of all vanity metrics.
+
+00:57:54 they've been out like two or three times as long as you have, they've 1000 stars.
+
+00:57:58 That is, I mean, that's noteworthy, honestly.
+
+00:58:00 Yeah.
+
+00:58:01 And there's another project like this, which has about 20 stars, which I was looking at earlier today, which is this, but in rust completely, which already has support for Monty, which I can't remember the name of right now, but maybe I should find it quickly and call it out.
+
+00:58:13 Cause I feel like it deserves it given that it's a really cool project.
+
+00:58:16 It has, as I say about, 30 stars.
+
+00:58:20 let me very quickly, excuse me for one minute.
+
+00:58:23 It was one of the replies to my initial announcement.
+
+00:58:27 sorry.
+
+00:58:28 I will not be very long.
+
+00:58:31 it's called bash, bash kit.
+
+00:58:33 I put the, put the link here.
+
+00:58:37 this already actually has optional support for using Monty as the, as a Python, runtime.
+
+00:58:44 well, if I was logged into GitHub on my streaming machine, I would have one more star, but I'll do it later.
+
+00:58:49 Fair enough.
+
+00:58:49 Fair enough.
+
+00:58:50 But, but I think what's interesting is all of these three projects and I've heard of a few others, you know, these are only possible really, or they're only really challenges anyone would take on with the advantage of, of an AI.
+
+00:59:00 And so, so I was mentioning this earlier.
+
+00:59:02 I think there were three reasons why these things have, why I'll talk about Monty in particular, why it is possible now when it wasn't before and why it is something where the like speed up from an LLM is even greater than in most, most coding tasks.
+
+00:59:14 One, the LLM, knows in its soul, in its weights, the internal implementation, how to go about implementing a bytecode interpreter or how to implement it.
+
+00:59:25 If I asked most even experienced Python engineers or Rust engineers, how do I write a bytecode interpreter?
+
+00:59:31 They would scratch their head and be like, yeah, I sort of know about this.
+
+00:59:33 I'll put my head up and say, I didn't know what a bytecode interpreter was or how they worked until I and Claude built one together.
+
+00:59:39 But like, they know exactly how to do it because they've read 15 different, well, well-trodden implementations.
+
+00:59:44 And it's got a great example.
+
+00:59:45 You can say, not just any, here's the Python, CPython one, just help me do that.
+
+00:59:50 Whatever that does.
+
+00:59:51 And the second thing is they know what the public interface is again, in their soul, as in they know what, what Python should be like.
+
+00:59:57 They know the signature of the filter function without you having to go and describe it.
+
+01:00:01 Thirdly, you have an amazing set of unit tests, which is basically just, does it match CPython?
+
+01:00:05 So in our case, we basically vibe generate tests whenever we're, whenever we're adding a feature and then we run them with CPython and Monty.
+
+01:00:14 And we confirm that they are identical output down to the byte.
+
+01:00:17 You know, the exceptions have to be identical to the, you know, to the byte.
+
+01:00:19 But in the case of just bash, they, they have the existing set of like some bash tests somewhere for like any shared environment that they're able to leverage.
+
+01:00:32 And I think one thing we might do at some point is basically go steal a bunch of CPython tests and run them with both.
+
+01:00:36 I haven't got there yet, but that would be an interesting way ahead.
+
+01:00:39 And then the last thing is you don't have to bike shed or have any human debate about what should the, what should the function, what should the error message be when you try and add an int to a string?
+
+01:00:48 There's no, there's no debate about that.
+
+01:00:50 You're just doing whatever CPython does.
+
+01:00:51 And so there's a whole, whole range of bike shedding debates that we just don't have to go and have because we're just like trying to target CPython.
+
+01:00:59 Now, of course, around the edge of that, there's a bunch of places where we do have to think about it.
+
+01:01:02 Like how do we do these external function calling things?
+
+01:01:05 And that's, that is obviously, that is honestly much, much slower because we don't have this, like the LLM knows already the answer.
+
+01:01:12 approach, but I think these are the kinds of tasks where LLMs are massively faster or one, one set of cases where LLMs are massively faster than without.
+
+01:01:21 So I was speaking to big public company in New York who was saying that one of their team had vibe coded a Redis, clone in rust, put it into production after 72 hours and it was 30% faster than Redis.
+
+01:01:34 Why is that probably worked fine, right?
+
+01:01:36 Yeah.
+
+01:01:37 And why is that possible?
+
+01:01:37 Well, the same things are all true.
+
+01:01:39 The unit test is super easy.
+
+01:01:40 It's just, is it the same as Redis?
+
+01:01:41 There's no debate about what the API is, et cetera, et cetera.
+
+01:01:44 And so there are these tasks, which historically we would have thought was super hard.
+
+01:01:48 So I think often we fall into the trap of thinking that what LLMs are good at is what humans are good at.
+
+01:01:53 And what LLMs are bad at is what humans are bad at.
+
+01:01:55 I think more and more, we're seeing there are things that LLMs are much better at than we are.
+
+01:01:59 And there are things that they are, that they're less good at.
+
+01:02:01 And we're still very early in learning what those things are, but it is not good enough just to be, just to use the like naive, simplistic approach of like what humans are good at, they're good at.
+
+01:02:10 The simplest example of that is like, ask a NLM to generate you a B-tree implementation in C.
+
+01:02:15 And with that prompt alone, it will write you 500 lines of C that work as a B-tree implementation.
+
+01:02:20 It takes you 20 minutes to study it, to be sure.
+
+01:02:23 And it's like, you're not, I think it works this way, right?
+
+01:02:26 Yeah.
+
+01:02:26 I honestly think the little, the bits of weird math and a little, the little hallucinations and stuff have shaken a lot of people's trust in these things.
+
+01:02:34 And it's just like, well, I'm, I mean, how easy is it to add five numbers?
+
+01:02:38 Come on.
+
+01:02:39 Obviously these things are junk because they can't do that.
+
+01:02:41 And it's just like, well, maybe that's not the tool to use for that situation.
+
+01:02:44 Right.
+
+01:02:44 Yeah.
+
+01:02:45 But, but what you're using here is incredible.
+
+01:02:47 Yeah.
+
+01:02:47 But again, we have the guardrails of you must write unit tests all the time that match the two.
+
+01:02:51 I mean, well, or we have fuzzing going on.
+
+01:02:53 The fuzzing is another amazing technique.
+
+01:02:55 So we use, so we have a Jason parser called jitter, which is about the fastest Jason parser in rust that we also is built into, Pydantic core, but it's also actually independently a package in, in PyPI that's used an awful lot.
+
+01:03:09 You'll see it in the dependencies of open AI, for example.
+
+01:03:12 but jitter was where we, I discovered about fuzzing really.
+
+01:03:15 No, I found out about it through, the hypothesis project project of, my friends, Zach Hatfield Dodds in Python, but then fuzzing in rust because the performance is so much better is, is, is really powerful.
+
+01:03:27 So basically it's generating random strings and using them as an input something, but then it's using very clever stochastic techniques to work out where to try more things.
+
+01:03:35 And so you can basically fuzz, Monty, you can just give it arbitrary strings for hour after hour.
+
+01:03:41 And periodically it'll find something where there's an error where like the memory usage is too high.
+
+01:03:46 If you do the following sequence of multiplying integers together.
+
+01:03:49 I don't think it will find a like true read the file system vulnerability, but it'll definitely find like odd memory uses or it has found, stack overflows and panics and things like that.
+
+01:03:59 Well, I think people are excited about it.
+
+01:04:02 It's definitely got a lot of people talking, a lot of attention, a lot of, a lot of comments in the live stream.
+
+01:04:07 So congrats.
+
+01:04:08 And yeah, keep us posted on where it goes.
+
+01:04:11 And we'll do.
+
+01:04:11 Thank you very much.
+
+01:04:12 Yeah.
+
+01:04:12 Thanks so much for having me.
+
+01:04:14 You bet.
+
+01:04:14 Bye.
+
+01:04:15 This has been another episode of talk Python to me.
+
+01:04:18 Thank you to our sponsors.
+
+01:04:19 Be sure to check out what they're offering.
+
+01:04:21 It really helps support the show.
+
+01:04:22 This episode is brought to you by our agentic AI programming for Python course.
+
+01:04:27 Learn to work with AI that actually understands your code base and build real features.
+
+01:04:32 Visit talkpython.fm/agentic dash AI.
+
+01:04:36 If you or your team needs to learn Python, we have over 270 hours of beginner and advanced courses on topics ranging from complete beginners to async code, flask, Django, HTMX, and even LLMs.
+
+01:04:49 Best of all, there's no subscription in sight.
+
+01:04:52 Browse the catalog at talkpython.fm.
+
+01:04:54 And if you're not already subscribed to the show on your favorite podcast player, what are you waiting for?
+
+01:04:59 Just search for Python in your podcast player.
+
+01:05:01 We should be right at the top.
+
+01:05:02 If you enjoy that geeky rap song, you can download the full track.
+
+01:05:06 The link is actually in your podcast blur show notes.
+
+01:05:08 This is your host, Michael Kennedy.
+
+01:05:10 Thank you so much for listening.
+
+01:05:11 I really appreciate it.
+
+01:05:13 I'll see you next time.
+
+01:05:24 I thought of me.
+
+01:05:26 Get we ready to roll.
+
+01:05:29 Upgrade the code.
+
+01:05:31 No fear of getting old.
+
+01:05:33 We tapped into that modern vibe.
+
+01:05:36 Overcame each storm.
+
+01:05:38 Talk Python To Me.
+
+01:05:40 I sync is the norm.
+

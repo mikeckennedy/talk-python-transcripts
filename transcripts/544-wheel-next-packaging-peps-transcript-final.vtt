@@ -1,0 +1,3139 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:06.060
+When you pip install a package with compiled code, the wheel you get is built for CPU features from 2009.
+
+00:00:06.660 --> 00:00:11.440
+Want newer optimizations like AVX2? Your installer has no way to ask for them.
+
+00:00:11.740 --> 00:00:15.600
+Want GPU support? You're on your own configuring special index URLs.
+
+00:00:16.020 --> 00:00:22.280
+The result is fat binaries, nearly gigabyte-sized wheels, and install pages that read like puzzle books.
+
+00:00:22.640 --> 00:00:34.240
+A coalition from NVIDIA, Astral, and Quansight has been working on WheelNext, a set of peps that let packages declare what hardware they need and let installers like uv pick the right build automatically.
+
+00:00:34.660 --> 00:00:37.080
+Just UVPip install Torch and it'll work.
+
+00:00:37.440 --> 00:00:47.060
+I sit down with Jonathan Decker from NVIDIA, Ralph Gommers from Quansight and the NumPy and SciPy teams, and Charlie Marsh, founder of Astral and creator of uv, to dig into it all.
+
+00:00:47.520 --> 00:00:52.160
+This is Talk Python To Me, episode 544, recorded March 2nd, 2026.
+
+00:00:53.740 --> 00:00:56.460
+Talk Python To Me, yeah, we ready to roll.
+
+00:00:56.540 --> 00:00:59.320
+Upgrading the code, no fear of getting old.
+
+00:00:59.400 --> 00:01:03.120
+They sink in the air, new frameworks in sight, geeky rap on deck.
+
+00:01:03.420 --> 00:01:05.120
+Quark crew, it's time to unite.
+
+00:01:05.240 --> 00:01:08.160
+We started in Pyramid, cruising old school lanes.
+
+00:01:08.420 --> 00:01:09.920
+Had that stable base, yeah, sir.
+
+00:01:09.920 --> 00:01:14.380
+Welcome to Talk Python To Me, the number one Python podcast for developers and data scientists.
+
+00:01:14.820 --> 00:01:16.240
+This is your host, Michael Kennedy.
+
+00:01:16.580 --> 00:01:20.220
+I'm a PSF fellow who's been coding for over 25 years.
+
+00:01:20.760 --> 00:01:21.920
+Let's connect on social media.
+
+00:01:21.920 --> 00:01:25.380
+You'll find me and Talk Python on Mastodon, Bluesky, and X.
+
+00:01:25.580 --> 00:01:27.540
+The social links are all in your show notes.
+
+00:01:28.240 --> 00:01:31.780
+You can find over 10 years of past episodes at talkpython.fm.
+
+00:01:31.860 --> 00:01:35.300
+And if you want to be part of the show, you can join our recording live streams.
+
+00:01:35.480 --> 00:01:35.980
+That's right.
+
+00:01:36.160 --> 00:01:39.520
+We live stream the raw, uncut version of each episode on YouTube.
+
+00:01:40.000 --> 00:01:44.520
+Just visit talkpython.fm/youtube to see the schedule of upcoming events.
+
+00:01:44.680 --> 00:01:48.340
+Be sure to subscribe there and press the bell so you'll get notified anytime we're recording.
+
+00:01:48.340 --> 00:01:50.920
+This episode is brought to you by Sentry.
+
+00:01:51.660 --> 00:01:54.820
+You know Sentry for the error monitoring, but they now have logs too.
+
+00:01:55.040 --> 00:02:02.100
+And with Sentry, your logs become way more usable, interleaving into your error reports to enhance debugging and understanding.
+
+00:02:02.420 --> 00:02:05.800
+Get started today at talkpython.fm/sentry.
+
+00:02:06.500 --> 00:02:10.060
+And it's brought to you by Temporal, durable workflows for Python.
+
+00:02:10.480 --> 00:02:17.040
+Write your workflows as normal Python code and Temporal ensures they run reliably, even across crashes and restarts.
+
+00:02:17.040 --> 00:02:20.340
+Get started at talkpython.fm/Temporal.
+
+00:02:21.000 --> 00:02:25.020
+Hey, a quick announcement for everyone taking courses over at Talk Python Training.
+
+00:02:25.300 --> 00:02:27.940
+We just rolled out course completion certificates.
+
+00:02:28.260 --> 00:02:29.300
+I'm really excited about these.
+
+00:02:29.660 --> 00:02:32.900
+When you finish a course, you can now generate a certificate automatically.
+
+00:02:33.520 --> 00:02:39.900
+The best part is there's a one-click button to add it straight to LinkedIn on your profile as an official certificate.
+
+00:02:40.420 --> 00:02:43.780
+Potential employers, current colleagues, they'll all see it right there on your profile.
+
+00:02:43.780 --> 00:02:52.500
+Just head over to your account page at Talk Python Training, find a course you finished, click certificate, and the share to LinkedIn option is right there.
+
+00:02:52.620 --> 00:02:53.240
+Zero friction.
+
+00:02:53.900 --> 00:03:03.900
+And if your employer gives you credit for professional development or reimburses you for training costs, but require some sort of proof, you can also download a full certificate as a PDF.
+
+00:03:04.280 --> 00:03:05.180
+Handy for that kind of thing.
+
+00:03:05.180 --> 00:03:09.040
+I'd love to see a wave of Talk Python certificates showing up on LinkedIn.
+
+00:03:09.600 --> 00:03:14.320
+Head over to Talk Python, click courses, go to your account page, and grab your certificates.
+
+00:03:15.160 --> 00:03:17.640
+Jonathan, Ralph, and Charlie, welcome.
+
+00:03:17.980 --> 00:03:20.660
+Welcome back, depending on which one of you are hearing this.
+
+00:03:21.380 --> 00:03:22.420
+Welcome to the show, you all.
+
+00:03:22.440 --> 00:03:23.780
+It's awesome to have you on Talk Python and me.
+
+00:03:24.040 --> 00:03:24.700
+Thanks for having us.
+
+00:03:24.780 --> 00:03:25.380
+Thanks for having us.
+
+00:03:25.380 --> 00:03:26.380
+Thanks for having us, Michael.
+
+00:03:27.060 --> 00:03:35.460
+We're going to dive in deep to Python packaging and really look at how the needs of Python packaging have evolved.
+
+00:03:36.120 --> 00:03:41.960
+And what you all, as well as a group of a bunch of other people, I see very long contributor lists on these peps.
+
+00:03:42.360 --> 00:03:44.520
+So a lot of people involved in this project.
+
+00:03:44.880 --> 00:03:45.340
+Really great.
+
+00:03:45.520 --> 00:03:47.540
+So let's get into it.
+
+00:03:47.540 --> 00:03:51.520
+Before we do, let's just do a quick round of intros for you all.
+
+00:03:51.760 --> 00:03:53.560
+I guess go around clockwise.
+
+00:03:53.860 --> 00:03:54.720
+Jonathan, you can go first.
+
+00:03:54.720 --> 00:03:59.540
+I work at NVIDIA for like, I think, the better of eight years right now.
+
+00:04:00.200 --> 00:04:02.340
+I did all kinds of different roles.
+
+00:04:02.600 --> 00:04:16.500
+But very recently, I mean, over the last two something years, I move into improving our CUDA and Python offering, trying to find better ways to expose GPU programming, essentially, at the Python layer.
+
+00:04:17.300 --> 00:04:26.120
+And I think for a little bit over a year, I've been working with Ralph and Charlie over multiple proposals to improve Python packaging.
+
+00:04:26.920 --> 00:04:28.060
+Initiative call we are next.
+
+00:04:28.260 --> 00:04:30.160
+And I think we'll talk a little bit more about this.
+
+00:04:30.380 --> 00:04:32.700
+So excited to be on the show today.
+
+00:04:33.420 --> 00:04:33.520
+Yeah.
+
+00:04:33.600 --> 00:04:34.280
+Excited to have you.
+
+00:04:34.400 --> 00:04:37.640
+You have really seen the roller coaster at NVIDIA, I'm sure.
+
+00:04:38.120 --> 00:04:38.280
+Right?
+
+00:04:38.520 --> 00:04:39.980
+Well, it's really exciting.
+
+00:04:39.980 --> 00:04:46.820
+Yeah, it was like gaming and probably some data science and then all the changes and now just center of the universe.
+
+00:04:47.040 --> 00:04:48.160
+So I'm sure it is exciting.
+
+00:04:48.500 --> 00:04:52.080
+You know, the funny thing is I wanted to join NVIDIA since 15 years.
+
+00:04:52.720 --> 00:04:56.360
+And I did a PhD to actually be able to join NVIDIA.
+
+00:04:56.620 --> 00:04:57.740
+That is so awesome.
+
+00:04:58.040 --> 00:04:58.820
+I love it.
+
+00:04:58.900 --> 00:05:02.040
+I was amazed by the CUDA technology when I was in high school.
+
+00:05:02.140 --> 00:05:05.600
+And I was like, ah, this is so incredible, the concept.
+
+00:05:06.060 --> 00:05:07.380
+And I wanted to join.
+
+00:05:07.380 --> 00:05:09.860
+So I'm happy I was able to make this happen.
+
+00:05:10.640 --> 00:05:13.320
+You know, CUDA is going to be an important part of this discussion.
+
+00:05:13.460 --> 00:05:18.480
+Not the only part, but it certainly is one of the forcing functions for the things happening here.
+
+00:05:18.740 --> 00:05:20.960
+Give people the background on CUDA.
+
+00:05:21.400 --> 00:05:22.020
+What is it?
+
+00:05:22.280 --> 00:05:22.800
+How does it work?
+
+00:05:22.880 --> 00:05:23.640
+Why is it so amazing?
+
+00:05:24.360 --> 00:05:37.540
+Well, CUDA is essentially a programming language that allows you to program on GPUs, specifically NVIDIA GPUs, and has a different programming model than what you would usually do in C.
+
+00:05:37.540 --> 00:05:44.400
+So because GPUs are fundamentally very different than CPUs, you have to program them with a different mindset.
+
+00:05:44.900 --> 00:05:52.960
+Like, for example, the biggest important thing when you start with GPUs is to not think about a single thread executing the instruction.
+
+00:05:52.960 --> 00:05:58.580
+But like, how can you massively parallel a task on like thousands of threads at a single?
+
+00:05:58.580 --> 00:06:08.720
+And it takes a different perspective and mode of thinking to how can you imagine doing a task on so many threads at the same time?
+
+00:06:08.720 --> 00:06:12.860
+We're not used to it as classic computer scientists.
+
+00:06:13.420 --> 00:06:19.600
+If anything, multi-threading is something that we tend to shy away from because there's a lot of caveats.
+
+00:06:20.480 --> 00:06:24.440
+But well, GPU programming is all about how can you have as many threads as possible.
+
+00:06:25.560 --> 00:06:26.080
+Yeah.
+
+00:06:26.600 --> 00:06:33.340
+It comes from graphics and videos where like this pixel is computed independently of that pixel.
+
+00:06:33.340 --> 00:06:36.360
+And we've got, you know, 5K resolution.
+
+00:06:36.640 --> 00:06:38.020
+So let's just break that up, right?
+
+00:06:38.260 --> 00:06:38.480
+Yeah.
+
+00:06:38.620 --> 00:06:39.960
+It's exactly the idea.
+
+00:06:40.120 --> 00:06:52.100
+And now we have this reasonably new model that's called title programming that abstract it even more, which essentially instead of thinking about threads and blocks and grids, you think in terms of title.
+
+00:06:52.340 --> 00:06:56.060
+So kind of a mini representation that you could have in mind.
+
+00:06:56.500 --> 00:07:00.460
+And that thing can scale and adapt differently on different hardware.
+
+00:07:00.640 --> 00:07:01.340
+So pretty cool.
+
+00:07:01.340 --> 00:07:03.240
+But yeah, that is amazing.
+
+00:07:03.620 --> 00:07:06.480
+People think that their CPU has a lot of cores.
+
+00:07:06.980 --> 00:07:09.580
+It's got nothing on the graphics cards.
+
+00:07:10.180 --> 00:07:10.760
+Well, yeah.
+
+00:07:11.240 --> 00:07:13.840
+It's a different type of hardware.
+
+00:07:14.420 --> 00:07:15.260
+Rich is different.
+
+00:07:15.540 --> 00:07:15.680
+Absolutely.
+
+00:07:16.100 --> 00:07:16.180
+Yeah.
+
+00:07:16.220 --> 00:07:16.760
+Well, very cool.
+
+00:07:16.860 --> 00:07:17.200
+Very cool.
+
+00:07:17.300 --> 00:07:20.760
+And what a journey if you did all that work to get there.
+
+00:07:20.980 --> 00:07:21.920
+I absolutely love it.
+
+00:07:22.120 --> 00:07:22.380
+Ralph.
+
+00:07:22.580 --> 00:07:22.860
+Welcome.
+
+00:07:23.080 --> 00:07:23.260
+Hello.
+
+00:07:23.600 --> 00:07:23.780
+Yeah.
+
+00:07:24.020 --> 00:07:24.500
+Thanks, Michael.
+
+00:07:24.700 --> 00:07:25.280
+Great to be here.
+
+00:07:25.940 --> 00:07:26.780
+So about me.
+
+00:07:26.780 --> 00:07:28.780
+I am a physicist by training.
+
+00:07:29.180 --> 00:07:32.120
+I did a PhD in atomic and quantum physics.
+
+00:07:32.760 --> 00:07:35.240
+Worked in the semiconductor industry in a while.
+
+00:07:35.740 --> 00:07:38.280
+And I rolled into scientific computing.
+
+00:07:38.440 --> 00:07:41.220
+Due to that, I started using Python in 2004.
+
+00:07:41.220 --> 00:07:43.640
+And used the mailing list at that point.
+
+00:07:43.840 --> 00:07:46.260
+Because there was, I mean, NumPy didn't exist yet.
+
+00:07:46.360 --> 00:07:48.020
+There was no documentation for anything.
+
+00:07:48.020 --> 00:07:49.320
+So you had to join a mailing list.
+
+00:07:49.540 --> 00:07:51.420
+That's how I rolled into open source early on.
+
+00:07:51.700 --> 00:07:56.080
+I became the release manager of NumPy and SciPy in 2010.
+
+00:07:56.080 --> 00:07:58.720
+And yeah, I've been kind of doing that ever since.
+
+00:07:59.140 --> 00:08:00.720
+As a volunteer for 10 years.
+
+00:08:00.820 --> 00:08:01.900
+And then I got really too much.
+
+00:08:02.040 --> 00:08:03.060
+So I made it my job.
+
+00:08:03.120 --> 00:08:06.240
+I joined Quansight, which is a small consulting company.
+
+00:08:06.620 --> 00:08:10.380
+Primarily around like data science, supplied AI, scientific computing.
+
+00:08:10.980 --> 00:08:14.080
+And yeah, I'm now one of the two co-CEOs of Quansight.
+
+00:08:14.740 --> 00:08:15.180
+Awesome.
+
+00:08:15.400 --> 00:08:19.560
+Trying to basically, we just converted last year to a public benefit corporation.
+
+00:08:19.560 --> 00:08:23.160
+Which is very much aligned with what, you know, most of our team wants to do.
+
+00:08:23.160 --> 00:08:25.320
+Most of them are open source maintainers.
+
+00:08:25.800 --> 00:08:31.680
+And yeah, we basically do consulting to allow ourselves to make impactful open source contributions.
+
+00:08:32.160 --> 00:08:35.500
+Quansight is doing a ton in the data science space.
+
+00:08:35.940 --> 00:08:37.500
+Scientific computing space, for sure.
+
+00:08:37.680 --> 00:08:42.180
+I've had multiple rounds of Quansight folks on the show and things like that.
+
+00:08:42.380 --> 00:08:43.100
+And very neat.
+
+00:08:43.300 --> 00:08:45.340
+Yeah, it's a lot of fun and rewarding.
+
+00:08:45.760 --> 00:08:47.060
+So yeah, glad to be here.
+
+00:08:47.280 --> 00:08:53.000
+It's an interesting transition going from a science or something along those lines into programming, right?
+
+00:08:53.000 --> 00:08:58.040
+And I got into it through working in my math research and so on.
+
+00:08:58.300 --> 00:08:59.980
+And actually, this is just more fun.
+
+00:09:00.040 --> 00:09:01.300
+I'm just going to do programming.
+
+00:09:01.820 --> 00:09:04.860
+It's not exactly physics, but it's pretty similar, you know?
+
+00:09:05.120 --> 00:09:05.400
+Yeah.
+
+00:09:05.600 --> 00:09:07.220
+I mean, I've always liked both.
+
+00:09:07.400 --> 00:09:10.020
+But I did experimental physics.
+
+00:09:10.020 --> 00:09:14.740
+And there, you have much less control over what you end up producing.
+
+00:09:15.140 --> 00:09:17.560
+You know, building and using lasers in the lab.
+
+00:09:17.620 --> 00:09:21.280
+If one broke, maybe I had to send it off for repairs and wait a month, right?
+
+00:09:21.380 --> 00:09:22.560
+And what do you do in the meantime?
+
+00:09:22.660 --> 00:09:23.040
+You program.
+
+00:09:23.680 --> 00:09:26.660
+So, you know, that's one of the nicer things about it.
+
+00:09:26.940 --> 00:09:31.440
+And yeah, I gradually started with like, even before Python, there was some MATLAB.
+
+00:09:31.440 --> 00:09:33.200
+And then, you know, you roll into open source.
+
+00:09:33.340 --> 00:09:37.360
+And then, you know, mostly just Python a bit of C and kind of like go down from there.
+
+00:09:37.460 --> 00:09:38.760
+And then you encounter packaging.
+
+00:09:39.040 --> 00:09:43.320
+And it's one of those things that like only 5% of people like and the rest see it as a chore.
+
+00:09:43.580 --> 00:09:46.500
+But yeah, when you like it, you just have to do more and more of it.
+
+00:09:46.820 --> 00:09:46.980
+Yeah.
+
+00:09:47.040 --> 00:09:49.000
+You're with your people now, I think, on this call.
+
+00:09:49.060 --> 00:09:49.600
+That's for sure.
+
+00:09:50.520 --> 00:09:51.040
+Hey, Charlie.
+
+00:09:51.600 --> 00:09:53.860
+I mean, do we even need to give you an introduction?
+
+00:09:53.980 --> 00:09:55.840
+We just say uv and then go on or?
+
+00:09:56.140 --> 00:09:56.840
+No, I'll generally.
+
+00:09:57.920 --> 00:09:59.080
+No, please do.
+
+00:09:59.080 --> 00:09:59.720
+I'm just kidding.
+
+00:10:00.040 --> 00:10:05.600
+But the reason I say that is uv has taken the world by storm, really.
+
+00:10:06.060 --> 00:10:06.920
+And congratulations.
+
+00:10:07.320 --> 00:10:08.220
+And yeah, tell people about yourself.
+
+00:10:08.220 --> 00:10:08.520
+Thank you.
+
+00:10:08.860 --> 00:10:09.440
+Yeah, yeah, of course.
+
+00:10:09.680 --> 00:10:11.160
+So my name is Charlie.
+
+00:10:11.520 --> 00:10:13.280
+I'm the founder and CEO of Afterall.
+
+00:10:13.780 --> 00:10:18.880
+I've been working on the company for, let's see, started the company in October 2022.
+
+00:10:19.200 --> 00:10:20.140
+That's the easier way to do it.
+
+00:10:20.360 --> 00:10:21.900
+So I've been working on this for a few years.
+
+00:10:23.440 --> 00:10:25.280
+We mostly build open source.
+
+00:10:25.280 --> 00:10:29.940
+So we've worked on a couple of different tools that have become quite popular in Python.
+
+00:10:30.140 --> 00:10:32.420
+So we build Ruff, which is our linter and formatter.
+
+00:10:32.800 --> 00:10:34.200
+TY, which is our type checker.
+
+00:10:34.500 --> 00:10:39.600
+And then most relevant for this episode would be uv, which is our Python package and project manager.
+
+00:10:40.560 --> 00:10:49.620
+So yeah, we spend all our time thinking about how to build tools that make it easier and to work with Python and how to make Python programming more productive.
+
+00:10:49.620 --> 00:10:51.780
+A lot of that's about speed.
+
+00:10:52.180 --> 00:10:59.680
+We try to build things that are really fast, but it's also about user experience and trying to sort of like take complexity out of the critical path for users.
+
+00:11:00.780 --> 00:11:12.220
+So, you know, for example, we've definitely spent a lot of time thinking about how we can make it easier for people to install PyTorch, which is, you know, one of the examples that will come up, I'm sure, you know, over the course of the show.
+
+00:11:12.280 --> 00:11:15.020
+And one of the motivating examples for the peps we've been working on.
+
+00:11:15.020 --> 00:11:17.560
+So, yeah, that's why I'm here.
+
+00:11:17.660 --> 00:11:21.780
+We've been collaborating with Jonathan, Ralph, and honestly, like a bunch of other people, too.
+
+00:11:21.840 --> 00:11:23.660
+It's been a really big effort, and I'm sure we'll get into that.
+
+00:11:23.760 --> 00:11:30.420
+But it's been cool to have this long running and very like wide ranging collaboration around trying to push Python packaging forward.
+
+00:11:30.880 --> 00:11:33.300
+Well, like I said, congrats on all the stuff with Astral.
+
+00:11:33.800 --> 00:11:36.640
+And we're going to talk a little bit about pyx, I think.
+
+00:11:36.780 --> 00:11:37.700
+Maybe see if there's any.
+
+00:11:37.980 --> 00:11:42.520
+Just to check in at the end of the show after we talk about some of these things, I think, if you're up for it.
+
+00:11:42.680 --> 00:11:43.120
+Yeah, sounds good.
+
+00:11:43.120 --> 00:11:45.140
+I mean, let's just start with what is the challenge.
+
+00:11:45.340 --> 00:11:52.660
+You all have described this as the lowest common denominator packaging problem that we've got to deal with.
+
+00:11:52.820 --> 00:12:05.100
+And the idea or the problem is different CPUs have specialized instructions, different graphics cards, all these different compute and platforms and so on might have specific instructions.
+
+00:12:05.360 --> 00:12:06.560
+And they're optimized, right?
+
+00:12:06.600 --> 00:12:10.140
+Like do this as vectors operations instead of on registers or whatever.
+
+00:12:10.140 --> 00:12:14.940
+But maybe some other thing that it might run on doesn't support that, right?
+
+00:12:15.060 --> 00:12:16.300
+I don't know, WebAssembly, whatever.
+
+00:12:16.640 --> 00:12:16.820
+Yeah.
+
+00:12:17.740 --> 00:12:28.420
+And so then how do you actually end up shipping something to Python people that takes advantages of the specializations that are there when they're there, but without breaking the other ones, right?
+
+00:12:28.480 --> 00:12:29.460
+That's kind of the core problem.
+
+00:12:29.540 --> 00:12:29.940
+Is that right?
+
+00:12:30.220 --> 00:12:30.540
+Yeah.
+
+00:12:30.540 --> 00:12:32.900
+I can take one little step back before.
+
+00:12:32.900 --> 00:12:33.520
+Go ahead, Alan.
+
+00:12:33.520 --> 00:12:46.080
+If you think about it like a wheel, when you take the Python package that we have everywhere, there is a few parts of the fine names that essentially allows you to know what it's been built for.
+
+00:12:46.460 --> 00:12:50.120
+So inside this, you have, if it's a pure Python package, it's simple.
+
+00:12:50.340 --> 00:12:55.260
+You might have a minimum Python version, but in most cases, it's pretty generic.
+
+00:12:55.260 --> 00:12:56.520
+So that's not an issue.
+
+00:12:56.660 --> 00:13:03.640
+When you start having compiled code inside the package, that's a different story because now we're talking about what kind of OS it was built for.
+
+00:13:03.920 --> 00:13:07.540
+So Windows, macOS, Linux, different flavors.
+
+00:13:08.500 --> 00:13:11.220
+We're talking about the type of CPU that it was built for.
+
+00:13:11.600 --> 00:13:16.880
+So x86, ARM, PowerPC, potentially RISC-V, all these things.
+
+00:13:17.860 --> 00:13:18.340
+Mobile.
+
+00:13:18.340 --> 00:13:20.520
+And then finally, the Python API.
+
+00:13:20.840 --> 00:13:24.060
+And in most cases, it means the minimum Python API that you need.
+
+00:13:24.880 --> 00:13:30.440
+So, and for people, an API is essentially the same as an API, but for a binary.
+
+00:13:31.000 --> 00:13:37.360
+So it's important when things are stable at the API level because it allows you to be future compatible.
+
+00:13:38.400 --> 00:13:39.380
+What does API mean?
+
+00:13:39.740 --> 00:13:40.460
+Jonathan, help us out.
+
+00:13:40.480 --> 00:13:42.040
+What does API mean for those of us who don't know?
+
+00:13:42.040 --> 00:13:43.460
+Application binary interface.
+
+00:13:43.640 --> 00:13:47.860
+So it's the same as API, but instead of specifically for binaries.
+
+00:13:48.340 --> 00:13:58.920
+And the problem that we collectively kind of try to get to is that, well, today, the compute space and the scientific computing space,
+
+00:13:58.920 --> 00:14:10.520
+which if we take the latest JetBrains Python developer survey, is at least 40 to 50% of the Python developers are essentially doing data science or similar.
+
+00:14:10.520 --> 00:14:21.160
+So it's a massive percentage of the community is doing, in some form, scientific computing to whatever extent you may want to think about it.
+
+00:14:21.160 --> 00:14:32.220
+And, well, the problem is when we do these things, we try to do them fast because who likes to wait on the return of some Pandas operation or NumPy or PyTorch operation.
+
+00:14:32.220 --> 00:14:42.620
+But to go fast, you need to use all the tricks in the books that you can get to essentially, you have to optimize the binary for a specific CPU,
+
+00:14:42.620 --> 00:14:47.860
+for a specific GPU, or for a specific library that you want to use, like BLAS.
+
+00:14:48.140 --> 00:14:53.060
+BLAS is a general concept, so which BLAS implementation is, or MPI.
+
+00:14:53.500 --> 00:15:03.020
+And the problem is, well, we don't have the tags or markers to allow us to essentially flag this specific binary to be compatible with X, Y, and Z.
+
+00:15:03.020 --> 00:15:13.660
+Right, so the wheel might say, this is for 3.14, it is for ARM CPUs, and so on, but it's not going to say,
+
+00:15:14.000 --> 00:15:18.780
+and it supports this vectorization optimization on Intel chips, right?
+
+00:15:18.960 --> 00:15:20.140
+I just said ARM, didn't I?
+
+00:15:20.300 --> 00:15:30.280
+A very good example with ARM is that the default most people build with is actually a Raspberry Pi, ARM level.
+
+00:15:30.480 --> 00:15:31.200
+Yeah, yeah, yeah.
+
+00:15:31.200 --> 00:15:42.300
+And you can imagine that when you build for any type of desktop CPU, ARM, you have a little bit more complex CPUs and a little bit more advanced chips.
+
+00:15:42.760 --> 00:15:48.260
+And it's a lot of performance that you leave on the table by not optimizing for a specific platform.
+
+00:15:48.440 --> 00:15:52.420
+So obviously, in some cases, it doesn't really matter, but in other cases, it does really matter.
+
+00:15:53.540 --> 00:15:56.120
+This portion of Talk Python To Me is brought to you by Sentry.
+
+00:15:56.560 --> 00:15:58.700
+You know Sentry for their great error monitoring.
+
+00:15:58.700 --> 00:16:00.120
+But let's talk about logs.
+
+00:16:00.580 --> 00:16:01.480
+Logs are messy.
+
+00:16:01.980 --> 00:16:07.600
+Trying to grep through them and line them up with traces and dashboards just to understand one issue isn't easy.
+
+00:16:08.060 --> 00:16:10.240
+Did you know that Sentry has logs too?
+
+00:16:10.760 --> 00:16:12.800
+And your logs just became way more usable.
+
+00:16:13.360 --> 00:16:19.300
+Sentry's logs are trace-connected and structured, so you can follow the request flow and filter by what matters.
+
+00:16:19.300 --> 00:16:28.020
+And because Sentry surfaces the context right where you're debugging, the trace, relevant logs, the error, and even the session replay all land in one timeline.
+
+00:16:28.380 --> 00:16:30.540
+No timestamp matching, no tool hopping.
+
+00:16:31.060 --> 00:16:37.280
+From front end to mobile to back end, whatever you're debugging, Sentry gives you the context you need so you can fix the problem and move on.
+
+00:16:37.720 --> 00:16:42.400
+More than 4.5 million developers use Sentry, including teams at Anthropic and Disney+.
+
+00:16:42.400 --> 00:16:47.840
+Get started with Sentry logs and error monitoring today at talkpython.fm/sentry.
+
+00:16:48.220 --> 00:16:50.520
+Be sure to use our code, talkpython26.
+
+00:16:50.980 --> 00:16:52.780
+The link is in your podcast player's show notes.
+
+00:16:53.080 --> 00:16:54.760
+Thank you to Sentry for supporting the show.
+
+00:16:55.760 --> 00:16:57.400
+I'll give a very concrete example.
+
+00:16:57.400 --> 00:17:04.560
+Intel x86-64 is kind of the most common CPU that most people will have at home.
+
+00:17:04.760 --> 00:17:12.700
+If you build a wheel for that, you can only use CPU features, performance CPU features that go back to about 2009.
+
+00:17:13.000 --> 00:17:27.220
+Any new hardware features that were introduced after 2009, things like SSC4, AVX2, later versions of that, you just cannot use because the installers don't know that you put that in the wheel.
+
+00:17:27.560 --> 00:17:32.280
+And hence, they will also install it on computers that don't have those instructions, right?
+
+00:17:32.300 --> 00:17:34.640
+And then you just get like very ugly crashes.
+
+00:17:34.980 --> 00:17:40.020
+Hence, what we all do is we ship wheels, binaries that are only compatible with 2009.
+
+00:17:40.320 --> 00:17:51.220
+And the difference between the 2009 hardware features and, you know, the 2019 or 2023 one could be a factor of 10x, 20x in performance, depending on what you're doing.
+
+00:17:51.220 --> 00:17:52.780
+10x to 20x?
+
+00:17:53.040 --> 00:17:53.320
+Oh, yeah.
+
+00:17:53.540 --> 00:17:58.680
+For, you know, especially when you work with scientific data and SIMD instructions.
+
+00:17:58.960 --> 00:18:01.580
+Yeah, you can get massive performance increases.
+
+00:18:01.800 --> 00:18:04.780
+If you heard of vectorization, this is a huge deal.
+
+00:18:05.100 --> 00:18:05.300
+Yeah.
+
+00:18:05.620 --> 00:18:12.880
+I mean, I guess the way I think about it from our perspective of building, like, because these problems, like one of the things that's very hard about solving them, and it has required,
+
+00:18:12.880 --> 00:18:21.460
+like us to be so collaborative across the industry, is that it touches, like, basically every piece of the Python packaging stack.
+
+00:18:21.840 --> 00:18:30.920
+Like, it impacts how you build things, how the registries work, like what they support, how installers, like, choose what to install.
+
+00:18:30.920 --> 00:18:36.600
+And so, like, for us, it's like, you know, there's the superpower of Python, I think, in some ways.
+
+00:18:36.980 --> 00:18:45.460
+Sorry, I think the superpower of Python in some ways is, like, you can build and distribute all this software that's built for, you know, that uses native code.
+
+00:18:45.460 --> 00:18:51.020
+Like, you can take native code, and you can distribute it out to users, and they can run it just like it's any other piece of Python code.
+
+00:18:51.820 --> 00:19:02.600
+And in the spec, we have these things like, okay, you can build a wheel that targets Windows or Linux or macOS, and it can target, like, xasics or ARM or whatever else.
+
+00:19:03.000 --> 00:19:04.600
+And those are all captured in the spec.
+
+00:19:04.720 --> 00:19:13.160
+And so, for us, like, building uv, we know how to detect those things, how to figure out, like, which wheel to install based on what the user's machine is running.
+
+00:19:13.160 --> 00:19:20.080
+But there's all this other stuff that's not captured by any of those standards, like the instruction set or even, like, the supported CUDA version.
+
+00:19:20.600 --> 00:19:25.220
+Like, all these things are not captured in that wheel file, and installers don't know how to detect them.
+
+00:19:25.300 --> 00:19:30.540
+They don't know how to figure out, like, okay, which PyTorch build should I use based on the CUDA version on the user's machine?
+
+00:19:30.700 --> 00:19:31.880
+Like, all that stuff is lost.
+
+00:19:31.960 --> 00:19:33.840
+And that's kind of the gap that we're trying to bridge.
+
+00:19:34.520 --> 00:19:41.660
+And part of the philosophy is also, so right now, Python packaging exposed what is called platform tags.
+
+00:19:41.660 --> 00:19:48.080
+So, essentially, a sort of, like, mini tag that comes with a specific definition that installers know how to resolve.
+
+00:19:48.640 --> 00:19:57.060
+And what we're trying to evolve is to end up creating 200 more today and 200 more in two years and 200 more, again, in four years.
+
+00:19:57.160 --> 00:20:10.040
+So, we try to come up with a generic system that will allow you to essentially include arbitrary definition that then resolvers and package managers can then understand by some sort of mechanism.
+
+00:20:10.040 --> 00:20:18.500
+And resolve, but not create a sort of blessed list of things that you constantly have to update because it's a lot of maintenance.
+
+00:20:19.040 --> 00:20:20.940
+Yeah, that's how we got into the situation now, right?
+
+00:20:21.000 --> 00:20:27.880
+Because there's one for the version, there's one for the architecture of the CPU, but then there's not a spot for the other stuff.
+
+00:20:27.980 --> 00:20:35.620
+So, the overall idea is to say almost just a metadata section in there and things can read it or ignore it as they see fit.
+
+00:20:35.620 --> 00:20:37.200
+Yeah, that's exactly a concept.
+
+00:20:37.340 --> 00:20:38.060
+Conceptually, yeah.
+
+00:20:38.180 --> 00:20:38.820
+A little bit.
+
+00:20:39.280 --> 00:20:39.860
+Yeah, yeah.
+
+00:20:40.060 --> 00:20:55.000
+I mean, it's like, I guess the question is, like, okay, if we have this, like, huge space of things that we might possibly want to detect and condition installs on, like, okay, anytime someone publishes a wheel for Python, they should now tell us, like, what CUDA version is it built for?
+
+00:20:55.000 --> 00:20:58.900
+Or, like, if any, what, like, CPU instruction sets does it support?
+
+00:20:59.160 --> 00:20:59.960
+Like, blah, blah, blah.
+
+00:21:00.160 --> 00:21:01.840
+Like, where would we put all that stuff, right?
+
+00:21:01.880 --> 00:21:02.520
+Becomes the question.
+
+00:21:02.640 --> 00:21:06.300
+It's like, what, are we just going to keep expanding, like, the platform tag and everything else?
+
+00:21:06.520 --> 00:21:09.340
+And that's, like, the problem that we're trying to solve in kind of a generic way.
+
+00:21:09.580 --> 00:21:13.020
+Yeah, you can end up with a file name that's 4,000 characters wide or something.
+
+00:21:13.140 --> 00:21:14.880
+They can already get pretty long, by the way.
+
+00:21:14.880 --> 00:21:21.620
+But, yeah, that's, if you have any changes, we have to work around that in uv sometimes, file name length limits.
+
+00:21:21.860 --> 00:21:22.000
+But, yeah.
+
+00:21:22.000 --> 00:21:27.500
+It's actually a very famous package that used, I think, 200 first digits of pi as the version number.
+
+00:21:28.600 --> 00:21:29.660
+Oh, my gosh.
+
+00:21:31.060 --> 00:21:32.380
+It's a pretty good joke.
+
+00:21:32.560 --> 00:21:33.400
+I didn't know about it.
+
+00:21:33.440 --> 00:21:36.640
+There's somebody on discuss.python.org that posted the link.
+
+00:21:36.700 --> 00:21:38.020
+And I was like, but that's hilarious.
+
+00:21:38.840 --> 00:21:40.260
+That is wild.
+
+00:21:40.260 --> 00:21:50.180
+So, before we dive into what you all are proposing, let's maybe talk about how just a couple of packages or libraries solve this problem now in maybe different directions.
+
+00:21:50.580 --> 00:21:52.820
+So, Ralph, what about NumPy, right?
+
+00:21:52.880 --> 00:21:55.900
+I mean, you guys talked about vectorization and stuff.
+
+00:21:56.520 --> 00:21:56.800
+Yeah.
+
+00:21:57.300 --> 00:21:59.060
+That's so in line with NumPy, right?
+
+00:21:59.100 --> 00:22:02.280
+Is NumPy, like, and pandas, that's the way, you know?
+
+00:22:02.540 --> 00:22:02.860
+Yes.
+
+00:22:02.980 --> 00:22:03.460
+NumPy, yes.
+
+00:22:03.560 --> 00:22:04.080
+Pandas, no.
+
+00:22:04.080 --> 00:22:14.120
+So, NumPy does contain SIMD instructions and, you know, because it's incredibly useful for performance.
+
+00:22:14.400 --> 00:22:20.240
+You know, NumPy has all large arrays and basic instructions on them that, like, have direct hardware implementations typically.
+
+00:22:21.060 --> 00:22:29.300
+But the way it's done is incredibly complex because you need to end up with a wheel that works on every type of CPU, right?
+
+00:22:29.360 --> 00:22:33.440
+We didn't, you know, I'll stay with x86, but the same happens on the other platforms, right?
+
+00:22:33.440 --> 00:22:39.220
+You know, it needs to run on a 2010 CPU and it needs to run better on a 2024 CPU.
+
+00:22:39.640 --> 00:22:54.440
+So, what we do in NumPy is we have a system that basically allows you to either parameterize a source file that, you know, and then rebuild it multiple times, you know, four different particular CPU architectures.
+
+00:22:54.440 --> 00:22:59.060
+So, like, you know, like a Haswell family and then a Skylake family and so on.
+
+00:22:59.260 --> 00:23:03.660
+And then we basically merge that together in a single Python extension module.
+
+00:23:03.660 --> 00:23:16.420
+And then at runtime, we have our own code to detect the CPU and basically then some, like, dispatch shim layer that kind of fishes out the right, you know, family from the extension module.
+
+00:23:16.420 --> 00:23:18.980
+So, yeah, you put up the diagram there.
+
+00:23:19.180 --> 00:23:20.560
+It's pretty complicated.
+
+00:23:21.080 --> 00:23:26.640
+And I'd say there I've been collaborating with some of the, you know, world experts on this.
+
+00:23:27.140 --> 00:23:38.480
+We had like an in the end, this was only successful because we built a generic architecture that other experts per, you know, CPU architecture could come and contribute to.
+
+00:23:38.480 --> 00:23:44.600
+So, we now have a specific team of like four people that help maintain the architecture.
+
+00:23:44.900 --> 00:23:51.760
+But then like, you know, Intel for years paid one of their engineers to optimize specifically the x86 code path.
+
+00:23:52.400 --> 00:23:57.320
+And then ARM has a NumPy maintainer who, you know, got commit writes a few years ago.
+
+00:23:57.580 --> 00:24:00.840
+And he's the final authority on all the ARM instructions that are in there.
+
+00:24:01.100 --> 00:24:06.160
+So, that whole complicated thing is now shipped and it's extremely good for performance.
+
+00:24:06.160 --> 00:24:10.680
+But you can see how this is not a scalable process to do in many packages, right?
+
+00:24:10.920 --> 00:24:16.680
+Plus, you know, if you compile everything five times, you get a binary that's, you know, it's not five times bigger, but it's a lot bigger.
+
+00:24:17.020 --> 00:24:19.160
+So, it's not great for users as well.
+
+00:24:19.440 --> 00:24:21.740
+Yeah, actually the nickname for these things are called Fatbin.
+
+00:24:22.000 --> 00:24:28.220
+So, you have the idea for why they are called that way because they tend to be very heavy to download.
+
+00:24:28.540 --> 00:24:28.960
+Yeah, yeah.
+
+00:24:29.300 --> 00:24:30.900
+Instead of wheels, you got big wheels.
+
+00:24:31.300 --> 00:24:31.480
+Yep.
+
+00:24:31.480 --> 00:24:37.900
+So, what happens if all these changes get adopted and it doesn't need to be compiled into one giant binary?
+
+00:24:38.280 --> 00:24:38.480
+Okay.
+
+00:24:38.700 --> 00:24:40.480
+Are all these maintainers still working?
+
+00:24:40.580 --> 00:24:43.720
+They just don't have to deal with trying to boot it all into one thing?
+
+00:24:44.000 --> 00:24:46.500
+They might still have to do, yes.
+
+00:24:46.760 --> 00:24:47.980
+I think essentially you're correct.
+
+00:24:48.080 --> 00:24:52.620
+You still need to write the actual code that uses the SIMD instructions.
+
+00:24:52.620 --> 00:25:00.880
+But then you can just produce a wheel that says like, okay, it works on this specific CPU architecture and just ignore this code if I'm building for another architecture.
+
+00:25:01.260 --> 00:25:06.540
+And all the, you know, detecting the CPU at runtime and the dynamic dispatch features you all don't need.
+
+00:25:06.740 --> 00:25:07.700
+Will it make the code faster?
+
+00:25:08.120 --> 00:25:09.140
+It will, well.
+
+00:25:09.760 --> 00:25:11.280
+Like will you have a better cache hits?
+
+00:25:11.380 --> 00:25:12.600
+Will there be smaller stuff in memory?
+
+00:25:12.680 --> 00:25:13.240
+You know, that kind of stuff.
+
+00:25:13.240 --> 00:25:16.400
+I don't think it will make the NumPy code much faster.
+
+00:25:17.240 --> 00:25:24.240
+It will, you know, it will make a huge difference for all the other packages that don't have this amount of complexity today.
+
+00:25:24.360 --> 00:25:31.660
+So like SciPy, scikit-learn, Pandas, Pillow, like none of these packages actually use SIMD code.
+
+00:25:31.960 --> 00:25:35.320
+And for SciPy, it's the easiest for me to talk about because I'm also a SciPy maintainer.
+
+00:25:35.480 --> 00:25:40.900
+We actually have a lot of code that, you know, got vendored in from somehow, like Fourier transforms, for example.
+
+00:25:41.060 --> 00:25:42.020
+They benefit a lot as well.
+
+00:25:42.020 --> 00:25:50.900
+We have AVX2 and ARM Neon implementations, but we just don't build them and don't ship that as wheels because we have no way of doing that.
+
+00:25:51.240 --> 00:25:56.340
+As soon as we have, you know, wheel variants, we can say, okay, let's ship two sets of wheels.
+
+00:25:56.600 --> 00:25:58.880
+I mean, that's more CI jobs to build more wheels.
+
+00:25:59.140 --> 00:26:02.680
+But, you know, when it's worth it, you know, you can make that trade-off, right?
+
+00:26:02.720 --> 00:26:03.740
+Like we already have the code.
+
+00:26:03.820 --> 00:26:07.020
+We just have to change a build option, produce a different wheel, and ship it.
+
+00:26:07.020 --> 00:26:15.160
+So do you just set up something like a hash if def sort of thing for like if defs this capability?
+
+00:26:15.900 --> 00:26:17.640
+Else you put in the generic code?
+
+00:26:18.320 --> 00:26:18.720
+Exactly.
+
+00:26:19.180 --> 00:26:22.260
+The, yeah, the C code is basically just a bunch of if defs.
+
+00:26:22.660 --> 00:26:29.800
+And, you know, if you only, you know, for maintainability reasons, you only add more if defs if, you know, it's really much faster.
+
+00:26:29.800 --> 00:26:36.020
+Like you are going to do it for 10 or 20% faster, but if it's 2x faster, well, why not have an extra else bridge?
+
+00:26:36.400 --> 00:26:37.040
+Yeah, absolutely.
+
+00:26:37.380 --> 00:26:39.720
+Charlie, does Rust have a hash if def equivalent?
+
+00:26:40.040 --> 00:26:40.600
+It must, right?
+
+00:26:40.860 --> 00:26:41.760
+Yeah, you can do.
+
+00:26:42.340 --> 00:26:43.920
+It has directives like that.
+
+00:26:44.120 --> 00:26:47.480
+Yeah, but you guys don't really need to worry about using this for yourself.
+
+00:26:47.880 --> 00:26:52.080
+This is more for the things that you service providing to everyone, right?
+
+00:26:52.400 --> 00:26:52.800
+Yeah.
+
+00:26:52.800 --> 00:27:00.000
+Yeah, this is mostly, this wouldn't have a huge impact on uv or, I mean, it could have some small impact.
+
+00:27:00.080 --> 00:27:04.960
+But I think largely this is about, yeah, how can we make it easier for users to consume this stuff?
+
+00:27:04.960 --> 00:27:09.740
+And I mean, the NumPy, like this is a good example of how it affects like build and distribution.
+
+00:27:10.080 --> 00:27:15.200
+Because, yes, they still have to write like architecture specific code if they want to get these optimizations.
+
+00:27:15.200 --> 00:27:24.060
+But what we'll be doing with these proposals is making it much easier for them to ship separate builds that are like dedicated for each of those different variants.
+
+00:27:24.400 --> 00:27:28.420
+So like the end user, you know, will get access to it.
+
+00:27:28.860 --> 00:27:35.680
+But in this case, it's like the bottleneck is, or part of the bottleneck is like all the complexity it puts on the maintainers and the people publishing.
+
+00:27:36.480 --> 00:27:42.020
+How much do you think it would impact the performance to ship Python standalone with different CPU extension?
+
+00:27:42.420 --> 00:27:44.040
+That is a good question, Jonathan.
+
+00:27:44.040 --> 00:27:49.400
+So we'd actually like to do, I don't know that I have a great answer to that.
+
+00:27:49.520 --> 00:27:52.260
+I mean, like a good quantitative answer to it.
+
+00:27:52.320 --> 00:27:55.080
+I think we are very interested in doing stuff like that.
+
+00:27:55.160 --> 00:27:57.640
+We've also considered, for example, shipping a build.
+
+00:27:57.920 --> 00:28:00.800
+Like we ship with a relatively old like glibc minimum.
+
+00:28:01.040 --> 00:28:07.200
+We've considered shipping a build, a variant, not in the sense of the, sorry, a different build.
+
+00:28:07.420 --> 00:28:08.200
+Let me just put it that way.
+
+00:28:08.560 --> 00:28:11.100
+That uses a more modern glibc version, for example.
+
+00:28:11.940 --> 00:28:13.640
+We do run into other problems with that.
+
+00:28:13.640 --> 00:28:15.440
+Like our build matrix is really big.
+
+00:28:15.500 --> 00:28:17.880
+We have to split it across multiple GitHub actions now.
+
+00:28:18.060 --> 00:28:20.600
+And so like we need to, we just have like a lot of builds.
+
+00:28:20.720 --> 00:28:24.260
+So we'd probably, we're worried about like doubling the size of the build matrix, for example.
+
+00:28:24.460 --> 00:28:26.060
+But that's a separate problem.
+
+00:28:26.340 --> 00:28:28.220
+But yes, it could actually, it could actually be helpful there.
+
+00:28:28.280 --> 00:28:29.880
+Although we don't ship those as wheels today.
+
+00:28:29.880 --> 00:28:30.820
+Yeah, that's awesome.
+
+00:28:31.020 --> 00:28:36.960
+In a very interesting angle to think about how much leverage, I mean, this probably does, this is probably something you've thought about.
+
+00:28:37.060 --> 00:28:44.260
+But how much leverage you and your team actually have on Python performance by how you control Python build standalone.
+
+00:28:44.260 --> 00:28:48.780
+This portion of Talk Python To Me is sponsored by Temporal.
+
+00:28:48.780 --> 00:28:55.660
+Ever since I had Mason Egger on the podcast for episode 515, I've been fascinated with durable workflows in Python.
+
+00:28:56.160 --> 00:29:00.820
+That's why I'm thrilled that Temporal has decided to become a podcast sponsor since that episode.
+
+00:29:00.820 --> 00:29:09.400
+If you've built background jobs or multi-step workflows, you know how messy things get with retries, timeouts, partial failures, and keeping state consistent.
+
+00:29:10.020 --> 00:29:15.200
+I'm sure many of you have written brutal code to keep the workflow moving and to track when you run into problems.
+
+00:29:15.600 --> 00:29:16.580
+But it's trickier than that.
+
+00:29:16.800 --> 00:29:21.760
+What if you have a long-running workflow and you need to redeploy the app or restart the server while it's running?
+
+00:29:22.320 --> 00:29:25.660
+This is where Temporal's open source framework is a game changer.
+
+00:29:25.660 --> 00:29:40.600
+You write workflows as normal Python code and Temporal ensures that they execute reliably, even across crashes, restarts, or long-running processes, while handling retries, states, and orchestrations for you so you don't have to build and maintain that logic yourself.
+
+00:29:41.300 --> 00:29:46.520
+You may be familiar with writing asynchronous code using the async and await keywords in Python.
+
+00:29:46.980 --> 00:29:55.300
+Temporal's brilliant programming model leverages the exact same programming model that you are familiar with, but uses it for durability, not just concurrency.
+
+00:29:55.660 --> 00:30:00.160
+Imagine writing awaitworkflow.sleep, time delta, 30 days.
+
+00:30:00.500 --> 00:30:02.440
+Yes, seriously, sleep for 30 days.
+
+00:30:02.580 --> 00:30:04.500
+Restart the server, deploy new versions of the app.
+
+00:30:04.720 --> 00:30:05.140
+That's it.
+
+00:30:05.340 --> 00:30:06.500
+Temporal takes care of the rest.
+
+00:30:07.040 --> 00:30:11.520
+Temporal is used by teams at Netflix, Snap, and NVIDIA for critical production systems.
+
+00:30:12.060 --> 00:30:14.740
+Get started with the open source Python SDK today.
+
+00:30:15.040 --> 00:30:17.480
+Learn more at talkpython.fm/Temporal.
+
+00:30:17.800 --> 00:30:19.800
+The link is in your podcast player's show notes.
+
+00:30:19.940 --> 00:30:22.200
+Thank you to Temporal for supporting the show.
+
+00:30:22.200 --> 00:30:26.400
+Maybe just tell people, what is the relevance there?
+
+00:30:26.660 --> 00:30:27.160
+Like, why?
+
+00:30:27.500 --> 00:30:30.680
+What is Python Build Standalone and how does this even apply to what we're talking about?
+
+00:30:30.880 --> 00:30:31.400
+Oh, yeah, sure.
+
+00:30:31.400 --> 00:30:32.520
+I use it every day.
+
+00:30:32.580 --> 00:30:32.960
+I love it.
+
+00:30:33.100 --> 00:30:34.480
+A lot of people use it and don't even know.
+
+00:30:34.560 --> 00:30:41.420
+I mean, it's probably the least, it's the least like public or like user, direct user facing thing that we do.
+
+00:30:41.420 --> 00:30:47.680
+But we took over maintenance of a project called Python Build Standalone probably like a year ago, maybe a little more.
+
+00:30:49.180 --> 00:31:04.880
+And that project, the basic idea is like typically when you build CPython, you know, at least like on Linux, for example, a bunch of absolute paths get embedded into the binary, which makes it hard to build like reproducible and relocatable CPythons.
+
+00:31:05.080 --> 00:31:08.740
+Like it's hard for someone to build a CPython that you can then download and run on your machine.
+
+00:31:08.740 --> 00:31:11.120
+You typically need to build it on your own machine.
+
+00:31:12.500 --> 00:31:17.200
+So what this project does is it's sort of like a fork of the CPython build system.
+
+00:31:17.340 --> 00:31:20.920
+It's like the CPython build system with a bunch of patches and other changes applied on top.
+
+00:31:21.040 --> 00:31:27.560
+And it makes it so that we can build Pythons that you can just download, unzip and run.
+
+00:31:27.560 --> 00:31:35.720
+So when you install Python with uv, and these are also used in like Bazel and in a bunch of other tools, we don't actually like build Python from source.
+
+00:31:35.840 --> 00:31:39.660
+We actually download, unzip and run Python, which just makes it much easier.
+
+00:31:39.800 --> 00:31:41.180
+It means it's faster.
+
+00:31:41.460 --> 00:31:45.320
+You don't have to have like the build tool chain on your machine.
+
+00:31:45.540 --> 00:31:48.380
+You don't run into problems around like failing to build it or anything like that.
+
+00:31:48.380 --> 00:31:53.240
+But the other thing that's been cool about that project, at least recently, is we've been very focused on performance.
+
+00:31:53.860 --> 00:32:00.140
+So on actually just trying to make sure that we're distributing, like our goal is to be like the fastest Python distribution.
+
+00:32:00.140 --> 00:32:07.320
+Like even without changing CPython source code, just changing how we build it and various things that we can tweak there.
+
+00:32:07.420 --> 00:32:08.800
+And so we've been working on a bunch of benchmarks.
+
+00:32:08.980 --> 00:32:14.920
+I do think we have the fastest Python now, but we haven't actually published our rigorous benchmark methodology.
+
+00:32:14.920 --> 00:32:19.520
+So I won't stake my reputation on that claim yet, but we've been very focused on it.
+
+00:32:19.580 --> 00:32:28.520
+And it's been a cool point of leverage because like we can just, yeah, if we can make Python, you know, if we can put out a Python distribution that's like 10 or 15% faster, you know, just by changing how we build it.
+
+00:32:28.900 --> 00:32:30.300
+Yeah, it's a big lever for impact.
+
+00:32:30.700 --> 00:32:31.460
+Yeah, it's a huge lever.
+
+00:32:31.600 --> 00:32:34.940
+And I hadn't really thought about it being a lever until Jonathan brought it up.
+
+00:32:35.220 --> 00:32:40.540
+But for example, it's not directly impacted by this because we don't ship it, I guess, for the reason that we don't ship it as a wheel.
+
+00:32:40.840 --> 00:32:42.260
+Although someday we potentially could.
+
+00:32:42.260 --> 00:32:45.040
+Right now it's just, they're just the files that uv knows how to install.
+
+00:32:45.440 --> 00:32:46.940
+But it's the same logic at the core.
+
+00:32:47.600 --> 00:32:53.960
+Once you start tweaking the packaging of Python packages, the next part you want to tweak is your Python install.
+
+00:32:55.420 --> 00:33:03.540
+Well, for example, all of my stuff that runs in on the servers, it's all in Docker and it has a base Docker image.
+
+00:33:03.540 --> 00:33:09.780
+And one of the very first lines is, you know, install the, use curl plus the shell to install uv.
+
+00:33:09.940 --> 00:33:12.480
+The next line is uv, V, E, and V.
+
+00:33:12.840 --> 00:33:16.040
+And that, that installs Python from Python build standalone.
+
+00:33:16.220 --> 00:33:19.560
+And then whatever, you need to make an actual app out of that afterwards.
+
+00:33:19.560 --> 00:33:19.900
+Right.
+
+00:33:20.220 --> 00:33:22.040
+And so how many people are doing that?
+
+00:33:22.140 --> 00:33:29.640
+I, it seems like a huge portion of the world has adopted uv for sort of bootstrapping Python instead of the other way.
+
+00:33:29.700 --> 00:33:31.700
+So that's, that's why it's such a big lever, right?
+
+00:33:31.700 --> 00:33:32.100
+Yep.
+
+00:33:32.260 --> 00:33:32.700
+Yeah, exactly.
+
+00:33:33.260 --> 00:33:33.620
+All right.
+
+00:33:33.800 --> 00:33:39.840
+As a way to sort of get into the peps, Charlie, you mentioned variants.
+
+00:33:39.920 --> 00:33:41.360
+You're like, wait, wait, wait, not that variant.
+
+00:33:42.080 --> 00:33:43.700
+What variant are we talking about?
+
+00:33:43.920 --> 00:33:44.980
+That's not that variant.
+
+00:33:45.260 --> 00:33:46.240
+What is that variant?
+
+00:33:46.280 --> 00:33:48.760
+I guess that we're not talking about in uv or Python build standalone.
+
+00:33:49.000 --> 00:33:49.700
+Who wants to take that?
+
+00:33:49.820 --> 00:33:50.580
+Ralph, do you want to take that?
+
+00:33:50.880 --> 00:33:52.780
+I'm not actually sure what the question is here.
+
+00:33:53.020 --> 00:33:55.240
+I think you were targeted for the question.
+
+00:33:55.880 --> 00:33:58.560
+Yeah, yeah, yeah.
+
+00:33:58.760 --> 00:33:59.340
+That's fine.
+
+00:33:59.340 --> 00:34:03.760
+I mean, like the, so we use, so the peps revolves around this concept of wheel variants.
+
+00:34:03.760 --> 00:34:09.420
+And the idea is you can have, I'll keep using the word variants.
+
+00:34:09.540 --> 00:34:20.580
+You can have different variants, different builds, you know, of a wheel that are intended to be installed based on properties that are known or detected on the machine.
+
+00:34:20.580 --> 00:34:28.580
+So, for example, that could be like, okay, what NVIDIA drivers do you have on your machine?
+
+00:34:29.060 --> 00:34:30.560
+Like, what are the versions of those drivers?
+
+00:34:30.680 --> 00:34:34.500
+Because that then implies things about what versions of the CUDA runtime you can use.
+
+00:34:34.920 --> 00:34:43.540
+And so when someone publishes a wheel, maybe that wheel, you know, leverages CUDA and needs to be built against CUDA and needs to be built, you know, in a way that leverages CUDA.
+
+00:34:43.540 --> 00:34:58.040
+And so they might publish different variants, effectively just different, you know, slightly different versions of, versions is wrong, different variants, slightly different flavors of that package that are all built against different, you know, different CUDA versions.
+
+00:34:58.820 --> 00:35:01.420
+And so we would call those different, you know, different variants.
+
+00:35:01.960 --> 00:35:03.680
+It's a, it's a, you need to correct me.
+
+00:35:03.680 --> 00:35:14.580
+The terminology across what I understand the packaging space, even outside of Python, if you type variants in general, this is, we try to reuse the terminology that ends up being
+
+00:35:14.580 --> 00:35:20.580
+pretty widely adopted in the packaging ecosystem, not Python packaging, the packaging at large.
+
+00:35:21.800 --> 00:35:25.980
+This is the, variants is the name that you'll find around for this kind of concept.
+
+00:35:26.460 --> 00:35:40.820
+You know, related to that, like, especially in the astral flavor these days, but also in many other areas, I feel like crates and rust, what they've done with their packaging system has kind of influenced some of the things we're adopting in the Python world.
+
+00:35:41.240 --> 00:35:46.360
+Has anything from the rust world influenced the, these peps that we're about to talk about?
+
+00:35:46.620 --> 00:35:49.380
+Well, crates are source distribution now, mostly.
+
+00:35:49.940 --> 00:35:50.080
+Yeah.
+
+00:35:50.420 --> 00:35:53.740
+Well, in this case, we're talking about actually binary distribution.
+
+00:35:54.060 --> 00:35:54.220
+Yeah.
+
+00:35:54.240 --> 00:35:54.380
+Yeah.
+
+00:35:54.380 --> 00:35:54.540
+Yeah.
+
+00:35:54.540 --> 00:35:55.080
+So not really.
+
+00:35:55.240 --> 00:35:55.400
+Okay.
+
+00:35:56.000 --> 00:35:56.740
+But in a sense.
+
+00:35:56.980 --> 00:35:58.180
+That's actually interesting, right?
+
+00:35:58.480 --> 00:35:58.700
+Yes.
+
+00:35:58.700 --> 00:35:58.820
+Yeah.
+
+00:35:59.100 --> 00:36:07.040
+Because a lot of the best packaging systems, you know, whether it's, it's rust or, you know, Nix, they start from source, right?
+
+00:36:07.080 --> 00:36:09.300
+And they know exactly what's, you know, in the box.
+
+00:36:09.640 --> 00:36:12.540
+And then binaries are kind of like an optimization, right?
+
+00:36:12.560 --> 00:36:19.080
+It's like, you have a thing that you know exactly what is the binary and you can check like, oh, I don't have to build this thing from source.
+
+00:36:19.200 --> 00:36:20.600
+I can grab a binary somewhere.
+
+00:36:20.880 --> 00:36:20.980
+Right.
+
+00:36:20.980 --> 00:36:22.900
+The packaging is absolutely not like that.
+
+00:36:23.080 --> 00:36:28.020
+Like if you build a wheel and you have an sdisk, I mean, you have no idea if they're the same thing.
+
+00:36:28.140 --> 00:36:35.920
+If you, you know, you cannot rebuild the wheel from the sdisk unless, you know, you use very, very well predefined constraints.
+
+00:36:36.300 --> 00:36:36.320
+Yeah.
+
+00:36:36.320 --> 00:36:36.500
+Yeah.
+
+00:36:36.500 --> 00:36:39.960
+I hadn't really thought about that either, but that is an interesting juxtaposition.
+
+00:36:40.240 --> 00:36:46.400
+Like the binary stuff that is all binary is shipping as source, but the interpreted stuff is shipping as binary.
+
+00:36:46.400 --> 00:36:57.640
+And I think part of the reason, or maybe the main reason is if we're talking about binary stuff for Rust, well, it's all Rust that's compiled, but for Python, it's this mix, this
+
+00:36:57.640 --> 00:37:03.660
+crazy mix of all these different libraries that are not, none of them are Python, but they're all binary in the end.
+
+00:37:03.720 --> 00:37:10.340
+And so you've got to get around the fact like, well, I don't have a Fortran and a Haskell compiler, so I can't run this project, you know?
+
+00:37:10.340 --> 00:37:15.300
+There's something quite amazing to Python in general, which is called the CFFI.
+
+00:37:15.500 --> 00:37:23.300
+So the C foreign function interface, which essentially allows you to build any sort of application you want in whatever language.
+
+00:37:23.460 --> 00:37:33.260
+As long as you're compatible with CFFI standard, you can call it from Python and it's incredible and amazingly useful.
+
+00:37:33.260 --> 00:37:46.280
+But to come back on what Ralph was saying, a lot of the design actually from WeR variant has been inspired by a system that is called SPAC that was designed for supercomputers.
+
+00:37:47.400 --> 00:38:00.440
+And we use this, especially around the design of CPU variants to kind of get a lot of inspiration around a package called RSpec that is just, from my perspective, pure brilliance in some of design.
+
+00:38:02.360 --> 00:38:07.800
+Just my words, but in my opinion, but I really think they got the thing right.
+
+00:38:08.800 --> 00:38:10.360
+It's just beautifully designed.
+
+00:38:10.360 --> 00:38:15.040
+Everything is static and JSON-fired and it's extremely easy to scale and maintain.
+
+00:38:15.820 --> 00:38:29.240
+But yes, if you take all the kind of system designed to support the most specific deployment scenarios like SPAC, like Nix, or even in some cases, cargo, well, they mostly ship sources
+
+00:38:29.240 --> 00:38:34.580
+to go around this variant problem because that allows you to control the entire build chain essentially.
+
+00:38:35.300 --> 00:38:44.600
+And in some cases, maybe Ralph can talk about it, but Conda Forge also kind of take an approach that is similar to Nix to kind of go around these issues a little bit.
+
+00:38:44.800 --> 00:38:46.920
+Maybe Ralph, if you want to talk a little bit about that.
+
+00:38:47.280 --> 00:38:51.720
+Not quite because Conda and Conda Forge don't do source distributions at all.
+
+00:38:52.080 --> 00:38:54.960
+They just take a release and they build binaries.
+
+00:38:54.960 --> 00:38:57.500
+And if there are no binaries, you can't install it.
+
+00:38:58.080 --> 00:39:00.220
+But yeah, I would say that's a good point, right?
+
+00:39:00.240 --> 00:39:02.380
+We have people that worked on all these systems.
+
+00:39:02.640 --> 00:39:06.980
+Like one of Jonathan's colleagues at NVIDIA, Mike Saran, used to work on Conda.
+
+00:39:07.200 --> 00:39:08.820
+I contribute to Conda Forge as well.
+
+00:39:09.000 --> 00:39:14.220
+And so we have some ideas that originally came from Conda, some that came from SPAC.
+
+00:39:14.500 --> 00:39:22.660
+And the end result is nothing like, not exactly like any of those systems, but it takes some of the best aspects of them to enhance Python packaging.
+
+00:39:22.660 --> 00:39:24.040
+Not reinventing the wheel.
+
+00:39:24.340 --> 00:39:26.020
+I mean, maybe, but not too much.
+
+00:39:27.600 --> 00:39:28.580
+Yeah, not too much.
+
+00:39:29.140 --> 00:39:35.220
+But it's kind of, it's cool because I think, like, I feel like a lot of this work really got kicked off.
+
+00:39:35.340 --> 00:39:36.900
+We did an in-person summit.
+
+00:39:37.900 --> 00:39:41.000
+And I honestly can't remember when that was because my mind is such a blurb.
+
+00:39:41.000 --> 00:39:41.520
+March 2025.
+
+00:39:42.660 --> 00:39:43.020
+Thank you.
+
+00:39:43.100 --> 00:39:44.140
+Okay, so it was about a year ago.
+
+00:39:44.480 --> 00:39:46.320
+And there's a bunch of notes about this.
+
+00:39:46.520 --> 00:39:56.420
+And we had people from probably like, I don't know, I'd have to guess 20 different companies, maybe more, all in person for a day, just talking about these problems.
+
+00:39:56.420 --> 00:40:07.160
+And a bunch of people presented on their own open source projects and how they intersect with, like, we had people from PyTorch, people from the JAX team, just talking about like, how, what their concerns are, like, what's working well for them, what's not.
+
+00:40:07.520 --> 00:40:14.560
+And so, you know, similarly to how we've, I think a lot of the design has really been influenced by like, what are other designs?
+
+00:40:14.560 --> 00:40:16.680
+What's the prior art and like, what's working well?
+
+00:40:17.640 --> 00:40:23.780
+You know, a lot of it was also informed by like, just talking to a bunch of people across the industry and understanding like, what their concerns are.
+
+00:40:24.300 --> 00:40:31.060
+And so, at least from my perspective, having not, honestly, by calendar time, I have not been involved in Python that long.
+
+00:40:31.140 --> 00:40:38.940
+But it's been like, definitely the most like cross company, cross project, cross organization effort I've been involved in by a lot.
+
+00:40:38.940 --> 00:40:45.920
+We try to replicate a model that I really like in the Python community that was faster cpython.
+
+00:40:46.260 --> 00:40:51.240
+We try to philosophically create the packaging child of faster cpython.
+
+00:40:51.600 --> 00:40:54.200
+But, and that's how we created We Are Next.
+
+00:40:54.540 --> 00:41:05.740
+It was all the amazing work that the faster cpython community did on the cpython side, and kind of creating the same synergy, but around Python packaging.
+
+00:41:05.960 --> 00:41:06.780
+And that's why it was.
+
+00:41:06.780 --> 00:41:10.920
+I would almost say it's even, you know, quite a bit more diverse.
+
+00:41:11.080 --> 00:41:18.640
+At least my understanding is faster cpython is primarily like funded and created by Microsoft, and it kind of turned into a community thing.
+
+00:41:18.840 --> 00:41:21.140
+But like, all the money came from Microsoft, I think.
+
+00:41:21.360 --> 00:41:25.420
+I think the majority of the people were working in a team inside Microsoft, at least.
+
+00:41:25.840 --> 00:41:30.500
+And here, we've got NVIDIA, Meta, the PyTorch folks at Meta.
+
+00:41:30.820 --> 00:41:35.360
+We got some contributions from AMD and Intel, and then Astral, Quansight.
+
+00:41:35.360 --> 00:41:43.260
+Large amount of the time that we've been able to spend at Quansight came from funding from Red Hat, who came with their own problem sets.
+
+00:41:43.780 --> 00:41:47.140
+And, you know, so, and that's just the most prominent contributors.
+
+00:41:47.340 --> 00:41:52.620
+So there's like at least 10 companies that started investing in this, because it solves so many problems.
+
+00:41:53.000 --> 00:41:53.780
+Yeah, that's really encouraging as well.
+
+00:41:53.780 --> 00:41:56.860
+On the left side, you'll see a section called Who We Are.
+
+00:41:57.500 --> 00:41:59.540
+Yeah, so I pulled up this project, Wheel Next.
+
+00:42:00.260 --> 00:42:02.200
+And, you know, Ralph, this is yours?
+
+00:42:02.200 --> 00:42:03.100
+Yeah, who are we?
+
+00:42:03.100 --> 00:42:08.600
+And the name of also the open source project that contributed time and expertise.
+
+00:42:09.480 --> 00:42:18.820
+Yeah, AMD, Anaconda, Aprio, Astral, Google, Huawei, Intel, Lap, Lab, Meta, NVIDIA, Preferred Networks, Quansight, and Red Hat.
+
+00:42:18.940 --> 00:42:21.180
+That's a bit of a group working on this.
+
+00:42:21.180 --> 00:42:32.180
+And you can see just above all the different open source projects that different OSS and lead maintainers have contributed time and energy to kind of try to make this move forward.
+
+00:42:32.300 --> 00:42:34.040
+So it is quite a few people.
+
+00:42:35.220 --> 00:42:35.640
+Yeah, yeah.
+
+00:42:35.720 --> 00:42:38.540
+Most notably, maybe QPy and PyTorch, possibly.
+
+00:42:38.900 --> 00:42:39.460
+I mean, they're all...
+
+00:42:39.460 --> 00:42:52.400
+Maybe one company that is not too well known, undeservingly, because they should, which is Probable at the bottom that you mentioned, which is essentially the support company behind scikit-learn.
+
+00:42:52.400 --> 00:42:59.460
+So if people don't know it, Probable is essentially representing Scikit.
+
+00:43:00.920 --> 00:43:03.720
+Yeah, so this is wheelnext.dev.
+
+00:43:03.780 --> 00:43:08.340
+This is basically the website for the group, the working group, something like that.
+
+00:43:08.340 --> 00:43:08.660
+Yep.
+
+00:43:09.180 --> 00:43:13.100
+We try to leave our notes, our thinking, our drafts.
+
+00:43:13.440 --> 00:43:18.480
+One aspect that I really like on the work that we did is that it kind of felt like a startup.
+
+00:43:18.480 --> 00:43:23.200
+We were making a mock-up and iterating very fast and getting feedback.
+
+00:43:23.600 --> 00:43:24.660
+And this, I don't like this.
+
+00:43:24.720 --> 00:43:25.340
+I don't like this.
+
+00:43:25.400 --> 00:43:26.800
+I don't like change it.
+
+00:43:27.060 --> 00:43:34.500
+I worked really closely with two people, one from Quansight, one from Astro, Constantine and Michel.
+
+00:43:34.900 --> 00:43:37.560
+And we did so many hours of work.
+
+00:43:37.560 --> 00:43:52.060
+So many different prototypes, iterating, exposing the work to people, collecting feedback, adjusting, and repeating the cycle so many times until we finally got to something that we thought was reasonable.
+
+00:43:52.580 --> 00:43:54.560
+And that's where we started to write the peps.
+
+00:43:54.840 --> 00:43:56.340
+But that process took us a year.
+
+00:43:57.560 --> 00:43:58.020
+All right.
+
+00:43:58.020 --> 00:44:00.320
+Well, we should probably jump into the peps.
+
+00:44:00.320 --> 00:44:04.900
+And I'll tell you what, you all have quite the authorship attribution here.
+
+00:44:04.960 --> 00:44:10.340
+But also, I believe, correct me if I'm wrong, that this PEP is notable in that it's the longest PEP ever.
+
+00:44:10.540 --> 00:44:11.340
+Something like that, right?
+
+00:44:12.080 --> 00:44:12.240
+Yeah.
+
+00:44:12.240 --> 00:44:14.000
+I don't know if it's an achievement to be proud of.
+
+00:44:17.340 --> 00:44:19.560
+It's the most powerful PEP ever.
+
+00:44:19.720 --> 00:44:20.120
+Yes.
+
+00:44:20.280 --> 00:44:20.600
+No, no.
+
+00:44:20.920 --> 00:44:21.780
+It's a super pep.
+
+00:44:21.780 --> 00:44:31.340
+So much so that we're talking about PEP 817 wheel variants, which is the variant thing that we actually are talking about, not the other variants, beyond platform tags.
+
+00:44:31.340 --> 00:44:38.000
+But then so much so that it actually got kicked to the curb for like, well, what is the minimal viable PEP of this pep?
+
+00:44:38.260 --> 00:44:39.760
+So we can take it in steps.
+
+00:44:40.700 --> 00:44:52.160
+And Jonathan, you just told me really good news that pep, so you spun off this other pep, PEP 825 wheel variants package format, which is smaller, which still has a significant authorship.
+
+00:44:52.660 --> 00:44:56.320
+But that this was just, it says draft, but is that true?
+
+00:44:56.320 --> 00:44:56.440
+Yeah.
+
+00:44:56.960 --> 00:44:57.120
+Yeah.
+
+00:44:57.260 --> 00:45:04.060
+So peps, maybe Ralph, you want to discuss a little about what's the process for PEP that I think that's important.
+
+00:45:04.440 --> 00:45:04.460
+Yeah.
+
+00:45:04.460 --> 00:45:08.120
+So when you submit a pep, it first, you know, submit up on GitHub.
+
+00:45:08.340 --> 00:45:17.340
+And then there's a group of folks called the PEP editors who basically just edit, you know, they review it for clarity, you know, language, consistency with other peps and so on.
+
+00:45:17.400 --> 00:45:20.360
+So they don't really look at the content of what you're proposing.
+
+00:45:21.180 --> 00:45:24.300
+So it's just, as long as it's clear, they're happy, you merge it in.
+
+00:45:24.300 --> 00:45:28.640
+But because the first PEP was already so long, that process took like over a month already.
+
+00:45:29.340 --> 00:45:31.700
+But at that point, it's merged as draft.
+
+00:45:31.900 --> 00:45:37.820
+And then you go to the Python packaging discourse where you say, okay, here's our pep.
+
+00:45:38.160 --> 00:45:40.800
+You know, now please let's start the actual community review.
+
+00:45:41.100 --> 00:45:44.360
+And then basically anybody with an opinion can weigh in.
+
+00:45:44.840 --> 00:45:46.580
+And it's just, it's a forum.
+
+00:45:47.340 --> 00:45:49.020
+They're not, it's not even a threaded forum.
+
+00:45:49.020 --> 00:45:53.580
+So it's just one long thread of comments, which tends to make it like a little challenging.
+
+00:45:54.000 --> 00:45:59.040
+You know, the more complex the topic gets, the harder it is to make sense of this conversation.
+
+00:45:59.480 --> 00:46:03.660
+It's really hard to have a threaded multi-component conversation.
+
+00:46:04.060 --> 00:46:04.660
+It is.
+
+00:46:04.960 --> 00:46:05.320
+Exactly.
+
+00:46:05.320 --> 00:46:09.140
+So that's one of the reasons it's now split into smaller parts.
+
+00:46:09.260 --> 00:46:12.100
+So you can at least have separate threads about different topics, right?
+
+00:46:12.240 --> 00:46:17.300
+So, and because especially not all of the parts of the design apply to everybody.
+
+00:46:17.300 --> 00:46:26.680
+When we're talking about installers, we want to hear primarily from the authors of uv and pip, Poetry, Hatch, PDM.
+
+00:46:26.680 --> 00:46:36.560
+But if we're talking about how do you build a wheel, well, we have to talk primarily to setup tools, Zykit, BuildCore, Meson Python, the build backends.
+
+00:46:36.980 --> 00:46:39.220
+And, you know, the index server the same, right?
+
+00:46:39.240 --> 00:46:41.940
+Do you want to know that the PyPI maintainers are happy?
+
+00:46:42.740 --> 00:46:50.440
+So that's why, you know, organizing this review and chopping it up into a complex part, it's still going to be really hard to get the right amount of feedback.
+
+00:46:50.440 --> 00:46:55.880
+But we now have like the first PR, you know, the first merge path in draft status.
+
+00:46:56.380 --> 00:47:01.920
+So it's going to only be accepted once the whole community review process is done.
+
+00:47:02.120 --> 00:47:09.720
+And probably what will happen is it's going to be provisionally accepted only because we know there's like three more paths coming for the other parts.
+
+00:47:10.160 --> 00:47:15.460
+And eventually, like the, you know, you want all four to be, you know, working and accepted.
+
+00:47:15.460 --> 00:47:26.560
+Like, you know, we now have prototypes, but, you know, we want the prototypes for the final design and have like, you know, the tool author say like, yeah, this works for us before you really go from provisional to actually accept.
+
+00:47:26.740 --> 00:47:26.980
+Amazing.
+
+00:47:27.220 --> 00:47:33.020
+So this is part of what I get out when I said at the beginning that this touches like every part of the packaging stack.
+
+00:47:33.120 --> 00:47:39.180
+There's just like, it's very hard to break it up into, I mean, that's what we're trying to do in some sense.
+
+00:47:39.180 --> 00:47:41.000
+But like, it's from the start, it's been hard.
+
+00:47:41.180 --> 00:47:53.240
+It's hard to, there aren't necessarily super great cut points because it does affect how you build packages, how you publish them, like how they get hosted and served from the registry, how installers like look at them and understand them.
+
+00:47:53.280 --> 00:47:58.660
+All of those things, like marker syntax, all of that stuff gets impacted in different ways.
+
+00:47:59.280 --> 00:47:59.980
+It's very funny.
+
+00:47:59.980 --> 00:48:03.280
+We're prototyping this for a year.
+
+00:48:03.400 --> 00:48:06.740
+We ended up pretty much forking the entire ecosystem.
+
+00:48:06.740 --> 00:48:20.600
+PIP got fork, EV got forks, warehouse got fork, packaging got fork, like absolutely every package in the ecosystem, but it didn't being forked because we needed to test our implementation.
+
+00:48:21.220 --> 00:48:21.960
+And we needed to verify.
+
+00:48:21.960 --> 00:48:24.240
+The goal, of course, is to unfork those things.
+
+00:48:24.320 --> 00:48:24.580
+Yes.
+
+00:48:24.580 --> 00:48:25.580
+Like over time.
+
+00:48:25.580 --> 00:48:36.020
+It's a re-merge pack, but we needed to have a playground to be able to experiment and see how the concept that we were developing was functioning in pip.
+
+00:48:36.020 --> 00:48:38.920
+And then in packaging, but then also in setup tools.
+
+00:48:39.360 --> 00:48:41.640
+And then in scikit build core.
+
+00:48:42.040 --> 00:48:43.100
+And then in Python method.
+
+00:48:43.260 --> 00:48:51.180
+And it just keeps spreading essentially to every single corner of the packaging, installation, and distribution aspect of Python.
+
+00:48:51.600 --> 00:48:52.760
+So that was pretty funny.
+
+00:48:53.320 --> 00:48:53.500
+Yeah.
+
+00:48:53.780 --> 00:48:56.120
+What ecosystem you got in?
+
+00:48:56.120 --> 00:49:06.040
+I think you have fork in uv, or I guess technically it's just a branch that Constantine on our team on here on the PEP has been, who's been super involved.
+
+00:49:06.240 --> 00:49:06.720
+Oh, thanks.
+
+00:49:07.020 --> 00:49:12.740
+Who's been super involved, you know, throughout and done a ton of work on basically implementing the standard in uv.
+
+00:49:12.740 --> 00:49:22.080
+So we have like a working implementation that we've used to, yeah, you can actually install it from, you know, we basically distribute it to a slightly different URL.
+
+00:49:22.360 --> 00:49:24.180
+So you can install it and test it.
+
+00:49:24.580 --> 00:49:29.720
+But yeah, that's been, that fork has evolved a lot, or that branch has evolved a lot.
+
+00:49:29.820 --> 00:49:35.700
+And it's been a lot of work to, I mean, it's been incredibly helpful for the design process for us to understand like what's hard, what's easy.
+
+00:49:35.700 --> 00:49:40.200
+And then I also think it's important for PEPs just to have like working implementations too.
+
+00:49:40.360 --> 00:49:46.900
+And I mean, a lot of people agree that's not an awful point, but that's been one of the goals too, is to show what it's like in practice and that it actually works.
+
+00:49:47.320 --> 00:49:48.600
+So people want to play around with this.
+
+00:49:48.720 --> 00:49:52.260
+An easy way might be to try to use this fork.
+
+00:49:52.500 --> 00:49:56.020
+We put a lot of work to actually make it, go ahead and try it.
+
+00:49:56.020 --> 00:50:05.260
+Because I think it's, I personally have a lot of like admiration for the work done in free threading Python, especially to the PEP.
+
+00:50:05.580 --> 00:50:15.300
+And I think Sam Gross, who is the main author, managed to make significant amount of progress as he was coming up with prototypes that are, it's not just my word.
+
+00:50:15.620 --> 00:50:16.660
+Let me show it to you.
+
+00:50:16.780 --> 00:50:17.240
+It works.
+
+00:50:18.540 --> 00:50:22.440
+And there was so much skepticism around that idea of free threading Python.
+
+00:50:22.720 --> 00:50:24.960
+He had to, had to show, not tell.
+
+00:50:24.960 --> 00:50:34.100
+But I think if we didn't do the work similarly on variant enabled wheels, people would have told us, oh, well, resolution is too slow.
+
+00:50:34.260 --> 00:50:36.180
+It's going to slow down installers too much.
+
+00:50:36.820 --> 00:50:40.520
+And Astro is probably one of the installers that care the most about speed.
+
+00:50:41.320 --> 00:50:47.860
+So we need to both convince us, but also Charlie's and his team to be, hey, it's not going to slow down anything.
+
+00:50:47.860 --> 00:50:48.020
+Yeah.
+
+00:50:48.120 --> 00:50:49.840
+And we had plenty of feedback on that front too.
+
+00:50:49.920 --> 00:50:52.500
+Well, during the design, we were like, no, this is going to be too slow.
+
+00:50:52.640 --> 00:50:54.800
+Or like, this is like a better way to do it, et cetera.
+
+00:50:54.960 --> 00:50:57.420
+But, but I like, I mean, I like this little snippet.
+
+00:50:57.420 --> 00:51:02.020
+Cause like, this is basically like, if you haven't felt this pain, it might not be meaningful to you.
+
+00:51:02.020 --> 00:51:06.320
+But if you've like worked with PyTorch, like this is kind of like, this is what we want to enable.
+
+00:51:06.320 --> 00:51:06.660
+Right.
+
+00:51:06.700 --> 00:51:12.880
+Is like, you don't, you don't have to like configure a specific index URL that like captures the CUDA variant or anything like that.
+
+00:51:12.880 --> 00:51:15.180
+Like you just say, hey, install Torch.
+
+00:51:15.180 --> 00:51:19.580
+And then in this variant enabled build, uv would, it would go look at Torch.
+
+00:51:19.820 --> 00:51:25.600
+It would see, okay, Torch, you know, it has different variants for different CUDA versions.
+
+00:51:25.920 --> 00:51:29.200
+And here's how I inspect, you know, what CUDA version I should use on your machine.
+
+00:51:29.200 --> 00:51:32.600
+And then it would pick out the right version based on what's supported by the GPU that's running.
+
+00:51:32.600 --> 00:51:39.100
+Like that should all happen and users shouldn't have to think about configuring it effectively is like what we were, what we have been working towards.
+
+00:51:39.520 --> 00:51:44.680
+And in the future, the first line doesn't exist because right now the first line is just here to install this variant enabled.
+
+00:51:44.760 --> 00:51:44.920
+Yeah.
+
+00:51:44.940 --> 00:51:46.080
+That just installs the fork.
+
+00:51:46.360 --> 00:51:46.500
+Yeah.
+
+00:51:46.700 --> 00:51:50.920
+And for people listening and not watching what they mean by this, there's three lines here to say how to use this.
+
+00:51:51.140 --> 00:51:51.800
+It says curl.
+
+00:51:51.800 --> 00:51:52.100
+I'm sorry.
+
+00:51:52.340 --> 00:51:52.700
+Basically.
+
+00:51:52.940 --> 00:51:53.320
+Yeah, no worries.
+
+00:51:53.380 --> 00:51:59.460
+It's the install statement for uv, which is typical, except for that it overrides the.
+
+00:51:59.580 --> 00:52:00.480
+The download URL.
+
+00:52:00.900 --> 00:52:01.840
+The download URL.
+
+00:52:01.840 --> 00:52:05.420
+It's a different URL, which is wheelnext.astral.sh.
+
+00:52:05.560 --> 00:52:09.980
+We serve, we distribute a separate variant enabled experimental quote unquote prototype build.
+
+00:52:10.160 --> 00:52:10.540
+Right.
+
+00:52:10.600 --> 00:52:16.380
+And then you just create a virtual environment, uv, V and V, and then you just uv pip install like normal, but it handles this.
+
+00:52:16.380 --> 00:52:25.800
+And, you know, Charlie, we spoke, I think on the pyx episode about just how large some of these things are like PyTorch and others that are compiled there.
+
+00:52:26.060 --> 00:52:30.140
+You can't just come download everything, all the variations into one wheel.
+
+00:52:30.140 --> 00:52:32.240
+I mean, I guess you could, but it'd be crazy, right?
+
+00:52:32.620 --> 00:52:33.980
+That's actually a big benefit, right?
+
+00:52:34.140 --> 00:52:37.700
+Like right now you go to PyPI, you download the PyTorch wheel.
+
+00:52:37.800 --> 00:52:39.880
+It'll be about 900 megabytes.
+
+00:52:40.240 --> 00:52:41.380
+You could make it small.
+
+00:52:41.620 --> 00:52:44.360
+You know, part of the reason it's so large is, again, these bad binaries, right?
+
+00:52:44.360 --> 00:52:46.920
+Like the NumPy ones are like a few megabytes.
+
+00:52:47.140 --> 00:52:52.260
+The PyTorch ones have a bunch of CUDA inside, like for five or six different CUDA architectures.
+
+00:52:52.480 --> 00:52:54.420
+And, you know, it floats very, very quickly.
+
+00:52:54.620 --> 00:52:59.660
+And actually the PyTorch team has to try incredibly hard to stay under one gigabyte.
+
+00:52:59.660 --> 00:53:09.680
+If we have variants, we can just slim it down to one CUDA architecture per wheel, you know, so you can go down to like, you know, 200 megabytes or so, 250 maybe.
+
+00:53:09.860 --> 00:53:13.840
+But it's way better for, you know, both for index servers, it's better for users.
+
+00:53:14.580 --> 00:53:16.120
+It's going to be pretty slow too.
+
+00:53:16.120 --> 00:53:22.560
+The only thing it's not better for it's CI servers that have to build all these different things if you start sharding.
+
+00:53:23.300 --> 00:53:26.220
+But that's a one-time cost that at the end ends up being.
+
+00:53:26.560 --> 00:53:33.040
+It's much better to have a slight increase one time and massive decrease scalable, essentially.
+
+00:53:33.380 --> 00:53:36.660
+You build it once, it gets installed a million times.
+
+00:53:36.840 --> 00:53:38.420
+That's a massive difference.
+
+00:53:38.880 --> 00:53:43.300
+And, you know, it's also better for the warehouse folks like PyPI.
+
+00:53:43.300 --> 00:53:49.560
+And it's easy for people to just assume pip install, uv pip install, that sort of stuff is going to work.
+
+00:53:49.860 --> 00:53:55.160
+But the cost of just the bandwidth in that infrastructure is astronomical, which is crazy.
+
+00:53:55.460 --> 00:53:58.700
+So this is going to be a major benefit for bandwidth.
+
+00:53:59.060 --> 00:54:01.240
+Yeah, and like also like install speed.
+
+00:54:01.980 --> 00:54:07.200
+You'll also benefit from that because you're no longer downloading as much stuff to actually install PyTorch.
+
+00:54:07.520 --> 00:54:12.020
+I mean, if you use uv, it's got some really good caching and it's pretty quick.
+
+00:54:12.020 --> 00:54:14.640
+Oh, but it doesn't multiply your bandwidth by magic.
+
+00:54:16.820 --> 00:54:17.620
+I wish.
+
+00:54:18.060 --> 00:54:19.740
+Charlie, if you find a solution to that.
+
+00:54:20.840 --> 00:54:21.920
+I haven't yet.
+
+00:54:22.180 --> 00:54:26.860
+But yeah, if you're downloading Torch and all the NVIDIA, all the CUDA stuff, it's, yeah.
+
+00:54:27.040 --> 00:54:27.560
+It's hefty.
+
+00:54:27.780 --> 00:54:30.560
+It's a large number of megabytes.
+
+00:54:31.040 --> 00:54:34.260
+Let's talk real quick about the PyPackaging Native Guide.
+
+00:54:34.360 --> 00:54:37.380
+And then I want to get an update on pyx real quick before we go.
+
+00:54:37.460 --> 00:54:38.920
+So, Ralph, this is your project, right?
+
+00:54:39.060 --> 00:54:39.700
+Tell us about this.
+
+00:54:39.800 --> 00:54:41.020
+I'll be sure to show it.
+
+00:54:41.020 --> 00:54:51.220
+Okay, so I've been watching discussions about some of the topics we've talked about in this episode, you know, since 2010 or so in Python packaging.
+
+00:54:51.220 --> 00:54:59.840
+And even back then, long before we had wheels, you know, NumPy, for example, had different .exe installers that we would upload to PyPI.
+
+00:54:59.840 --> 00:55:04.120
+And, like, there would be one named underscore sse2, one underscore sse3.
+
+00:55:04.300 --> 00:55:08.580
+And, like, user had just the right .exe and install it on their Windows machine.
+
+00:55:09.000 --> 00:55:09.140
+What?
+
+00:55:09.640 --> 00:55:10.040
+Wow.
+
+00:55:10.040 --> 00:55:10.820
+Oh, I have no idea.
+
+00:55:11.080 --> 00:55:11.240
+Okay.
+
+00:55:11.860 --> 00:55:14.100
+Yes, it was not fun.
+
+00:55:14.400 --> 00:55:21.300
+And actually, this was by far the hardest thing when I became NumPy release manager because we had to build these things on Linux under Wine.
+
+00:55:21.300 --> 00:55:24.300
+And there were no instructions and there were really janky scripts.
+
+00:55:24.420 --> 00:55:26.680
+So, it took me three months to get the first release out.
+
+00:55:27.800 --> 00:55:34.060
+But, yeah, so we, I saw all these discussions about, you know, this was sse2 and sse3.
+
+00:55:34.060 --> 00:55:43.660
+And, like, you know, the pip authors and, you know, most of the people who work with pure Python, like, you know, the DevOps folks, the, you know, web framework folks, they had no idea about this.
+
+00:55:44.020 --> 00:55:52.120
+And usually, these conversations went in circles because when you explain something to one person, the next person would come in and, like, you know, this is endless mailing list threats.
+
+00:55:52.380 --> 00:55:53.380
+That would never go anywhere.
+
+00:55:53.740 --> 00:55:59.600
+So, after, you know, seeing that for 12, 13 years or so, I, you know, finally got tired of that.
+
+00:55:59.680 --> 00:56:03.240
+And I thought, I'm going to write a reference site that explains the problem.
+
+00:56:03.240 --> 00:56:05.900
+I don't want to propose any solutions, but just explain the problem.
+
+00:56:06.000 --> 00:56:18.400
+So, the next time someone starts a new conversation about, you know, SIMD extensions or about GPUs or, you know, about some of the issues with mixing, you know, source and binary distributions.
+
+00:56:18.720 --> 00:56:19.540
+Just link to this site.
+
+00:56:19.660 --> 00:56:24.340
+Like, please use that as our best, you know, approach at trying to summarize a problem, you know.
+
+00:56:24.560 --> 00:56:26.960
+So, we have a baseline to start talking about solutions.
+
+00:56:27.360 --> 00:56:30.780
+And I think, you know, Jonathan, you know, is one of the people who saw this.
+
+00:56:30.780 --> 00:56:32.140
+I think a lot of people read this.
+
+00:56:32.140 --> 00:56:38.560
+But it was a nice basis to, you know, just point at this as, like, there are your problem descriptions.
+
+00:56:38.920 --> 00:56:45.940
+And, you know, for the GPU part, like, NVIDIA folks really helped to make sure that all the explanations of the problems were correct.
+
+00:56:46.360 --> 00:56:51.140
+So, when we started Wheel Next, we could just start talking about, like, okay, what are the solutions here?
+
+00:56:51.380 --> 00:56:54.080
+This website is absolutely incredible.
+
+00:56:54.600 --> 00:56:55.360
+It's amazing.
+
+00:56:55.560 --> 00:56:56.380
+Yeah, it's amazing.
+
+00:56:56.380 --> 00:57:01.420
+Thanks to the work that Ralph and every contributor to this website have made.
+
+00:57:01.620 --> 00:57:07.980
+This is by far the best explanation anywhere on the internet to all these packaging issues.
+
+00:57:08.320 --> 00:57:12.220
+And I really like the perspective that Ralph has took, which is don't state the solution.
+
+00:57:12.360 --> 00:57:14.720
+Just focus on stating the problem very clear.
+
+00:57:14.720 --> 00:57:21.760
+And then with Wheel Next, we try to take the exact flip coin, flip side of the coin, which is don't focus on the problem.
+
+00:57:21.860 --> 00:57:22.780
+It's already explained.
+
+00:57:23.020 --> 00:57:26.480
+Just focus on proposing one solution to some of the problems.
+
+00:57:26.780 --> 00:57:28.400
+And this is how we created Wheel Next.
+
+00:57:28.560 --> 00:57:29.140
+I love it.
+
+00:57:29.380 --> 00:57:37.760
+You know, one of the big problems, challenges, I guess, is if you don't fully understand the problem space, you could be debating two different things.
+
+00:57:37.760 --> 00:57:41.440
+And one person sees a really important angle, the other person doesn't even see that angle.
+
+00:57:41.960 --> 00:57:45.040
+They have a different perspective that they're arguing for optimizing for.
+
+00:57:45.240 --> 00:57:48.100
+And so, yeah, it's sort of a little bit like the Wheel Next stuff.
+
+00:57:48.180 --> 00:57:52.060
+Like, let's get everyone involved and see all the angles and then discuss it, right?
+
+00:57:52.240 --> 00:57:52.520
+Exactly.
+
+00:57:52.960 --> 00:57:57.440
+Well, you know the saying, a problem well stated is a problem half solved.
+
+00:57:57.780 --> 00:58:01.780
+So, this is exactly what we are trying to say.
+
+00:58:02.020 --> 00:58:02.540
+I love it.
+
+00:58:02.540 --> 00:58:10.200
+All right, I want to get a quick update on pyx since I feel like, Charlie, you're right in the middle of this.
+
+00:58:10.380 --> 00:58:13.600
+I know pyx was looking to solve some of these problems as well.
+
+00:58:14.220 --> 00:58:19.560
+Give us the elevator pitch and just, we have a whole episode on this from, I don't know, six months ago or something.
+
+00:58:19.920 --> 00:58:24.640
+But, yeah, give us the, what's the situation here and does this change things on how you're handling it and make things easier?
+
+00:58:24.980 --> 00:58:26.040
+Yeah, yeah, yeah, for sure.
+
+00:58:26.040 --> 00:58:32.460
+So, like, yeah, pyx is our hosted package registry and it's in beta right now.
+
+00:58:32.560 --> 00:58:35.520
+So, we're live with a bunch of great customers.
+
+00:58:37.420 --> 00:58:51.320
+The goal of pyx is basically to enable us to solve, like, more of the packaging problems that we see in the uv issue tracker by having our own registry that we think is well implemented and solves problems that we see that other registries don't really solve.
+
+00:58:51.320 --> 00:58:59.820
+So, like, basically from the start, the way that we've approached the wheel, these, like, problems around the GPU stuff is from, like, two perspectives.
+
+00:59:00.820 --> 00:59:07.100
+And in pyx, we're really just focused, in terms of how it overlaps with wheel variants, we're really just focused on the GPU part.
+
+00:59:07.360 --> 00:59:13.940
+But the way that we've approached it has basically been try to push the standards forward as much as we can.
+
+00:59:14.200 --> 00:59:15.960
+And that's what we've been doing in this effort.
+
+00:59:15.960 --> 00:59:21.040
+And then simultaneously try to figure out how we can help users, like, until the standards change.
+
+00:59:21.720 --> 00:59:32.580
+And so, pyx has mostly been, has more been in that second camp of, like, assuming the standards don't change because we don't want to, we don't want to, like, unilaterally start changing a bunch of things, like, without going through the process.
+
+00:59:32.740 --> 00:59:36.520
+How can we make the world, like, a little bit easier for people who are working with this kind of stuff?
+
+00:59:36.520 --> 00:59:46.020
+So, for example, like, in pyx, we take a lot of packages that are, like, PyTorch extensions or need to be built against CUDA, and we, like, build those.
+
+00:59:46.300 --> 00:59:53.660
+Like, we build them across a wide range of, like, CUDA versions, PyTorch versions, Python versions, CPU architectures, and we make those available to users.
+
+00:59:53.960 --> 00:59:58.640
+So, it doesn't solve the core problem of, like, how do you build and distribute this stuff?
+
+00:59:58.640 --> 01:00:06.520
+But it does mean that, like, if you're operating within the constraints of, like, the current set of standards, we can make people's lives easier by making it so they don't have to build so many things.
+
+01:00:06.600 --> 01:00:09.720
+Like, we build them well, they all work together, all that kind of stuff.
+
+01:00:10.140 --> 01:00:12.020
+So, that's what, like, we've been focused on.
+
+01:00:12.080 --> 01:00:21.840
+And I think, like, looking forward, like, our goal is to support Wheelnecks, like, as soon as, like, sorry, Wheel Variants, like, as soon as possible, and, like, put those into the registry.
+
+01:00:21.840 --> 01:00:28.940
+So, as soon as we feel like that's a, you know, a feasible thing to do on the registry, we'll support it in pyx and support it for, like, our users and our customers.
+
+01:00:29.560 --> 01:00:39.780
+But in the meantime, it's kind of been, like, a parallel track effort of pushing forward on all the Wheelnecks work and standards, and then just trying to, like, solve immediate user problems without changing standards, like, partly through the registry.
+
+01:00:40.160 --> 01:00:41.320
+Things are going good at pyx?
+
+01:00:41.680 --> 01:00:42.540
+You're making progress?
+
+01:00:42.680 --> 01:00:42.780
+Yeah.
+
+01:00:42.780 --> 01:00:43.840
+Getting closer to public launch?
+
+01:00:43.860 --> 01:00:44.060
+Yeah, we're making progress.
+
+01:00:44.520 --> 01:00:45.300
+Yeah, yeah.
+
+01:00:45.600 --> 01:00:46.080
+No, it's good.
+
+01:00:46.400 --> 01:00:47.120
+Customers are growing.
+
+01:00:47.220 --> 01:00:47.920
+Numbers are growing up.
+
+01:00:48.000 --> 01:00:48.340
+It's good.
+
+01:00:48.580 --> 01:00:48.860
+Awesome.
+
+01:00:49.100 --> 01:00:50.360
+People want to try pyx?
+
+01:00:50.360 --> 01:00:50.800
+What are they?
+
+01:00:51.040 --> 01:00:51.300
+Are they?
+
+01:00:51.300 --> 01:00:52.820
+They can join the waitlist here.
+
+01:00:53.120 --> 01:00:53.560
+Yeah, yeah.
+
+01:00:53.820 --> 01:01:01.380
+This is, you know, you just, we have a, yeah, or you can go to astral.sh.pyx, and we look at all the responses, and we basically onboard people one by one.
+
+01:01:01.580 --> 01:01:09.700
+So, talking about when is this stuff going to be ready, you'll be able to adopt it, I guess maybe that's a good place to close out our conversation here is, what's the timeline?
+
+01:01:10.140 --> 01:01:11.080
+What are expectations?
+
+01:01:11.740 --> 01:01:12.540
+How are things going?
+
+01:01:12.660 --> 01:01:13.160
+What's next?
+
+01:01:13.460 --> 01:01:14.240
+It's a great question.
+
+01:01:14.280 --> 01:01:14.880
+Everything's open source.
+
+01:01:15.060 --> 01:01:16.060
+It's a two-month delay.
+
+01:01:20.060 --> 01:01:20.420
+No.
+
+01:01:20.420 --> 01:01:22.840
+What's the party line on this question?
+
+01:01:25.940 --> 01:01:26.660
+Oh, gosh.
+
+01:01:27.060 --> 01:01:44.620
+Well, it's, I liked, we have a joke inside, I don't know if it's inside widespread inside WeOnX, but we call this the Barry's fourth law, Varso fourth law, I don't remember exactly how, which is essentially make an estimate, multiply it by two, and change the unit.
+
+01:01:44.620 --> 01:01:47.980
+So, if you think it's going to take six months, it's one year.
+
+01:01:47.980 --> 01:01:48.380
+Oh, no.
+
+01:01:48.380 --> 01:01:50.140
+Change the unit, one decade.
+
+01:01:50.140 --> 01:02:00.700
+And it's a running joke that we have that I think is really good.
+
+01:02:00.700 --> 01:02:09.220
+Realistically, I think it depends on where are we going to set the bar for starting to roll things out.
+
+01:02:09.220 --> 01:02:13.160
+So, as Ralf was saying, we'll probably see some provisionally accepted.
+
+01:02:13.800 --> 01:02:17.900
+But as we get to that point, some of the stuff will be possible.
+
+01:02:18.280 --> 01:02:28.180
+For example, I expect that little by little, we can start experimenting with things without getting necessarily to the absolute final stage.
+
+01:02:28.180 --> 01:02:32.480
+But the full feature will be available to the app at the last stage.
+
+01:02:32.680 --> 01:02:35.520
+So, complicated question to answer.
+
+01:02:35.660 --> 01:02:37.760
+We hope that it's not going to take too many years.
+
+01:02:38.020 --> 01:02:40.260
+I'll make a connection back to pyx here.
+
+01:02:40.380 --> 01:02:45.080
+Because I think, you know, there's part is like, okay, there's four PAPs that need to be reviewed.
+
+01:02:45.400 --> 01:02:47.920
+Probably we need to update some prototypes here and there.
+
+01:02:48.040 --> 01:02:50.880
+It's probably going to take, you know, the better part of this year.
+
+01:02:51.080 --> 01:02:53.440
+At that point, you know, you have accepted PAPs, right?
+
+01:02:53.440 --> 01:02:55.380
+But then PyPI needs to be updated.
+
+01:02:55.760 --> 01:02:58.840
+Like, you know, all the tools that, like Twine, would need to be updated.
+
+01:02:59.160 --> 01:03:01.360
+Like, there's a new metadata version.
+
+01:03:01.560 --> 01:03:10.020
+So, everything that consumes that needs to be updated before, you know, package authors can actually start producing these wheels and upload them to PyPI.
+
+01:03:10.460 --> 01:03:12.560
+So, that's going to not be this year, right?
+
+01:03:12.600 --> 01:03:17.140
+There's a very long tail of, you know, how the implementation rolls through the ecosystem.
+
+01:03:17.140 --> 01:03:20.240
+And then you have to wait until users get newer tools.
+
+01:03:20.620 --> 01:03:22.900
+And then, only then can you start uploading wheels.
+
+01:03:22.900 --> 01:03:25.480
+So, I'm going to poke at Charlie a bit here.
+
+01:03:25.580 --> 01:03:31.240
+Because one of the advantages of having a separate registry is, you know, plus the ability to rebuild everything.
+
+01:03:31.720 --> 01:03:36.060
+You can start using variant wheels, like, the moment that everything is accepted.
+
+01:03:36.420 --> 01:03:36.960
+It's way sooner.
+
+01:03:36.960 --> 01:03:36.320
+I know.
+
+01:03:36.320 --> 01:03:36.960
+It's way sooner.
+
+01:03:36.960 --> 01:03:37.240
+Yes.
+
+01:03:37.560 --> 01:03:38.360
+Have you thought about that?
+
+01:03:38.560 --> 01:03:39.140
+That is true.
+
+01:03:39.320 --> 01:03:40.300
+Yeah, yeah, of course.
+
+01:03:40.480 --> 01:03:40.660
+Yeah.
+
+01:03:40.900 --> 01:03:46.700
+I think from our perspective, we're mostly like, do we feel like the design is done or how much turn will there be on the design?
+
+01:03:47.220 --> 01:03:51.580
+But yeah, we're definitely in a position to, like, start building and distributing this stuff much, much sooner.
+
+01:03:51.580 --> 01:03:56.940
+UV has a second advantage, which is I think they have a much shorter tail of users in terms of version.
+
+01:03:57.300 --> 01:04:01.660
+I think uv users end up on a much more quote-unquote recent version.
+
+01:04:02.000 --> 01:04:12.920
+If you look at pip, I think, I don't remember the statistic on top of my head, but a still significant portion of users use five-year-old version of pip, which I don't even know which version of Python.
+
+01:04:12.920 --> 01:04:14.740
+It was 3.9 or something.
+
+01:04:15.520 --> 01:04:21.460
+So it is, uv is able to move a lot faster, but also the users are more reactive.
+
+01:04:21.840 --> 01:04:23.140
+That's a very interesting point.
+
+01:04:23.480 --> 01:04:24.200
+A very interesting angle.
+
+01:04:24.340 --> 01:04:30.260
+I mean, I think a lot of people who are very tuned into the Python space have switched to uv, started using uv.
+
+01:04:30.260 --> 01:04:35.580
+And there's probably a lot of people who don't read the newsletters, don't listen to the podcast, and so on.
+
+01:04:35.640 --> 01:04:38.800
+And they know pip, and they just keep on PIPing, which is fine.
+
+01:04:38.960 --> 01:04:39.840
+I'm not knocking it.
+
+01:04:39.960 --> 01:04:46.800
+But, you know, it means not only are they using pip, they might be using an older version of Python because they don't want to shake it up.
+
+01:04:47.080 --> 01:04:50.080
+And, you know, those are going to be the long tails that are going to be hard.
+
+01:04:50.080 --> 01:04:54.840
+I guess one more thought about what's next here before we call this a show here.
+
+01:04:55.100 --> 01:04:56.100
+What is the minimal?
+
+01:04:56.440 --> 01:04:58.960
+We talked about PEP 825, the minimal PEP.
+
+01:04:59.040 --> 01:05:01.640
+What is the minimal amount of adoption, right?
+
+01:05:01.680 --> 01:05:15.760
+So if the top five biggest data science and machine learning libraries adopt this and the installer tools like uv and pip support it, that actually alone might be a really big benefit if all the other packages are just ignored, right?
+
+01:05:15.760 --> 01:05:21.900
+So that's way more achievable than every single package that has native code has all these specifiers, right?
+
+01:05:22.180 --> 01:05:24.520
+What's the minimum level of adoption?
+
+01:05:24.900 --> 01:05:30.720
+I'd say that, I mean, the minimum level at which you can call it a success, yeah, five is probably not that far off.
+
+01:05:30.760 --> 01:05:32.400
+The benefits start to accumulate quickly.
+
+01:05:32.540 --> 01:05:43.380
+But I would expect once packages like PyTorch start adopting this, especially in the deep learning space, you know, this will be adopted very widely, very quickly because it solves so many problems.
+
+01:05:43.380 --> 01:05:49.860
+Like many of the most popular packages like VLLM with very large development teams and very large numbers of users.
+
+01:05:50.300 --> 01:05:53.660
+If you look at their install pages, it's like, you know, it's like a puzzle book.
+
+01:05:54.020 --> 01:06:00.120
+You just don't know how to install this stuff and they don't have wheels on PyPI and they have their own extra index servers.
+
+01:06:00.640 --> 01:06:02.460
+And it's not for lack of trying.
+
+01:06:02.600 --> 01:06:03.740
+It's not for lack of trying.
+
+01:06:03.900 --> 01:06:09.580
+Like those teams like put a lot of effort into trying to make it easier to install, but they basically all run into different kinds of roadblocks.
+
+01:06:09.580 --> 01:06:14.000
+I think five packages is what you'll get after maybe two weeks.
+
+01:06:14.560 --> 01:06:21.620
+After a month, you will get twice that amount and probably a quadratic progression for quite a few weeks.
+
+01:06:21.760 --> 01:06:26.940
+But it's especially in the scientific compute space and maybe machine learning to be more specific.
+
+01:06:27.400 --> 01:06:31.100
+Well, the moment that it works, so many packages will switch.
+
+01:06:31.380 --> 01:06:32.360
+Like so many.
+
+01:06:32.640 --> 01:06:36.860
+If you just take PyTorch, half of its dependencies will probably activate variant mode.
+
+01:06:36.860 --> 01:06:41.220
+And then the people that build on top of PyTorch are people who build on top of Jax.
+
+01:06:41.640 --> 01:06:46.140
+So just that, you end up with at least 50 packages in a matter of a few months.
+
+01:06:47.100 --> 01:06:51.720
+Yeah, I'm just thinking there's probably a very small set that are feeling the most pain.
+
+01:06:52.380 --> 01:07:00.560
+You could do direct outreach to just the most important projects and get that adopted and make a really big difference, even if it's not every package.
+
+01:07:00.560 --> 01:07:07.340
+But the funny part is that most of the packages that would be interested, that we would reach out to are already part of We Are Next.
+
+01:07:08.280 --> 01:07:16.200
+Because they in some way find the pain pretty significant and are starving for a solution.
+
+01:07:16.580 --> 01:07:17.080
+They know.
+
+01:07:17.340 --> 01:07:17.840
+They already know.
+
+01:07:18.100 --> 01:07:19.700
+All right, let's call it a show, folks.
+
+01:07:20.000 --> 01:07:21.960
+Let's final call to action.
+
+01:07:21.960 --> 01:07:29.980
+People out there listening, either they're maintainers of packages or they're users of these libraries or they got their own open source project.
+
+01:07:30.400 --> 01:07:31.440
+They're seeing the light.
+
+01:07:31.540 --> 01:07:32.320
+They want to get involved.
+
+01:07:32.860 --> 01:07:33.720
+They want to try it out.
+
+01:07:33.860 --> 01:07:34.380
+What do you tell them?
+
+01:07:34.560 --> 01:07:39.440
+Well, first, it would be great if people were to come and discuss the Python.org.
+
+01:07:39.560 --> 01:07:45.000
+That's where the community is trying to aggregate to discuss all these different proposals.
+
+01:07:45.000 --> 01:07:49.600
+So I think the more people get involved, the more better.
+
+01:07:51.200 --> 01:08:01.680
+But also trying the different packages that we are trying to publish that Charlize has been helping us and his team has been helping us to create a sort of end-to-end experience.
+
+01:08:02.080 --> 01:08:07.720
+I think right now we have example of Linux, macOS, and Windows.
+
+01:08:08.060 --> 01:08:13.000
+It works on different type of hardware, different type of CPUs, different type of GPUs.
+
+01:08:13.000 --> 01:08:21.740
+It works pretty broadly, and we wanted to give a sort of sample flavor of what could be a variant-enabled world.
+
+01:08:22.100 --> 01:08:26.880
+Yeah, I'd say, yeah, for the majority of listeners, they're not going to be packaging tool authors, right?
+
+01:08:26.940 --> 01:08:31.280
+So those are the ones you would expect to participate in the review primarily.
+
+01:08:31.500 --> 01:08:35.480
+But I'd say if you're a user of any of the packages we mentioned, just try it out.
+
+01:08:35.740 --> 01:08:39.200
+You know, download the uv variant-enabled installer.
+
+01:08:39.200 --> 01:08:45.320
+And if you're a package author and we haven't mentioned your package, but it will solve a problem for you, get in touch.
+
+01:08:45.440 --> 01:08:49.540
+Because I think that's maybe the most relevant part here.
+
+01:08:49.800 --> 01:08:55.160
+There's at least hundreds, maybe thousands of packages that we think we have answers for.
+
+01:08:55.340 --> 01:09:02.700
+But if their solution or their problem statement is slightly different, I think now would be a great time to learn and make sure we cover as many use cases as possible.
+
+01:09:02.700 --> 01:09:08.700
+Yeah, I mean, I guess the only thing I'd say is ideally the average user won't even have to think about this, right?
+
+01:09:08.760 --> 01:09:13.240
+And hopefully they just get it through uv or through pip or whatever in the long term.
+
+01:09:13.540 --> 01:09:15.100
+But that may take time.
+
+01:09:15.380 --> 01:09:16.220
+But that's our goal, certainly.
+
+01:09:16.600 --> 01:09:17.920
+Yeah, it's all behind the scenes.
+
+01:09:18.260 --> 01:09:18.580
+They don't know.
+
+01:09:18.820 --> 01:09:22.340
+But certainly, if it solves a problem, reach out, be part of it.
+
+01:09:23.020 --> 01:09:25.040
+Jonathan, Ralph, Charlie, thanks for being on the show.
+
+01:09:25.260 --> 01:09:25.780
+It's been great.
+
+01:09:26.100 --> 01:09:26.540
+Keep up being around.
+
+01:09:26.540 --> 01:09:28.120
+Thanks for having us.
+
+01:09:28.400 --> 01:09:28.760
+Bye.
+
+01:09:29.060 --> 01:09:29.340
+Bye-bye.
+
+01:09:29.520 --> 01:09:29.620
+Bye.
+
+01:09:30.400 --> 01:09:32.820
+This has been another episode of Talk Python To Me.
+
+01:09:32.960 --> 01:09:33.920
+Thank you to our sponsors.
+
+01:09:34.120 --> 01:09:35.400
+Be sure to check out what they're offering.
+
+01:09:35.580 --> 01:09:36.960
+It really helps support the show.
+
+01:09:37.600 --> 01:09:39.400
+This episode is brought to you by Sentry.
+
+01:09:39.900 --> 01:09:43.320
+You know Sentry for the error monitoring, but they now have logs too.
+
+01:09:43.320 --> 01:09:50.580
+And with Sentry, your logs become way more usable, interleaving into your error reports to enhance debugging and understanding.
+
+01:09:51.080 --> 01:09:54.280
+Get started today at talkpython.fm/sentry.
+
+01:09:54.280 --> 01:09:58.540
+And it's brought to you by Temporal, durable workflows for Python.
+
+01:09:58.940 --> 01:10:05.520
+Write your workflows as normal Python code and Temporal ensures they run reliably, even across crashes and restarts.
+
+01:10:05.760 --> 01:10:08.780
+Get started at talkpython.fm/Temporal.
+
+01:10:09.380 --> 01:10:21.860
+If you or your team needs to learn Python, we have over 270 hours of beginner and advanced courses on topics ranging from complete beginners to async code, Flask, Django, HTML, and even LLMs.
+
+01:10:21.860 --> 01:10:24.540
+Best of all, there's no subscription in sight.
+
+01:10:24.960 --> 01:10:26.720
+Browse the catalog at talkpython.fm.
+
+01:10:27.360 --> 01:10:32.040
+And if you're not already subscribed to the show on your favorite podcast player, what are you waiting for?
+
+01:10:32.640 --> 01:10:34.540
+Just search for Python in your podcast player.
+
+01:10:34.640 --> 01:10:35.480
+We should be right at the top.
+
+01:10:35.820 --> 01:10:38.800
+If you enjoyed that geeky rap song, you can download the full track.
+
+01:10:38.920 --> 01:10:40.800
+The link is actually in your podcast blur of show notes.
+
+01:10:41.520 --> 01:10:42.940
+This is your host, Michael Kennedy.
+
+01:10:43.200 --> 01:10:44.440
+Thank you so much for listening.
+
+01:10:44.620 --> 01:10:45.400
+I really appreciate it.
+
+01:10:45.820 --> 01:10:46.560
+I'll see you next time.
+
+01:10:46.560 --> 01:10:47.560
+Bye.
+
+01:11:16.560 --> 01:11:17.100
+Bye.

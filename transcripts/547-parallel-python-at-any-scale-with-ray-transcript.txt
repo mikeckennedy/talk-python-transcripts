@@ -1,0 +1,740 @@
+00:00:00 When OpenAI trained GPT-3, they didn't roll their own orchestration layer.
+
+00:00:04 They used Ray, an open-source Python framework born out of the same Berkeley Research Lab lineage that gave us Apache Spark. And here's the twist. Ray was originally built for reinforcement
+
+00:00:15 learning research and then quietly faded as RL hit a wall. Until ChatGPT showed up, suddenly reinforcement learning was back. As the post-training step, that turns a raw language
+
+00:00:26 model into something genuinely useful. Edward Oaks and Richard Law, two founding engineers behind Ray and AnyScale, joined me on Talk Python to tell that story. We'll trace Ray from its
+
+00:00:37 RISE lab origins at UC Berkeley to powering some of the largest training runs in the world.
+
+00:00:43 We'll talk about what Ray actually is, a distributed execution engine for AI workloads, and how a few lines of Python become work running across hundreds of GPUs. We'll cover Ray data for
+
+00:00:54 multimodal pipelines, the dashboard, the VS Code remote debugger, CubeRay for Kubernetes, and where Ray fits alongside Dask, multiprocessing, and AsyncIO. If you've ever stared at a single
+
+00:01:07 machine Python script and thought, there has to be a better way to scale this, this one's for you.
+
+00:01:11 It's Talk Python To Me, episode 547, recorded April 27th, 2026.
+
+00:01:18 Welcome to Talk Python To Me, the number one Python podcast for developers and data scientists.
+
+00:01:40 This is your host, Michael Kennedy. I'm a PSF fellow who's been coding for over 25 years.
+
+00:01:47 Let's connect on social media. You'll find me and Talk Python on Mastodon, BlueSky, and X. The social links are all in your show notes. You can find over 10 years of past episodes at talkpython.fm. And if you want to be part of the show, you can join our recording live streams.
+
+00:02:01 That's right, we live stream the raw uncut version of each episode on YouTube. Just visit talkpython.fm/youtube to see the schedule of upcoming events. Be sure to subscribe there
+
+00:02:12 and press the bell so you'll get notified anytime we're recording. This episode is sponsored by Sentry's Seer. If you're tired of debugging in the dark, give Seer a try. There are plenty of AI tools that help you write code, but Sentry's Seer is built to help you fix it when it breaks.
+
+00:02:27 Visit talkpython.fm/sentry and use the code Talk Python26, all one word, no spaces, or $100 in Sentry credits. What if your AI agents worked like FastAPI microservices,
+
+00:02:39 typed, autonomous, and discovering each other at runtime? That's the world AgentField is building.
+
+00:02:45 Join them at talkpython.fm/AgentField. Edward, Richard, welcome to Talk Python To Me. Great to be here with both of you and talking about parallel computing and beyond. Thanks for having us on.
+
+00:02:56 Excited to be here and share some hopefully interesting information about Ray with the audience.
+
+00:03:01 Thanks for having us. I don't know how many people know about Ray, but it's a really cool parallel computing framework that's got this sort of big data angle and it's got an AI angle. We're going to talk about both of those and dive into the history and maybe even the future, who knows?
+
+00:03:16 But before we get into those, let's just start with your stories. Edward, I'll let you go first.
+
+00:03:21 Introduce you all, please. Yeah, my name is Edward, also go by Ed, and I've been working on Ray since I think about 2019, maybe late 2018. At that time, I was a grad student at UC Berkeley. So that's
+
+00:03:33 actually where Richard and I met, and that's where Ray kind of originated. So we were grad students in what was called the RISE Lab under Professor Jan Stoica. So he's also the professor that had,
+
+00:03:45 and the predecessor to that lab is what Spark came out of. Oh yeah, really? Wow. Yeah. So a lot of people view Ray as like kind of a successor to Spark. That's not really how we talk about it. I think
+
+00:03:56 it's kind of a different system solving different problems, but we did originate from the same university and sort of a similar lab. Yeah. And just kind of about me, what I'm interested in,
+
+00:04:05 I would say I'm not really like an AI person as much as I am like an infrastructure and like distributed computing person. So the reason why I was originally attracted to working on Ray and why
+
+00:04:15 I'm still doing it however many years later is I just really feel motivated by this idea of like providing an easier way for our users to leverage like large scale computing and sort of like building
+
+00:04:29 that like abstraction or like bridge layer that enables people to do it. Incredible. Richard, how about you? I'm one of the founding engineers here with Edward, and currently I'm on more of the
+
+00:04:40 product management side at any scale. And my background here is that I was actually an undergrad
+
+00:04:46 that was working on various like machine learning research projects. And at the time, Ray was still not like a very, it wasn't even like an early project yet. But the thing that was very exciting
+
+00:05:01 at Berkeley was reinforcement learning. At the time, like DeepMind was getting a lot of popularity and press for a game, like sort of innovations that we're doing for game AI. And eventually that
+
+00:05:14 sort of culminated in the AlphaGo moment. Tell people what that is. I'm sure some of us know, but that was kind of the first time that an AI system beat other competitors, where it wasn't just
+
+00:05:27 a memorization, or like a, we're going to load every possible combination of moves into the system, right? Tell us about that. I didn't follow it too closely, but at the time there were previous
+
+00:05:39 game AIs, like, like, you know, IBM sort of. Yeah. Stockfish, I think is what it's called. The original like chess AI. Right. And I think Go was a much more high dimensional complex game. So there
+
+00:05:52 was a lot. The first one, IBM won beat one of the grandmasters, but people were like, yeah, but it doesn't really count because it just knew all the possibilities and played it out, you know, which is, which I think that's a fair criticism. Yeah. And the other thing is it was like a very like hand
+
+00:06:06 tuned algorithm that took like years to build. So it was, it was like many people kind of using chess knowledge to like build a search algorithm that was like, you know, very specific to chess.
+
+00:06:16 AlphaGo one was, first of all, like the game was much harder than chess. Second, like it was, you know, a widely staged event. And then in terms of the learning algorithms, they did use
+
+00:06:28 reinforcement learning to train the model. And as far as I understand, like a lot of the ways they applied the machine learning techniques were not memorization or were not caching, but rather like
+
+00:06:39 having sort of like neural networks that could estimate the state and the value and the current of the current position and to be able to sort of extend and decide what the next move was given
+
+00:06:50 their internal representation of what the state was. So yeah, so that was obviously very, very impressive. And a lot of the technology that led to that moment was reinforcement learning.
+
+00:07:00 For us in Berkeley, we were interested in being able to sort of provide that sort of technology to researchers also at Berkeley that didn't have access to large engineering teams and Google's
+
+00:07:14 infrastructure and stuff like that. And so that's kind of where Ray came out of. Like it was baked out of doing reinforcement learning research and machine learning research and sort of evolved from that.
+
+00:07:25 Give people a look inside this research lab that y'all are talking about. It sounds super interesting.
+
+00:07:30 And I guess I have a couple of things that are wondering about. One is just, you know, what is a lab that generates like grid computing systems and, you know, large big data systems?
+
+00:07:41 How do you think about problems and then solve them? I know what a chemistry lab does, but I'm not entirely sure what this thing does to result in that coming out. And then two,
+
+00:07:50 how does it go from being something created in the lab that's really powerful or useful to either an open source product or even a product product service type product? Like what's that journey look like?
+
+00:08:02 One thing that I think is pretty unique. Well, let me take a step back for this type of like computer systems research where, you know, like grid computing or like networking or like large scale data
+
+00:08:11 processing. It can be hard to do that in an academic setting because a lot of times the like requirements and the infrastructure are like, well, they're expensive. And also like the types of problems
+
+00:08:22 that you work on, you know, like data center networking algorithms are only relevant to like the few companies that operate data centers. So it can be kind of hard to do that in an academic setting.
+
+00:08:32 Yeah. I was thinking about that when I was preparing for the show is like, I really want to try out some things with Ray and some of this computing stuff, but I just don't have the problems or the data that justify like genuinely using it, not just taking it through a sample. You know what I mean?
+
+00:08:45 I feel like academics would have a similar issue.
+
+00:08:48 The thing that was unique. So the lab that we were in was called the Rise Lab and the one before it was called the Amp Lab and the one after it was called the Sky Lab. And each of them kind of had a theme. So the Amp Lab was like mostly about like big data. So that was like the one that generated
+
+00:09:01 Spark. The Rise Lab was about like machine learning and reinforcement learning. And then the Sky Lab is about like sky computing. So like cross cloud and stuff like that. Richard and I are a little bit less familiar with that one because it was after we left. But the thing about the Amp and specifically the
+
+00:09:14 Rise Lab is that it was very like interdisciplinary. So the professor I mentioned that we work with, Jan, he had really intentionally set it up so that, you know, the students who are really passionate about like distributed systems and networking were working like really closely with the students who
+
+00:09:28 were the like machine learning and reinforcement learning experts. And then there were also folks who were really interested in security were also like working closely with both of them.
+
+00:09:37 And I think that kind of like cross pollination really helped yield like interesting project ideas and more kind of like realistic requirements. Because what Ray originally came from was like
+
+00:09:49 one of classmates and then the co-founder of AnyScale or the two of them, Robert and Philip, they were more like ML focused people. And they were trying to do reinforcement learning research,
+
+00:09:59 but they were trying to sort of put a square peg in a round hole by doing it on Spark. And it turned out that Spark like just really wasn't built for the requirements of reinforcement learning,
+
+00:10:09 which are a little bit more like dynamic in nature. And it was that kind of, and then they had access to, you know, professors who professors and students who were passionate about like distributed systems
+
+00:10:21 and data systems and stuff. So that's kind of where Ray came from was like organically, you had students who were trying to do reinforcement learning, they kind of hit this wall that the tools like didn't help them solve. So it was like, okay, let's start a new project and build the tool that we need.
+
+00:10:34 Yeah, makes a lot of sense. Richard, anything you want to add to that?
+
+00:10:37 Edward comes a little bit from the more systems side. And I was a little bit more on like the machine learning applied side. And I remember when I was in the RISE lab, there was a lot of
+
+00:10:49 interactions with the, like the one of the best machine learning, like the best machine learning groups in Berkeley as well. Like, like Mike Jordan, who, who is one of like the, like very, very famous AI professor had his group sort of co-located in the same space,
+
+00:11:03 in addition to all these systems people.
+
+00:11:05 You're talking about bear, right? Berkeley AI research.
+
+00:11:08 There's bear. And then there's also like a subset, which is like a lot of the Mike's students were also in, in the RISE lab. And in addition to that, there was also a biannual. So every six months,
+
+00:11:19 we would have a industry retreat. So there'd be about 200, 250 people that show up at like a conference
+
+00:11:27 or like a hotel. And 70 of them would be the students that we just talked about. And 180 of them would be like top researchers or like executives from the industry. So we were able to
+
+00:11:42 sort of cross pollinate and share ideas and collaborate and get feedback from folks like Bill Daly, who was, who's like the NVIDIA's chief scientist, or, you know, like a lot of really,
+
+00:11:52 you know, top people at Google who were doing recommendation systems and so on and so forth.
+
+00:11:57 So that was like that sort of moment was, was very often reoccurring. So every six months, and then we would just have this opportunity to actually touch base with what was happening in
+
+00:12:08 the industry and therefore drive innovation so that we could be impactful and do impactful projects.
+
+00:12:14 What's the relationship between reinforcement learning and like the transformer stuff that we see powering LLMs these days? How similar or different is that?
+
+00:12:23 Reinforcing learning is more of a, you can think of it as like a learning paradigm, right? It's like a way how it's kind of like this framework that you would use to, to set up a problem. And then,
+
+00:12:35 and like, it's fundamentally about like having a agent or like a, some actor or agent that interacts with the world, gets rewards or like some feedback signal from that world, and then sort of learns
+
+00:12:49 from that and continually updates its like, its policy. It's more focused on solving a single problem, you might say, or like a category problems, you know? It's just this very, very generic framework,
+
+00:13:01 right? And it can apply to like, you can imagine like the same thing is how like a mouse would interact with a maze or like a child would interact with a toy, right? So it's just a framework. It's like a
+
+00:13:13 symbolic representation of this framework. And whereas Transformers is like a, it's like a model architecture, right? It's like a way for us to be able to ingrain a particular modeling heuristic
+
+00:13:26 that tells us that like, hey, for certain types of data, in particular sequence data, there are patterns that you can learn across the sequences, and that can improve like the quality of modeling.
+
+00:13:39 And so like the two can be worked, like can be used together, you can do reinforcement learning with a transformer, but you can also have a transformer that stands by itself as trained with supervised learning and reinforcement learning that is done without a transformer model.
+
+00:13:52 Interesting.
+
+00:13:52 That question that you asked is actually, I think, like tightly intertwined with the history of Ray, because as we mentioned in like the 2017-2018 era, Ray was kind of originally motivated by
+
+00:14:04 reinforcement learning. But that reinforcement learning had like very little to do with like transformer models or LLMs. It was things along the line of the AlphaGo project that we talked about,
+
+00:14:14 or it was also being used a lot for robotics at Berkeley. And then reinforcement learning actually, like sort of, I would say died out for a while or like got less popular, kind of like hit a wall
+
+00:14:25 and it didn't, it was like viewed as not that practical. So the original Ray library, like the most popular one in the early days is called RLLib. And that was like far and away the most successful Ray library for a long time. And then it kind of like petered out for a while.
+
+00:14:39 RL for reinforcement learning, right? Something like that?
+
+00:14:41 Yeah, that's right. Reinforcement learning.
+
+00:14:43 Okay.
+
+00:14:43 And then we had this kind of ChatGPT or like LLM moment, which by the way, Ray is also like tightly intertwined with because GPT-3 and I think 4, I'm not actually sure about 4, but at least 3 was
+
+00:14:57 trained using Ray as like the compute framework by OpenAI. And the really big innovation that went from like GPT to ChatGPT was by applying reinforcement learning to the transformer models.
+
+00:15:11 So this technique is called post-training, which is like you have, you do the supervised learning that Richard was kind of talking about, or you do like what they call pre-training and you generate these like model weights that basically encode like a huge amount of information, like the whole internet.
+
+00:15:24 And then they are, but they're kind of unrefined, right? You can think of it as like a, I don't know, a child with a lot of intelligence, but not very good at communication or something. And they applied
+
+00:15:34 reinforcement learning techniques as a way to sort of tailor the model to specific use cases.
+
+00:15:39 So the first one was for this like chat application. So that's how you go from like GPT to ChatGPT.
+
+00:15:45 And then another example of that more recently is like these coding agents are also a different version of like post-trained LLMs or transformers. And we're seeing, so we originally had Ray kind
+
+00:15:57 of used for reinforcement learning, kind of dipped and it was used for like LLM things. And now we're actually seeing a huge resurgence in reinforcement learning specifically for this like post-training use case that I was talking about.
+
+00:16:08 Are you guys surprised just how far these GPT type things and Claude Code and so on have come given that you saw a little bit before then?
+
+00:16:17 I remember like Jan would occasionally pull me aside and say like, hey, you should work on like program synthesis and program synthesis is like effectively is like a model. It's a like a,
+
+00:16:30 it's a, it's a, it's a machinery problem where you try to like get models to write code. And then I don't think that was definitely not the right approach. Like that's not what ended up like not, it wasn't like the program synthesis line of work that ended up with coding agents, but like Jan was always
+
+00:16:44 like, hey, why don't we go work on programs with this? I have no idea what program synthesis is. I like, I have no expertise in this thing, but he wanted to work on the problem. Well, which is funny, because like in five years, seven years later, it turns out like this is like the biggest known
+
+00:16:57 economically valuable sort of application of these machinery.
+
+00:17:00 And solved in just a completely different way that I don't think anybody really saw coming.
+
+00:17:06 That was definitely an emergent thing. At least for me, I didn't expect that at all.
+
+00:17:10 Yeah. Well, I'm blown away by it. I honestly, I'm happy that it exists. I get to do cool stuff with it, but sure didn't see it coming. This portion of Talk Python To Me is brought to you by Sentry and
+
+00:17:22 Sear AI. There are plenty of AI tools that help you write code, but Sentry Sear is built to help you fix it when it breaks. The difference is context. Sear isn't just guessing based on syntax. It's
+
+00:17:34 analyzing your actual Sentry data, your stack traces, logs, and failure patterns. Because it has the full context, it can a spot buggy code in review and help prevent issues before they happen,
+
+00:17:45 and b identify the root cause of production errors. It can even draft a fix and hand the work off to an agent-like cursor to open a PR for you. Sear turns Sentry into a complete loop. You have your
+
+00:17:57 traces, errors, logs, and replays to see the problem, and now AI to help solve it. Join millions of devs at companies like Claude, Disney Plus, and even Talk Python who use Sentry to move
+
+00:18:07 faster. Check them out at talkpython.fm/sentry and use code talkpython26, all one word, for $100 in Sentry credits. Thank you to Sentry for supporting Talk Python.
+
+00:18:21 Let's switch over and talk about maybe set the foundations we're talking about, Ray, a little bit.
+
+00:18:26 And by that, I mean, let's talk about like different options for parallel computing and that kind of thing. So we have this sort of spectrum of compute, and it sounds to me like
+
+00:18:37 the history, the idea is, hey, let's move towards scaling this compute out across all the cores, across multiple machines, so that when you're doing training and reinforcement learning, things like
+
+00:18:50 that, you can actually take advantage of all the compute. And I'm guessing GPUs as well, right?
+
+00:18:55 Yeah, GPUs are definitely like bread and butter for Ray.
+
+00:18:57 So at the very smallest layer of parallelism, at least in Python land, we've got asyncio, which really still runs on a single thread, but it uses waiting periods like waiting on databases,
+
+00:19:07 waiting on API calls, and so on to interlace work without true parallelism, but still kind of.
+
+00:19:13 We have threads, which really, until recently, didn't do anything much different.
+
+00:19:18 Right? It's just less control structures, right? Because we had the gill, and then we now we've got free threaded Python. So it's a little bit better, but you got to have the library support. We have multi processing and sub processes. And that's
+
+00:19:29 kind of what we have out of the box in Python. But then we have stuff that both of you all are familiar with, or have built things like databases like Spark, or Ray, we've also got Dask and Coiled,
+
+00:19:42 which is, I'm interested to hear how you all see yourself as the same or different than Dask and Coiled and so on, which itself is different than when it started, at least Coiled. So it may be like,
+
+00:19:52 just speak to this, this arc of trying to get more compute out of our apps.
+
+00:19:58 I would kind of try to organize like a framework for thinking about those. So, and this is a little bit off the cuff. So hopefully it's, you guys can follow it. But I would say there's kind of like
+
+00:20:08 two axes I would think about. So the first one is like how specific versus kind of how general of like a parallelism framework you have. So something that is like really specific, like the most specific would be something that is like completely tailored to one use case, like a,
+
+00:20:23 this is not really Python, but like a SQL database. Like it's really good at like processing SQL queries, you can't really use it for anything else. And then a little bit more general than that is something
+
+00:20:33 like Spark. So you can use it for this kind of like big data processing type workload, you can use it for some streaming. But if you try to do anything that kind of goes outside the bounds of that, you start to
+
+00:20:44 run into a little bit of trouble because it has kind of an opinionated, like high level API, and an opinionated way that like data moves throughout the system, for example. And then you have kind of on
+
+00:20:56 the more general purpose and you have like Ray, and I would say desk is also more general purpose than the others. And so, so you have like specific to general purpose. And then there's also, I think,
+
+00:21:07 like the scale. So like asyncio is extremely useful for making many like concurrent, like IO bound requests, like HTTP requests, database queries, file operations, like anything like that. But it only
+
+00:21:20 works within one thread. Yeah, it feels a little bit like a scale up lever, even though you're not technically scaling up the hardware. It's like, yeah, you're still in the same box, just the box
+
+00:21:30 can do a little bit more. So asyncio is kind of scale up within a thread even. And then you can also have like scale up within a process. So if you have like multi threading, of course, like with free
+
+00:21:42 threading, you can actually get like parallelism. What most people do to scale up within a process, like historically with Python is they call into like native code, right? So you're using NumPy, you have basically like Python bindings, but in reality, almost all of the compute is happening in
+
+00:21:56 like a C extension library. And that's, that's also true for Torch. So those allow you to kind of like scale up to varying degrees, so like scale up within a thread within a process. And then
+
+00:22:07 multiprocessing also lets you scale up within like a whole host that you could use, you know, 64 cores of machine. And then at some point, you can't even fit on one machine anymore, you need to scale
+
+00:22:18 out even more. And that's where you need some kind of like parallel computing or like grid computing or kind of cluster framework, like Ray or Dask. It could be you need to scale up because of memory,
+
+00:22:29 or it could be a CPU, right? I think often people think just CPU, right? We just got to compute more, but it could be we've got a terabyte of stuff to try to process. Could be or it could be also for,
+
+00:22:40 because you need to use more GPUs, either for compute or for memory, like some of these large scale LLMs, you can't even fit it inside of like one single GPU. So you need to kind of like shard it across many machines. Yeah, we'll even see there's some,
+
+00:22:54 some ways to put these together, right? Like, I guess it's probably pretty straightforward, but we'll talk about the programming model and stuff. But you theoretically could use, I don't know, multiprocessing or something in your code, but then scale that across machines
+
+00:23:07 with Ray. Is that possible? You could. Does it make sense?
+
+00:23:10 Between a lot of these things, I think there's like some kind of unique parts and then some overlap. So like Ray can be used just on one machine. In that case, you know, Ray kind of manages its own processes and does like the delegation of work from like what we call your
+
+00:23:24 driver process, which is like the main Python program to the other processes, which in Ray terminology are like tasks and actors. If you're running Ray on one machine, then it looks quite similar to
+
+00:23:36 multiprocessing just with a little bit more opinionated of an API and some like integrated like observability features and stuff like that. But Ray definitely like is designed around the like
+
+00:23:47 multi-node kind of larger scale cluster use case. That's like where the value really comes in.
+
+00:23:52 I think you had a question about like Dask and Coiled. I think Dask and Coiled, they were more of like a
+
+00:23:59 comparison point for Ray, especially because like there was a Pandas on Ray project in 2018. And at that point, I think they were, yeah, it was, it did get brought up more often, but more recently, we don't
+
+00:24:13 hear about Coiled as often. I think in particular because we've sort of, you know, focused our, our product efforts a little bit more towards the AI side, whereas Coiled, I think is more like a
+
+00:24:24 scientific computing slash like general, you know, scale up Panda, scale up NumPy sort of approach. So we diverged and we don't see each other that often.
+
+00:24:33 Ian, from the last time I spoke with Matthew Rocklin, not too long ago, it looked like we were really focused on kind of creating and configuring and managing the infrastructure that allows for grid computing with
+
+00:24:47 data science type of stuff. A lot of like managing AWS and scaling them and, and so on. And more than the original Dask story, I think. All right. So, well, that brings us to what is Ray? I mean,
+
+00:25:00 we talked a little bit about it, but like, just give us the, like, what would you tell people if you made it a conference or something?
+
+00:25:06 You want to take this, Richard? You want me to?
+
+00:25:07 Yeah. I mean, I can start.
+
+00:25:09 We've both given that conference talk many times, by the way, so we should be good at this.
+
+00:25:12 Here's a rehearsal.
+
+00:25:14 So Ray is, by the way I would probably put it as like, it's a, it's a distributed execution engine for AI workloads. And in particular, it handles a lot of the orchestration aspects of the AI workloads and
+
+00:25:27 also has a variety of first party and third party libraries are built on top of it to help scale these AI workloads that we, we often see. So two popular, very, very popular applications of Ray today is that,
+
+00:25:41 is Reinforced Learning and then Multimodal Data Processing. Both of them are very, very relevant in today's AI world, but Reinforced Learning libraries, a lot of the third party ones, they will use Ray for
+
+00:25:53 coordinating the different components that you need to do Reinforced Learning with. There's like an inference engine that's involved. There's a training engine that's involved. And there's also like agents and sandboxes that are involved. So all three things, all, all these things need to be
+
+00:26:07 coordinated by one central orchestration system. And it's way easier to write this in Ray because Ray gives you that, that ability to control all these components as if you're writing single-threaded
+
+00:26:18 code. Multimodal Data Processing is the other big one where existing data processing libraries will focus on the ability to handle tabular data and work with Parquet, Iceberg, Delta, so on and so forth.
+
+00:26:29 Whereas like Ray finds its niche more in the, like the intersection between the data and the GPU.
+
+00:26:36 And so typically you're working with like larger unstructured data, for example, like images or embeddings. And oftentimes that requires like more complex scheduling and more complex orchestration
+
+00:26:48 that Ray is really good at. Given the origins, it certainly makes sense that you've got this focus on really nailing ML training and other types of workloads. Is it relevant to people who are just doing, I don't know, time series work or? We were going to talk about this at some point, but the,
+
+00:27:03 we kind of organize Ray in terms of like layers in a way. So that we call like the base, like Python API, which is quite simple. It's really just like, you know, for like people very familiar with Python,
+
+00:27:14 you could think of it as like multiprocessing for a cluster. So that we call kind of Ray core, is like that base, like distributed execution engine, sort of like core primitives for scaling up,
+
+00:27:25 distributing work and handling failures and like just overall kind of parallelism. And then on top of it, we have like a lot of library integrations, like that's what the Ray libraries are,
+
+00:27:36 like Ray train and serve. And then some of these post-training libraries. So that core layer is like absolutely relevant for non kind of AI workloads. And we do have many, many users that use it for
+
+00:27:48 things like in the finance world, they use it for parallel back testing or time series analysis, like you mentioned. Yeah. And any kind of like generic, just like parallel workload that you
+
+00:27:59 need to scale beyond the single machine. Now I'm thinking of it in finance and real-time trading type stuff. You could be running a whole bunch of scenarios in reverse. And then there are many of the
+
+00:28:09 largest hedge funds do exactly that using Ray. From my understanding, we could use Ray even on one machine. And it has some capabilities to help you sort of take better advantage of all your hardware.
+
+00:28:20 Like even my little streaming Mac mini has 10 CPUs and I just write regular Python code, I get like 16% or something or 10% of that. Right? Yeah. You certainly can use a Ray on one node.
+
+00:28:31 I think actually the kind of most compelling part of that is you can do it for development. So you can like, if you're working on this kind of large scale post-training thing, if it's useful to kind
+
+00:28:43 of think about what you'd have to do without Ray. So you would have like four different containers, each one would have its own like Python entry point, and you'd have to kind of like run and
+
+00:28:53 orchestrate them as like these independent services. So eventually maybe you'd like deploy them on Kubernetes or something like that. But even when testing locally, it's like, if you want to run all of them and like, make sure that kind of the integration points work well, and like quickly be
+
+00:29:07 able to like iterate and debug stuff. It's really painful if those are all kind of like loosely coupled as different processes. And especially if the way that you start them on your local machine is going to
+
+00:29:18 be very different than when you actually go to like scale it up in a cluster. Even if you just make a change, like, okay, now I got to go restart all the workers and so on. Right? I think a lot of people can relate to that pain. And with Ray, the thing that's really cool is you can, you can write kind
+
+00:29:32 of one Python script that like starts all those different processes and does the orchestration.
+
+00:29:37 You can run it just on your like local Mac or whatever local machine you have. And then once you kind of like have it working, then you can run it on a cluster and like scale it up using like
+
+00:29:46 the same code. Does it come with cluster management in terms of like infrastructure's code type of stuff?
+
+00:29:53 Will it spin up nodes and so on? Or do you have to have your cluster set up and then just it knows about it? You know what I mean? The answer is kind of both depending on your use case.
+
+00:30:03 So I'd categorize it as like there are maybe three or four ways that people run Ray clusters.
+
+00:30:09 So the first is using a tool that we call like the cluster launcher. So this is kind of like if you're an individual practitioner and you just want something like really low friction,
+
+00:30:19 we have a tool that will basically like spin up a Ray cluster on like AWS or GCP or Azure, or even on your own set of hardware, like you can kind of like bring your own set of machines.
+
+00:30:31 But that's not really like a fully managed experience. You can also run Ray on Kubernetes.
+
+00:30:36 So there's a community led project called KubeRay, which is a pretty tightly integrated like Kubernetes operator that makes it really easy to like run Ray clusters on Kubernetes.
+
+00:30:46 Or you can use like a more managed service like AnyScale, obviously where Richard and I work, we have like managed infrastructure for Ray clusters. But there are also, I think there are some other providers you can run Ray clusters to like AWS has an offering or
+
+00:31:00 Domino data labs has an offering. And I think there are a few more as well.
+
+00:31:03 You know, it makes a lot of sense that you guys have this sort of let us run the infrastructure side. We'll talk more about that later. With KubeRay though, do you just say like, as long as you have a Kubernetes cluster, you can just let it kind of create pods and scale up or down
+
+00:31:17 as demand is needed there, something like that.
+
+00:31:19 When you install KubeRay into your cluster, it will basically run the KubeRay controller as like a background pod.
+
+00:31:24 It's called like an operator in Kubernetes lingo. And then at that point, you now have these like custom resources. So you can like create a Ray cluster or a Ray job as like a custom resource.
+
+00:31:36 And then it will get spun up as a bunch of pods and they will connect to each other and get health checked. And all of that infrastructure management is done.
+
+00:31:43 KubeRay is pretty, pretty active. 2.5 thousand GitHub stars commits 17 hours ago. Nice.
+
+00:31:49 There's a huge community kind of initiative behind KubeRay and like we're involved with it too, but it really kind of is like kind of taken a life of its own. And it's really useful too, because like even on Kubernetes, everyone's environment is a little bit different. So having
+
+00:32:04 maintainers and committers from like many different companies and people who are running in like different environments makes it easier to sort of cover all the bases.
+
+00:32:12 For sure. Yeah. That diversity of use cases and stuff is always nice to create a better, better API, better library, and so on.
+
+00:32:22 This portion of Talk Python To Me is brought to you by Agentfield. What happens when you give hundreds of AI agents a shared code base and let them write code, review each other's work,
+
+00:32:31 and ship to production? Well, that's exactly what the team behind Agentfield AI built. And the wild part, it's not some proprietary system locked behind a paywall. It's an open source Python library.
+
+00:32:44 Now, where most agent frameworks have you wiring up DAGs and workflows, Agentfield lets you build AI agents the way you'd build FastAPI microservices. Think typed Python functions that become autonomous
+
+00:32:57 services. They discover each other at runtime, call each other like APIs, scale independently, fail independently, and recover on their own. And here's the thing. You're not just orchestrating
+
+00:33:08 LLM calls. You can orchestrate entire anonymous tools, spin up multiple Claude Code instances, codec sessions, any coding harness you want, all running as live nodes on the same architecture,
+
+00:33:21 collaborating and verifying each other's output. That's how they build the factory. And it's completely free and open source. Check it out at talkpython.fm/agentfield. That's talkpython.fm
+
+00:33:32 slash agentfield. The link is in your podcast player show notes. Thank you to Agentfield for supporting the show. Let's talk to an example. You have a bunch of examples. So you have examples,
+
+00:33:43 and then you've got, is that also the gallery? Are these the same thing? I think those are the same.
+
+00:33:47 There's a ton here. This is kind of like all of them, and the others are like the highlighted ones.
+
+00:33:52 Some highlighted ones. Sure. Got it. So I think it would be nice to talk through the experience of doing a project in Ray, keeping in mind that it's always hard to talk about code over audio,
+
+00:34:05 but you know, let's maybe, maybe we could just like sort of skim over whoever wants to sort of narrate this experience of like going through one of the examples, you have an audio batch inference type of scenarios. Maybe we could talk.
+
+00:34:17 Can you score down so that I know where I'm going to end up?
+
+00:34:20 Yeah. Do some whisper stuff, do some GPU stuff, some LLM stuff, persist a curated subset, that sort of thing. Cool. Yeah. I kind of get the sense. So Ray is basically very similar to writing a
+
+00:34:34 standard Python script. So like ideally the way you sort of think about things in or in the way you read the code, it should be very similar to, should be minimally intrusive and should be very familiar
+
+00:34:45 with how you're, how you might sort of reason about, about like, you know, serial code or like single thread code. And so like, obviously the, the, a lot of the things that we do here don't demonstrate,
+
+00:34:58 or like demonstrate how you might sort of set up a project by yourself. So including like standard pip installations, you can use uv if you want and then like standard imports. Right. And then moving down,
+
+00:35:08 we started to enter like using Ray data, which is the data processing multimodal data system that we have. It's a library on top of Ray and it provides a lot of simple abstractions to do all sorts of like
+
+00:35:23 big data tasks. So like here you have example, which is simply just like reading the dataset and then like subsampling it.
+
+00:35:28 So let me ask you a question about this. So you basically say ray.data.readparquet and you give it an S3 link to a parquet file, presumably either assigned or public. When I say that, does that
+
+00:35:39 load it into one machine or does that instruct all of the workers all to go and load this?
+
+00:35:44 It actually doesn't load anything, but if you do end up executing it, right? So it's lazy. So, so right now what you're doing is you're just actually just like constructing this, this program.
+
+00:35:56 But when you do execute it, it will execute on all the processes or like, you know, across like the entire cluster.
+
+00:36:02 In this scenario, it doesn't necessarily need to have one of them populate the data for all the others. They can all go straight to S3 and get it.
+
+00:36:08 And particularly in this example, this has, it probably points to a folder and the folder has many different files.
+
+00:36:15 Ah, so maybe it breaks. Yeah. Yeah. Maybe it breaks it up.
+
+00:36:18 We have a thing where every single line of the parquet file, every single row has some set of bytes.
+
+00:36:25 And what we want to do is transform those bytes into a, you know, something that's more manageable, like a numpy array. So that's kind of what we're doing here. We're loading the data
+
+00:36:36 with torch audio, and then we're doing some resampling and then, and then we're sort of like a returning that back to ray data. So that this is like a single map test map, where like a single function.
+
+00:36:47 So you write a function that does this, what you just described. It passes in an item.
+
+00:36:52 It's a row basically. Yeah. So I think it's like a row in the parquet file. And then you just say, go to your data that you, you know, you loaded with Ray and you say map given to the function, not called the function, right? Just give it the pointer to the function.
+
+00:37:05 That's right.
+
+00:37:06 And it figures out like, okay, here's how we'll distribute it across the cluster.
+
+00:37:10 This map, this resample function will be executed on like hundreds of processes across the cluster.
+
+00:37:16 And maybe it'll do something smart, like say I'm on row 1000. So it could do a skip, maybe, or something like that, potentially.
+
+00:37:23 All the data is already like sharded.
+
+00:37:25 Got it.
+
+00:37:25 So it will take the, whatever is available, and then it will just like run the function.
+
+00:37:31 That's pretty cool. And then you've got your whisper processor. Definitely have written some whisper processing code lately. This uses a class, not a function. And the reason for this is that,
+
+00:37:44 as you might have experienced, like loading whisper might take a little bit of time.
+
+00:37:47 Yes.
+
+00:37:47 If you scroll to the right on this. Okay. So here we don't use it, but like, you can also move the whisper model onto a GPU. And the way you would do that is you set on the bottom, and you just use like, you know, number GPUs equals one.
+
+00:37:58 Right here, it says device equals CPU, but yeah, but you could put GPU here, huh?
+
+00:38:02 You could. And also in map badges, you would put the map like GPU, whatever.
+
+00:38:07 Yeah.
+
+00:38:07 What's happening is that as you are doing the execution, what we will do is we will spawn a bunch of these classes across on different processes on the cluster. And so they'll be
+
+00:38:19 able to like preload the model, and then you can send data to this class, and then it will call the double under call. And then you have this basically like operator that streaming data in and out.
+
+00:38:31 I have something very embarrassing to admit, which is these double underscore methods. I always knew they were called dunder methods, but I didn't know that it's because it's like double underscore.
+
+00:38:41 I just put that together when Richard said double under. I've been using Python for like, you know, well over a decade and I never put that together.
+
+00:38:49 You know, what's really interesting, because I have to talk about so much of the stuff that is written and yeah, I've certainly gone through stages where like, I'll get a message, Michael, not like that. They say it like this. Like really, but how are we supposed to know? There are so many
+
+00:39:02 projects. I mean, dunder doesn't necessarily fall under this, but there's a lot of open source projects that could be pronounced so differently, so many ways. And I've seen a few that will have an MP3 file or an audio file that says, this is how it's pronounced. Press play. You know what I mean?
+
+00:39:17 Yeah. I'm right there with you. Amazing. One thing I wanted to cover with that. So that num GPUs thing is like really powerful. This is kind of like one of the core like powers of Ray. So this means that
+
+00:39:28 like, you know, if you think about this pipeline, right, we had first, we're kind of like chunking up the data and reading it across a bunch of processes in the cluster. So that's like a like IO bound
+
+00:39:38 operation. And then we had some kind of like pre-processing logic where we were like transforming those audio files, which is like a CPU bound operation. And then now we're doing this like
+
+00:39:48 GPU step, which here it's like this whisper preprocessor, or it could be any kind of like ML model inference or anything that runs on a GPU. So you have these like kind of very different
+
+00:39:59 like compute profiles, like the IO bound, the CPU bound, the GPU bound. And Ray, like the thing that makes it so powerful is that you can express this in like one program. And then you can also like
+
+00:40:10 efficiently use all of those resources. Okay. So maybe I've got five GPUs, but I've got a whole bunch of cores on each machine. Would it maybe make different choices about how it scales, given the different resources, like thinking about GPUs or versus CPUs?
+
+00:40:25 Yeah, that's exactly right. So you would, you know, maybe you need like four CPUs per GPU to like keep the GPU busy. So Ray data will, will basically do that kind of auto scaling itself in order to like
+
+00:40:37 keep the GPU as busy as possible. And this Ray data, it says Ray, a raw DS.
+
+00:40:42 That's a data set. Yeah. Data set. Is this have any analogies or sort of similar APIs to like DASC or not DASC to Polars, Polars or Pandas or any of these other, does it try to pretend to be one
+
+00:40:57 of these other things or is it just its own library? So the way you would do like a data frame library, I think would heavily index on the interactive experience. And that's not something that we
+
+00:41:10 focus so heavily on. In fact, like there's oftentimes where like, and also the other thing is like all those libraries, they will like DASC and Polars and Pandas and so on. Like they will focus a lot on
+
+00:41:24 TABUO data. And I think that's like, that's important, but it's not like our strong suite.
+
+00:41:31 Like our, the thing I think we would want to be 10x better is, is being able to do this sort of like heterogeneous compute and being able to orchestrate like very complex pipelines very simply. Whereas,
+
+00:41:43 and then like come back and sort of improve and make the tabular support like just on par and usable.
+
+00:41:50 I think that makes a lot of sense. It absolutely does. I guess maybe the last little bit, we have to go through this whole example, but maybe the persist story is a little bit interesting.
+
+00:41:59 The, if you go up one more, like the, to the tab before, I think actually, this is also very interesting where we're actually using the LLM based quality filter. Okay.
+
+00:42:08 We're using VLM as part of the pipeline. So VLM is like optimized inference engine for LLM models.
+
+00:42:16 And what you can do with RayData is you can actually just say like, Hey, I just want to shove VLM into one of the stages. And I want to, you can even do like more complex parallels and you can see like, Hey, this model is like a trillion parameters.
+
+00:42:28 And I just want to like put it somewhere inside. And that's something that you can very easily do with RayData. Is this a open weights, local running model or is, is that something like a API call to
+
+00:42:39 this? I mean, you can do here in this example, it is open weights model. So you would be able to self host and you can, there's also APIs to do like anthropic calls. Yeah. That is an interesting idea to
+
+00:42:50 put that in the middle there. And finally, like, yeah, writing out, you can write out to any source storage of like S3, NFS, so on and so forth. It's useful for like the data transformation tasks.
+
+00:43:01 This again, well, it's not like you're pulling all the data to one process and then writing it's like a distributed kind of partitioned, right? To the same file or to a set of files?
+
+00:43:10 To a set of files. Yeah. That makes sense. That seems a lot easier to coordinate like they just have. Yeah. Otherwise you'll have problems. Yeah, exactly. A bit of a race condition or something.
+
+00:43:19 Okay. This is super neat. I think this is a cool way to start writing the code, but then you've got to, you know, visualize it, right? See what's going on. So you have a dashboard, which is pretty cool.
+
+00:43:30 I'll scroll down and try to find some pictures of the dashboard. There's some, there's nice videos here as well, but it gives you, tell us about the dashboard. It gives you a lot of views into what's happening. The first thing I'd say is like, you know, the mission of Ray is sort of like make
+
+00:43:42 distributed computing easy. And I think anyone who's ever written like a multi-node, like application of any kind knows that like observability and debugging are like one of the core problems
+
+00:43:55 anytime that you're scaling out. So yeah, we invest a lot in this like observability tooling.
+
+00:43:59 So the Ray dashboard, it kind of mirrors the rest of Ray where we have sort of this like core, like parallel computing, like primitive part. So the Ray dashboard, you know, you can get like a
+
+00:44:10 cluster level view where you see like a summary of each node and like the resource consumption, like, you know, is it fully utilizing the CPUs and GPUs? What is running on that node? Like that
+
+00:44:21 kind of physical layout. But then we also have like more logical views. So what's shown on the screen now is this like task and actor breakdown. So you can see, you know, if you've submitted a thousand of a, like a read task, if you think about how that Ray data pipeline works, you're like
+
+00:44:36 submitting a bunch of tasks that are reading the data, you can see how many of those are running, how many have completed, if they failed, you can get like a summary of the stack traces. And then we
+
+00:44:46 also have some like higher level views that are specific to the Ray libraries. So you can imagine like this Ray core layer, it's really like kind of generic. So you have like tasks and actors and
+
+00:44:59 nodes, but it doesn't necessarily tell you about like, you know, the high level summary of what's happening in that data pipeline that we were talking about a few minutes ago. So we also have some,
+
+00:45:08 some high level visualizations for like surveying and training that help you understand what's happening in that.
+
+00:45:14 There's a bunch of different libraries that you've talked about. I don't know how much time we really have to go all into them, but you've got Ray core, which we talked about, and then Ray data, which we were using to read the data, but train, tune, serve, RL for reinforcement learning.
+
+00:45:28 And then even more libraries.
+
+00:45:29 Yeah.
+
+00:45:31 Expanded out to more libraries.
+
+00:45:33 One like high level comment is, I think Richard kind of mentioned this earlier, but like one of the things that we've really invested in a lot is like building this ecosystem around Ray. We want
+
+00:45:42 people to feel like Ray is not just a tool for like one workload. It's really something you can like build a platform around. So if you're doing any kind of like a large scale, like machine learning
+
+00:45:53 or AI, you know, Ray is, it's like, if you kind of build the infrastructure or like you use managed infrastructure for like the cluster setup and all that stuff. And then the people who are actually
+
+00:46:04 like writing the applications are like really empowered because they can write just like Python scripts to do all these different types of use cases from like training, the tuning to RL
+
+00:46:14 to data processing. So yeah, we see, I think it's very common that people who are using Ray are not just using one of these libraries. They're really kind of using a slew of them or maybe even all of them.
+
+00:46:25 I do think it empowers people quite a bit. Like write code, kind of like, you know, but call a Ray function instead. And then guess what? It's distributed across a bunch of machines, which is a really hard problem to solve. One of the extra libraries that's cool is the multi-processing pool.
+
+00:46:40 I just saw that one. We expanded it. That's kind of cool because if you're already trying to do scale out through multi-processing, just to get advantage, take advantage of the local cores, you could just say, use the Ray util multi-processing pool and then boom, off it goes. Right.
+
+00:46:54 I haven't looked at this in a long time. This is something that I wrote like eight years ago or something.
+
+00:46:59 2020 probably.
+
+00:47:00 It kind of one of those, I think that would be very general purpose.
+
+00:47:03 It's also, I think a good like conceptual introduction to Ray because, you know, people are familiar with multi-processing and they know that they can like use it to scale out on one node. Well, then Ray is just kind of like the next step if you want to scale out across multiple nodes.
+
+00:47:17 One thing that I thought is really cool is also you've got a debugger and a VS Code, presumably open VSX as well, extension that you can install and like look at the cluster, look at the jobs
+
+00:47:30 running. If something crashes, it'll like break and wait for a debugger to attach potentially.
+
+00:47:35 You want to talk about that?
+
+00:47:36 It's kind of like if you could use PDB, but across the cluster. So you can, you can like set a break point, like inside a remote function, that remote function might be running on like a different, a different machine. And then if like an exception is raised or like, there's
+
+00:47:51 just something happening there that like you couldn't debug locally, then you can like attach remotely to that process. And you can, you know, you can get like a backtrace and you can inspect local variables and stuff like that.
+
+00:48:03 It's very useful in the cases where maybe you did like local development and everything was working fine. And then for some reason, when you like deploy to a cluster, something is going wrong. Like maybe there's one piece of data that like is behaving in an unexpected
+
+00:48:17 way. This kind of gives you a way to directly debug that without having to write a ton of print statements and filter through them as I'm sure many people have.
+
+00:48:25 Exactly. You don't, you don't have to like print step one, step two, step 2.1, step 2.2, step 3. Like, cause you had to insert some more like to like break it down.
+
+00:48:36 The step 2.2.3.a has saved me a lot of times in my life though.
+
+00:48:41 I mean, it's like basically a bisection algorithm to find the problem, but like the, it's like having to go to and do the line numbers and basic eventually you just need to leave a gap.
+
+00:48:51 But it is really nice to use in VS Code because it gives you nearly the same debugger experience as you would get just for like a regular debugger. I saw a YouTube video about this and the question that somebody said, Hey, is there a PyCharm version of this?
+
+00:49:04 Is there a PyCharm version of it or just, just the VS Code derivatives?
+
+00:49:08 I think it's only VS Code, but Hey, we're always looking for contributors. It's probably not, it's probably not that hard to extend. It's just a, as you can see from the number of libraries over there. The Ray team is quite busy. Let's talk real briefly about the ecosystem.
+
+00:49:22 We're getting a little short on time, but what is this ecosystem compared to like all of your tools?
+
+00:49:27 So integrations with say like Airflow, Apache Airflow, or even Dask, which is kind of interesting that it integrates with Dask. And so what's the story with this?
+
+00:49:36 I think there are two aspects to integration. Actually, I'm reminded, I need to update this page.
+
+00:49:42 There's like projects where you want to interoperate with Ray. So they sit side by side or like, it's like a complimentary tool. Airflow is an example of that. Like Dask would be like something
+
+00:49:55 where you can do a lot more of your data processing on the side and then, and then Ray stuff on the other side. Flight would be like another, so, you know, workflow or automation, you would like use
+
+00:50:05 that with Ray, but not like in Ray or around Ray. Whereas like there are other projects that are built on top of Ray. So like Moden that you just saw, Daft, these are libraries that, that leverage Ray
+
+00:50:18 and to, to orchestrate and scale. And there's like a separate API and Ray isn't necessarily exposed as the API to the users. So yeah, so I think that's something that is particularly like lively, especially
+
+00:50:30 now in the reinforcement learning and multimodal data processing space. Frankly, I'm looking through this, like a lot of these projects have sort of like gone, gone, like have sort of evolved or like,
+
+00:50:42 have like lost their community. And I think there's a, actually a massive Ray ecosystem that isn't represented on this, this screen here that is like actively building on top of Ray.
+
+00:50:52 All right. Well, just give you some homework. There you go.
+
+00:50:54 Yeah. Richard kind of mentioned this, but the way I think about it is like, kind of like things above Ray and things below Ray. So like above Ray is like the, like higher level libraries, like the reinforcement learning library, data processing library. And then below Ray is like
+
+00:51:08 integrating Ray into like the different infrastructure. So like with Airflow and the cube Ray, and basically like allowing you to run Ray on top of like any type of like hardware cluster
+
+00:51:19 management solution. So we really like try to view Ray as this kind of like, like if people, I don't know if I'm dating myself, but you know, in the internet model, there's like the narrow waste, right? Which is like TCP IP. So we view Ray as kind of like the narrow waste of the like AI,
+
+00:51:33 like distributed computing ecosystem.
+
+00:51:35 One more thing. I think we're, we've got time to talk just a little bit about the business model.
+
+00:51:40 So over on Ray.io, I can see that I can go to like GitHub or go to the docs, but also you've got AnyScale, which lets you basically is the infrastructure behind running Ray, right? Is that
+
+00:51:53 this sort of the business side of Ray?
+
+00:51:56 AnyScale is a company, but also a product. So for example, like Ray is like a software library that you can run, but there is a lot of, if you're sort of deploying Ray for you're like an internal
+
+00:52:08 platform for a company, like there's still a lot of other bells and whistles that you'll, you'll sort of want. So for example, like being able to have a fast interactive development,
+
+00:52:18 being able to optimize, like the time takes for the workloads to start up, having great observability and debuggability and being able to sort of like share resources across different teams within,
+
+00:52:31 within like across different Ray jobs. And, and then also being able to optimize your Ray workloads.
+
+00:52:37 So these are all like features and capabilities that you'd get with AnyScale. And, and yeah, and then also like, you know, support, being able to sort of deploy and manage and upstream fixes to
+
+00:52:48 Ray that sort of help your, your enterprise, like in your company achieve a goal of needs for your machine learning platform. That's like a lot of stuff that we do.
+
+00:52:56 You know, I think this is one of the core ways that people are making open source stuff, their business, right? Like we built you a great library, but there's this whole operational side of it that you maybe either don't want to do, or you don't have a bunch of servers or whatever.
+
+00:53:10 And we'll just, for a price, we'll just take care of that. Right.
+
+00:53:12 There's like a couple of ways that you can go. Like, so one thing I want to, I want to say is that having a company, like a successful company behind Ray is like critical for its health. Like, there's no way that we could have, that we could have built like as many of the
+
+00:53:27 libraries and like funded as many of like the ecosystem integrations. And like, I mean, just built something with as big of a scope as Ray, if we didn't have like a company backing it, like paying as many people to work on it as were. And yeah, I think there's like a few different
+
+00:53:40 ways that you can go about this, like kind of open source monetization thing. Like AnyScale model is, is largely this, yeah, like managed infrastructure and like the hard parts around it. You know, there's some people that also kind of go for the more like support expertise model. I think that
+
+00:53:54 could work if, you know, if you really want to like stay small, like if you have a smaller open source project, it's just a couple of people. And like, you know, you're trying to make enough money to survive and keep working on that project. Then honestly, I think that's the easier route
+
+00:54:06 than trying to build a whole managed product because it's, it's not easy.
+
+00:54:10 It's kind of a, kind of just a consulting story. This, this other side you're talking about is like, I will be your X open source project, X consultant. And guess what? I created it. So I'm, who else is going to be better? You know what I mean?
+
+00:54:23 That's very real. Like if I would recommend like a lot of open source people, like consider that, even if it's just the, like the start of something is like, that's the way that you really like engage with people and understand their problems and like understand where the business value is.
+
+00:54:37 A hundred percent. Let me ask you one more tech oriented question before we call it.
+
+00:54:41 What about deployment? I have 10 servers in my cluster. I changed one line in my code and I want to try it now. Now what? How hard is it to get it to update everywhere?
+
+00:54:51 So that is something that we, that I personally spent a lot of time working on. I think that Ray actually has a very good story for it. So there's like, there's kind of a tiered approach. So it sort of
+
+00:55:02 depends. Like obviously if you're changing, like if you need a different, like, like CUDA version or something, then that will require you to basically like redeploy the cluster. But that's something that happens like pretty seldom. Like, you know, maybe you do that every couple of months,
+
+00:55:16 something like that. If you're just changing, like, you know, in Ray, you have this like driver script, which is the main like orchestration code. So if you're just changing that, and that's like kind of what you're iterating on, like more frequently, then you can just change like that code
+
+00:55:30 inline. And then when you submit the job or like connect to the cluster, Ray has this thing called runtime environment, which includes basically auto packaging your local code. So what it does is it
+
+00:55:40 actually just like zips up the local files, uploads them to like a coordinator process in the cluster.
+
+00:55:46 And then when you go to actually run the tasks and actors that require that code, they have like kind of a, an internal ID that points to it, and they'll pull it down. So that means that you can, like, if you're just editing your script and rerunning, it's a matter of like less than
+
+00:56:00 one second to update. Oh, that's nice. Yeah. Yeah. That's a huge productivity gain.
+
+00:56:05 Yeah. I was thinking this must, the more you scale out, the harder it's going to be as well. Right?
+
+00:56:09 Yeah. And if you need to wait for a hundred nodes to pull a Docker image, every time you change one line of code, you're going to have a bad time. That makes me think of one more real quick thing is, so I have a job that's running. Maybe it takes 10 minutes. I make a change three minutes after
+
+00:56:23 submitting it, a new version gets deployed. What's the story with versioning running workflows?
+
+00:56:28 That's something where, that we kind of like leave to the outside of Ray layer. So a lot of people have different ways to do that. Like if you're running on Kubernetes, like maybe you're like checking in
+
+00:56:39 your CRD into your like repo, or maybe you're using something like Apache Airflow. So we kind of leave that to like the orchestration layer. Like inside of AnyScale, we have a concept of like an AnyScale
+
+00:56:49 job, which is sort of the code artifact and like the cluster configuration and you're like infrastructure configuration. So that's like inside of AnyScale, that's kind of like the unit
+
+00:56:59 of like reproducibility or versioning. And yeah, folks basically build that kind of on top of Ray.
+
+00:57:04 Well, very cool project, Richard and Edward. Thank you both for being here. How about a final call to action? People are interested. They want to get started with Ray. What do you tell them?
+
+00:57:13 Go to the Ray website and try it out.
+
+00:57:15 Check out the documentation. We've got a whole lot of examples.
+
+00:57:17 Awesome.
+
+00:57:18 Yeah. I would say any kind of machine learning workload or, or just general, like parallel Python, like just give it a spin. Amazing. Well, thanks for being here and talk to y'all later. Thank you.
+
+00:57:27 Thank you.
+
+00:57:29 This has been another episode of Talk Python To Me. Thank you to our sponsors. Be sure to check out what they're offering. It really helps support the show. This episode is sponsored by Sentry's Seer. If you're tired of debugging in the dark, give Seer a try. There are plenty of AI tools that
+
+00:57:43 help you write code, but Sentry's Seer is built to help you fix it when it breaks. Visit talkpython.fm/sentry and use the code talkpython26, all one word, no spaces, for $100
+
+00:57:54 in Sentry credits. What if your AI agents worked like FastAPI microservices, typed, autonomous, and discovering each other at runtime? That's the world Agent Field is building. Join them
+
+00:58:05 at talkpython.fm/Agent Field. If you or your team needs to learn Python, we have over 270 hours of beginner and advanced courses on topics ranging from complete beginners to async code,
+
+00:58:18 Flask, Django, HTMX, and even LLMs. Best of all, there's no subscription in sight. Browse the catalog at talkpython.fm. And if you're not already subscribed to the show on your favorite
+
+00:58:29 podcast player, what are you waiting for? Just search for Python in your podcast player. We should be right at the top. If you enjoy that geeky rap song, you can download the full track.
+
+00:58:38 The link is actually in your podcast below or share notes. This is your host, Michael Kennedy.
+
+00:58:42 Thank you so much for listening. I really appreciate it. I'll see you next time.
+
+00:58:46 Bye.
+
+00:59:16 Bye.
+

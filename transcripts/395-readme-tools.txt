@@ -2088,7 +2088,7 @@
 
 01:00:36 becomes part of the document. So sort of the input file and the output file are the same file so that
 
-01:00:41 you get sort of an item potent kind of processing of the file. So you can have a readme.md. You run cog
+01:00:41 you get sort of an idempotent kind of processing of the file. So you can have a readme.md. You run cog
 
 01:00:47 on it. You still just have a readme.md, but now you've got the results of the computation in the file.
 
